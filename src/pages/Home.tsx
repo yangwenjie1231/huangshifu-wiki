@@ -1,0 +1,175 @@
+import React, { useEffect, useState } from 'react';
+import { motion } from 'motion/react';
+import { Link } from 'react-router-dom';
+import { Book, MessageSquare, Music, Calendar, ArrowRight, Clock, Heart } from 'lucide-react';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
+import { format } from 'date-fns';
+
+const Home = () => {
+  const [latestPosts, setLatestPosts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchLatest = async () => {
+      try {
+        const postsRef = collection(db, 'posts');
+        const q = query(postsRef, orderBy('updatedAt', 'desc'), limit(3));
+        const snapshot = await getDocs(q);
+        setLatestPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (e) {
+        console.error("Error fetching latest posts:", e);
+      }
+      setLoading(false);
+    };
+    fetchLatest();
+  }, []);
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      {/* Hero Section */}
+      <section className="relative h-[70vh] min-h-[500px] rounded-[40px] overflow-hidden mb-20 shadow-2xl">
+        <img 
+          src="https://picsum.photos/seed/huangshifu/1920/1080" 
+          alt="Huang Shifu" 
+          className="absolute inset-0 w-full h-full object-cover"
+          referrerPolicy="no-referrer"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-12 sm:p-20">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+          >
+            <h1 className="text-white text-6xl sm:text-8xl font-serif font-bold mb-6 leading-tight">
+              黄诗扶 <span className="text-3xl sm:text-4xl font-normal italic opacity-80 block sm:inline ml-0 sm:ml-4">Huang Shifu</span>
+            </h1>
+            <p className="text-white/80 text-xl font-serif italic max-w-2xl mb-10 leading-relaxed">
+              “以诗入乐，以乐咏诗。在这里，探索关于黄诗扶的一切。”
+            </p>
+            <div className="flex flex-wrap gap-4">
+              <Link to="/wiki" className="px-8 py-4 bg-brand-primary text-gray-900 rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-lg">
+                进入百科 <ArrowRight size={20} />
+              </Link>
+              <Link to="/forum" className="px-8 py-4 bg-white/10 backdrop-blur-md border border-white/30 text-white rounded-full font-medium hover:bg-white/20 transition-all">
+                参与社区讨论
+              </Link>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Wiki Categories */}
+      <section className="mb-24">
+        <div className="flex justify-between items-end mb-12">
+          <div>
+            <h2 className="text-4xl font-serif font-bold text-gray-900 mb-2">百科全书</h2>
+            <p className="text-gray-500 italic">Wiki Encyclopedia</p>
+          </div>
+          <Link to="/wiki" className="text-brand-primary font-bold flex items-center gap-1 hover:underline">
+            查看全部 <ArrowRight size={16} />
+          </Link>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          {[
+            { title: '人物介绍', icon: <Book size={32} />, desc: '生平经历、艺术风格与成就', color: 'bg-white', slug: 'biography', link: '/wiki?category=biography' },
+            { title: '音乐作品', icon: <Music size={32} />, desc: '原创、翻唱及合作曲目全收录', color: 'bg-white', slug: 'music', link: '/music' },
+            { title: '专辑一览', icon: <Book size={32} />, desc: '历年发行专辑与EP详情', color: 'bg-white', slug: 'album', link: '/wiki?category=album' },
+            { title: '活动记录', icon: <Calendar size={32} />, desc: '演出、直播与线下活动时间线', color: 'bg-white', slug: 'event', link: '/wiki?category=event' },
+          ].map((cat, i) => (
+            <motion.div
+              key={cat.title}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1 }}
+              viewport={{ once: true }}
+              className={`${cat.color} p-8 rounded-[32px] hover:shadow-xl transition-all group cursor-pointer border border-gray-100 hover:border-brand-primary/20`}
+            >
+              <div className="text-brand-primary mb-6 group-hover:scale-110 transition-transform">{cat.icon}</div>
+              <h3 className="text-2xl font-serif font-bold mb-3">{cat.title}</h3>
+              <p className="text-gray-500 text-sm leading-relaxed mb-6">{cat.desc}</p>
+              <Link to={cat.link} className="w-10 h-10 rounded-full bg-brand-cream border border-gray-100 flex items-center justify-center text-brand-primary group-hover:bg-brand-primary group-hover:text-gray-900 transition-all">
+                <ArrowRight size={18} />
+              </Link>
+            </motion.div>
+          ))}
+        </div>
+      </section>
+
+      {/* Community Preview */}
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+        <div className="lg:col-span-2">
+          <div className="flex justify-between items-end mb-8">
+            <h2 className="text-3xl font-serif font-bold text-gray-900">社区动态</h2>
+            <Link to="/forum" className="text-brand-primary font-bold text-sm hover:underline">更多讨论</Link>
+          </div>
+          <div className="space-y-4">
+            {loading ? (
+              [1, 2, 3].map(i => (
+                <div key={i} className="h-24 bg-white rounded-3xl animate-pulse border border-gray-100"></div>
+              ))
+            ) : latestPosts.length > 0 ? (
+              latestPosts.map((post) => (
+                <Link 
+                  key={post.id} 
+                  to={`/forum/${post.id}`}
+                  className="block bg-white p-6 rounded-3xl border border-gray-100 hover:border-brand-primary/20 transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="px-2 py-1 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded">
+                      {post.section === 'music' ? '音乐讨论' : post.section === 'news' ? '动态资讯' : post.section === 'fanart' ? '同人创作' : '问答区'}
+                    </span>
+                    <span className="text-gray-400 text-xs flex items-center gap-1">
+                      <Clock size={12} /> {post.updatedAt?.toDate ? format(post.updatedAt.toDate(), 'MM-dd HH:mm') : '刚刚'}
+                    </span>
+                  </div>
+                  <h4 className="text-xl font-serif font-bold mb-2 group-hover:text-brand-primary transition-colors">{post.title}</h4>
+                  <div className="flex items-center gap-4 text-gray-400 text-sm">
+                    <span className="flex items-center gap-1"><MessageSquare size={14} /> {post.commentsCount || 0}</span>
+                    <span className="flex items-center gap-1"><Heart size={14} /> {post.likesCount || 0}</span>
+                  </div>
+                </Link>
+              ))
+            ) : (
+              <div className="bg-white p-12 rounded-3xl border border-gray-100 text-center italic text-gray-400">
+                暂无社区动态
+              </div>
+            )}
+          </div>
+        </div>
+        
+        <div className="bg-brand-primary rounded-[40px] p-10 text-gray-900 flex flex-col justify-between h-full min-h-[400px] shadow-xl">
+          <div>
+            <h2 className="text-3xl font-serif font-bold mb-6">加入我们</h2>
+            <p className="text-gray-800/70 font-serif italic leading-relaxed mb-8">
+              “诗扶小筑是一个由粉丝自发维护的社区。无论你是资深乐迷，还是刚被圈粉的新人，这里都有你的位置。”
+            </p>
+          </div>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-4 bg-white/20 rounded-2xl border border-white/20">
+              <div className="w-10 h-10 rounded-full bg-white/40 flex items-center justify-center">
+                <Music size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-bold">1,240+</p>
+                <p className="text-xs text-gray-800/50">收录曲目</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-4 bg-white/20 rounded-2xl border border-white/20">
+              <div className="w-10 h-10 rounded-full bg-white/40 flex items-center justify-center">
+                <MessageSquare size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-bold">5,600+</p>
+                <p className="text-xs text-gray-800/50">社区成员</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+};
+
+export default Home;
