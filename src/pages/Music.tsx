@@ -66,6 +66,7 @@ const Music = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [selectedSongs, setSelectedSongs] = useState<Set<string>>(new Set());
   const [isBatchMode, setIsBatchMode] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{ show: boolean, type: 'single' | 'batch', id?: string }>({ show: false, type: 'single' });
   const { user, isAdmin } = useAuth();
   const { currentSong, setCurrentSong, setIsPlaying } = useMusic();
 
@@ -153,16 +154,15 @@ const Music = () => {
     setIsPlaying(true);
   };
 
-  const handleDeleteSong = async (e: React.MouseEvent, songId: string) => {
-    e.stopPropagation();
-    if (!window.confirm("确定要删除这首歌曲吗？")) return;
-    
+  const handleDeleteSong = async (songId: string) => {
     const path = 'music';
     try {
       await deleteDoc(doc(db, path, songId));
       fetchSongs();
+      setConfirmModal({ show: false, type: 'single' });
     } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, path);
+      console.error("Delete error:", e);
+      alert("删除失败，请检查权限");
     }
   };
 
@@ -178,19 +178,29 @@ const Music = () => {
 
   const handleBatchDelete = async () => {
     if (selectedSongs.size === 0) return;
-    if (!window.confirm(`确定要删除选中的 ${selectedSongs.size} 首歌曲吗？`)) return;
 
     setLoading(true);
     const path = 'music';
+    let successCount = 0;
+    let failCount = 0;
+
     for (const docId of Array.from(selectedSongs)) {
       try {
         await deleteDoc(doc(db, path, docId));
+        successCount++;
       } catch (e) {
         console.error(`Error deleting ${docId}:`, e);
+        failCount++;
       }
     }
+    
+    if (failCount > 0) {
+      alert(`批量删除完成。成功: ${successCount}, 失败: ${failCount}`);
+    }
+
     setSelectedSongs(new Set());
     setIsBatchMode(false);
+    setConfirmModal({ show: false, type: 'single' });
     fetchSongs();
     setLoading(false);
   };
@@ -281,7 +291,7 @@ const Music = () => {
               取消选择
             </button>
             <button 
-              onClick={handleBatchDelete}
+              onClick={() => setConfirmModal({ show: true, type: 'batch' })}
               className="px-6 py-2 bg-red-500 text-white rounded-full text-sm font-bold hover:bg-red-600 transition-all"
             >
               批量删除
@@ -289,6 +299,40 @@ const Music = () => {
           </div>
         </motion.div>
       )}
+
+      <AnimatePresence>
+        {confirmModal.show && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-[40px] p-8 max-w-md w-full shadow-2xl"
+            >
+              <h3 className="text-2xl font-serif font-bold text-gray-900 mb-4">确认删除</h3>
+              <p className="text-gray-500 mb-8">
+                {confirmModal.type === 'single' 
+                  ? "您确定要删除这首歌曲吗？此操作无法撤销。" 
+                  : `您确定要删除选中的 ${selectedSongs.size} 首歌曲吗？此操作无法撤销。`}
+              </p>
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => setConfirmModal({ show: false, type: 'single' })}
+                  className="flex-grow px-6 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-all"
+                >
+                  取消
+                </button>
+                <button 
+                  onClick={() => confirmModal.type === 'single' ? handleDeleteSong(confirmModal.id!) : handleBatchDelete()}
+                  className="flex-grow px-6 py-4 bg-red-500 text-white rounded-2xl font-bold hover:bg-red-600 transition-all"
+                >
+                  确定删除
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
         <div className="lg:col-span-2">
@@ -346,7 +390,10 @@ const Music = () => {
                   <div className="flex items-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
                     {isAdmin && !isBatchMode && (
                       <button 
-                        onClick={(e) => handleDeleteSong(e, song.docId)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmModal({ show: true, type: 'single', id: song.docId });
+                        }}
                         className="p-2 text-gray-400 hover:text-red-500 transition-colors"
                         title="删除歌曲"
                       >
