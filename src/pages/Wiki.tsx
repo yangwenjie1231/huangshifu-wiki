@@ -393,21 +393,26 @@ const WikiEditor = () => {
     
     setLoading(true);
 
-    const pageSlug = isNew ? formData.title.toLowerCase().replace(/\s+/g, '-') : slug;
-    const pageData = {
-      ...formData,
+    const pageData: any = {
+      title: formData.title,
       slug: pageSlug,
+      category: formData.category,
+      content: formData.content,
       tags: formData.tags.split(',').map(t => t.trim()).filter(t => t),
+      eventDate: formData.eventDate,
       lastEditorUid: user.uid,
       lastEditorName: profile?.displayName || user.displayName || '匿名用户',
       updatedAt: serverTimestamp(),
-      createdAt: isNew ? serverTimestamp() : undefined
     };
+
+    if (isNew) {
+      pageData.createdAt = serverTimestamp();
+    }
 
     try {
       const docRef = doc(db, 'wiki', pageSlug!);
       if (isNew) {
-        await setDoc(docRef, { ...pageData, createdAt: serverTimestamp() });
+        await setDoc(docRef, pageData);
       } else {
         await updateDoc(docRef, pageData);
       }
@@ -427,6 +432,7 @@ const WikiEditor = () => {
       navigate(`/wiki/${pageSlug}`);
     } catch (e) {
       console.error("Error saving wiki page:", e);
+      alert("保存失败，请检查网络或权限");
     }
     setLoading(false);
   };
@@ -549,7 +555,7 @@ const WikiEditor = () => {
             <button 
               type="submit" 
               disabled={loading}
-              className="px-12 py-4 bg-brand-olive text-white rounded-full font-bold hover:bg-brand-olive/90 transition-all shadow-lg flex items-center gap-2 disabled:opacity-50"
+              className="px-12 py-4 bg-brand-olive text-white rounded-full font-bold hover:bg-brand-olive/90 hover:scale-105 active:scale-95 transition-all shadow-lg flex items-center gap-2 disabled:opacity-50"
             >
               <Save size={20} /> {loading ? '保存中...' : '发布页面'}
             </button>

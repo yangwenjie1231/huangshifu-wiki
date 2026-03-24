@@ -62,8 +62,8 @@ export const GlobalMusicPlayer = () => {
       initial={{ y: 100 }}
       animate={{ y: 0 }}
       className={clsx(
-        "fixed bottom-0 left-0 right-0 z-[60] bg-white/90 backdrop-blur-xl border-t border-gray-100 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] transition-all duration-500",
-        isExpanded ? "h-auto" : "h-20"
+        "fixed left-0 right-0 z-[60] bg-white/90 backdrop-blur-xl border-t border-gray-100 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] transition-all duration-500",
+        isExpanded ? "bottom-0 h-auto" : "bottom-16 md:bottom-0 h-20"
       )}
     >
       <div className="max-w-7xl mx-auto px-4 h-full flex flex-col">
