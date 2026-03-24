@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs, doc, getDoc, setDoc, serverTimestamp, orderBy, addDoc, limit, deleteDoc } from 'firebase/firestore';
+import { collection, query, getDocs, doc, getDoc, setDoc, serverTimestamp, orderBy, addDoc, limit, deleteDoc, where } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useMusic } from '../context/MusicContext';
@@ -64,6 +64,8 @@ const Music = () => {
   const [loading, setLoading] = useState(true);
   const [searchId, setSearchId] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [selectedSongs, setSelectedSongs] = useState<Set<string>>(new Set());
+  const [isBatchMode, setIsBatchMode] = useState(false);
   const { user, isAdmin } = useAuth();
   const { currentSong, setCurrentSong, setIsPlaying } = useMusic();
 
@@ -87,42 +89,66 @@ const Music = () => {
   const handleAddSong = async () => {
     if (!searchId) return;
     
-    // Extract ID from URL if needed
-    let id = searchId;
-    if (searchId.includes('id=')) {
-      id = searchId.split('id=')[1].split('&')[0];
-    }
-
-    try {
-      const response = await fetch(`/api/music/song/${id}`);
-      const metadata = await response.json();
-      
-      if (metadata.error) {
-        alert("无法获取歌曲信息，请检查 ID 是否正确");
-        return;
+    // Split by comma, space or newline for batch processing
+    const ids = searchId.split(/[\s,\n]+/).map(s => {
+      let id = s.trim();
+      if (id.includes('id=')) {
+        id = id.split('id=')[1].split('&')[0];
       }
+      return id;
+    }).filter(id => id);
 
-      const path = 'music';
+    if (ids.length === 0) return;
+
+    setLoading(true);
+    let addedCount = 0;
+    let skippedCount = 0;
+
+    for (const id of ids) {
       try {
+        // Check if song already exists
+        const path = 'music';
+        const q = query(collection(db, path), where('id', '==', parseInt(id) || id));
+        const snapshot = await getDocs(q);
+        
+        if (!snapshot.empty) {
+          skippedCount++;
+          continue;
+        }
+
+        const response = await fetch(`/api/music/song/${id}`);
+        const metadata = await response.json();
+        
+        if (metadata.error) {
+          console.error(`Failed to fetch metadata for ID: ${id}`);
+          skippedCount++;
+          continue;
+        }
+
         await addDoc(collection(db, path), {
           ...metadata,
           addedBy: user?.uid,
           createdAt: serverTimestamp()
         });
+        addedCount++;
       } catch (e) {
-        handleFirestoreError(e, OperationType.CREATE, path);
+        console.error(`Error adding song ${id}:`, e);
+        skippedCount++;
       }
-
-      setSearchId('');
-      setIsAdding(false);
-      fetchSongs();
-    } catch (e) {
-      console.error("Error adding song:", e);
-      alert("添加失败");
     }
+
+    alert(`添加完成！成功: ${addedCount}, 跳过/失败: ${skippedCount}`);
+    setSearchId('');
+    setIsAdding(false);
+    fetchSongs();
+    setLoading(false);
   };
 
   const playSong = (song: any) => {
+    if (isBatchMode) {
+      toggleSelect(song.docId);
+      return;
+    }
     setCurrentSong(song);
     setIsPlaying(true);
   };
@@ -140,6 +166,35 @@ const Music = () => {
     }
   };
 
+  const toggleSelect = (docId: string) => {
+    const newSelected = new Set(selectedSongs);
+    if (newSelected.has(docId)) {
+      newSelected.delete(docId);
+    } else {
+      newSelected.add(docId);
+    }
+    setSelectedSongs(newSelected);
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedSongs.size === 0) return;
+    if (!window.confirm(`确定要删除选中的 ${selectedSongs.size} 首歌曲吗？`)) return;
+
+    setLoading(true);
+    const path = 'music';
+    for (const docId of Array.from(selectedSongs)) {
+      try {
+        await deleteDoc(doc(db, path, docId));
+      } catch (e) {
+        console.error(`Error deleting ${docId}:`, e);
+      }
+    }
+    setSelectedSongs(new Set());
+    setIsBatchMode(false);
+    fetchSongs();
+    setLoading(false);
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-12">
       <header className="mb-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -154,13 +209,28 @@ const Music = () => {
         </div>
         
         {isAdmin && (
-          <button 
-            onClick={() => setIsAdding(!isAdding)}
-            className="px-8 py-4 bg-gray-900 text-white rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-xl"
-          >
-            {isAdding ? <X size={20} /> : <Plus size={20} />}
-            {isAdding ? '取消添加' : '添加音乐'}
-          </button>
+          <div className="flex gap-4">
+            <button 
+              onClick={() => {
+                setIsBatchMode(!isBatchMode);
+                setSelectedSongs(new Set());
+              }}
+              className={clsx(
+                "px-6 py-4 rounded-full font-bold transition-all flex items-center gap-2 shadow-xl",
+                isBatchMode ? "bg-brand-primary text-gray-900" : "bg-white text-gray-500 border border-gray-100"
+              )}
+            >
+              <List size={20} />
+              {isBatchMode ? '退出批量' : '批量管理'}
+            </button>
+            <button 
+              onClick={() => setIsAdding(!isAdding)}
+              className="px-8 py-4 bg-gray-900 text-white rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-xl"
+            >
+              {isAdding ? <X size={20} /> : <Plus size={20} />}
+              {isAdding ? '取消添加' : '添加音乐'}
+            </button>
+          </div>
         )}
       </header>
 
@@ -173,26 +243,52 @@ const Music = () => {
             className="mb-12 p-8 bg-brand-cream/30 rounded-[40px] border border-brand-primary/10"
           >
             <h3 className="text-xl font-serif font-bold text-gray-900 mb-6 flex items-center gap-2">
-              <Sparkles size={20} className="text-brand-primary" /> 输入网易云音乐 ID 或链接
+              <Sparkles size={20} className="text-brand-primary" /> 输入网易云音乐 ID 或链接 (支持批量，用空格或逗号分隔)
             </h3>
-            <div className="flex gap-4">
-              <input 
-                type="text" 
+            <div className="flex flex-col gap-4">
+              <textarea 
                 value={searchId}
                 onChange={e => setSearchId(e.target.value)}
-                placeholder="例如: 1335942780 或 https://music.163.com/song?id=1335942780"
-                className="flex-grow px-6 py-4 bg-white rounded-3xl border-none focus:ring-2 focus:ring-brand-primary/20 shadow-sm"
+                placeholder="例如: 1335942780, 1335942781 或链接列表"
+                className="w-full px-6 py-4 bg-white rounded-3xl border-none focus:ring-2 focus:ring-brand-primary/20 shadow-sm min-h-[120px]"
               />
-              <button 
-                onClick={handleAddSong}
-                className="px-10 py-4 bg-brand-primary text-gray-900 rounded-3xl font-bold hover:scale-105 transition-all shadow-md"
-              >
-                获取并添加
-              </button>
+              <div className="flex justify-end">
+                <button 
+                  onClick={handleAddSong}
+                  disabled={loading}
+                  className="px-10 py-4 bg-brand-primary text-gray-900 rounded-3xl font-bold hover:scale-105 transition-all shadow-md disabled:opacity-50"
+                >
+                  {loading ? '正在处理...' : '获取并添加'}
+                </button>
+              </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {isBatchMode && selectedSongs.size > 0 && (
+        <motion.div 
+          initial={{ y: 100 }}
+          animate={{ y: 0 }}
+          className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 bg-gray-900 text-white px-8 py-4 rounded-full shadow-2xl flex items-center gap-8"
+        >
+          <span className="text-sm font-bold">已选择 {selectedSongs.size} 首歌曲</span>
+          <div className="flex gap-4">
+            <button 
+              onClick={() => setSelectedSongs(new Set())}
+              className="text-sm text-gray-400 hover:text-white"
+            >
+              取消选择
+            </button>
+            <button 
+              onClick={handleBatchDelete}
+              className="px-6 py-2 bg-red-500 text-white rounded-full text-sm font-bold hover:bg-red-600 transition-all"
+            >
+              批量删除
+            </button>
+          </div>
+        </motion.div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
         <div className="lg:col-span-2">
@@ -221,13 +317,23 @@ const Music = () => {
                   onClick={() => playSong(song)}
                   className={clsx(
                     "p-6 flex items-center gap-4 hover:bg-gray-50 transition-all cursor-pointer group",
-                    currentSong?.docId === song.docId && "bg-brand-primary/5"
+                    currentSong?.docId === song.docId && !isBatchMode && "bg-brand-primary/5",
+                    isBatchMode && selectedSongs.has(song.docId) && "bg-brand-primary/10"
                   )}
                 >
-                  <span className="text-xs font-bold text-gray-300 w-4">{index + 1}</span>
+                  {isBatchMode ? (
+                    <div className={clsx(
+                      "w-5 h-5 rounded border-2 flex items-center justify-center transition-all",
+                      selectedSongs.has(song.docId) ? "bg-brand-primary border-brand-primary" : "border-gray-200 bg-white"
+                    )}>
+                      {selectedSongs.has(song.docId) && <X size={14} className="text-gray-900" />}
+                    </div>
+                  ) : (
+                    <span className="text-xs font-bold text-gray-300 w-4">{index + 1}</span>
+                  )}
                   <div className="relative w-12 h-12 rounded-xl overflow-hidden shadow-md">
                     <img src={song.cover} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    {currentSong?.docId === song.docId && (
+                    {currentSong?.docId === song.docId && !isBatchMode && (
                       <div className="absolute inset-0 bg-brand-primary/40 flex items-center justify-center">
                         <Play size={16} className="text-gray-900 fill-current" />
                       </div>
@@ -238,7 +344,7 @@ const Music = () => {
                     <p className="text-xs text-gray-400">{song.artist} — {song.album}</p>
                   </div>
                   <div className="flex items-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {isAdmin && (
+                    {isAdmin && !isBatchMode && (
                       <button 
                         onClick={(e) => handleDeleteSong(e, song.docId)}
                         className="p-2 text-gray-400 hover:text-red-500 transition-colors"
@@ -247,18 +353,22 @@ const Music = () => {
                         <Trash2 size={18} />
                       </button>
                     )}
-                    <button className="p-2 text-gray-400 hover:text-red-500 transition-colors">
-                      <Heart size={18} />
-                    </button>
-                    <a 
-                      href={`https://music.163.com/song?id=${song.id}`} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
-                      onClick={e => e.stopPropagation()}
-                    >
-                      <ExternalLink size={18} />
-                    </a>
+                    {!isBatchMode && (
+                      <>
+                        <button className="p-2 text-gray-400 hover:text-red-500 transition-colors">
+                          <Heart size={18} />
+                        </button>
+                        <a 
+                          href={`https://music.163.com/song?id=${song.id}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          <ExternalLink size={18} />
+                        </a>
+                      </>
+                    )}
                   </div>
                 </div>
               )) : (

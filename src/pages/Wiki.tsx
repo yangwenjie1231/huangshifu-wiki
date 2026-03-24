@@ -4,6 +4,8 @@ import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serv
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
@@ -22,41 +24,59 @@ const mdParser = new MarkdownIt({
 
 // --- Wiki Internal Linking Component ---
 const WikiMarkdown = ({ content }: { content: string }) => {
-  // Regex to match [[slug]] or [[Title|slug]]
-  const parts = content.split(/(\[\[[^\]]+\]\])/g);
-  
+  // Pre-process internal links [[display|slug]] or [[slug]] to standard markdown links
+  // This is safer than overriding the 'p' component which can break with HTML
+  const processedContent = content.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (match, p1, p2) => {
+    const display = p1.trim();
+    const slug = p2 ? p2.trim() : p1.trim();
+    return `[${display}](/wiki/${slug})`;
+  });
+
   return (
     <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeRaw]}
       components={{
-        p: ({ children }) => {
-          if (typeof children === 'string') {
-            const subParts = children.split(/(\[\[[^\]]+\]\])/g);
+        // Use Link from react-router-dom for internal links
+        a: ({ href, children, ...props }) => {
+          if (href?.startsWith('/wiki/')) {
             return (
-              <p>
-                {subParts.map((part, i) => {
-                  if (part.startsWith('[[') && part.endsWith(']]')) {
-                    const inner = part.slice(2, -2);
-                    const [display, slug] = inner.includes('|') ? inner.split('|') : [inner, inner];
-                    return (
-                      <Link 
-                        key={i} 
-                        to={`/wiki/${slug.trim()}`} 
-                        className="text-brand-olive font-bold hover:underline decoration-brand-olive/30 underline-offset-4"
-                      >
-                        {display.trim()}
-                      </Link>
-                    );
-                  }
-                  return part;
-                })}
-              </p>
+              <Link 
+                to={href} 
+                className="text-brand-olive font-bold hover:underline decoration-brand-olive/30 underline-offset-4"
+                {...props}
+              >
+                {children}
+              </Link>
             );
           }
-          return <p>{children}</p>;
-        }
+          return (
+            <a 
+              href={href} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-brand-olive hover:underline"
+              {...props}
+            >
+              {children}
+            </a>
+          );
+        },
+        // Support tables with Tailwind
+        table: ({ children }) => (
+          <div className="overflow-x-auto my-8">
+            <table className="w-full border-collapse border border-gray-200 rounded-xl overflow-hidden">
+              {children}
+            </table>
+          </div>
+        ),
+        thead: ({ children }) => <thead className="bg-brand-cream/50 text-brand-olive">{children}</thead>,
+        th: ({ children }) => <th className="border border-gray-200 px-4 py-3 text-left font-bold">{children}</th>,
+        td: ({ children }) => <td className="border border-gray-200 px-4 py-3">{children}</td>,
+        tr: ({ children }) => <tr className="hover:bg-gray-50 transition-colors">{children}</tr>
       }}
     >
-      {content}
+      {processedContent}
     </ReactMarkdown>
   );
 };
@@ -119,7 +139,12 @@ const WikiList = () => {
                 : "bg-white text-gray-500 border-gray-200 hover:border-brand-olive hover:text-brand-olive"
             )}
           >
-            {cat === 'all' ? '全部' : cat}
+            {cat === 'all' ? '全部' : 
+             cat === 'biography' ? '人物介绍' :
+             cat === 'music' ? '音乐作品' :
+             cat === 'album' ? '专辑一览' :
+             cat === 'timeline' ? '时间轴' :
+             cat === 'event' ? '活动记录' : cat}
           </Link>
         ))}
       </div>
@@ -139,7 +164,13 @@ const WikiList = () => {
               className="bg-white p-8 rounded-[32px] border border-gray-100 hover:border-brand-olive/20 hover:shadow-xl transition-all group"
             >
               <div className="flex items-center gap-2 mb-4">
-                <span className="px-2 py-1 bg-brand-cream text-brand-olive text-[10px] font-bold uppercase tracking-wider rounded">{page.category}</span>
+                <span className="px-2 py-1 bg-brand-cream text-brand-olive text-[10px] font-bold uppercase tracking-wider rounded">
+                  {page.category === 'biography' ? '人物介绍' :
+                   page.category === 'music' ? '音乐作品' :
+                   page.category === 'album' ? '专辑一览' :
+                   page.category === 'timeline' ? '时间轴' :
+                   page.category === 'event' ? '活动记录' : page.category}
+                </span>
               </div>
               <h3 className="text-2xl font-serif font-bold mb-4 group-hover:text-brand-olive transition-colors">{page.title}</h3>
               <p className="text-gray-400 text-sm line-clamp-2 mb-6 italic leading-relaxed">
@@ -210,7 +241,13 @@ const WikiPageView = () => {
       <article className="bg-white rounded-[40px] p-8 sm:p-16 border border-gray-100 shadow-sm">
         <header className="mb-12 border-b border-gray-100 pb-12">
           <div className="flex items-center gap-3 mb-6">
-            <span className="px-3 py-1 bg-brand-cream text-brand-olive text-xs font-bold uppercase tracking-widest rounded-full">{page.category}</span>
+            <span className="px-3 py-1 bg-brand-cream text-brand-olive text-xs font-bold uppercase tracking-widest rounded-full">
+              {page.category === 'biography' ? '人物介绍' :
+               page.category === 'music' ? '音乐作品' :
+               page.category === 'album' ? '专辑一览' :
+               page.category === 'timeline' ? '时间轴' :
+               page.category === 'event' ? '活动记录' : page.category}
+            </span>
             <span className="text-gray-300">/</span>
             <span className="text-gray-400 text-sm flex items-center gap-1"><Clock size={14} /> 最后更新: {page.updatedAt?.toDate ? format(page.updatedAt.toDate(), 'yyyy-MM-dd HH:mm') : '刚刚'}</span>
           </div>
@@ -294,11 +331,11 @@ const WikiPageView = () => {
           <div className="flex items-center gap-2 text-gray-400 text-sm italic">
             <Tag size={14} />
             {page.tags?.map((tag: string) => (
-              <span key={tag} className="hover:text-brand-olive cursor-pointer">#{tag}</span>
+              <span key={tag} className="hover:text-brand-olive cursor-pointer px-2 py-0.5 bg-brand-cream/30 rounded-full text-[10px] font-bold uppercase tracking-wider">#{tag}</span>
             ))}
           </div>
           <div className="flex items-center gap-2 text-gray-400 text-sm">
-            <UserIcon size={14} /> 编辑者 ID: {page.lastEditorUid?.substring(0, 8)}...
+            <UserIcon size={14} /> 编辑者: <span className="font-bold text-brand-olive">{page.lastEditorName || '匿名用户'}</span> <span className="text-[10px] opacity-50">({page.lastEditorUid?.substring(0, 8)})</span>
           </div>
         </footer>
       </article>
@@ -362,6 +399,7 @@ const WikiEditor = () => {
       slug: pageSlug,
       tags: formData.tags.split(',').map(t => t.trim()).filter(t => t),
       lastEditorUid: user.uid,
+      lastEditorName: profile?.displayName || user.displayName || '匿名用户',
       updatedAt: serverTimestamp(),
       createdAt: isNew ? serverTimestamp() : undefined
     };
@@ -462,7 +500,14 @@ const WikiEditor = () => {
             <div className="border border-gray-100 rounded-[32px] overflow-hidden">
               <MdEditor 
                 style={{ height: '500px' }} 
-                renderHTML={(text) => mdParser.render(text)} 
+                renderHTML={(text) => {
+                  const processed = text.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (match, p1, p2) => {
+                    const display = p1.trim();
+                    const slug = p2 ? p2.trim() : p1.trim();
+                    return `[${display}](/wiki/${slug})`;
+                  });
+                  return mdParser.render(processed);
+                }} 
                 value={formData.content}
                 onChange={({ text }) => setFormData({...formData, content: text})}
                 onImageUpload={async (file) => {
@@ -728,7 +773,11 @@ const WikiTimeline = () => {
                   </div>
                   <div className="flex items-center gap-2 mb-3">
                     <span className="px-2 py-1 bg-brand-cream text-brand-olive text-[10px] font-bold uppercase tracking-wider rounded">
-                      {event.category}
+                      {event.category === 'biography' ? '人物介绍' :
+                       event.category === 'music' ? '音乐作品' :
+                       event.category === 'album' ? '专辑一览' :
+                       event.category === 'timeline' ? '时间轴' :
+                       event.category === 'event' ? '活动记录' : event.category}
                     </span>
                   </div>
                   <h3 className="text-2xl font-serif font-bold text-gray-800 group-hover:text-brand-olive transition-colors mb-4">

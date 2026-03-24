@@ -1,8 +1,10 @@
-import { collection, doc, setDoc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
+import SparkMD5 from 'spark-md5';
 
 export interface ImageMap {
   id: string;
+  md5: string;
   localUrl: string;
   weiboUrl?: string;
   smmsUrl?: string;
@@ -11,16 +13,49 @@ export interface ImageMap {
 }
 
 /**
+ * Calculates the MD5 hash of a file.
+ */
+const calculateMD5 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const binary = e.target?.result;
+      if (binary) {
+        const hash = SparkMD5.ArrayBuffer.hash(binary as ArrayBuffer);
+        resolve(hash);
+      } else {
+        reject(new Error("Failed to read file for MD5 calculation"));
+      }
+    };
+    reader.onerror = () => reject(new Error("FileReader error"));
+    reader.readAsArrayBuffer(file);
+  });
+};
+
+/**
  * Uploads an image to multiple CDNs and stores the mapping in Firestore.
  * Note: In a real implementation, you would call the respective CDN APIs here.
  * For this prototype, we'll simulate the upload by generating mock CDN URLs.
  */
 export const uploadImageToCDNs = async (file: File): Promise<string> => {
-  // 1. Simulate local upload (using URL.createObjectURL for demo, in real app use Firebase Storage)
+  // 1. Calculate MD5 hash
+  const md5 = await calculateMD5(file);
+
+  // 2. Check if image with same MD5 already exists
+  const imageMapsRef = collection(db, 'imageMaps');
+  const q = query(imageMapsRef, where('md5', '==', md5));
+  const snapshot = await getDocs(q);
+
+  if (!snapshot.empty) {
+    // Image already exists, return the existing ID
+    return snapshot.docs[0].id;
+  }
+
+  // 3. Simulate local upload (using URL.createObjectURL for demo, in real app use Firebase Storage)
   const localUrl = URL.createObjectURL(file);
   const imageId = Math.random().toString(36).substring(7);
 
-  // 2. Simulate uploading to multiple CDNs
+  // 4. Simulate uploading to multiple CDNs
   // In a real app, you'd use fetch() to call Weibo, SM.MS, and Superbed APIs.
   const weiboUrl = `https://wx1.sinaimg.cn/large/${imageId}.jpg`;
   const smmsUrl = `https://s2.loli.net/2024/03/23/${imageId}.jpg`;
@@ -28,6 +63,7 @@ export const uploadImageToCDNs = async (file: File): Promise<string> => {
 
   const imageMap: ImageMap = {
     id: imageId,
+    md5,
     localUrl,
     weiboUrl,
     smmsUrl,
@@ -35,7 +71,7 @@ export const uploadImageToCDNs = async (file: File): Promise<string> => {
     createdAt: serverTimestamp()
   };
 
-  // 3. Store mapping in Firestore
+  // 5. Store mapping in Firestore
   await setDoc(doc(db, 'imageMaps', imageId), imageMap);
 
   return imageId;
