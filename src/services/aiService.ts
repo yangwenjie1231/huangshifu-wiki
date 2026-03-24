@@ -1,8 +1,13 @@
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || '' });
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 export const summarizeWikiContent = async (content: string) => {
+  if (!ai) {
+    console.warn('Gemini API key is missing. summarizeWikiContent is disabled.');
+    return null;
+  }
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -19,6 +24,10 @@ export const summarizeWikiContent = async (content: string) => {
 };
 
 export const generateWikiIntro = async (topic: string) => {
+  if (!ai) {
+    console.warn('Gemini API key is missing. generateWikiIntro is disabled.');
+    return null;
+  }
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -35,6 +44,10 @@ export const generateWikiIntro = async (topic: string) => {
 };
 
 export const describeImageForSearch = async (base64Image: string, mimeType: string) => {
+  if (!ai) {
+    console.warn('Gemini API key is missing. describeImageForSearch is disabled.');
+    return null;
+  }
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",

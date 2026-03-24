@@ -1,5 +1,4 @@
-import { collection, doc, setDoc, getDoc, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../firebase';
+import { collection, doc, setDoc, getDoc, addDoc, serverTimestamp, query, where, getDocs, db } from '../firebase';
 import SparkMD5 from 'spark-md5';
 
 export interface ImageMap {
@@ -72,7 +71,7 @@ export const uploadImageToCDNs = async (file: File): Promise<string> => {
   };
 
   // 5. Store mapping in Firestore
-  await setDoc(doc(db, 'imageMaps', imageId), imageMap);
+  await setDoc(doc(db, 'imageMaps', imageId), imageMap as unknown as Record<string, unknown>);
 
   return imageId;
 };

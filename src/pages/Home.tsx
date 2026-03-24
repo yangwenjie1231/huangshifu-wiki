@@ -1,28 +1,37 @@
 import React, { useEffect, useState } from 'react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Book, MessageSquare, Music, Calendar, ArrowRight, Clock, Heart } from 'lucide-react';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
-import { db } from '../firebase';
 import { format } from 'date-fns';
+import { apiGet } from '../lib/apiClient';
+
+const toDateValue = (value: string | null | undefined) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+type HomeFeedResponse = {
+  announcements: Array<{ id: string; content: string; link?: string; createdAt: string }>;
+  hotPosts: any[];
+  recentPosts: any[];
+};
 
 const Home = () => {
-  const [latestPosts, setLatestPosts] = useState<any[]>([]);
+  const [feed, setFeed] = useState<HomeFeedResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchLatest = async () => {
+    const fetchFeed = async () => {
       try {
-        const postsRef = collection(db, 'posts');
-        const q = query(postsRef, orderBy('updatedAt', 'desc'), limit(3));
-        const snapshot = await getDocs(q);
-        setLatestPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const data = await apiGet<HomeFeedResponse>('/api/home/feed');
+        setFeed(data);
       } catch (e) {
-        console.error("Error fetching latest posts:", e);
+        console.error("Error fetching home feed:", e);
       }
       setLoading(false);
     };
-    fetchLatest();
+    fetchFeed();
   }, []);
 
   return (
@@ -109,8 +118,8 @@ const Home = () => {
               [1, 2, 3].map(i => (
                 <div key={i} className="h-24 bg-white rounded-3xl animate-pulse border border-gray-100"></div>
               ))
-            ) : latestPosts.length > 0 ? (
-              latestPosts.map((post) => (
+            ) : (feed?.recentPosts?.length ?? 0) > 0 ? (
+              feed!.recentPosts.slice(0, 5).map((post) => (
                 <Link 
                   key={post.id} 
                   to={`/forum/${post.id}`}
@@ -121,7 +130,7 @@ const Home = () => {
                       {post.section === 'music' ? '音乐讨论' : post.section === 'news' ? '动态资讯' : post.section === 'fanart' ? '同人创作' : '问答区'}
                     </span>
                     <span className="text-gray-400 text-xs flex items-center gap-1">
-                      <Clock size={12} /> {post.updatedAt?.toDate ? format(post.updatedAt.toDate(), 'MM-dd HH:mm') : '刚刚'}
+                      <Clock size={12} /> {toDateValue(post.updatedAt) ? format(toDateValue(post.updatedAt)!, 'MM-dd HH:mm') : '刚刚'}
                     </span>
                   </div>
                   <h4 className="text-xl font-serif font-bold mb-2 group-hover:text-brand-primary transition-colors">{post.title}</h4>

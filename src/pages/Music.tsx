@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs, doc, getDoc, setDoc, serverTimestamp, orderBy, addDoc, limit, deleteDoc, where } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { collection, query, getDocs, doc, deleteDoc, where, orderBy, db, auth } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useMusic } from '../context/MusicContext';
 import { Music as MusicIcon, Search, Plus, Play, Pause, Disc, List, Trash2, Heart, ExternalLink, Sparkles, ChevronRight, Volume2, Headphones, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'motion/react';
 import { MusicPlayer } from '../components/MusicPlayer';
+import { apiDelete, apiPost } from '../lib/apiClient';
 
 enum OperationType {
   CREATE = 'create',
@@ -36,6 +36,18 @@ interface FirestoreErrorInfo {
   }
 }
 
+type SongItem = {
+  docId: string;
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  cover: string;
+  audioUrl: string;
+  lyric?: string | null;
+  favoritedByMe?: boolean;
+};
+
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
@@ -60,14 +72,15 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 }
 
 const Music = () => {
-  const [songs, setSongs] = useState<any[]>([]);
+  const [songs, setSongs] = useState<SongItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchId, setSearchId] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [selectedSongs, setSelectedSongs] = useState<Set<string>>(new Set());
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{ show: boolean, type: 'single' | 'batch', id?: string }>({ show: false, type: 'single' });
-  const { user, isAdmin } = useAuth();
+  const [favoriting, setFavoriting] = useState<string | null>(null);
+  const { user, isAdmin, isBanned } = useAuth();
   const { currentSong, setCurrentSong, setIsPlaying } = useMusic();
 
   const fetchSongs = async () => {
@@ -89,6 +102,10 @@ const Music = () => {
 
   const handleAddSong = async () => {
     if (!searchId) return;
+    if (isBanned) {
+      alert('账号已被封禁，无法执行此操作');
+      return;
+    }
     
     // Split by comma, space or newline for batch processing
     const ids = searchId.split(/[\s,\n]+/).map(s => {
@@ -109,7 +126,7 @@ const Music = () => {
       try {
         // Check if song already exists
         const path = 'music';
-        const q = query(collection(db, path), where('id', '==', parseInt(id) || id));
+        const q = query(collection(db, path), where('id', '==', id));
         const snapshot = await getDocs(q);
         
         if (!snapshot.empty) {
@@ -117,21 +134,13 @@ const Music = () => {
           continue;
         }
 
-        const response = await fetch(`/api/music/song/${id}`);
-        const metadata = await response.json();
-        
-        if (metadata.error) {
-          console.error(`Failed to fetch metadata for ID: ${id}`);
+        try {
+          await apiPost<{ song: any }>('/api/music/from-netease', { id });
+          addedCount++;
+        } catch (error) {
+          console.error(`Failed to add metadata for ID: ${id}`, error);
           skippedCount++;
-          continue;
         }
-
-        await addDoc(collection(db, path), {
-          ...metadata,
-          addedBy: user?.uid,
-          createdAt: serverTimestamp()
-        });
-        addedCount++;
       } catch (e) {
         console.error(`Error adding song ${id}:`, e);
         skippedCount++;
@@ -145,7 +154,7 @@ const Music = () => {
     setLoading(false);
   };
 
-  const playSong = (song: any) => {
+  const playSong = (song: SongItem) => {
     if (isBatchMode) {
       toggleSelect(song.docId);
       return;
@@ -163,6 +172,33 @@ const Music = () => {
     } catch (e) {
       console.error("Delete error:", e);
       alert("删除失败，请检查权限");
+    }
+  };
+
+  const handleToggleFavorite = async (song: SongItem) => {
+    if (!user || !song.docId) {
+      alert('请先登录后收藏');
+      return;
+    }
+
+    if (favoriting === song.docId) return;
+    setFavoriting(song.docId);
+    try {
+      if (song.favoritedByMe) {
+        await apiDelete(`/api/favorites/music/${song.docId}`);
+        setSongs((prev) => prev.map((item) => (item.docId === song.docId ? { ...item, favoritedByMe: false } : item)));
+      } else {
+        await apiPost('/api/favorites', {
+          targetType: 'music',
+          targetId: song.docId,
+        });
+        setSongs((prev) => prev.map((item) => (item.docId === song.docId ? { ...item, favoritedByMe: true } : item)));
+      }
+    } catch (error) {
+      console.error('Toggle music favorite error:', error);
+      alert('收藏操作失败，请稍后重试');
+    } finally {
+      setFavoriting(null);
     }
   };
 
@@ -222,6 +258,10 @@ const Music = () => {
           <div className="flex gap-4">
             <button 
               onClick={() => {
+                if (isBanned) {
+                  alert('账号已被封禁，无法执行此操作');
+                  return;
+                }
                 setIsBatchMode(!isBatchMode);
                 setSelectedSongs(new Set());
               }}
@@ -234,7 +274,13 @@ const Music = () => {
               {isBatchMode ? '退出批量' : '批量管理'}
             </button>
             <button 
-              onClick={() => setIsAdding(!isAdding)}
+              onClick={() => {
+                if (isBanned) {
+                  alert('账号已被封禁，无法执行此操作');
+                  return;
+                }
+                setIsAdding(!isAdding);
+              }}
               className="px-8 py-4 bg-gray-900 text-white rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-xl"
             >
               {isAdding ? <X size={20} /> : <Plus size={20} />}
@@ -402,7 +448,18 @@ const Music = () => {
                     )}
                     {!isBatchMode && (
                       <>
-                        <button className="p-2 text-gray-400 hover:text-red-500 transition-colors">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleFavorite(song);
+                          }}
+                          disabled={favoriting === song.docId}
+                          className={clsx(
+                            'p-2 transition-colors',
+                            song.favoritedByMe ? 'text-red-500' : 'text-gray-400 hover:text-red-500',
+                            favoriting === song.docId && 'opacity-50 cursor-not-allowed',
+                          )}
+                        >
                           <Heart size={18} />
                         </button>
                         <a 

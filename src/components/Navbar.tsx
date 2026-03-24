@@ -1,14 +1,139 @@
 import React from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { loginWithGoogle, loginWithWeChat, logout } from '../firebase';
-import { Music, Book, MessageSquare, User as UserIcon, LogIn, LogOut, Shield, Image as ImageIcon, Search, MessageCircle, Menu, X } from 'lucide-react';
+import { Music, Book, MessageSquare, User as UserIcon, LogIn, LogOut, Shield, Image as ImageIcon, Search, MessageCircle, Menu, X, Bell } from 'lucide-react';
 import { clsx } from 'clsx';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { login, register, logoutRequest } from '../lib/auth';
+import { apiGet, apiPost } from '../lib/apiClient';
+
+interface NotificationItem {
+  id: string;
+  type: 'reply' | 'like' | 'review_result';
+  payload: Record<string, unknown>;
+  isRead: boolean;
+  createdAt: string;
+}
+
+interface NotificationsResponse {
+  notifications: NotificationItem[];
+  total: number;
+  unreadCount: number;
+  page: number;
+  limit: number;
+}
+
+type AuthMode = 'login' | 'register';
 
 export const Navbar = () => {
-  const { user, profile, isAdmin } = useAuth();
+  const { user, profile, isAdmin, isBanned } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const [authModalOpen, setAuthModalOpen] = React.useState(false);
+  const [authMode, setAuthMode] = React.useState<AuthMode>('login');
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [displayName, setDisplayName] = React.useState('');
+  const [authLoading, setAuthLoading] = React.useState(false);
+  const [notifPanelOpen, setNotifPanelOpen] = React.useState(false);
+  const [notifications, setNotifications] = React.useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = React.useState(0);
+  const [notifLoading, setNotifLoading] = React.useState(false);
+
+  const fetchNotifications = React.useCallback(async () => {
+    if (!user) return;
+    try {
+      setNotifLoading(true);
+      const data = await apiGet<NotificationsResponse>('/api/notifications', { limit: 10 });
+      setNotifications(data.notifications || []);
+      setUnreadCount(data.unreadCount || 0);
+    } catch (error) {
+      console.error('Fetch notifications error:', error);
+    } finally {
+      setNotifLoading(false);
+    }
+  }, [user]);
+
+  React.useEffect(() => {
+    if (user) {
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [user, fetchNotifications]);
+
+  const markNotificationRead = async (id: string) => {
+    try {
+      await apiPost('/api/notifications/' + id + '/read');
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Mark notification read error:', error);
+    }
+  };
+
+  const markAllNotificationsRead = async () => {
+    try {
+      await apiPost('/api/notifications/read-all');
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+    } catch (error) {
+      console.error('Mark all notifications read error:', error);
+    }
+  };
+
+  const getNotificationText = (notif: NotificationItem) => {
+    switch (notif.type) {
+      case 'reply':
+        return '回复了你的' + (notif.payload.parentId ? '评论' : '帖子');
+      case 'like':
+        return '赞了你的帖子';
+      case 'review_result':
+        return notif.payload.approved === true ? '通过了你的编辑审核' : '拒绝了你的编辑';
+      default:
+        return '有新通知';
+    }
+  };
+
+  const openAuthModal = (mode: AuthMode) => {
+    setAuthMode(mode);
+    setAuthModalOpen(true);
+  };
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) return;
+
+    try {
+      setAuthLoading(true);
+      if (authMode === 'login') {
+        await login(email, password);
+      } else {
+        await register(email, password, displayName || email.split('@')[0] || '匿名用户');
+      }
+      setAuthModalOpen(false);
+      setEmail('');
+      setPassword('');
+      setDisplayName('');
+      setIsMenuOpen(false);
+    } catch (error) {
+      console.error('Auth failed:', error);
+      alert(error instanceof Error ? error.message : '登录失败');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logoutRequest();
+      setIsMenuOpen(false);
+    } catch (error) {
+      console.error('Logout failed:', error);
+      alert('退出登录失败，请稍后重试');
+    }
+  };
 
   return (
     <nav className="sticky top-0 z-50 bg-brand-paper/80 backdrop-blur-md border-b border-gray-200">
@@ -50,34 +175,108 @@ export const Navbar = () => {
             <div className="hidden md:flex items-center gap-4">
               {user ? (
                 <div className="flex items-center gap-4">
+                  {isBanned && (
+                    <span className="text-[10px] font-bold px-2 py-1 rounded bg-red-50 text-red-600">
+                      账号受限
+                    </span>
+                  )}
                   {isAdmin && (
                     <Link to="/admin" className="text-gray-500 hover:text-brand-olive">
                       <Shield size={20} />
                     </Link>
                   )}
+                  {user && (
+                    <div className="relative">
+                      <button
+                        onClick={() => setNotifPanelOpen(!notifPanelOpen)}
+                        className="relative text-gray-500 hover:text-brand-olive transition-colors"
+                      >
+                        <Bell size={20} />
+                        {unreadCount > 0 && (
+                          <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full px-1">
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                          </span>
+                        )}
+                      </button>
+                      <AnimatePresence>
+                        {notifPanelOpen && (
+                          <>
+                            <div className="fixed inset-0 z-40" onClick={() => setNotifPanelOpen(false)} />
+                            <motion.div
+                              initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl border border-gray-100 shadow-xl z-50 overflow-hidden"
+                            >
+                              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                                <span className="font-bold text-gray-900">通知</span>
+                                {unreadCount > 0 && (
+                                  <button
+                                    onClick={markAllNotificationsRead}
+                                    className="text-xs text-brand-olive hover:underline"
+                                  >
+                                    全部已读
+                                  </button>
+                                )}
+                              </div>
+                              <div className="max-h-80 overflow-y-auto">
+                                {notifLoading ? (
+                                  <div className="py-8 text-center text-sm text-gray-400">加载中...</div>
+                                ) : notifications.length === 0 ? (
+                                  <div className="py-8 text-center text-sm text-gray-400">暂无通知</div>
+                                ) : (
+                                  notifications.map((notif) => (
+                                    <button
+                                      key={notif.id}
+                                      onClick={() => {
+                                        if (!notif.isRead) markNotificationRead(notif.id);
+                                        setNotifPanelOpen(false);
+                                      }}
+                                      className={clsx(
+                                        'w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors',
+                                        !notif.isRead && 'bg-blue-50/50'
+                                      )}
+                                    >
+                                      <p className={clsx('text-sm', !notif.isRead ? 'font-medium text-gray-900' : 'text-gray-600')}>
+                                        {getNotificationText(notif)}
+                                      </p>
+                                      <p className="text-xs text-gray-400 mt-0.5">
+                                        {new Date(notif.createdAt).toLocaleString('zh-CN')}
+                                      </p>
+                                    </button>
+                                  ))
+                                )}
+                              </div>
+                            </motion.div>
+                          </>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
                   <Link to="/profile" className="flex items-center gap-2 group">
                     <img src={profile?.photoURL || user.photoURL || ''} alt="" className="w-8 h-8 rounded-full border border-gray-200" referrerPolicy="no-referrer" />
                     <span className="hidden sm:inline text-sm font-medium text-gray-700 group-hover:text-brand-olive">{profile?.displayName || user.displayName}</span>
                   </Link>
-                  <button onClick={logout} className="text-gray-400 hover:text-red-500 transition-colors">
+                  <button onClick={handleLogout} className="text-gray-400 hover:text-red-500 transition-colors">
                     <LogOut size={20} />
                   </button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
                   <button 
-                    onClick={loginWithWeChat}
+                    onClick={() => openAuthModal('register')}
                     className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500 text-white text-sm font-medium hover:bg-green-600 transition-all shadow-sm"
                   >
                     <MessageCircle size={18} />
-                    微信登录
+                    账号注册
                   </button>
                   <button 
-                    onClick={loginWithGoogle}
+                    onClick={() => openAuthModal('login')}
                     className="flex items-center gap-2 px-4 py-2 rounded-full bg-brand-olive text-white text-sm font-medium hover:bg-brand-olive/90 transition-all shadow-sm"
                   >
                     <LogIn size={18} />
-                    Google 登录
+                    账号登录
                   </button>
                 </div>
               )}
@@ -126,6 +325,11 @@ export const Navbar = () => {
               <div className="pt-4 border-t border-gray-100">
                 {user ? (
                   <div className="space-y-4">
+                    {isBanned && (
+                      <div className="px-3 py-2 bg-red-50 text-red-600 rounded-xl text-xs">
+                        账号已封禁{profile?.banReason ? `：${profile.banReason}` : ''}
+                      </div>
+                    )}
                     <Link to="/profile" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-3 p-2">
                       <img src={profile?.photoURL || user.photoURL || ''} alt="" className="w-10 h-10 rounded-full border border-gray-200" referrerPolicy="no-referrer" />
                       <div>
@@ -141,8 +345,7 @@ export const Navbar = () => {
                     )}
                     <button 
                       onClick={() => {
-                        logout();
-                        setIsMenuOpen(false);
+                        handleLogout();
                       }}
                       className="w-full flex items-center gap-3 p-3 bg-red-50 text-red-500 rounded-xl"
                     >
@@ -154,28 +357,102 @@ export const Navbar = () => {
                   <div className="space-y-3">
                     <button 
                       onClick={() => {
-                        loginWithWeChat();
-                        setIsMenuOpen(false);
+                        openAuthModal('register');
                       }}
                       className="w-full flex items-center justify-center gap-2 py-4 bg-green-500 text-white rounded-2xl font-bold"
                     >
                       <MessageCircle size={20} />
-                      微信登录
+                      账号注册
                     </button>
                     <button 
                       onClick={() => {
-                        loginWithGoogle();
-                        setIsMenuOpen(false);
+                        openAuthModal('login');
                       }}
                       className="w-full flex items-center justify-center gap-2 py-4 bg-brand-olive text-white rounded-2xl font-bold"
                     >
                       <LogIn size={20} />
-                      Google 登录
+                      账号登录
                     </button>
                   </div>
                 )}
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {authModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              className="w-full max-w-md bg-white rounded-3xl border border-gray-100 shadow-2xl p-8"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-serif font-bold text-brand-olive">
+                  {authMode === 'login' ? '账号登录' : '账号注册'}
+                </h3>
+                <button
+                  onClick={() => setAuthModalOpen(false)}
+                  className="text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleAuthSubmit} className="space-y-4">
+                {authMode === 'register' && (
+                  <input
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="昵称（可选）"
+                    className="w-full px-4 py-3 bg-brand-cream rounded-xl border-none focus:ring-2 focus:ring-brand-olive/20"
+                  />
+                )}
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="邮箱"
+                  className="w-full px-4 py-3 bg-brand-cream rounded-xl border-none focus:ring-2 focus:ring-brand-olive/20"
+                />
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="密码（至少 6 位）"
+                  className="w-full px-4 py-3 bg-brand-cream rounded-xl border-none focus:ring-2 focus:ring-brand-olive/20"
+                />
+
+                <button
+                  type="submit"
+                  disabled={authLoading}
+                  className="w-full px-4 py-3 bg-brand-olive text-white rounded-xl font-bold hover:bg-brand-olive/90 transition-all disabled:opacity-50"
+                >
+                  {authLoading
+                    ? (authMode === 'login' ? '登录中...' : '注册中...')
+                    : (authMode === 'login' ? '登录' : '注册')}
+                </button>
+              </form>
+
+              <button
+                onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
+                className="mt-4 text-sm font-medium text-brand-olive hover:underline"
+              >
+                {authMode === 'login' ? '没有账号？去注册' : '已有账号？去登录'}
+              </button>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

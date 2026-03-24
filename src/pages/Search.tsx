@@ -1,13 +1,25 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Search as SearchIcon, Book, MessageSquare, Image as ImageIcon, Clock, ChevronRight, Tag, X, Filter, Sparkles, Calendar, Camera } from 'lucide-react';
-import { format, startOfDay, endOfDay, subDays } from 'date-fns';
+import { format, endOfDay } from 'date-fns';
 import { clsx } from 'clsx';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { describeImageForSearch } from '../services/aiService';
 import { SmartImage } from '../components/SmartImage';
+import { apiGet } from '../lib/apiClient';
+
+const toDateValue = (value: string | null | undefined) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+type SearchSuggestion = {
+  type: 'keyword' | 'wiki' | 'post';
+  text: string;
+  subtext?: string;
+  id?: string;
+};
 
 const Search = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -31,7 +43,26 @@ const Search = () => {
   const [aiSearching, setAiSearching] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const trendingTags = ['黄诗扶', '音乐作品', '演出经历', '同人创作', 'Live', '绝色', '2024'];
+  // Hot Keywords
+  const [hotKeywords, setHotKeywords] = useState<string[]>([]);
+
+  // Suggest Dropdown
+  const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
+  const [showSuggest, setShowSuggest] = useState(false);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const suggestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const fetchHotKeywords = async () => {
+      try {
+        const data = await apiGet<{ keywords: Array<{ keyword: string; count: number }> }>('/api/search/hot-keywords');
+        setHotKeywords(data.keywords?.map((k) => k.keyword) || []);
+      } catch (e) {
+        console.error("Fetch hot keywords error:", e);
+      }
+    };
+    fetchHotKeywords();
+  }, []);
 
   useEffect(() => {
     if (initialQuery) {
@@ -39,8 +70,34 @@ const Search = () => {
     }
   }, [initialQuery]);
 
+  const fetchSuggestions = useCallback(async (q: string) => {
+    if (!q || q.length < 2) {
+      setSuggestions([]);
+      setShowSuggest(false);
+      return;
+    }
+    setSuggestLoading(true);
+    try {
+      const data = await apiGet<{ suggestions: SearchSuggestion[] }>('/api/search/suggest', { q });
+      setSuggestions(data.suggestions || []);
+      setShowSuggest(true);
+    } catch (e) {
+      console.error("Suggest error:", e);
+    } finally {
+      setSuggestLoading(false);
+    }
+  }, []);
+
+  const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setSearchQuery(val);
+    if (suggestTimeoutRef.current) clearTimeout(suggestTimeoutRef.current);
+    suggestTimeoutRef.current = setTimeout(() => fetchSuggestions(val), 300);
+  };
+
   const handleSearch = async (q: string, filtersOverride?: any) => {
     setLoading(true);
+    setShowSuggest(false);
     const currentQuery = q || searchQuery;
     setSearchParams({ q: currentQuery });
     setSearchQuery(currentQuery);
@@ -48,46 +105,35 @@ const Search = () => {
     const filters = filtersOverride || { selectedTags, dateRange, contentType };
 
     try {
-      const collections = ['wiki', 'posts', 'galleries'];
-      const searchPromises = collections.map(async (col) => {
-        if (filters.contentType !== 'all' && filters.contentType !== col) return [];
+      const typeMap: Record<string, string> = {
+        wiki: 'wiki',
+        posts: 'posts',
+        galleries: 'galleries',
+      };
+      const apiType = filters.contentType === 'all' ? 'all' : typeMap[filters.contentType] || 'all';
 
-        const ref = collection(db, col);
-        let qry = query(ref, orderBy('updatedAt', 'desc'), limit(100));
-        
-        // Firestore doesn't support complex text search + multiple filters well without indexes
-        // So we fetch and filter client-side for this demo/prototype
-        const snapshot = await getDocs(qry);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const data = await apiGet<{ wiki: any[]; posts: any[]; galleries: any[] }>('/api/search', {
+        q: currentQuery,
+        type: apiType,
+        ...(filters.dateRange.start ? { startDate: filters.dateRange.start } : {}),
+        ...(filters.dateRange.end ? { endDate: filters.dateRange.end } : {}),
       });
 
-      const [wikiDocs, postsDocs, galleriesDocs] = await Promise.all(searchPromises);
+      const allResults = {
+        wiki: data.wiki || [],
+        posts: data.posts || [],
+        galleries: data.galleries || [],
+      };
 
       const filterFn = (item: any) => {
-        // Text Search
-        const searchStr = (item.title || item.content || item.description || '').toLowerCase();
-        const tagsStr = (item.tags || []).join(' ').toLowerCase();
-        const categoryStr = (item.category || item.section || '').toLowerCase();
-        const matchesText = !currentQuery || searchStr.includes(currentQuery.toLowerCase()) || tagsStr.includes(currentQuery.toLowerCase()) || categoryStr.includes(currentQuery.toLowerCase());
-
-        // Tag Filter
         const matchesTags = filters.selectedTags.length === 0 || filters.selectedTags.every(tag => (item.tags || []).includes(tag));
-
-        // Date Filter
-        let matchesDate = true;
-        if (filters.dateRange.start || filters.dateRange.end) {
-          const itemDate = item.updatedAt?.toDate ? item.updatedAt.toDate() : new Date();
-          if (filters.dateRange.start && itemDate < new Date(filters.dateRange.start)) matchesDate = false;
-          if (filters.dateRange.end && itemDate > endOfDay(new Date(filters.dateRange.end))) matchesDate = false;
-        }
-
-        return matchesText && matchesTags && matchesDate;
+        return matchesTags;
       };
 
       setResults({
-        wiki: wikiDocs.filter(filterFn),
-        posts: postsDocs.filter(filterFn),
-        galleries: galleriesDocs.filter(filterFn)
+        wiki: allResults.wiki.filter(filterFn),
+        posts: allResults.posts.filter(filterFn),
+        galleries: allResults.galleries.filter(filterFn),
       });
     } catch (e) {
       console.error("Search error:", e);
@@ -139,12 +185,55 @@ const Search = () => {
             <input 
               type="text" 
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={handleQueryChange}
+              onFocus={() => searchQuery.length >= 2 && fetchSuggestions(searchQuery)}
               placeholder="搜索百科、帖子或图集..."
               className="w-full px-14 py-6 bg-brand-cream/30 rounded-[32px] border-none focus:ring-4 focus:ring-brand-olive/10 transition-all text-xl font-serif"
             />
             <SearchIcon className="absolute left-6 top-1/2 -translate-y-1/2 text-brand-olive/40 group-focus-within:text-brand-olive transition-colors" size={24} />
             
+            <AnimatePresence>
+              {showSuggest && suggestions.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                  className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl border border-gray-100 shadow-xl z-50 overflow-hidden"
+                >
+                  {suggestions.map((s, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        if (s.type === 'keyword') {
+                          handleSearch(s.text);
+                        } else {
+                          setShowSuggest(false);
+                          if (s.type === 'wiki' && s.id) {
+                            window.location.href = `/wiki/${s.id}`;
+                          } else if (s.type === 'post' && s.id) {
+                            window.location.href = `/forum/${s.id}`;
+                          }
+                        }
+                      }}
+                      className="w-full text-left px-4 py-3 hover:bg-brand-cream/50 transition-colors border-b border-gray-50 last:border-0"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className={clsx(
+                          'px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider',
+                          s.type === 'keyword' ? 'bg-orange-100 text-orange-600' : s.type === 'wiki' ? 'bg-brand-cream text-brand-olive' : 'bg-brand-primary/10 text-brand-primary'
+                        )}>
+                          {s.type === 'keyword' ? '搜索' : s.type === 'wiki' ? '百科' : '帖子'}
+                        </span>
+                        <span className="text-sm text-gray-700">{s.text}</span>
+                        {s.subtext && <span className="text-xs text-gray-400">{s.subtext}</span>}
+                      </div>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
               <button 
                 type="button"
@@ -168,7 +257,7 @@ const Search = () => {
           <div className="flex items-center justify-between">
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">热门:</span>
-              {trendingTags.slice(0, 4).map(tag => (
+              {hotKeywords.slice(0, 4).map(tag => (
                 <button 
                   key={tag}
                   onClick={() => handleSearch(tag)}
@@ -203,7 +292,7 @@ const Search = () => {
                       <Tag size={14} /> 标签筛选
                     </h4>
                     <div className="flex flex-wrap gap-2">
-                      {trendingTags.map(tag => (
+                      {hotKeywords.map(tag => (
                         <button
                           key={tag}
                           onClick={() => toggleTag(tag)}
@@ -344,7 +433,7 @@ const Search = () => {
                           {page.content.replace(/[#*`]/g, '').substring(0, 100)}...
                         </p>
                         <div className="flex items-center justify-between text-gray-400 text-[10px]">
-                          <span className="flex items-center gap-1"><Clock size={12} /> {page.updatedAt?.toDate ? format(page.updatedAt.toDate(), 'yyyy-MM-dd') : '刚刚'}</span>
+                          <span className="flex items-center gap-1"><Clock size={12} /> {toDateValue(page.updatedAt) ? format(toDateValue(page.updatedAt)!, 'yyyy-MM-dd') : '刚刚'}</span>
                           <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
                         </div>
                       </Link>
@@ -372,7 +461,7 @@ const Search = () => {
                       >
                         <div className="flex items-center gap-2 mb-2">
                           <span className="px-2 py-0.5 bg-brand-cream text-brand-olive text-[10px] font-bold uppercase tracking-wider rounded">{post.section}</span>
-                          <span className="text-[10px] text-gray-400 flex items-center gap-1"><Clock size={10} /> {post.updatedAt?.toDate ? format(post.updatedAt.toDate(), 'yyyy-MM-dd') : '刚刚'}</span>
+                          <span className="text-[10px] text-gray-400 flex items-center gap-1"><Clock size={10} /> {toDateValue(post.updatedAt) ? format(toDateValue(post.updatedAt)!, 'yyyy-MM-dd') : '刚刚'}</span>
                         </div>
                         <h3 className="text-xl font-serif font-bold group-hover:text-brand-olive transition-colors">{post.title}</h3>
                       </Link>

@@ -1,7 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, db, ref, uploadBytes, getDownloadURL, storage } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Image as ImageIcon, Plus, Folder, X, Upload, Tag, Clock, User as UserIcon, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
@@ -9,10 +7,16 @@ import { motion, AnimatePresence } from 'motion/react';
 import { clsx } from 'clsx';
 import { SmartImage } from '../components/SmartImage';
 
+const toDateValue = (value: string | null | undefined) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 const GalleryList = () => {
   const [galleries, setGalleries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
+  const { user, isBanned } = useAuth();
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   useEffect(() => {
@@ -31,7 +35,7 @@ const GalleryList = () => {
           <h1 className="text-5xl font-serif font-bold text-brand-olive mb-2">图集馆</h1>
           <p className="text-gray-500 italic">诗扶图集 · 记录每一帧绝色</p>
         </div>
-        {user && (
+        {user && !isBanned && (
           <button 
             onClick={() => setIsUploadModalOpen(true)}
             className="px-6 py-3 bg-brand-olive text-white rounded-full font-medium hover:bg-brand-olive/90 transition-all flex items-center gap-2 shadow-md"
@@ -72,7 +76,7 @@ const GalleryList = () => {
                   ))}
                 </div>
                 <div className="flex items-center justify-between text-gray-400 text-xs">
-                  <span className="flex items-center gap-1"><Clock size={12} /> {gallery.createdAt?.toDate ? format(gallery.createdAt.toDate(), 'yyyy-MM-dd') : '刚刚'}</span>
+                  <span className="flex items-center gap-1"><Clock size={12} /> {toDateValue(gallery.createdAt) ? format(toDateValue(gallery.createdAt)!, 'yyyy-MM-dd') : '刚刚'}</span>
                   <span className="flex items-center gap-1"><UserIcon size={12} /> {gallery.authorUid?.substring(0, 6)}</span>
                 </div>
               </div>
@@ -97,7 +101,7 @@ const GalleryList = () => {
 };
 
 const UploadModal = ({ onClose }: { onClose: () => void }) => {
-  const { user, profile } = useAuth();
+  const { user, profile, isBanned } = useAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
@@ -128,6 +132,7 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
 
   const handleUpload = async () => {
     if (!user || files.length === 0) return alert('请选择图片');
+    if (isBanned) return alert('账号已被封禁，无法上传图集');
     
     // Group files by folder if possible
     const groups: { [key: string]: File[] } = {};
@@ -157,8 +162,8 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
 
         for (const file of groupFiles) {
           const storageRef = ref(storage, `galleries/${user.uid}/${Date.now()}_${file.name}`);
-          await uploadBytes(storageRef, file);
-          const url = await getDownloadURL(storageRef);
+          const uploadResult = await uploadBytes(storageRef, file);
+          const url = await getDownloadURL(uploadResult);
           imageUrls.push({ url, name: file.name });
           
           uploadedCount++;

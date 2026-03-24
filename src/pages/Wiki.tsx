@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Routes, Route, Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, orderBy, addDoc, limit } from 'firebase/firestore';
-import { db } from '../firebase';
+import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, orderBy, addDoc, limit, db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -12,6 +11,7 @@ import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { summarizeWikiContent, generateWikiIntro } from '../services/aiService';
 import { uploadImageToCDNs, getImageUrl } from '../services/imageService';
+import { apiDelete, apiPost } from '../lib/apiClient';
 import MdEditor from 'react-markdown-editor-lite';
 import MarkdownIt from 'markdown-it';
 import 'react-markdown-editor-lite/lib/index.css';
@@ -21,6 +21,46 @@ const mdParser = new MarkdownIt({
   linkify: true,
   typographer: true
 });
+
+const toDateValue = (value: string | null | undefined) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const formatDate = (value: string | null | undefined, pattern: string) => {
+  const parsed = toDateValue(value);
+  return parsed ? format(parsed, pattern) : '刚刚';
+};
+
+type ContentStatus = 'draft' | 'pending' | 'published' | 'rejected';
+
+type WikiItem = {
+  id: string;
+  slug: string;
+  title: string;
+  category: string;
+  content: string;
+  tags?: string[];
+  eventDate?: string | null;
+  status?: ContentStatus;
+  reviewNote?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  favoritesCount?: number;
+  favoritedByMe?: boolean;
+  lastEditorUid: string;
+  lastEditorName: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const getStatusText = (status?: ContentStatus) => {
+  if (status === 'pending') return '待审核';
+  if (status === 'rejected') return '已驳回';
+  if (status === 'draft') return '草稿';
+  return '已发布';
+};
 
 // --- Wiki Internal Linking Component ---
 const WikiMarkdown = ({ content }: { content: string }) => {
@@ -85,9 +125,9 @@ const WikiMarkdown = ({ content }: { content: string }) => {
 const WikiList = () => {
   const [searchParams] = useSearchParams();
   const category = searchParams.get('category') || 'all';
-  const [pages, setPages] = useState<any[]>([]);
+  const [pages, setPages] = useState<WikiItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
+  const { user, isBanned } = useAuth();
 
   useEffect(() => {
     const fetchPages = async () => {
@@ -99,7 +139,7 @@ const WikiList = () => {
           q = query(wikiRef, where('category', '==', category), orderBy('updatedAt', 'desc'));
         }
         const snapshot = await getDocs(q);
-        setPages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setPages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WikiItem)));
       } catch (e) {
         console.error("Error fetching wiki pages:", e);
       }
@@ -119,7 +159,7 @@ const WikiList = () => {
           <Link to="/wiki/timeline" className="px-6 py-3 bg-brand-cream text-brand-olive rounded-full font-medium hover:bg-brand-olive hover:text-white transition-all flex items-center gap-2 shadow-sm">
             <Calendar size={18} /> 时间轴视图
           </Link>
-          {user && (
+          {user && !isBanned && (
             <Link to="/wiki/new" className="px-6 py-3 bg-brand-olive text-white rounded-full font-medium hover:bg-brand-olive/90 transition-all flex items-center gap-2 shadow-md">
               <Plus size={18} /> 创建页面
             </Link>
@@ -177,7 +217,7 @@ const WikiList = () => {
                 {page.content.replace(/[#*`]/g, '').substring(0, 100)}...
               </p>
               <div className="flex items-center justify-between text-gray-400 text-xs">
-                <span className="flex items-center gap-1"><Clock size={12} /> {page.updatedAt?.toDate ? format(page.updatedAt.toDate(), 'yyyy-MM-dd') : '刚刚'}</span>
+                <span className="flex items-center gap-1"><Clock size={12} /> {formatDate(page.updatedAt, 'yyyy-MM-dd')}</span>
                 <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
               </div>
             </Link>
@@ -196,12 +236,14 @@ const WikiList = () => {
 // --- Wiki Page Component ---
 const WikiPageView = () => {
   const { slug } = useParams();
-  const [page, setPage] = useState<any>(null);
+  const [page, setPage] = useState<WikiItem | null>(null);
   const [loading, setLoading] = useState(true);
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isBanned } = useAuth();
   const [summary, setSummary] = useState<string | null>(null);
   const [summarizing, setSummarizing] = useState(false);
-  const [backlinks, setBacklinks] = useState<any[]>([]);
+  const [backlinks, setBacklinks] = useState<WikiItem[]>([]);
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [favoriting, setFavoriting] = useState(false);
 
   useEffect(() => {
     const fetchPage = async () => {
@@ -210,14 +252,14 @@ const WikiPageView = () => {
         const docRef = doc(db, 'wiki', slug!);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          setPage(docSnap.data());
+          setPage(docSnap.data() as WikiItem);
           
           // Fetch Backlinks
           const wikiRef = collection(db, 'wiki');
           const q = query(wikiRef, limit(100)); // Simplified: fetch all and filter client-side for [[slug]]
           const snapshot = await getDocs(q);
           const links = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() } as any))
+            .map(doc => ({ id: doc.id, ...doc.data() } as WikiItem))
             .filter(p => p.slug !== slug && p.content.includes(`[[${slug}]]`));
           setBacklinks(links);
         }
@@ -231,6 +273,51 @@ const WikiPageView = () => {
 
   if (loading) return <div className="max-w-4xl mx-auto px-4 py-20 text-center italic text-gray-400">加载中...</div>;
   if (!page) return <div className="max-w-4xl mx-auto px-4 py-20 text-center italic text-gray-400">页面未找到</div>;
+
+  const isOwner = Boolean(user && page?.lastEditorUid === user.uid);
+  const canSubmitReview = Boolean(!isBanned && isOwner && page && (page.status === 'draft' || page.status === 'rejected'));
+
+  const handleToggleFavorite = async () => {
+    if (!slug || !user || favoriting) return;
+    setFavoriting(true);
+    try {
+      if (page.favoritedByMe) {
+        await apiDelete(`/api/favorites/wiki/${slug}`);
+        setPage((prev) => prev ? {
+          ...prev,
+          favoritedByMe: false,
+          favoritesCount: Math.max(0, Number(prev.favoritesCount || 0) - 1),
+        } : prev);
+      } else {
+        await apiPost('/api/favorites', { targetType: 'wiki', targetId: slug });
+        setPage((prev) => prev ? {
+          ...prev,
+          favoritedByMe: true,
+          favoritesCount: Number(prev.favoritesCount || 0) + 1,
+        } : prev);
+      }
+    } catch (error) {
+      console.error('Toggle wiki favorite failed:', error);
+      alert('收藏操作失败，请稍后重试');
+    } finally {
+      setFavoriting(false);
+    }
+  };
+
+  const handleSubmitReview = async () => {
+    if (!slug || !canSubmitReview || submittingReview) return;
+    setSubmittingReview(true);
+    try {
+      const data = await apiPost<{ page: WikiItem }>(`/api/wiki/${slug}/submit`);
+      setPage((prev) => prev ? { ...prev, ...data.page } : prev);
+      alert('已提交审核，请等待管理员处理');
+    } catch (error) {
+      console.error('Submit wiki review failed:', error);
+      alert('提交审核失败，请稍后重试');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-12">
@@ -249,11 +336,23 @@ const WikiPageView = () => {
                page.category === 'event' ? '活动记录' : page.category}
             </span>
             <span className="text-gray-300">/</span>
-            <span className="text-gray-400 text-sm flex items-center gap-1"><Clock size={14} /> 最后更新: {page.updatedAt?.toDate ? format(page.updatedAt.toDate(), 'yyyy-MM-dd HH:mm') : '刚刚'}</span>
+            <span className="text-gray-400 text-sm flex items-center gap-1"><Clock size={14} /> 最后更新: {formatDate(page.updatedAt, 'yyyy-MM-dd HH:mm')}</span>
           </div>
           <div className="flex justify-between items-start gap-4">
             <h1 className="text-5xl sm:text-6xl font-serif font-bold text-brand-olive leading-tight">{page.title}</h1>
             <div className="flex gap-2">
+              <button
+                onClick={handleToggleFavorite}
+                disabled={!user || favoriting}
+                className={clsx(
+                  'p-3 rounded-full transition-all flex items-center gap-2',
+                  page.favoritedByMe ? 'bg-brand-olive text-white' : 'bg-brand-cream text-brand-olive hover:bg-brand-olive hover:text-white',
+                  (!user || favoriting) && 'opacity-50 cursor-not-allowed',
+                )}
+                title={page.favoritedByMe ? '取消收藏' : '收藏页面'}
+              >
+                <Save size={20} />
+              </button>
               <button 
                 onClick={async () => {
                   setSummarizing(true);
@@ -283,6 +382,33 @@ const WikiPageView = () => {
                 </div>
               )}
             </div>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <span className={clsx(
+              'px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider',
+              page.status === 'published'
+                ? 'bg-green-100 text-green-700'
+                : page.status === 'pending'
+                  ? 'bg-amber-100 text-amber-700'
+                  : page.status === 'rejected'
+                    ? 'bg-red-100 text-red-700'
+                    : 'bg-gray-100 text-gray-600',
+            )}>
+              {getStatusText(page.status)}
+            </span>
+            <span className="text-xs text-gray-500">收藏 {page.favoritesCount || 0}</span>
+            {canSubmitReview && (
+              <button
+                onClick={handleSubmitReview}
+                disabled={submittingReview}
+                className="px-4 py-1.5 rounded-full bg-amber-100 text-amber-800 text-xs font-bold hover:bg-amber-200 disabled:opacity-50"
+              >
+                {submittingReview ? '提交中...' : '提交审核'}
+              </button>
+            )}
+            {page.status === 'rejected' && page.reviewNote ? (
+              <span className="text-xs text-red-500">驳回原因：{page.reviewNote}</span>
+            ) : null}
           </div>
         </header>
 
@@ -348,7 +474,7 @@ const WikiEditor = () => {
   const { slug } = useParams();
   const isNew = !slug || slug === 'new';
   const navigate = useNavigate();
-  const { user, profile, isAdmin } = useAuth();
+  const { user, profile, isAdmin, isBanned } = useAuth();
   
   const [formData, setFormData] = useState({
     title: '',
@@ -358,7 +484,7 @@ const WikiEditor = () => {
     tags: '',
     eventDate: ''
   });
-  const [loading, setLoading] = useState(false);
+  const [savingMode, setSavingMode] = useState<'draft' | 'pending' | null>(null);
   const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
@@ -382,9 +508,12 @@ const WikiEditor = () => {
     }
   }, [slug, isNew]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (status: 'draft' | 'pending') => {
     if (!user) return;
+    if (isBanned) {
+      alert('账号已被封禁，无法编辑百科');
+      return;
+    }
     
     if (formData.category === 'music' && !isAdmin) {
       alert("只有管理员可以修改音乐分类的内容");
@@ -402,7 +531,7 @@ const WikiEditor = () => {
       return;
     }
     
-    setLoading(true);
+    setSavingMode(status);
 
     const pageData: any = {
       title: formData.title,
@@ -411,6 +540,7 @@ const WikiEditor = () => {
       content: formData.content,
       tags: formData.tags.split(',').map(t => t.trim()).filter(t => t),
       eventDate: formData.eventDate,
+      status,
       lastEditorUid: user.uid,
       lastEditorName: profile?.displayName || user.displayName || '匿名用户',
       updatedAt: serverTimestamp(),
@@ -445,7 +575,7 @@ const WikiEditor = () => {
       console.error("Error saving wiki page:", e);
       alert("保存失败，请检查网络或权限");
     }
-    setLoading(false);
+    setSavingMode(null);
   };
 
   return (
@@ -458,7 +588,13 @@ const WikiEditor = () => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSubmit('pending');
+          }}
+          className="space-y-8"
+        >
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">标题</label>
@@ -562,13 +698,21 @@ const WikiEditor = () => {
             />
           </div>
 
-          <div className="pt-8 flex justify-end">
+          <div className="pt-8 flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => handleSubmit('draft')}
+              disabled={Boolean(savingMode)}
+              className="px-8 py-4 bg-gray-100 text-gray-700 rounded-full font-bold hover:bg-gray-200 transition-all flex items-center gap-2 disabled:opacity-50"
+            >
+              <Save size={18} /> {savingMode === 'draft' ? '保存中...' : '保存草稿'}
+            </button>
             <button 
-              type="submit" 
-              disabled={loading}
+              type="submit"
+              disabled={Boolean(savingMode)}
               className="px-12 py-4 bg-brand-olive text-white rounded-full font-bold hover:bg-brand-olive/90 hover:scale-105 active:scale-95 transition-all shadow-lg flex items-center gap-2 disabled:opacity-50"
             >
-              <Save size={20} /> {loading ? '保存中...' : '发布页面'}
+              <Sparkles size={18} /> {savingMode === 'pending' ? '提交中...' : '提交审核'}
             </button>
           </div>
         </form>
@@ -579,6 +723,7 @@ const WikiEditor = () => {
 
 // --- Wiki History Component ---
 const WikiHistory = () => {
+  const { isBanned } = useAuth();
   const { slug } = useParams();
   const [revisions, setRevisions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -601,15 +746,14 @@ const WikiHistory = () => {
   }, [slug]);
 
   const handleRollback = async (revision: any) => {
-    if (!window.confirm(`确定要回滚到 ${format(revision.createdAt.toDate(), 'yyyy-MM-dd HH:mm')} 的版本吗？`)) return;
+    if (!window.confirm(`确定要回滚到 ${formatDate(revision.createdAt, 'yyyy-MM-dd HH:mm')} 的版本吗？`)) return;
+    if (isBanned) {
+      alert('账号已被封禁，无法回滚');
+      return;
+    }
     
     try {
-      const docRef = doc(db, 'wiki', slug!);
-      await updateDoc(docRef, {
-        title: revision.title,
-        content: revision.content,
-        updatedAt: serverTimestamp()
-      });
+      await apiPost(`/api/wiki/${slug}/rollback/${revision.id}`);
       navigate(`/wiki/${slug}`);
     } catch (e) {
       console.error("Rollback error:", e);
@@ -641,7 +785,7 @@ const WikiHistory = () => {
                     {revisions.length - i}
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-gray-700">{format(rev.createdAt.toDate(), 'yyyy-MM-dd HH:mm:ss')}</p>
+                    <p className="text-sm font-bold text-gray-700">{formatDate(rev.createdAt, 'yyyy-MM-dd HH:mm:ss')}</p>
                     <p className="text-xs text-gray-400">编辑者: {rev.editorName} ({rev.editorUid.substring(0, 6)})</p>
                   </div>
                 </div>
@@ -680,7 +824,7 @@ const WikiHistory = () => {
                 <div>
                   <h3 className="text-2xl font-serif font-bold text-brand-olive">版本预览</h3>
                   <p className="text-xs text-gray-400 mt-1">
-                    {format(selectedRevision.createdAt.toDate(), 'yyyy-MM-dd HH:mm:ss')} · 编辑者: {selectedRevision.editorName}
+                    {formatDate(selectedRevision.createdAt, 'yyyy-MM-dd HH:mm:ss')} · 编辑者: {selectedRevision.editorName}
                   </p>
                 </div>
                 <button onClick={() => setSelectedRevision(null)} className="p-2 text-gray-400 hover:text-red-500">
@@ -718,7 +862,7 @@ const WikiHistory = () => {
 
 // --- Wiki Timeline Component ---
 const WikiTimeline = () => {
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<WikiItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -729,8 +873,8 @@ const WikiTimeline = () => {
         const q = query(wikiRef, orderBy('eventDate', 'asc'));
         const snapshot = await getDocs(q);
         const allEvents = snapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() }))
-          .filter((p: any) => p.eventDate); // Ensure they have a date
+          .map(doc => ({ id: doc.id, ...doc.data() } as WikiItem))
+          .filter((p) => p.eventDate); // Ensure they have a date
         setEvents(allEvents);
       } catch (e) {
         console.error("Error fetching timeline events:", e);

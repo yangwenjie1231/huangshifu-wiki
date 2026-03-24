@@ -1,0 +1,339 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  user
+  admin
+  super_admin
+}
+
+enum UserStatus {
+  active
+  banned
+}
+
+enum ContentStatus {
+  draft
+  pending
+  published
+  rejected
+}
+
+enum ModerationTargetType {
+  wiki
+  post
+}
+
+enum ModerationAction {
+  submit
+  approve
+  reject
+  rollback
+}
+
+enum FavoriteTargetType {
+  wiki
+  post
+  music
+}
+
+enum UserBanAction {
+  ban
+  unban
+}
+
+enum NotificationType {
+  reply
+  like
+  review_result
+}
+
+enum BrowsingTargetType {
+  wiki
+  post
+  music
+}
+
+model User {
+  uid           String         @id @default(cuid())
+  email         String         @unique
+  passwordHash  String
+  displayName   String
+  photoURL      String?
+  role          UserRole       @default(user)
+  status        UserStatus     @default(active)
+  banReason     String?        @db.Text
+  bannedAt      DateTime?
+  level         Int            @default(1)
+  bio           String         @db.Text
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  posts         Post[]         @relation("UserPosts")
+  comments      PostComment[]  @relation("UserComments")
+  wikiEdits     WikiPage[]     @relation("WikiLastEditor")
+  revisions     WikiRevision[] @relation("WikiRevisionEditor")
+  galleries     Gallery[]      @relation("UserGalleries")
+  musicAdded    MusicTrack[]   @relation("MusicAddedBy")
+  postLikes     PostLike[]
+  favorites     Favorite[]
+  moderationLogs ModerationLog[] @relation("ModerationOperator")
+  userBanOps    UserBanLog[]   @relation("UserBanActionBy")
+  userBanTargets UserBanLog[]  @relation("UserBanActionTarget")
+  notifications Notification[]
+  browsingHistories BrowsingHistory[]
+
+  @@index([status, createdAt])
+}
+
+model Section {
+  id          String   @id
+  name        String
+  description String   @default("")
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  posts       Post[]
+
+  @@index([createdAt])
+}
+
+model Post {
+  id            String        @id @default(cuid())
+  title         String
+  section       String
+  content       String        @db.LongText
+  tags          Json?
+  authorUid     String
+  status        ContentStatus @default(published)
+  reviewNote    String?       @db.Text
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  hotScore      Float         @default(0)
+  viewCount     Int           @default(0)
+  likesCount    Int           @default(0)
+  commentsCount Int           @default(0)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  sectionRef    Section       @relation(fields: [section], references: [id], onDelete: Restrict)
+  author        User          @relation("UserPosts", fields: [authorUid], references: [uid], onDelete: Cascade)
+  comments      PostComment[]
+  likes         PostLike[]
+
+  @@index([section])
+  @@index([status, updatedAt])
+  @@index([updatedAt])
+  @@index([hotScore, updatedAt])
+}
+
+model PostComment {
+  id         String   @id @default(cuid())
+  postId     String
+  authorUid  String
+  authorName String
+  authorPhoto String?
+  content    String   @db.Text
+  parentId   String?
+  createdAt  DateTime @default(now())
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author     User     @relation("UserComments", fields: [authorUid], references: [uid], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+  @@index([parentId])
+}
+
+model WikiPage {
+  id            String         @id @default(cuid())
+  slug          String         @unique
+  title         String
+  category      String
+  content       String         @db.LongText
+  tags          Json?
+  eventDate     String?
+  status        ContentStatus  @default(published)
+  reviewNote    String?        @db.Text
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  viewCount     Int            @default(0)
+  favoritesCount Int           @default(0)
+  lastEditorUid String
+  lastEditorName String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  lastEditor    User           @relation("WikiLastEditor", fields: [lastEditorUid], references: [uid], onDelete: Cascade)
+  revisions     WikiRevision[]
+
+  @@index([category, updatedAt])
+  @@index([status, updatedAt])
+  @@index([eventDate])
+}
+
+model PostLike {
+  id        String   @id @default(cuid())
+  postId    String
+  userUid   String
+  createdAt DateTime @default(now())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userUid], references: [uid], onDelete: Cascade)
+
+  @@unique([postId, userUid])
+  @@index([userUid, createdAt])
+}
+
+model Favorite {
+  id         String             @id @default(cuid())
+  userUid    String
+  targetType FavoriteTargetType
+  targetId   String
+  createdAt  DateTime           @default(now())
+  user       User               @relation(fields: [userUid], references: [uid], onDelete: Cascade)
+
+  @@unique([userUid, targetType, targetId])
+  @@index([targetType, targetId])
+  @@index([userUid, createdAt])
+}
+
+model ModerationLog {
+  id         String               @id @default(cuid())
+  targetType ModerationTargetType
+  targetId   String
+  action     ModerationAction
+  operatorUid String
+  note       String?              @db.Text
+  createdAt  DateTime             @default(now())
+  operator   User                 @relation("ModerationOperator", fields: [operatorUid], references: [uid], onDelete: Cascade)
+
+  @@index([targetType, targetId, createdAt])
+  @@index([operatorUid, createdAt])
+}
+
+model UserBanLog {
+  id         String        @id @default(cuid())
+  targetUid  String
+  action     UserBanAction
+  operatorUid String
+  note       String?       @db.Text
+  createdAt  DateTime      @default(now())
+  target     User          @relation("UserBanActionTarget", fields: [targetUid], references: [uid], onDelete: Cascade)
+  operator   User          @relation("UserBanActionBy", fields: [operatorUid], references: [uid], onDelete: Cascade)
+
+  @@index([targetUid, createdAt])
+  @@index([operatorUid, createdAt])
+}
+
+model WikiRevision {
+  id         String   @id @default(cuid())
+  pageSlug   String
+  title      String
+  content    String   @db.LongText
+  editorUid  String
+  editorName String
+  createdAt  DateTime @default(now())
+  page       WikiPage @relation(fields: [pageSlug], references: [slug], onDelete: Cascade)
+  editor     User     @relation("WikiRevisionEditor", fields: [editorUid], references: [uid], onDelete: Cascade)
+
+  @@index([pageSlug, createdAt])
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  link      String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, createdAt])
+}
+
+model Gallery {
+  id         String         @id @default(cuid())
+  title      String
+  description String        @db.Text
+  authorUid  String
+  authorName String
+  tags       Json?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  author     User           @relation("UserGalleries", fields: [authorUid], references: [uid], onDelete: Cascade)
+  images     GalleryImage[]
+
+  @@index([createdAt])
+}
+
+model GalleryImage {
+  id        String   @id @default(cuid())
+  galleryId String
+  url       String   @db.Text
+  name      String
+  sortOrder Int      @default(0)
+  gallery   Gallery  @relation(fields: [galleryId], references: [id], onDelete: Cascade)
+
+  @@index([galleryId, sortOrder])
+}
+
+model MusicTrack {
+  docId     String   @id @default(cuid())
+  id        String   @unique
+  title     String
+  artist    String
+  album     String
+  cover     String   @db.Text
+  audioUrl  String   @db.Text
+  lyric     String?  @db.LongText
+  addedBy   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  adder     User?    @relation("MusicAddedBy", fields: [addedBy], references: [uid], onDelete: SetNull)
+
+  @@index([createdAt])
+}
+
+model ImageMap {
+  id         String   @id
+  md5        String   @unique
+  localUrl   String   @db.Text
+  weiboUrl   String?  @db.Text
+  smmsUrl    String?  @db.Text
+  superbedUrl String? @db.Text
+  createdAt  DateTime @default(now())
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userUid   String
+  type      NotificationType
+  payload   Json
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userUid], references: [uid], onDelete: Cascade)
+
+  @@index([userUid, isRead, createdAt])
+  @@index([userUid, createdAt])
+}
+
+model BrowsingHistory {
+  id         String            @id @default(cuid())
+  userUid    String
+  targetType BrowsingTargetType
+  targetId   String
+  createdAt  DateTime          @default(now())
+  user       User              @relation(fields: [userUid], references: [uid], onDelete: Cascade)
+
+  @@index([userUid, createdAt])
+  @@index([userUid, targetType, createdAt])
+  @@index([targetType, targetId, createdAt])
+}
+
+model SearchKeyword {
+  keyword   String   @id
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@index([count, updatedAt])
+}

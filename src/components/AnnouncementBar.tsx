@@ -1,30 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { Megaphone, X, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, query, where, limit, onSnapshot, orderBy } from 'firebase/firestore';
-import { db } from '../firebase';
+import { apiGet } from '../lib/apiClient';
 
 export const AnnouncementBar = () => {
   const [isVisible, setIsVisible] = useState(true);
   const [announcement, setAnnouncement] = useState<any>(null);
 
   useEffect(() => {
-    const q = query(
-      collection(db, 'announcements'),
-      where('active', '==', true),
-      orderBy('createdAt', 'desc'),
-      limit(1)
-    );
+    let cancelled = false;
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (!snapshot.empty) {
-        setAnnouncement({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() });
-      } else {
-        setAnnouncement(null);
+    const fetchAnnouncement = async () => {
+      try {
+        const data = await apiGet<{ announcement: any | null }>('/api/announcements/latest');
+        if (!cancelled) {
+          setAnnouncement(data.announcement || null);
+        }
+      } catch (error) {
+        console.error('Fetch latest announcement failed:', error);
       }
-    });
+    };
 
-    return () => unsubscribe();
+    fetchAnnouncement();
+    const intervalId = window.setInterval(fetchAnnouncement, 30000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   if (!isVisible || !announcement) return null;
