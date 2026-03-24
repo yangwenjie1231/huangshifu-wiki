@@ -390,6 +390,17 @@ const WikiEditor = () => {
       alert("只有管理员可以修改音乐分类的内容");
       return;
     }
+
+    const pageSlug = (isNew ? (formData.slug || formData.title) : slug || formData.slug)
+      ?.trim()
+      .toLowerCase()
+      .replace(/[\\/]/g, '-')
+      .replace(/\s+/g, '-');
+
+    if (!pageSlug) {
+      alert("请先填写标题以生成页面标识");
+      return;
+    }
     
     setLoading(true);
 
