@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, db, ref, uploadBytes, getDownloadURL, storage } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Image as ImageIcon, Plus, Folder, X, Upload, Tag, Clock, User as UserIcon, ChevronRight } from 'lucide-react';
@@ -54,7 +55,8 @@ const GalleryList = () => {
       ) : galleries.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {galleries.map((gallery) => (
-            <div 
+            <Link
+              to={`/gallery/${gallery.id}`}
               key={gallery.id} 
               className="bg-white rounded-[32px] border border-gray-100 overflow-hidden hover:shadow-xl transition-all group"
             >
@@ -80,7 +82,7 @@ const GalleryList = () => {
                   <span className="flex items-center gap-1"><UserIcon size={12} /> {gallery.authorUid?.substring(0, 6)}</span>
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       ) : (

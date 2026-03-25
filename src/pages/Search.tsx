@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Search as SearchIcon, Book, MessageSquare, Image as ImageIcon, Clock, ChevronRight, Tag, X, Filter, Sparkles, Calendar, Camera } from 'lucide-react';
 import { format, endOfDay } from 'date-fns';
 import { clsx } from 'clsx';
@@ -23,6 +23,7 @@ type SearchSuggestion = {
 
 const Search = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const initialQuery = searchParams.get('q') || '';
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [results, setResults] = useState<{
@@ -210,9 +211,9 @@ const Search = () => {
                         } else {
                           setShowSuggest(false);
                           if (s.type === 'wiki' && s.id) {
-                            window.location.href = `/wiki/${s.id}`;
+                            navigate(`/wiki/${s.id}`);
                           } else if (s.type === 'post' && s.id) {
-                            window.location.href = `/forum/${s.id}`;
+                            navigate(`/forum/${s.id}`);
                           }
                         }
                       }}
@@ -484,7 +485,7 @@ const Search = () => {
                     {results.galleries.map(gallery => (
                       <Link 
                         key={gallery.id} 
-                        to={`/gallery`}
+                        to={`/gallery/${gallery.id}`}
                         className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all group"
                       >
                         <div className="h-32 overflow-hidden">

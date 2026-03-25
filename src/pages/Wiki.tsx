@@ -367,7 +367,7 @@ const WikiPageView = () => {
                 <Sparkles size={20} />
                 {summarizing && <span className="text-xs">生成中...</span>}
               </button>
-              {user && (
+              {isOwner && (
                 <div className="flex gap-2">
                   {(page.category !== 'music' || isAdmin) && (
                     <>

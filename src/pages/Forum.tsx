@@ -2,14 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Routes, Route, Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ReactMarkdown from 'react-markdown';
-import { MessageSquare, Heart, Share2, Plus, Clock, User as UserIcon, ArrowLeft, Save, X, Send } from 'lucide-react';
+import { MessageSquare, Heart, Share2, Plus, Clock, User as UserIcon, ArrowLeft, Save, X, Send, Edit3 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import MdEditor from 'react-markdown-editor-lite';
 import MarkdownIt from 'markdown-it';
 import 'react-markdown-editor-lite/lib/index.css';
 import { uploadImageToCDNs, getImageUrl } from '../services/imageService';
-import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
+import { apiDelete, apiGet, apiPost, apiPut } from '../lib/apiClient';
 
 type ContentStatus = 'draft' | 'pending' | 'published' | 'rejected';
 
@@ -323,6 +323,7 @@ const PostDetail = () => {
 
   const isOwner = Boolean(user && post && post.authorUid === user.uid);
   const canSubmitReview = Boolean(!isBanned && isOwner && post && (post.status === 'draft' || post.status === 'rejected'));
+  const canEditPost = Boolean(!isBanned && isOwner);
   const canComment = post.status === 'published';
 
   const handleToggleLike = async () => {
@@ -375,6 +376,31 @@ const PostDetail = () => {
       alert('提交审核失败，请稍后重试');
     } finally {
       setSubmittingReview(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!postId) return;
+    const url = `${window.location.origin}/forum/${postId}`;
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = url;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      alert('链接已复制，可直接分享给好友');
+    } catch (error) {
+      console.error('Share copy failed:', error);
+      alert('复制链接失败，请手动复制地址栏链接');
     }
   };
 
@@ -448,9 +474,14 @@ const PostDetail = () => {
           >
             <Save size={20} /> {post.favoritedByMe ? '已收藏' : '收藏'}
           </button>
-          <button className="flex items-center gap-2 text-gray-400 hover:text-brand-primary transition-colors">
+          <button onClick={handleShare} className="flex items-center gap-2 text-gray-400 hover:text-brand-primary transition-colors">
             <Share2 size={20} /> 分享
           </button>
+          {canEditPost && (
+            <Link to={`/forum/${post.id}/edit`} className="flex items-center gap-2 text-gray-400 hover:text-brand-primary transition-colors">
+              <Edit3 size={20} /> 编辑
+            </Link>
+          )}
           {canSubmitReview && (
             <button
               onClick={handleSubmitReview}
@@ -559,8 +590,10 @@ const PostDetail = () => {
 };
 
 const PostEditor = () => {
+  const { postId } = useParams();
+  const isEditing = Boolean(postId);
   const navigate = useNavigate();
-  const { user, isBanned } = useAuth();
+  const { user, isBanned, loading: authLoading } = useAuth();
   const [sections, setSections] = useState<SectionItem[]>([]);
   const [formData, setFormData] = useState({
     title: '',
@@ -569,6 +602,7 @@ const PostEditor = () => {
     tags: '',
   });
   const [savingMode, setSavingMode] = useState<'draft' | 'pending' | null>(null);
+  const [loadingPost, setLoadingPost] = useState(false);
 
   useEffect(() => {
     const fetchSections = async () => {
@@ -577,7 +611,7 @@ const PostEditor = () => {
         const fetchedSections = data.sections || [];
         setSections(fetchedSections);
         if (fetchedSections.length > 0) {
-          setFormData((prev) => ({ ...prev, section: fetchedSections[0].id }));
+          setFormData((prev) => (prev.section ? prev : { ...prev, section: fetchedSections[0].id }));
         }
       } catch (error) {
         console.error('Error fetching sections:', error);
@@ -586,6 +620,42 @@ const PostEditor = () => {
 
     fetchSections();
   }, []);
+
+  useEffect(() => {
+    const fetchEditingPost = async () => {
+      if (!postId || !isEditing || authLoading) return;
+      try {
+        setLoadingPost(true);
+        const data = await apiGet<{ post: PostItem }>(`/api/posts/${postId}`);
+        if (!data.post) {
+          alert('帖子不存在或无权编辑');
+          navigate('/forum');
+          return;
+        }
+
+        if (!user || data.post.authorUid !== user.uid) {
+          alert('你无权编辑此帖子');
+          navigate(`/forum/${postId}`);
+          return;
+        }
+
+        setFormData({
+          title: data.post.title,
+          section: data.post.section,
+          content: data.post.content,
+          tags: (data.post.tags || []).join(', '),
+        });
+      } catch (error) {
+        console.error('Error loading editable post:', error);
+        alert('加载帖子失败，请稍后重试');
+        navigate('/forum');
+      } finally {
+        setLoadingPost(false);
+      }
+    };
+
+    fetchEditingPost();
+  }, [authLoading, isEditing, navigate, postId, user]);
 
   const handleSubmit = async (status: 'draft' | 'pending') => {
     if (!user) return;
@@ -596,28 +666,36 @@ const PostEditor = () => {
     setSavingMode(status);
 
     try {
-      const data = await apiPost<{ post: PostItem }>('/api/posts', {
+      const payload = {
         title: formData.title,
         section: formData.section,
         content: formData.content,
         tags: formData.tags.split(',').map((t) => t.trim()).filter(Boolean),
         status,
-      });
+      };
+
+      const data = isEditing && postId
+        ? await apiPut<{ post: PostItem }>(`/api/posts/${postId}`, payload)
+        : await apiPost<{ post: PostItem }>('/api/posts', payload);
 
       navigate(`/forum/${data.post.id}`);
     } catch (error) {
       console.error('Error creating post:', error);
-      alert(status === 'draft' ? '保存草稿失败，请稍后重试' : '提交审核失败，请稍后重试');
+      alert(status === 'draft' ? '保存失败，请稍后重试' : '提交审核失败，请稍后重试');
     } finally {
       setSavingMode(null);
     }
   };
 
+  if (loadingPost) {
+    return <div className="max-w-4xl mx-auto px-4 py-20 text-center italic text-gray-400">加载中...</div>;
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-12">
       <div className="bg-white rounded-[40px] p-8 sm:p-12 border border-gray-100 shadow-sm">
         <div className="flex justify-between items-center mb-12">
-          <h1 className="text-4xl font-serif font-bold text-gray-900">发布新帖子</h1>
+          <h1 className="text-4xl font-serif font-bold text-gray-900">{isEditing ? '编辑帖子' : '发布新帖子'}</h1>
           <button onClick={() => navigate(-1)} className="p-2 text-gray-400 hover:text-red-500">
             <X size={24} />
           </button>
@@ -726,6 +804,7 @@ const Forum = () => {
     <Routes>
       <Route path="/" element={<PostList />} />
       <Route path="/new" element={<PostEditor />} />
+      <Route path="/:postId/edit" element={<PostEditor />} />
       <Route path="/:postId" element={<PostDetail />} />
     </Routes>
   );

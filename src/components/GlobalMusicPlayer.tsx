@@ -5,7 +5,7 @@ import { useMusic } from '../context/MusicContext';
 import { clsx } from 'clsx';
 
 export const GlobalMusicPlayer = () => {
-  const { currentSong, setCurrentSong, isPlaying, setIsPlaying } = useMusic();
+  const { currentSong, setCurrentSong, isPlaying, setIsPlaying, playNext, playPrevious } = useMusic();
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -27,6 +27,16 @@ export const GlobalMusicPlayer = () => {
   const togglePlay = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsPlaying(!isPlaying);
+  };
+
+  const handlePlayPrevious = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    playPrevious();
+  };
+
+  const handlePlayNext = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    playNext();
   };
 
   const onTimeUpdate = () => {
@@ -100,7 +110,7 @@ export const GlobalMusicPlayer = () => {
 
           <div className="flex items-center gap-6">
             <div className="hidden md:flex items-center gap-4">
-              <button className="text-gray-400 hover:text-gray-900 transition-colors">
+              <button onClick={handlePlayPrevious} className="text-gray-400 hover:text-gray-900 transition-colors">
                 <SkipBack size={20} />
               </button>
               <button 
@@ -109,7 +119,7 @@ export const GlobalMusicPlayer = () => {
               >
                 {isPlaying ? <Pause size={20} /> : <Play size={20} className="ml-0.5" />}
               </button>
-              <button className="text-gray-400 hover:text-gray-900 transition-colors">
+              <button onClick={handlePlayNext} className="text-gray-400 hover:text-gray-900 transition-colors">
                 <SkipForward size={20} />
               </button>
             </div>
@@ -170,7 +180,7 @@ export const GlobalMusicPlayer = () => {
                   />
 
                   <div className="flex items-center justify-center md:justify-start gap-8">
-                    <button className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
+                    <button onClick={handlePlayPrevious} className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
                       <SkipBack size={28} />
                     </button>
                     <button 
@@ -179,7 +189,7 @@ export const GlobalMusicPlayer = () => {
                     >
                       {isPlaying ? <Pause size={32} /> : <Play size={32} className="ml-1" />}
                     </button>
-                    <button className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
+                    <button onClick={handlePlayNext} className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
                       <SkipForward size={28} />
                     </button>
                   </div>
@@ -195,7 +205,7 @@ export const GlobalMusicPlayer = () => {
         src={currentSong.audioUrl}
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={onLoadedMetadata}
-        onEnded={() => setIsPlaying(false)}
+        onEnded={playNext}
       />
     </motion.div>
   );

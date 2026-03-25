@@ -15,7 +15,7 @@ interface Song {
 }
 
 export const MusicPlayer = ({ songId }: { songId: string }) => {
-  const { currentSong, setCurrentSong, isPlaying, setIsPlaying } = useMusic();
+  const { currentSong, setCurrentSong, isPlaying, setIsPlaying, playNext, playPrevious } = useMusic();
   const [song, setSong] = useState<Song | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -42,6 +42,14 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
     } else {
       setIsPlaying(!isPlaying);
     }
+  };
+
+  const handlePlayPrevious = () => {
+    playPrevious();
+  };
+
+  const handlePlayNext = () => {
+    playNext();
   };
 
   if (loading) return <div className="p-8 text-center animate-pulse">加载音乐中...</div>;
@@ -85,7 +93,7 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
           <p className="text-brand-primary font-bold mb-4">{song.artist} — {song.album}</p>
           
           <div className="flex items-center gap-4 mb-6">
-            <button className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
+            <button onClick={handlePlayPrevious} className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
               <SkipBack size={24} />
             </button>
             <button 
@@ -94,7 +102,7 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
             >
               {(isCurrent && isPlaying) ? <Pause size={32} /> : <Play size={32} className="ml-1" />}
             </button>
-            <button className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
+            <button onClick={handlePlayNext} className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
               <SkipForward size={24} />
             </button>
           </div>

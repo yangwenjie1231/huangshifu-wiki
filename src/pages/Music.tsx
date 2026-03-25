@@ -81,7 +81,7 @@ const Music = () => {
   const [confirmModal, setConfirmModal] = useState<{ show: boolean, type: 'single' | 'batch', id?: string }>({ show: false, type: 'single' });
   const [favoriting, setFavoriting] = useState<string | null>(null);
   const { user, isAdmin, isBanned } = useAuth();
-  const { currentSong, setCurrentSong, setIsPlaying } = useMusic();
+  const { currentSong, setCurrentSong, setIsPlaying, setPlaylist, playSongAtIndex } = useMusic();
 
   const fetchSongs = async () => {
     setLoading(true);
@@ -89,7 +89,9 @@ const Music = () => {
     try {
       const q = query(collection(db, path), orderBy('createdAt', 'desc'));
       const snapshot = await getDocs(q);
-      setSongs(snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id })));
+      const fetchedSongs = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id })) as SongItem[];
+      setSongs(fetchedSongs);
+      setPlaylist(fetchedSongs);
     } catch (e) {
       handleFirestoreError(e, OperationType.GET, path);
     }
@@ -159,6 +161,11 @@ const Music = () => {
       toggleSelect(song.docId);
       return;
     }
+    const index = songs.findIndex((item) => item.docId === song.docId);
+    if (index >= 0) {
+      playSongAtIndex(index);
+      return;
+    }
     setCurrentSong(song);
     setIsPlaying(true);
   };
@@ -166,6 +173,9 @@ const Music = () => {
   const handleDeleteSong = async (songId: string) => {
     const path = 'music';
     try {
+      if (currentSong?.docId === songId) {
+        setCurrentSong(null);
+      }
       await deleteDoc(doc(db, path, songId));
       fetchSongs();
       setConfirmModal({ show: false, type: 'single' });

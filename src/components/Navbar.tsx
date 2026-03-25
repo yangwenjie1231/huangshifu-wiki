@@ -1,10 +1,10 @@
 import React from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Music, Book, MessageSquare, User as UserIcon, LogIn, LogOut, Shield, Image as ImageIcon, Search, MessageCircle, Menu, X, Bell } from 'lucide-react';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
-import { login, register, logoutRequest } from '../lib/auth';
+import { login, register, logoutRequest, loginWithWeChat } from '../lib/auth';
 import { apiGet, apiPost } from '../lib/apiClient';
 
 interface NotificationItem {
@@ -15,6 +15,14 @@ interface NotificationItem {
   createdAt: string;
 }
 
+interface ReviewNotificationPayload {
+  approved?: boolean;
+  targetType?: 'wiki' | 'post';
+  targetId?: string;
+  title?: string;
+  note?: string | null;
+}
+
 interface NotificationsResponse {
   notifications: NotificationItem[];
   total: number;
@@ -23,16 +31,27 @@ interface NotificationsResponse {
   limit: number;
 }
 
-type AuthMode = 'login' | 'register';
+interface WechatLoginResponse {
+  token?: string;
+  wechat?: {
+    openId?: string;
+    unionId?: string | null;
+  };
+}
+
+type AuthMode = 'login' | 'register' | 'wechat';
 
 export const Navbar = () => {
   const { user, profile, isAdmin, isBanned } = useAuth();
+  const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [authModalOpen, setAuthModalOpen] = React.useState(false);
   const [authMode, setAuthMode] = React.useState<AuthMode>('login');
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [displayName, setDisplayName] = React.useState('');
+  const [wechatCode, setWechatCode] = React.useState('');
+  const [wechatPhotoURL, setWechatPhotoURL] = React.useState('');
   const [authLoading, setAuthLoading] = React.useState(false);
   const [notifPanelOpen, setNotifPanelOpen] = React.useState(false);
   const [notifications, setNotifications] = React.useState<NotificationItem[]>([]);
@@ -90,10 +109,37 @@ export const Navbar = () => {
       case 'like':
         return '赞了你的帖子';
       case 'review_result':
-        return notif.payload.approved === true ? '通过了你的编辑审核' : '拒绝了你的编辑';
+        const payload = notif.payload as ReviewNotificationPayload;
+        const target = payload.targetType === 'wiki' ? '百科' : payload.targetType === 'post' ? '帖子' : '内容';
+        const title = typeof payload.title === 'string' && payload.title.trim() ? `《${payload.title}》` : '';
+        const base = payload.approved === true ? `已通过你的${target}编辑审核` : `已驳回你的${target}编辑审核`;
+        if (payload.approved === true) {
+          return `${base}${title ? `：${title}` : ''}`;
+        }
+        const note = typeof payload.note === 'string' ? payload.note.trim() : '';
+        return `${base}${title ? `：${title}` : ''}${note ? `（原因：${note}）` : ''}`;
       default:
         return '有新通知';
     }
+  };
+
+  const getNotificationLink = (notif: NotificationItem) => {
+    if (notif.type === 'reply' || notif.type === 'like') {
+      const postId = typeof notif.payload.postId === 'string' ? notif.payload.postId : null;
+      return postId ? `/forum/${postId}` : null;
+    }
+
+    if (notif.type === 'review_result') {
+      const payload = notif.payload as ReviewNotificationPayload;
+      if (payload.targetType === 'wiki' && typeof payload.targetId === 'string') {
+        return `/wiki/${payload.targetId}`;
+      }
+      if (payload.targetType === 'post' && typeof payload.targetId === 'string') {
+        return `/forum/${payload.targetId}`;
+      }
+    }
+
+    return null;
   };
 
   const openAuthModal = (mode: AuthMode) => {
@@ -103,19 +149,36 @@ export const Navbar = () => {
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) return;
+    if (authMode === 'wechat') {
+      if (!wechatCode.trim()) return;
+    } else if (!email || !password) {
+      return;
+    }
 
     try {
       setAuthLoading(true);
       if (authMode === 'login') {
         await login(email, password);
-      } else {
+      } else if (authMode === 'register') {
         await register(email, password, displayName || email.split('@')[0] || '匿名用户');
+      } else {
+        const result = await loginWithWeChat<WechatLoginResponse>(wechatCode, {
+          displayName: displayName || undefined,
+          photoURL: wechatPhotoURL || undefined,
+        });
+        if (result.token) {
+          localStorage.setItem('mp_auth_token', result.token);
+        }
+        if (result.wechat?.openId) {
+          localStorage.setItem('mp_open_id', result.wechat.openId);
+        }
       }
       setAuthModalOpen(false);
       setEmail('');
       setPassword('');
       setDisplayName('');
+      setWechatCode('');
+      setWechatPhotoURL('');
       setIsMenuOpen(false);
     } catch (error) {
       console.error('Auth failed:', error);
@@ -231,6 +294,10 @@ export const Navbar = () => {
                                       key={notif.id}
                                       onClick={() => {
                                         if (!notif.isRead) markNotificationRead(notif.id);
+                                        const link = getNotificationLink(notif);
+                                        if (link) {
+                                          navigate(link);
+                                        }
                                         setNotifPanelOpen(false);
                                       }}
                                       className={clsx(
@@ -397,7 +464,7 @@ export const Navbar = () => {
             >
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-2xl font-serif font-bold text-brand-olive">
-                  {authMode === 'login' ? '账号登录' : '账号注册'}
+                  {authMode === 'wechat' ? '微信登录' : authMode === 'login' ? '账号登录' : '账号注册'}
                 </h3>
                 <button
                   onClick={() => setAuthModalOpen(false)}
@@ -408,32 +475,57 @@ export const Navbar = () => {
               </div>
 
               <form onSubmit={handleAuthSubmit} className="space-y-4">
-                {authMode === 'register' && (
+                {(authMode === 'register' || authMode === 'wechat') && (
                   <input
                     type="text"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="昵称（可选）"
+                    placeholder={authMode === 'wechat' ? '微信昵称（可选）' : '昵称（可选）'}
                     className="w-full px-4 py-3 bg-brand-cream rounded-xl border-none focus:ring-2 focus:ring-brand-olive/20"
                   />
                 )}
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="邮箱"
-                  className="w-full px-4 py-3 bg-brand-cream rounded-xl border-none focus:ring-2 focus:ring-brand-olive/20"
-                />
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="密码（至少 6 位）"
-                  className="w-full px-4 py-3 bg-brand-cream rounded-xl border-none focus:ring-2 focus:ring-brand-olive/20"
-                />
+                {authMode === 'wechat' ? (
+                  <>
+                    <input
+                      type="text"
+                      required
+                      value={wechatCode}
+                      onChange={(e) => setWechatCode(e.target.value)}
+                      placeholder="小程序 wx.login code"
+                      className="w-full px-4 py-3 bg-brand-cream rounded-xl border-none focus:ring-2 focus:ring-brand-olive/20"
+                    />
+                    <input
+                      type="url"
+                      value={wechatPhotoURL}
+                      onChange={(e) => setWechatPhotoURL(e.target.value)}
+                      placeholder="头像 URL（可选）"
+                      className="w-full px-4 py-3 bg-brand-cream rounded-xl border-none focus:ring-2 focus:ring-brand-olive/20"
+                    />
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      开发环境可使用 mock code：`mock:openId` 或 `mock:openId:unionId`。
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="邮箱"
+                      className="w-full px-4 py-3 bg-brand-cream rounded-xl border-none focus:ring-2 focus:ring-brand-olive/20"
+                    />
+                    <input
+                      type="password"
+                      required
+                      minLength={6}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="密码（至少 6 位）"
+                      className="w-full px-4 py-3 bg-brand-cream rounded-xl border-none focus:ring-2 focus:ring-brand-olive/20"
+                    />
+                  </>
+                )}
 
                 <button
                   type="submit"
@@ -441,17 +533,25 @@ export const Navbar = () => {
                   className="w-full px-4 py-3 bg-brand-olive text-white rounded-xl font-bold hover:bg-brand-olive/90 transition-all disabled:opacity-50"
                 >
                   {authLoading
-                    ? (authMode === 'login' ? '登录中...' : '注册中...')
-                    : (authMode === 'login' ? '登录' : '注册')}
+                    ? (authMode === 'login' ? '登录中...' : authMode === 'register' ? '注册中...' : '登录中...')
+                    : (authMode === 'login' ? '登录' : authMode === 'register' ? '注册' : '微信登录')}
                 </button>
               </form>
 
-              <button
-                onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
-                className="mt-4 text-sm font-medium text-brand-olive hover:underline"
-              >
-                {authMode === 'login' ? '没有账号？去注册' : '已有账号？去登录'}
-              </button>
+              <div className="mt-4 flex items-center justify-between gap-2 text-sm">
+                <button
+                  onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
+                  className="font-medium text-brand-olive hover:underline"
+                >
+                  {authMode === 'login' ? '没有账号？去注册' : '已有账号？去登录'}
+                </button>
+                <button
+                  onClick={() => setAuthMode(authMode === 'wechat' ? 'login' : 'wechat')}
+                  className="font-medium text-brand-olive hover:underline"
+                >
+                  {authMode === 'wechat' ? '改用账号密码' : '改用微信登录'}
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

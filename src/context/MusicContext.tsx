@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useState, ReactNode } from 'react';
 
 interface Song {
   id: string;
@@ -8,7 +8,7 @@ interface Song {
   album: string;
   cover: string;
   audioUrl: string;
-  lyric?: string;
+  lyric?: string | null;
 }
 
 interface MusicContextType {
@@ -16,16 +16,127 @@ interface MusicContextType {
   setCurrentSong: (song: Song | null) => void;
   isPlaying: boolean;
   setIsPlaying: (playing: boolean) => void;
+  playlist: Song[];
+  currentIndex: number;
+  setPlaylist: (songs: Song[]) => void;
+  playSongAtIndex: (index: number) => void;
+  playNext: () => void;
+  playPrevious: () => void;
 }
 
 const MusicContext = createContext<MusicContextType | undefined>(undefined);
 
 export const MusicProvider = ({ children }: { children: ReactNode }) => {
-  const [currentSong, setCurrentSong] = useState<Song | null>(null);
+  const [currentSong, setCurrentSongState] = useState<Song | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [playlist, setPlaylistState] = useState<Song[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(-1);
+
+  const setPlaylist = useCallback((songs: Song[]) => {
+    setPlaylistState(songs);
+
+    if (!songs.length) {
+      setCurrentIndex(-1);
+      return;
+    }
+
+    setCurrentIndex((prevIndex) => {
+      if (
+        prevIndex >= 0 &&
+        prevIndex < songs.length &&
+        currentSong &&
+        songs[prevIndex] &&
+        ((songs[prevIndex].docId && currentSong.docId && songs[prevIndex].docId === currentSong.docId) ||
+          songs[prevIndex].id === currentSong.id)
+      ) {
+        return prevIndex;
+      }
+
+      if (!currentSong) {
+        return -1;
+      }
+
+      const matched = songs.findIndex(
+        (song) => (song.docId && currentSong.docId ? song.docId === currentSong.docId : song.id === currentSong.id),
+      );
+      return matched;
+    });
+  }, [currentSong]);
+
+  const setCurrentSong = useCallback((song: Song | null) => {
+    if (!song) {
+      setCurrentSongState(null);
+      setCurrentIndex(-1);
+      setIsPlaying(false);
+      return;
+    }
+
+    setCurrentSongState(song);
+
+    const index = playlist.findIndex(
+      (item) => (item.docId && song.docId ? item.docId === song.docId : item.id === song.id),
+    );
+    setCurrentIndex(index);
+  }, [playlist]);
+
+  const playSongAtIndex = useCallback((index: number) => {
+    if (!playlist.length) return;
+
+    const normalizedIndex = ((index % playlist.length) + playlist.length) % playlist.length;
+    const song = playlist[normalizedIndex];
+    if (!song) return;
+
+    setCurrentIndex(normalizedIndex);
+    setCurrentSongState(song);
+    setIsPlaying(true);
+  }, [playlist]);
+
+  const playNext = useCallback(() => {
+    if (!playlist.length) return;
+    if (currentIndex < 0) {
+      playSongAtIndex(0);
+      return;
+    }
+    playSongAtIndex(currentIndex + 1);
+  }, [currentIndex, playSongAtIndex, playlist.length]);
+
+  const playPrevious = useCallback(() => {
+    if (!playlist.length) return;
+    if (currentIndex < 0) {
+      playSongAtIndex(playlist.length - 1);
+      return;
+    }
+    playSongAtIndex(currentIndex - 1);
+  }, [currentIndex, playSongAtIndex, playlist.length]);
+
+  const value = useMemo(
+    () => ({
+      currentSong,
+      setCurrentSong,
+      isPlaying,
+      setIsPlaying,
+      playlist,
+      currentIndex,
+      setPlaylist,
+      playSongAtIndex,
+      playNext,
+      playPrevious,
+    }),
+    [
+      currentSong,
+      setCurrentSong,
+      isPlaying,
+      playlist,
+      currentIndex,
+      setPlaylist,
+      playSongAtIndex,
+      playNext,
+      playPrevious,
+    ],
+  );
 
   return (
-    <MusicContext.Provider value={{ currentSong, setCurrentSong, isPlaying, setIsPlaying }}>
+    <MusicContext.Provider value={value}>
       {children}
     </MusicContext.Provider>
   );

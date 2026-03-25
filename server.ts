@@ -28,6 +28,10 @@ const PORT = Number(process.env.PORT) || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || '';
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '';
 const SUPER_ADMIN_EMAIL = process.env.SEED_SUPER_ADMIN_EMAIL || '';
+const WECHAT_MP_APPID = process.env.WECHAT_MP_APPID || process.env.WECHAT_APP_ID || '';
+const WECHAT_MP_APP_SECRET =
+  process.env.WECHAT_MP_APP_SECRET || process.env.WECHAT_MP_APPSECRET || process.env.WECHAT_APP_SECRET || '';
+const WECHAT_LOGIN_MOCK = process.env.WECHAT_LOGIN_MOCK === 'true';
 
 if (!JWT_SECRET) {
   throw new Error('Missing JWT_SECRET. Please set it in .env.local');
@@ -42,11 +46,20 @@ interface SessionJwtPayload extends JwtPayload {
   role: PrismaUserRole;
 }
 
+interface WechatCodeSessionResponse {
+  openid?: string;
+  unionid?: string;
+  session_key?: string;
+  errcode?: number;
+  errmsg?: string;
+}
+
 interface ApiUser {
   uid: string;
   email: string;
   displayName: string;
   photoURL: string | null;
+  wechatBound: boolean;
   role: PrismaUserRole;
   status: UserStatus;
   banReason: string | null;
@@ -115,6 +128,74 @@ function parseDate(date: string | Date | null | undefined) {
   const parsed = new Date(date);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed;
+}
+
+function createWechatPlaceholderEmail(openId: string) {
+  const safe = openId.replace(/[^a-zA-Z0-9._-]/g, '').slice(0, 64);
+  const fallback = safe || `wx_${Date.now().toString(36)}`;
+  return `${fallback}@wechat.local`;
+}
+
+async function exchangeWechatLoginCode(rawCode: string) {
+  const code = rawCode.trim();
+  if (!code) {
+    throw new Error('缺少 code');
+  }
+
+  if (WECHAT_LOGIN_MOCK) {
+    const mockPayload = code.replace(/^mock:/, '');
+    const [openIdPart, unionIdPart] = mockPayload.split(':');
+    const openId = (openIdPart || `mock_openid_${Date.now().toString(36)}`).slice(0, 128);
+    const unionId = unionIdPart ? unionIdPart.slice(0, 128) : null;
+    return { openId, unionId };
+  }
+
+  if (!WECHAT_MP_APPID || !WECHAT_MP_APP_SECRET) {
+    throw new Error('服务器未配置微信登录参数');
+  }
+
+  const response = await axios.get<WechatCodeSessionResponse>('https://api.weixin.qq.com/sns/jscode2session', {
+    params: {
+      appid: WECHAT_MP_APPID,
+      secret: WECHAT_MP_APP_SECRET,
+      js_code: code,
+      grant_type: 'authorization_code',
+    },
+    timeout: 10_000,
+  });
+
+  const data = response.data;
+  if (typeof data?.errcode === 'number' && data.errcode !== 0) {
+    throw new Error(`微信登录失败：${data.errmsg || `errcode=${data.errcode}`}`);
+  }
+
+  if (!data?.openid) {
+    throw new Error('微信登录失败：未获取到 openid');
+  }
+
+  return {
+    openId: data.openid,
+    unionId: data.unionid || null,
+  };
+}
+
+async function buildUniqueWechatEmail(openId: string) {
+  const base = createWechatPlaceholderEmail(openId);
+  const [name, domain] = base.split('@');
+  let candidate = base;
+
+  for (let i = 0; i < 8; i += 1) {
+    const existing = await prisma.user.findUnique({
+      where: { email: candidate },
+      select: { uid: true },
+    });
+    if (!existing) {
+      return candidate;
+    }
+    candidate = `${name}_${i + 1}@${domain || 'wechat.local'}`;
+  }
+
+  return `${name}_${Date.now().toString(36)}@${domain || 'wechat.local'}`;
 }
 
 function parsePostSort(value: unknown): PostSortType {
@@ -266,6 +347,7 @@ function userToApiUser(user: {
   email: string;
   displayName: string;
   photoURL: string | null;
+  wechatOpenId?: string | null;
   role: PrismaUserRole;
   status: UserStatus;
   banReason: string | null;
@@ -278,6 +360,7 @@ function userToApiUser(user: {
     email: user.email,
     displayName: user.displayName,
     photoURL: user.photoURL,
+    wechatBound: Boolean(user.wechatOpenId),
     role: user.role,
     status: user.status,
     banReason: user.banReason,
@@ -770,6 +853,83 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: '登录失败，请稍后重试' });
+  }
+});
+
+app.post('/api/auth/wechat/login', async (req, res) => {
+  try {
+    const code = typeof req.body?.code === 'string' ? req.body.code : '';
+    const displayNameRaw = typeof req.body?.displayName === 'string' ? req.body.displayName.trim() : '';
+    const photoURLRaw = typeof req.body?.photoURL === 'string' ? req.body.photoURL.trim() : '';
+
+    if (!code.trim()) {
+      res.status(400).json({ error: 'code 不能为空' });
+      return;
+    }
+
+    const { openId, unionId } = await exchangeWechatLoginCode(code);
+
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { wechatOpenId: openId },
+          ...(unionId ? [{ wechatUnionId: unionId }] : []),
+        ],
+      },
+    });
+
+    if (!user) {
+      const generatedEmail = await buildUniqueWechatEmail(openId);
+      const generatedPassword = `wx_${openId}_${Date.now()}`;
+      const passwordHash = await bcrypt.hash(generatedPassword, 12);
+      const fallbackName = displayNameRaw || `微信用户${openId.slice(-6)}`;
+
+      user = await prisma.user.create({
+        data: {
+          email: generatedEmail,
+          passwordHash,
+          displayName: fallbackName,
+          photoURL: photoURLRaw || null,
+          bio: '',
+          wechatOpenId: openId,
+          wechatUnionId: unionId,
+        },
+      });
+    } else {
+      const shouldUpdateProfile =
+        (displayNameRaw && displayNameRaw !== user.displayName) ||
+        (photoURLRaw && photoURLRaw !== (user.photoURL || '')) ||
+        user.wechatOpenId !== openId ||
+        (!user.wechatUnionId && !!unionId);
+
+      if (shouldUpdateProfile) {
+        user = await prisma.user.update({
+          where: { uid: user.uid },
+          data: {
+            displayName: displayNameRaw || undefined,
+            photoURL: photoURLRaw || undefined,
+            wechatOpenId: openId,
+            wechatUnionId: unionId || user.wechatUnionId,
+          },
+        });
+      }
+    }
+
+    const apiUser = userToApiUser(user);
+    const token = createToken(apiUser);
+    setAuthCookie(req, res, token);
+
+    res.json({
+      user: apiUser,
+      token,
+      wechat: {
+        openId,
+        unionId,
+      },
+    });
+  } catch (error) {
+    console.error('WeChat login error:', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : '微信登录失败' });
   }
 });
 
@@ -1476,6 +1636,57 @@ app.get('/api/wiki', async (req: AuthenticatedRequest, res) => {
   } catch (error) {
     console.error('Fetch wiki pages error:', error);
     res.status(500).json({ error: '获取百科失败' });
+  }
+});
+
+app.get('/api/mp/wiki', async (req: AuthenticatedRequest, res) => {
+  try {
+    const category = typeof req.query.category === 'string' ? req.query.category : 'all';
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const skip = (page - 1) * limit;
+
+    const where = {
+      status: 'published' as ContentStatus,
+      ...(category && category !== 'all' ? { category } : {}),
+    };
+
+    const [pages, total] = await Promise.all([
+      prisma.wikiPage.findMany({
+        where,
+        orderBy: [{ updatedAt: 'desc' }],
+        take: limit,
+        skip,
+        select: {
+          slug: true,
+          title: true,
+          category: true,
+          tags: true,
+          eventDate: true,
+          updatedAt: true,
+          favoritesCount: true,
+        },
+      }),
+      prisma.wikiPage.count({ where }),
+    ]);
+
+    res.json({
+      items: pages.map((page) => ({
+        slug: page.slug,
+        title: page.title,
+        category: page.category,
+        tags: serializeTags(page.tags),
+        eventDate: page.eventDate,
+        favoritesCount: page.favoritesCount,
+        updatedAt: page.updatedAt.toISOString(),
+      })),
+      total,
+      page,
+      limit,
+    });
+  } catch (error) {
+    console.error('Fetch mp wiki list error:', error);
+    res.status(500).json({ error: '获取小程序百科失败' });
   }
 });
 
@@ -2299,6 +2510,71 @@ app.post('/api/posts', requireAuth, requireActiveUser, async (req: Authenticated
   }
 });
 
+app.post('/api/mp/posts', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { title, section, content, tags } = req.body as {
+      title?: string;
+      section?: string;
+      content?: string;
+      tags?: string[];
+    };
+
+    if (!title || !section || !content) {
+      res.status(400).json({ error: '缺少必要字段' });
+      return;
+    }
+
+    const sectionExists = await prisma.section.findUnique({
+      where: { id: section },
+      select: { id: true },
+    });
+    if (!sectionExists) {
+      res.status(400).json({ error: '版块不存在' });
+      return;
+    }
+
+    const post = await prisma.post.create({
+      data: {
+        title,
+        section,
+        content,
+        tags: tags || [],
+        status: isAdminRole(req.authUser!.role) ? 'published' : 'pending',
+        reviewNote: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        authorUid: req.authUser!.uid,
+      },
+    });
+
+    if (!isAdminRole(req.authUser!.role)) {
+      await prisma.moderationLog.create({
+        data: {
+          targetType: 'post',
+          targetId: post.id,
+          action: 'submit',
+          operatorUid: req.authUser!.uid,
+          note: 'mp 端投稿',
+        },
+      });
+    }
+
+    res.status(201).json({
+      post: {
+        id: post.id,
+        title: post.title,
+        section: post.section,
+        status: post.status,
+        createdAt: post.createdAt.toISOString(),
+        updatedAt: post.updatedAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error('Create mp post error:', error);
+    res.status(500).json({ error: '小程序发帖失败' });
+  }
+});
+
 app.post('/api/posts/:id/comments', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
     const { content, parentId } = req.body as {
@@ -2383,6 +2659,101 @@ app.post('/api/posts/:id/comments', requireAuth, requireActiveUser, async (req: 
   }
 });
 
+app.post('/api/mp/comments', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { postId, content, parentId } = req.body as {
+      postId?: string;
+      content?: string;
+      parentId?: string | null;
+    };
+
+    if (!postId || !content || !content.trim()) {
+      res.status(400).json({ error: 'postId 和评论内容不能为空' });
+      return;
+    }
+
+    const currentPost = await prisma.post.findUnique({
+      where: { id: postId },
+      select: {
+        id: true,
+        status: true,
+        authorUid: true,
+      },
+    });
+
+    if (!currentPost || !canViewPost(currentPost, req.authUser)) {
+      res.status(404).json({ error: '帖子未找到' });
+      return;
+    }
+
+    if (currentPost.status !== 'published') {
+      res.status(403).json({ error: '仅已发布内容可评论' });
+      return;
+    }
+
+    let replyTargetUid: string | null = null;
+    if (parentId) {
+      const parent = await prisma.postComment.findUnique({
+        where: { id: parentId },
+        select: {
+          id: true,
+          postId: true,
+          authorUid: true,
+        },
+      });
+      if (!parent || parent.postId !== postId) {
+        res.status(400).json({ error: '回复目标不存在' });
+        return;
+      }
+      replyTargetUid = parent.authorUid;
+    }
+
+    const comment = await prisma.postComment.create({
+      data: {
+        postId,
+        authorUid: req.authUser!.uid,
+        authorName: req.authUser!.displayName,
+        authorPhoto: req.authUser!.photoURL,
+        content,
+        parentId: parentId || null,
+      },
+    });
+
+    await prisma.post.update({
+      where: { id: postId },
+      data: {
+        commentsCount: { increment: 1 },
+      },
+    });
+
+    const notifyUid = replyTargetUid || currentPost.authorUid;
+    if (notifyUid && notifyUid !== req.authUser!.uid) {
+      await createNotification(notifyUid, 'reply', {
+        postId,
+        commentId: comment.id,
+        actorUid: req.authUser!.uid,
+        actorName: req.authUser!.displayName,
+        preview: comment.content.slice(0, 120),
+      });
+    }
+
+    res.status(201).json({
+      comment: {
+        id: comment.id,
+        postId: comment.postId,
+        authorUid: comment.authorUid,
+        authorName: comment.authorName,
+        content: comment.content,
+        parentId: comment.parentId,
+        createdAt: comment.createdAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error('Create mp comment error:', error);
+    res.status(500).json({ error: '小程序评论失败' });
+  }
+});
+
 app.post('/api/posts/:id/submit', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
     const postId = req.params.id;
@@ -2432,6 +2803,94 @@ app.post('/api/posts/:id/submit', requireAuth, requireActiveUser, async (req: Au
   } catch (error) {
     console.error('Submit post review error:', error);
     res.status(500).json({ error: '提交审核失败' });
+  }
+});
+
+app.put('/api/posts/:id', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { title, section, content, tags, status } = req.body as {
+      title?: string;
+      section?: string;
+      content?: string;
+      tags?: string[];
+      status?: ContentStatus;
+    };
+
+    if (!title || !section || !content) {
+      res.status(400).json({ error: '缺少必要字段' });
+      return;
+    }
+
+    const existingPost = await prisma.post.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        authorUid: true,
+        status: true,
+      },
+    });
+
+    if (!existingPost) {
+      res.status(404).json({ error: '帖子未找到' });
+      return;
+    }
+
+    const isOwner = existingPost.authorUid === req.authUser!.uid;
+    const isAdmin = isAdminRole(req.authUser!.role);
+    if (!isOwner && !isAdmin) {
+      res.status(403).json({ error: '无权编辑该帖子' });
+      return;
+    }
+
+    const sectionExists = await prisma.section.findUnique({
+      where: { id: section },
+      select: { id: true },
+    });
+    if (!sectionExists) {
+      res.status(400).json({ error: '版块不存在' });
+      return;
+    }
+
+    let nextStatus: ContentStatus;
+    if (isAdmin) {
+      nextStatus = parseContentStatus(status) || existingPost.status;
+    } else if (existingPost.status === 'published') {
+      nextStatus = 'pending';
+    } else {
+      const normalized = normalizePostWriteStatus(status ?? existingPost.status, req.authUser!);
+      nextStatus = existingPost.status === 'pending' && normalized === 'draft' ? 'pending' : normalized;
+    }
+
+    const post = await prisma.post.update({
+      where: { id: req.params.id },
+      data: {
+        title,
+        section,
+        content,
+        tags: Array.isArray(tags) ? tags : [],
+        status: nextStatus,
+        reviewNote: null,
+        reviewedBy: null,
+        reviewedAt: null,
+      },
+    });
+
+    if (nextStatus === 'pending') {
+      await prisma.moderationLog.create({
+        data: {
+          targetType: 'post',
+          targetId: post.id,
+          action: 'submit',
+          operatorUid: req.authUser!.uid,
+          note: !isAdmin && existingPost.status === 'published' ? '编辑后重新提交审核' : null,
+        },
+      });
+    }
+
+    res.json({ post: toPostResponse(post) });
+  } catch (error) {
+    console.error('Edit post error:', error);
+    res.status(500).json({ error: '编辑帖子失败' });
   }
 });
 
@@ -2826,6 +3285,16 @@ app.post('/api/admin/review/:type/:id/approve', requireAdmin, async (req: Authen
         },
       });
 
+      if (page.lastEditorUid && page.lastEditorUid !== req.authUser!.uid) {
+        await createNotification(page.lastEditorUid, 'review_result', {
+          approved: true,
+          targetType: 'wiki',
+          targetId,
+          title: page.title,
+          note: note || null,
+        });
+      }
+
       res.json({ item: toWikiResponse(page) });
       return;
     }
@@ -2849,6 +3318,16 @@ app.post('/api/admin/review/:type/:id/approve', requireAdmin, async (req: Authen
         note: note || null,
       },
     });
+
+    if (post.authorUid && post.authorUid !== req.authUser!.uid) {
+      await createNotification(post.authorUid, 'review_result', {
+        approved: true,
+        targetType: 'post',
+        targetId,
+        title: post.title,
+        note: note || null,
+      });
+    }
 
     res.json({ item: toPostResponse(post) });
   } catch (error) {
@@ -2892,6 +3371,16 @@ app.post('/api/admin/review/:type/:id/reject', requireAdmin, async (req: Authent
         },
       });
 
+      if (page.lastEditorUid && page.lastEditorUid !== req.authUser!.uid) {
+        await createNotification(page.lastEditorUid, 'review_result', {
+          approved: false,
+          targetType: 'wiki',
+          targetId,
+          title: page.title,
+          note: rejectNote,
+        });
+      }
+
       res.json({ item: toWikiResponse(page) });
       return;
     }
@@ -2915,6 +3404,16 @@ app.post('/api/admin/review/:type/:id/reject', requireAdmin, async (req: Authent
         note: rejectNote,
       },
     });
+
+    if (post.authorUid && post.authorUid !== req.authUser!.uid) {
+      await createNotification(post.authorUid, 'review_result', {
+        approved: false,
+        targetType: 'post',
+        targetId,
+        title: post.title,
+        note: rejectNote,
+      });
+    }
 
     res.json({ item: toPostResponse(post) });
   } catch (error) {
@@ -2977,6 +3476,29 @@ app.get('/api/galleries', async (_req, res) => {
   } catch (error) {
     console.error('Fetch galleries error:', error);
     res.status(500).json({ error: '获取图集失败' });
+  }
+});
+
+app.get('/api/galleries/:id', async (req, res) => {
+  try {
+    const gallery = await prisma.gallery.findUnique({
+      where: { id: req.params.id },
+      include: {
+        images: {
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    if (!gallery) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    res.json({ gallery: toGalleryResponse(gallery) });
+  } catch (error) {
+    console.error('Fetch gallery detail error:', error);
+    res.status(500).json({ error: '获取图集详情失败' });
   }
 });
 
