@@ -66,6 +66,8 @@ model User {
   passwordHash  String
   displayName   String
   photoURL      String?
+  wechatOpenId  String?        @unique
+  wechatUnionId String?
   role          UserRole       @default(user)
   status        UserStatus     @default(active)
   banReason     String?        @db.Text
@@ -89,6 +91,7 @@ model User {
   browsingHistories BrowsingHistory[]
 
   @@index([status, createdAt])
+  @@index([wechatUnionId])
 }
 
 model Section {

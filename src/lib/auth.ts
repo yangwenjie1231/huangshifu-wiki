@@ -10,6 +10,7 @@ export interface User {
   email: string;
   displayName: string;
   photoURL: string | null;
+  wechatBound?: boolean;
   role: 'user' | 'admin' | 'super_admin';
   status: 'active' | 'banned';
   banReason: string | null;
@@ -112,6 +113,25 @@ export async function register(email: string, password: string, displayName: str
 
   await parseJsonResponse(response);
   await refreshAuthState();
+}
+
+export async function loginWithWeChat<T = unknown>(code: string, profile?: { displayName?: string; photoURL?: string }) {
+  const response = await fetch('/api/auth/wechat/login', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify({
+      code,
+      displayName: profile?.displayName,
+      photoURL: profile?.photoURL,
+    }),
+  });
+
+  const data = await parseJsonResponse<T>(response);
+  await refreshAuthState();
+  return data;
 }
 
 export async function logoutRequest() {

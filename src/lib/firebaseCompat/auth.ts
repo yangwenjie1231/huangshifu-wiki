@@ -2,7 +2,7 @@ export {
   auth,
   onAuthStateChanged,
   login as loginWithGoogle,
-  register as loginWithWeChat,
+  loginWithWeChat,
   logoutRequest as logout,
   type User,
 } from '../auth';

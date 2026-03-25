@@ -263,6 +263,62 @@ CREATE TABLE IF NOT EXISTS `SearchKeyword` (
   KEY `SearchKeyword_count_updatedAt_idx` (`count`,`updatedAt`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+SET @has_user_wechat_openid := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'User' AND COLUMN_NAME = 'wechatOpenId'
+);
+SET @sql := IF(
+  @has_user_wechat_openid = 0,
+  'ALTER TABLE `User` ADD COLUMN `wechatOpenId` varchar(191) DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_user_wechat_unionid := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'User' AND COLUMN_NAME = 'wechatUnionId'
+);
+SET @sql := IF(
+  @has_user_wechat_unionid = 0,
+  'ALTER TABLE `User` ADD COLUMN `wechatUnionId` varchar(191) DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_user_wechat_openid_key := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'User' AND INDEX_NAME = 'User_wechatOpenId_key'
+);
+SET @sql := IF(
+  @has_user_wechat_openid_key = 0,
+  'CREATE UNIQUE INDEX `User_wechatOpenId_key` ON `User` (`wechatOpenId`)',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_user_wechat_unionid_idx := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'User' AND INDEX_NAME = 'User_wechatUnionId_idx'
+);
+SET @sql := IF(
+  @has_user_wechat_unionid_idx = 0,
+  'CREATE INDEX `User_wechatUnionId_idx` ON `User` (`wechatUnionId`)',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 SET @has_post_hot_score := (
   SELECT COUNT(*)
   FROM INFORMATION_SCHEMA.COLUMNS
