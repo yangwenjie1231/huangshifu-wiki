@@ -11,6 +11,9 @@ import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import * as cheerio from 'cheerio';
 import { Prisma, PrismaClient, UserRole as PrismaUserRole } from '@prisma/client';
+import { getEmbeddingModelName, getEmbeddingVectorSize, generateImageEmbedding } from './src/server/vector/clipEmbedding';
+import { getQdrantCollectionName, searchImageEmbeddingPoints } from './src/server/vector/qdrantService';
+import { enqueueGalleryImageEmbeddings, enqueueMissingImageEmbeddings, syncImageEmbeddingBatch } from './src/server/vector/embeddingSync';
 
 dotenv.config({ path: '.env.local' });
 dotenv.config();
@@ -40,6 +43,17 @@ if (!JWT_SECRET) {
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const AUTH_COOKIE_NAME = 'hsf_token';
 const IS_PROD = process.env.NODE_ENV === 'production';
+const UPLOAD_SESSION_TTL_MINUTES = Math.max(5, Number(process.env.UPLOAD_SESSION_TTL_MINUTES || 45));
+const IMAGE_EMBEDDING_BATCH_SIZE = Math.max(1, Number(process.env.IMAGE_EMBEDDING_BATCH_SIZE || 100));
+const IMAGE_SEARCH_RESULT_LIMIT = Math.max(1, Number(process.env.IMAGE_SEARCH_RESULT_LIMIT || 24));
+const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp']);
+const ALLOWED_IMAGE_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/bmp',
+]);
 
 interface SessionJwtPayload extends JwtPayload {
   uid: string;
@@ -75,6 +89,7 @@ type ModerationTargetType = 'wiki' | 'post';
 type NotificationType = 'reply' | 'like' | 'review_result';
 type BrowsingTargetType = 'wiki' | 'post' | 'music';
 type PostSortType = 'latest' | 'hot' | 'recommended';
+type SearchSortType = 'latest' | 'hot' | 'relevance';
 
 type AuthenticatedRequest = Request & {
   authUser?: ApiUser;
@@ -85,9 +100,10 @@ const uploadStorage = multer.diskStorage({
     cb(null, uploadsDir);
   },
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
+    const ext = path.extname(file.originalname).toLowerCase();
     const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, '_');
-    cb(null, `${Date.now()}_${base}${ext}`);
+    const nonce = Math.random().toString(36).slice(2, 10);
+    cb(null, `${Date.now()}_${nonce}_${base}${ext}`);
   },
 });
 
@@ -95,6 +111,31 @@ const upload = multer({
   storage: uploadStorage,
   limits: {
     fileSize: 20 * 1024 * 1024,
+  },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const mime = (file.mimetype || '').toLowerCase();
+    if (!ALLOWED_IMAGE_EXTENSIONS.has(ext) || !ALLOWED_IMAGE_MIME_TYPES.has(mime)) {
+      cb(new Error('仅支持 JPG、PNG、WEBP、GIF、BMP 图片上传'));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
+const searchImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+  },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const mime = (file.mimetype || '').toLowerCase();
+    if (!ALLOWED_IMAGE_EXTENSIONS.has(ext) || !ALLOWED_IMAGE_MIME_TYPES.has(mime)) {
+      cb(new Error('仅支持 JPG、PNG、WEBP、GIF、BMP 图片上传'));
+      return;
+    }
+    cb(null, true);
   },
 });
 
@@ -128,6 +169,318 @@ function parseDate(date: string | Date | null | undefined) {
   const parsed = new Date(date);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed;
+}
+
+function parseInteger(value: unknown, fallback: number, options?: { min?: number; max?: number }) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  let normalized = Math.floor(parsed);
+  if (typeof options?.min === 'number') {
+    normalized = Math.max(options.min, normalized);
+  }
+  if (typeof options?.max === 'number') {
+    normalized = Math.min(options.max, normalized);
+  }
+  return normalized;
+}
+
+function parseBoolean(value: unknown, fallback = false) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    const lowered = value.trim().toLowerCase();
+    if (lowered === 'true' || lowered === '1') return true;
+    if (lowered === 'false' || lowered === '0') return false;
+  }
+  if (typeof value === 'number') {
+    if (value === 1) return true;
+    if (value === 0) return false;
+  }
+  return fallback;
+}
+
+function extractBase64Payload(value: unknown) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.startsWith('data:')) {
+    const commaIndex = trimmed.indexOf(',');
+    if (commaIndex < 0) {
+      return null;
+    }
+    return trimmed.slice(commaIndex + 1);
+  }
+
+  return trimmed;
+}
+
+function parseMinSimilarityScore(value: unknown) {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+
+  return Math.max(0, Math.min(1, parsed));
+}
+
+function toEmbeddingPayload(payload: unknown) {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+  const galleryId = typeof record.galleryId === 'string' ? record.galleryId : '';
+  const galleryImageId = typeof record.galleryImageId === 'string' ? record.galleryImageId : '';
+  if (!galleryId || !galleryImageId) {
+    return null;
+  }
+
+  return {
+    galleryId,
+    galleryImageId,
+    imageUrl: typeof record.imageUrl === 'string' ? record.imageUrl : '',
+    imageName: typeof record.imageName === 'string' ? record.imageName : '',
+  };
+}
+
+function normalizeTagList(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [] as string[];
+  }
+
+  return value
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean)
+    .slice(0, 30);
+}
+
+function parseAssetIdList(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [] as string[];
+  }
+
+  const deduped = new Set<string>();
+  value.forEach((item) => {
+    if (typeof item !== 'string') return;
+    const normalized = item.trim();
+    if (!normalized) return;
+    deduped.add(normalized);
+  });
+  return [...deduped];
+}
+
+function parseTrackDocIdList(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [] as string[];
+  }
+
+  const deduped = new Set<string>();
+  value.forEach((item) => {
+    if (typeof item !== 'string') return;
+    const normalized = item.trim();
+    if (!normalized) return;
+    deduped.add(normalized);
+  });
+
+  return [...deduped].slice(0, 500);
+}
+
+function createUploadSessionExpiresAt() {
+  return new Date(Date.now() + UPLOAD_SESSION_TTL_MINUTES * 60 * 1000);
+}
+
+function isUploadSessionExpired(expiresAt: Date) {
+  return expiresAt.getTime() <= Date.now();
+}
+
+function buildUploadPublicUrl(fileName: string) {
+  return `/uploads/${fileName}`;
+}
+
+function resolveUploadPathByStorageKey(storageKey: string) {
+  const normalized = storageKey.replace(/\\/g, '/').replace(/^\/+/, '');
+  const base = path.resolve(uploadsDir);
+  const target = path.resolve(base, normalized);
+  if (target !== base && !target.startsWith(`${base}${path.sep}`)) {
+    return null;
+  }
+  return target;
+}
+
+function extractStorageKeyFromUploadUrl(url: string) {
+  if (!url.startsWith('/uploads/')) {
+    return null;
+  }
+  const raw = url.slice('/uploads/'.length);
+  if (!raw) {
+    return null;
+  }
+  return decodeURIComponent(raw);
+}
+
+async function safeDeleteUploadFileByStorageKey(storageKey: string) {
+  const filePath = resolveUploadPathByStorageKey(storageKey);
+  if (!filePath) {
+    return;
+  }
+  try {
+    await fs.promises.unlink(filePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.error('Delete upload file error:', error);
+    }
+  }
+}
+
+async function safeDeleteUploadFileByUrl(url: string) {
+  const storageKey = extractStorageKeyFromUploadUrl(url);
+  if (!storageKey) {
+    return;
+  }
+  await safeDeleteUploadFileByStorageKey(storageKey);
+}
+
+async function validateUploadedImage(file: Express.Multer.File) {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (!ALLOWED_IMAGE_EXTENSIONS.has(ext)) {
+    throw new Error('不支持的图片扩展名');
+  }
+
+  const buffer = await fs.promises.readFile(file.path);
+  const detectedMimeType = detectImageMimeType(buffer);
+  if (!detectedMimeType || !ALLOWED_IMAGE_MIME_TYPES.has(detectedMimeType)) {
+    throw new Error('文件内容与图片格式不匹配');
+  }
+
+  const expectedMimeByExt: Record<string, string> = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.webp': 'image/webp',
+    '.gif': 'image/gif',
+    '.bmp': 'image/bmp',
+  };
+  const expectedMimeType = expectedMimeByExt[ext];
+  if (!expectedMimeType || detectedMimeType !== expectedMimeType) {
+    throw new Error('图片扩展名与文件内容不一致');
+  }
+
+  return {
+    mimeType: detectedMimeType,
+  };
+}
+
+function detectImageMimeType(buffer: Buffer) {
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return 'image/jpeg';
+  }
+
+  if (
+    buffer.length >= 8
+    && buffer[0] === 0x89
+    && buffer[1] === 0x50
+    && buffer[2] === 0x4e
+    && buffer[3] === 0x47
+    && buffer[4] === 0x0d
+    && buffer[5] === 0x0a
+    && buffer[6] === 0x1a
+    && buffer[7] === 0x0a
+  ) {
+    return 'image/png';
+  }
+
+  if (
+    buffer.length >= 6
+    && buffer[0] === 0x47
+    && buffer[1] === 0x49
+    && buffer[2] === 0x46
+    && buffer[3] === 0x38
+    && (buffer[4] === 0x37 || buffer[4] === 0x39)
+    && buffer[5] === 0x61
+  ) {
+    return 'image/gif';
+  }
+
+  if (
+    buffer.length >= 12
+    && buffer[0] === 0x52
+    && buffer[1] === 0x49
+    && buffer[2] === 0x46
+    && buffer[3] === 0x46
+    && buffer[8] === 0x57
+    && buffer[9] === 0x45
+    && buffer[10] === 0x42
+    && buffer[11] === 0x50
+  ) {
+    return 'image/webp';
+  }
+
+  if (buffer.length >= 2 && buffer[0] === 0x42 && buffer[1] === 0x4d) {
+    return 'image/bmp';
+  }
+
+  return null;
+}
+
+function toUploadSessionResponse(session: {
+  id: string;
+  ownerUid: string;
+  status: string;
+  maxFiles: number;
+  uploadedFiles: number;
+  expiresAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: session.id,
+    ownerUid: session.ownerUid,
+    status: session.status,
+    maxFiles: session.maxFiles,
+    uploadedFiles: session.uploadedFiles,
+    expiresAt: session.expiresAt.toISOString(),
+    createdAt: session.createdAt.toISOString(),
+    updatedAt: session.updatedAt.toISOString(),
+  };
+}
+
+function toMediaAssetResponse(asset: {
+  id: string;
+  ownerUid: string;
+  sessionId: string | null;
+  storageKey: string;
+  publicUrl: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: asset.id,
+    ownerUid: asset.ownerUid,
+    sessionId: asset.sessionId,
+    storageKey: asset.storageKey,
+    url: asset.publicUrl,
+    fileName: asset.fileName,
+    mimeType: asset.mimeType,
+    sizeBytes: asset.sizeBytes,
+    status: asset.status,
+    createdAt: asset.createdAt.toISOString(),
+    updatedAt: asset.updatedAt.toISOString(),
+  };
 }
 
 function createWechatPlaceholderEmail(openId: string) {
@@ -203,6 +556,124 @@ function parsePostSort(value: unknown): PostSortType {
     return value;
   }
   return 'latest';
+}
+
+function parseSearchSort(value: unknown): SearchSortType {
+  if (value === 'latest' || value === 'hot' || value === 'relevance') {
+    return value;
+  }
+  return 'relevance';
+}
+
+function normalizeSearchText(value: string) {
+  return value.toLowerCase().trim();
+}
+
+function getSearchQueryTokens(query: string) {
+  const normalized = normalizeSearchText(query);
+  if (!normalized) {
+    return [] as string[];
+  }
+
+  return normalized
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 1)
+    .slice(0, 12);
+}
+
+function calculateKeywordMatchScore(query: string, candidates: Array<string | null | undefined>) {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) {
+    return 0;
+  }
+
+  const tokens = getSearchQueryTokens(query);
+  if (!tokens.length) {
+    return 0;
+  }
+
+  const normalizedCandidates = candidates
+    .map((candidate) => (typeof candidate === 'string' ? normalizeSearchText(candidate) : ''))
+    .filter(Boolean);
+
+  if (!normalizedCandidates.length) {
+    return 0;
+  }
+
+  let score = 0;
+  const title = normalizedCandidates[0] || '';
+  if (title) {
+    if (title === normalizedQuery) {
+      score += 1;
+    } else if (title.startsWith(normalizedQuery)) {
+      score += 0.9;
+    } else if (title.includes(normalizedQuery)) {
+      score += 0.75;
+    }
+  }
+
+  if (normalizedCandidates.some((candidate) => candidate.includes(normalizedQuery))) {
+    score += 0.55;
+  }
+
+  let tokenHits = 0;
+  tokens.forEach((token) => {
+    if (normalizedCandidates.some((candidate) => candidate.includes(token))) {
+      tokenHits += 1;
+    }
+  });
+
+  score += (tokenHits / tokens.length) * 0.8;
+  return Number(Math.min(1, score / 2.35).toFixed(4));
+}
+
+function calculateRecencyScore(updatedAt: Date, halfLifeDays = 30) {
+  const elapsedMs = Math.max(0, Date.now() - updatedAt.getTime());
+  const elapsedDays = elapsedMs / (1000 * 60 * 60 * 24);
+  return Number(Math.exp(-elapsedDays / halfLifeDays).toFixed(4));
+}
+
+function calculateWikiHotScore(item: { viewCount?: number; favoritesCount?: number }) {
+  const views = Math.max(0, Number(item.viewCount || 0));
+  const favorites = Math.max(0, Number(item.favoritesCount || 0));
+  const score = Math.log10(views + 1) * 0.6 + Math.log10(favorites + 1) * 1.1;
+  return Number(Math.max(0, Math.min(1, score / 4)).toFixed(4));
+}
+
+function calculatePostSearchHotScore(item: {
+  hotScore?: number;
+  likesCount: number;
+  commentsCount: number;
+  viewCount?: number;
+}) {
+  const base = Math.max(0, Number(item.hotScore || 0));
+  const interactions = Math.max(0, item.likesCount) * 2.2 + Math.max(0, item.commentsCount) * 2.8;
+  const views = Math.max(0, Number(item.viewCount || 0)) * 0.12;
+  const raw = base + interactions + views;
+  const normalized = Math.log10(raw + 1) / 2.4;
+  return Number(Math.max(0, Math.min(1, normalized)).toFixed(4));
+}
+
+function calculateGalleryHotScore(item: { images?: unknown[] }) {
+  const imageCount = Array.isArray(item.images) ? item.images.length : 0;
+  const score = Math.log10(Math.max(1, imageCount));
+  return Number(Math.max(0, Math.min(1, score / 2)).toFixed(4));
+}
+
+function calculateSearchCompositeScore(
+  sortMode: SearchSortType,
+  keywordScore: number,
+  hotScore: number,
+  recencyScore: number,
+) {
+  if (sortMode === 'latest') {
+    return recencyScore;
+  }
+  if (sortMode === 'hot') {
+    return Number((hotScore * 0.75 + recencyScore * 0.25).toFixed(4));
+  }
+  return Number((keywordScore * 0.45 + hotScore * 0.3 + recencyScore * 0.25).toFixed(4));
 }
 
 function normalizeKeyword(value: string) {
@@ -474,6 +945,13 @@ function parseFavoriteType(value: unknown): FavoriteTargetType | null {
   return null;
 }
 
+function parseNotificationType(value: unknown): NotificationType | null {
+  if (value === 'reply' || value === 'like' || value === 'review_result') {
+    return value;
+  }
+  return null;
+}
+
 function parseBrowsingTargetType(value: unknown): BrowsingTargetType | null {
   if (value === 'wiki' || value === 'post' || value === 'music') {
     return value;
@@ -722,6 +1200,15 @@ function toGalleryResponse(gallery: {
     url: string;
     name: string;
     sortOrder: number;
+    assetId?: string | null;
+    asset?: {
+      id: string;
+      publicUrl: string;
+      fileName: string;
+      mimeType: string;
+      sizeBytes: number;
+      status: string;
+    } | null;
   }[];
 }) {
   return {
@@ -735,7 +1222,13 @@ function toGalleryResponse(gallery: {
     updatedAt: gallery.updatedAt.toISOString(),
     images: gallery.images
       .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map((image) => ({ url: image.url, name: image.name })),
+      .map((image) => ({
+        assetId: image.assetId || image.asset?.id || null,
+        url: image.asset?.publicUrl || image.url,
+        name: image.asset?.fileName || image.name,
+        mimeType: image.asset?.mimeType || null,
+        sizeBytes: image.asset?.sizeBytes || null,
+      })),
   };
 }
 
@@ -1519,10 +2012,17 @@ app.get('/api/notifications', requireAuth, async (req: AuthenticatedRequest, res
     const page = Math.max(Number(req.query.page) || 1, 1);
     const skip = (page - 1) * limit;
     const unreadOnly = req.query.unread === 'true';
+    const requestedType = parseNotificationType(req.query.type);
 
-    const where = {
+    if (req.query.type !== undefined && !requestedType) {
+      res.status(400).json({ error: '通知类型无效' });
+      return;
+    }
+
+    const where: Prisma.NotificationWhereInput = {
       userUid,
       ...(unreadOnly ? { isRead: false } : {}),
+      ...(requestedType ? { type: requestedType } : {}),
     };
 
     const [notifications, total, unreadCount] = await Promise.all([
@@ -2001,15 +2501,31 @@ app.post('/api/wiki', requireAuth, requireActiveUser, async (req: AuthenticatedR
     });
 
     if (existing) {
-      res.status(409).json({ error: '该 slug 已存在' });
-      return;
+      if (existing.lastEditorUid !== req.authUser!.uid) {
+        res.status(409).json({ error: '该 slug 已存在' });
+        return;
+      }
     }
 
     const nextStatus = normalizeWikiWriteStatus(status, req.authUser!);
 
-    const page = await prisma.wikiPage.create({
-      data: {
+    const page = await prisma.wikiPage.upsert({
+      where: { slug: pageSlug },
+      create: {
         slug: pageSlug,
+        title,
+        category,
+        content,
+        tags: tags || [],
+        eventDate: eventDate || null,
+        status: nextStatus,
+        reviewNote: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        lastEditorUid: req.authUser!.uid,
+        lastEditorName: req.authUser!.displayName,
+      },
+      update: {
         title,
         category,
         content,
@@ -3465,6 +3981,9 @@ app.get('/api/galleries', async (_req, res) => {
     const galleries = await prisma.gallery.findMany({
       include: {
         images: {
+          include: {
+            asset: true,
+          },
           orderBy: { sortOrder: 'asc' },
         },
       },
@@ -3485,6 +4004,9 @@ app.get('/api/galleries/:id', async (req, res) => {
       where: { id: req.params.id },
       include: {
         images: {
+          include: {
+            asset: true,
+          },
           orderBy: { sortOrder: 'asc' },
         },
       },
@@ -3502,7 +4024,209 @@ app.get('/api/galleries/:id', async (req, res) => {
   }
 });
 
-app.post('/api/uploads', requireAuth, requireActiveUser, upload.single('file'), async (req, res) => {
+app.post('/api/uploads/sessions', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const requestedMaxFiles = parseInteger(req.body?.maxFiles, 50, { min: 1, max: 200 });
+    const session = await prisma.uploadSession.create({
+      data: {
+        ownerUid: req.authUser!.uid,
+        maxFiles: requestedMaxFiles,
+        expiresAt: createUploadSessionExpiresAt(),
+      },
+    });
+
+    res.status(201).json({ session: toUploadSessionResponse(session) });
+  } catch (error) {
+    console.error('Create upload session error:', error);
+    res.status(500).json({ error: '创建上传会话失败' });
+  }
+});
+
+app.get('/api/uploads/sessions/:id', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const session = await prisma.uploadSession.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!session || session.ownerUid !== req.authUser!.uid) {
+      res.status(404).json({ error: '上传会话不存在' });
+      return;
+    }
+
+    if (session.status === 'open' && isUploadSessionExpired(session.expiresAt)) {
+      const expired = await prisma.uploadSession.update({
+        where: { id: session.id },
+        data: { status: 'expired' },
+      });
+      res.json({ session: toUploadSessionResponse(expired) });
+      return;
+    }
+
+    res.json({ session: toUploadSessionResponse(session) });
+  } catch (error) {
+    console.error('Fetch upload session error:', error);
+    res.status(500).json({ error: '获取上传会话失败' });
+  }
+});
+
+app.post('/api/uploads/sessions/:id/files', requireAuth, requireActiveUser, upload.single('file'), async (req: AuthenticatedRequest, res) => {
+  const file = req.file;
+  try {
+    if (!file) {
+      res.status(400).json({ error: '请选择文件' });
+      return;
+    }
+
+    const session = await prisma.uploadSession.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        ownerUid: true,
+        status: true,
+        maxFiles: true,
+        uploadedFiles: true,
+        expiresAt: true,
+      },
+    });
+
+    if (!session || session.ownerUid !== req.authUser!.uid) {
+      await safeDeleteUploadFileByStorageKey(file.filename);
+      res.status(404).json({ error: '上传会话不存在' });
+      return;
+    }
+
+    if (session.status !== 'open') {
+      await safeDeleteUploadFileByStorageKey(file.filename);
+      res.status(400).json({ error: '上传会话不可用' });
+      return;
+    }
+
+    if (isUploadSessionExpired(session.expiresAt)) {
+      await prisma.uploadSession.update({
+        where: { id: session.id },
+        data: { status: 'expired' },
+      });
+      await safeDeleteUploadFileByStorageKey(file.filename);
+      res.status(410).json({ error: '上传会话已过期，请重新创建' });
+      return;
+    }
+
+    if (session.uploadedFiles >= session.maxFiles) {
+      await safeDeleteUploadFileByStorageKey(file.filename);
+      res.status(400).json({ error: '上传文件数量超过会话上限' });
+      return;
+    }
+
+    let validatedMimeType: string;
+    try {
+      const result = await validateUploadedImage(file);
+      validatedMimeType = result.mimeType;
+    } catch (error) {
+      await safeDeleteUploadFileByStorageKey(file.filename);
+      res.status(400).json({ error: error instanceof Error ? error.message : '非法图片文件' });
+      return;
+    }
+
+    const created = await prisma.$transaction(async (tx) => {
+      const updatedSession = await tx.uploadSession.update({
+        where: { id: session.id },
+        data: {
+          uploadedFiles: { increment: 1 },
+        },
+      });
+
+      const asset = await tx.mediaAsset.create({
+        data: {
+          ownerUid: req.authUser!.uid,
+          sessionId: session.id,
+          storageKey: file.filename,
+          publicUrl: buildUploadPublicUrl(file.filename),
+          fileName: file.originalname,
+          mimeType: validatedMimeType,
+          sizeBytes: file.size,
+          status: 'ready',
+        },
+      });
+
+      return {
+        updatedSession,
+        asset,
+      };
+    });
+
+    res.status(201).json({
+      session: toUploadSessionResponse(created.updatedSession),
+      asset: toMediaAssetResponse(created.asset),
+    });
+  } catch (error) {
+    if (file?.filename) {
+      await safeDeleteUploadFileByStorageKey(file.filename);
+    }
+    console.error('Upload session file error:', error);
+    res.status(500).json({ error: '上传图片失败' });
+  }
+});
+
+app.post('/api/uploads/sessions/:id/finalize', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const session = await prisma.uploadSession.findUnique({
+      where: { id: req.params.id },
+      include: {
+        assets: {
+          where: {
+            ownerUid: req.authUser!.uid,
+            status: 'ready',
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!session || session.ownerUid !== req.authUser!.uid) {
+      res.status(404).json({ error: '上传会话不存在' });
+      return;
+    }
+
+    if (session.status === 'finalized') {
+      res.json({
+        session: toUploadSessionResponse(session),
+        assets: session.assets.map(toMediaAssetResponse),
+      });
+      return;
+    }
+
+    if (session.status === 'expired' || isUploadSessionExpired(session.expiresAt)) {
+      if (session.status !== 'expired') {
+        await prisma.uploadSession.update({
+          where: { id: session.id },
+          data: { status: 'expired' },
+        });
+      }
+      res.status(410).json({ error: '上传会话已过期，请重新上传' });
+      return;
+    }
+
+    if (!session.assets.length) {
+      res.status(400).json({ error: '请先上传至少一张图片' });
+      return;
+    }
+
+    const finalized = await prisma.uploadSession.update({
+      where: { id: session.id },
+      data: { status: 'finalized' },
+    });
+
+    res.json({
+      session: toUploadSessionResponse(finalized),
+      assets: session.assets.map(toMediaAssetResponse),
+    });
+  } catch (error) {
+    console.error('Finalize upload session error:', error);
+    res.status(500).json({ error: '完成上传会话失败' });
+  }
+});
+
+app.post('/api/uploads', requireAuth, requireActiveUser, upload.single('file'), async (req: AuthenticatedRequest, res) => {
   try {
     const file = req.file;
     if (!file) {
@@ -3510,21 +4234,51 @@ app.post('/api/uploads', requireAuth, requireActiveUser, upload.single('file'), 
       return;
     }
 
+    let mimeType = '';
+    try {
+      const validated = await validateUploadedImage(file);
+      mimeType = validated.mimeType;
+    } catch (error) {
+      await safeDeleteUploadFileByStorageKey(file.filename);
+      res.status(400).json({ error: error instanceof Error ? error.message : '非法图片文件' });
+      return;
+    }
+
+    const asset = await prisma.mediaAsset.create({
+      data: {
+        ownerUid: req.authUser!.uid,
+        storageKey: file.filename,
+        publicUrl: buildUploadPublicUrl(file.filename),
+        fileName: file.originalname,
+        mimeType,
+        sizeBytes: file.size,
+        status: 'ready',
+      },
+    });
+
     res.status(201).json({
       file: {
-        url: `/uploads/${file.filename}`,
+        assetId: asset.id,
+        storageKey: asset.storageKey,
+        mimeType: asset.mimeType,
+        sizeBytes: asset.sizeBytes,
+        url: asset.publicUrl,
         name: file.originalname,
       },
     });
   } catch (error) {
+    if (req.file?.filename) {
+      await safeDeleteUploadFileByStorageKey(req.file.filename);
+    }
     console.error('Upload file error:', error);
     res.status(500).json({ error: '上传文件失败' });
   }
 });
 
 app.post('/api/galleries/upload', requireAuth, requireActiveUser, upload.array('images', 50), async (req: AuthenticatedRequest, res) => {
+  const files = req.files as Express.Multer.File[];
+  const createdAssetIds: string[] = [];
   try {
-    const files = req.files as Express.Multer.File[];
     const title = typeof req.body.title === 'string' ? req.body.title : '';
     const description = typeof req.body.description === 'string' ? req.body.description : '';
     const tagsRaw = typeof req.body.tags === 'string' ? req.body.tags : '';
@@ -3539,6 +4293,27 @@ app.post('/api/galleries/upload', requireAuth, requireActiveUser, upload.array('
     }
 
     const finalTitle = title || '默认图集';
+    const validatedFiles = await Promise.all(
+      files.map(async (file) => {
+        const { mimeType } = await validateUploadedImage(file);
+        const asset = await prisma.mediaAsset.create({
+          data: {
+            ownerUid: req.authUser!.uid,
+            storageKey: file.filename,
+            publicUrl: buildUploadPublicUrl(file.filename),
+            fileName: file.originalname,
+            mimeType,
+            sizeBytes: file.size,
+            status: 'ready',
+          },
+        });
+        createdAssetIds.push(asset.id);
+        return {
+          file,
+          asset,
+        };
+      }),
+    );
 
     const gallery = await prisma.gallery.create({
       data: {
@@ -3548,52 +4323,225 @@ app.post('/api/galleries/upload', requireAuth, requireActiveUser, upload.array('
         authorName: req.authUser!.displayName,
         tags,
         images: {
-          create: files.map((file, index) => ({
-            url: `/uploads/${file.filename}`,
-            name: file.originalname,
+          create: validatedFiles.map((entry, index) => ({
+            assetId: entry.asset.id,
+            url: entry.asset.publicUrl,
+            name: entry.asset.fileName,
             sortOrder: index,
           })),
         },
       },
       include: {
         images: {
+          include: {
+            asset: true,
+          },
           orderBy: { sortOrder: 'asc' },
         },
       },
     });
 
+    try {
+      await enqueueGalleryImageEmbeddings(
+        prisma,
+        gallery.images.map((image) => image.id),
+      );
+    } catch (error) {
+      console.error('Enqueue gallery image embeddings error:', error);
+    }
+
     res.status(201).json({ gallery: toGalleryResponse(gallery) });
   } catch (error) {
+    if (createdAssetIds.length > 0) {
+      await prisma.mediaAsset.deleteMany({
+        where: {
+          id: { in: createdAssetIds },
+        },
+      });
+    }
+    await Promise.all(
+      files.map((file) => safeDeleteUploadFileByStorageKey(file.filename)),
+    );
     console.error('Upload gallery error:', error);
+    const message = error instanceof Error ? error.message : '';
+    if (message.includes('图片') || message.includes('文件')) {
+      res.status(400).json({ error: message });
+      return;
+    }
     res.status(500).json({ error: '上传图集失败' });
   }
 });
 
 app.post('/api/galleries', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
-    const { title, description, tags, images } = req.body as {
+    const { title, description, tags, images, assetIds, uploadSessionId } = req.body as {
       title?: string;
       description?: string;
       tags?: string[];
       images?: { url: string; name: string }[];
+      assetIds?: string[];
+      uploadSessionId?: string;
     };
+
+    const normalizedAssetIds = parseAssetIdList(assetIds);
+
+    if (normalizedAssetIds.length > 0) {
+      const finalTitle = typeof title === 'string' && title.trim() ? title.trim() : '默认图集';
+      const finalDescription = typeof description === 'string' && description.trim()
+        ? description.trim()
+        : `${finalTitle} 图集`;
+      const finalTags = normalizeTagList(tags);
+
+      const assets = await prisma.mediaAsset.findMany({
+        where: {
+          id: { in: normalizedAssetIds },
+          ownerUid: req.authUser!.uid,
+          status: 'ready',
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      if (assets.length !== normalizedAssetIds.length) {
+        res.status(400).json({ error: '包含无效或无权限的图片资源' });
+        return;
+      }
+
+      if (uploadSessionId && typeof uploadSessionId === 'string') {
+        const session = await prisma.uploadSession.findUnique({
+          where: { id: uploadSessionId },
+          select: {
+            id: true,
+            ownerUid: true,
+            status: true,
+            expiresAt: true,
+          },
+        });
+
+        if (!session || session.ownerUid !== req.authUser!.uid) {
+          res.status(400).json({ error: '上传会话不存在' });
+          return;
+        }
+
+        if (session.status === 'expired' || isUploadSessionExpired(session.expiresAt)) {
+          if (session.status !== 'expired') {
+            await prisma.uploadSession.update({
+              where: { id: session.id },
+              data: { status: 'expired' },
+            });
+          }
+          res.status(410).json({ error: '上传会话已过期，请重新上传' });
+          return;
+        }
+
+        if (session.status !== 'finalized') {
+          res.status(400).json({ error: '请先完成上传会话' });
+          return;
+        }
+      }
+
+      const assetsById = new Map(assets.map((asset) => [asset.id, asset]));
+      const orderedAssets = normalizedAssetIds
+        .map((id) => assetsById.get(id))
+        .filter((asset): asset is typeof assets[number] => Boolean(asset));
+
+      const gallery = await prisma.gallery.create({
+        data: {
+          title: finalTitle,
+          description: finalDescription,
+          authorUid: req.authUser!.uid,
+          authorName: req.authUser!.displayName,
+          tags: finalTags,
+          images: {
+            create: orderedAssets.map((asset, index) => ({
+              assetId: asset.id,
+              url: asset.publicUrl,
+              name: asset.fileName || `image-${index + 1}`,
+              sortOrder: index,
+            })),
+          },
+        },
+        include: {
+          images: {
+            orderBy: { sortOrder: 'asc' },
+            include: {
+              asset: true,
+            },
+          },
+        },
+      });
+
+      try {
+        await enqueueGalleryImageEmbeddings(
+          prisma,
+          gallery.images.map((image) => image.id),
+        );
+      } catch (error) {
+        console.error('Enqueue gallery image embeddings error:', error);
+      }
+
+      res.status(201).json({ gallery: toGalleryResponse(gallery) });
+      return;
+    }
 
     if (!images || !Array.isArray(images) || images.length === 0) {
       res.status(400).json({ error: '图集至少需要一张图片' });
       return;
     }
 
+    const normalizedTitle = typeof title === 'string' && title.trim() ? title.trim() : '默认图集';
+    const normalizedDescription = typeof description === 'string' && description.trim() ? description.trim() : '无描述';
+    const normalizedTags = normalizeTagList(tags);
+
+    const normalizedImages = images
+      .map((image, index) => {
+        if (!image || typeof image.url !== 'string') {
+          return null;
+        }
+        const url = image.url.trim();
+        if (!url || !url.startsWith('/uploads/')) {
+          return null;
+        }
+        const fallbackName = `image-${index + 1}`;
+        const name = typeof image.name === 'string' && image.name.trim() ? image.name.trim() : fallbackName;
+        return {
+          url,
+          name,
+        };
+      })
+      .filter((item): item is { url: string; name: string } => Boolean(item));
+
+    if (!normalizedImages.length || normalizedImages.length !== images.length) {
+      res.status(400).json({ error: '图片地址不合法，请重新上传' });
+      return;
+    }
+
+    const fallbackAssets = await prisma.mediaAsset.findMany({
+      where: {
+        ownerUid: req.authUser!.uid,
+        status: 'ready',
+        publicUrl: {
+          in: normalizedImages.map((item) => item.url),
+        },
+      },
+      select: {
+        id: true,
+        publicUrl: true,
+      },
+    });
+    const assetByUrl = new Map(fallbackAssets.map((item) => [item.publicUrl, item.id]));
+
     const gallery = await prisma.gallery.create({
       data: {
-        title: title || '默认图集',
-        description: description || '无描述',
+        title: normalizedTitle,
+        description: normalizedDescription,
         authorUid: req.authUser!.uid,
         authorName: req.authUser!.displayName,
-        tags: Array.isArray(tags) ? tags : [],
+        tags: normalizedTags,
         images: {
-          create: images.map((image, index) => ({
+          create: normalizedImages.map((image, index) => ({
+            assetId: assetByUrl.get(image.url) || null,
             url: image.url,
-            name: image.name || `image-${index + 1}`,
+            name: image.name,
             sortOrder: index,
           })),
         },
@@ -3601,9 +4549,21 @@ app.post('/api/galleries', requireAuth, requireActiveUser, async (req: Authentic
       include: {
         images: {
           orderBy: { sortOrder: 'asc' },
+          include: {
+            asset: true,
+          },
         },
       },
     });
+
+    try {
+      await enqueueGalleryImageEmbeddings(
+        prisma,
+        gallery.images.map((image) => image.id),
+      );
+    } catch (error) {
+      console.error('Enqueue gallery image embeddings error:', error);
+    }
 
     res.status(201).json({ gallery: toGalleryResponse(gallery) });
   } catch (error) {
@@ -3614,9 +4574,42 @@ app.post('/api/galleries', requireAuth, requireActiveUser, async (req: Authentic
 
 app.delete('/api/galleries/:id', requireAdmin, async (req, res) => {
   try {
+    const gallery = await prisma.gallery.findUnique({
+      where: { id: req.params.id },
+      include: {
+        images: true,
+      },
+    });
+
+    if (!gallery) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
     await prisma.gallery.delete({
       where: { id: req.params.id },
     });
+
+    await Promise.all(
+      gallery.images.map(async (image) => {
+        if (image.assetId) {
+          const linked = await prisma.galleryImage.count({ where: { assetId: image.assetId } });
+          if (linked === 0) {
+            const asset = await prisma.mediaAsset.findUnique({ where: { id: image.assetId } });
+            if (asset) {
+              await safeDeleteUploadFileByStorageKey(asset.storageKey);
+              await prisma.mediaAsset.update({
+                where: { id: asset.id },
+                data: { status: 'deleted' },
+              });
+            }
+          }
+        } else {
+          await safeDeleteUploadFileByUrl(image.url);
+        }
+      }),
+    );
+
     res.json({ success: true });
   } catch (error) {
     console.error('Delete gallery error:', error);
@@ -3654,6 +4647,386 @@ app.get('/api/music', async (req: AuthenticatedRequest, res) => {
   } catch (error) {
     console.error('Fetch music error:', error);
     res.status(500).json({ error: '获取音乐失败' });
+  }
+});
+
+app.get('/api/albums', async (req: AuthenticatedRequest, res) => {
+  try {
+    const includeTracks = req.query.includeTracks === 'true';
+
+    const albums = await prisma.album.findMany({
+      include: {
+        tracks: {
+          include: {
+            track: true,
+          },
+          orderBy: { trackOrder: 'asc' },
+        },
+      },
+      orderBy: [
+        { releaseDate: 'desc' },
+        { createdAt: 'desc' },
+      ],
+      take: 200,
+    });
+
+    const favoritedMusicSet = new Set<string>();
+    if (req.authUser) {
+      const favorites = await prisma.favorite.findMany({
+        where: {
+          userUid: req.authUser.uid,
+          targetType: 'music',
+          targetId: {
+            in: albums.flatMap((album) => album.tracks.map((entry) => entry.track.docId)),
+          },
+        },
+        select: { targetId: true },
+      });
+      favorites.forEach((item) => favoritedMusicSet.add(item.targetId));
+    }
+
+    res.json({
+      albums: albums.map((album) => {
+        const tracks = album.tracks.map((entry) => ({
+          ...entry.track,
+          favoritedByMe: favoritedMusicSet.has(entry.track.docId),
+          trackOrder: entry.trackOrder,
+          createdAt: entry.track.createdAt.toISOString(),
+          updatedAt: entry.track.updatedAt.toISOString(),
+        }));
+
+        return {
+          id: album.id,
+          title: album.title,
+          artist: album.artist,
+          cover: album.cover,
+          description: album.description,
+          releaseDate: album.releaseDate ? album.releaseDate.toISOString() : null,
+          trackCount: tracks.length,
+          createdBy: album.createdBy,
+          createdAt: album.createdAt.toISOString(),
+          updatedAt: album.updatedAt.toISOString(),
+          ...(includeTracks ? { tracks } : {}),
+        };
+      }),
+    });
+  } catch (error) {
+    console.error('Fetch albums error:', error);
+    res.status(500).json({ error: '获取专辑失败' });
+  }
+});
+
+app.get('/api/albums/:id', async (req: AuthenticatedRequest, res) => {
+  try {
+    const album = await prisma.album.findUnique({
+      where: { id: req.params.id },
+      include: {
+        tracks: {
+          include: {
+            track: true,
+          },
+          orderBy: { trackOrder: 'asc' },
+        },
+      },
+    });
+
+    if (!album) {
+      res.status(404).json({ error: '专辑不存在' });
+      return;
+    }
+
+    const trackDocIds = album.tracks.map((entry) => entry.track.docId);
+    const favoritedMusicSet = new Set<string>();
+
+    if (req.authUser && trackDocIds.length) {
+      const favorites = await prisma.favorite.findMany({
+        where: {
+          userUid: req.authUser.uid,
+          targetType: 'music',
+          targetId: { in: trackDocIds },
+        },
+        select: { targetId: true },
+      });
+      favorites.forEach((item) => favoritedMusicSet.add(item.targetId));
+    }
+
+    res.json({
+      album: {
+        id: album.id,
+        title: album.title,
+        artist: album.artist,
+        cover: album.cover,
+        description: album.description,
+        releaseDate: album.releaseDate ? album.releaseDate.toISOString() : null,
+        createdBy: album.createdBy,
+        createdAt: album.createdAt.toISOString(),
+        updatedAt: album.updatedAt.toISOString(),
+        tracks: album.tracks.map((entry) => ({
+          ...entry.track,
+          favoritedByMe: favoritedMusicSet.has(entry.track.docId),
+          trackOrder: entry.trackOrder,
+          createdAt: entry.track.createdAt.toISOString(),
+          updatedAt: entry.track.updatedAt.toISOString(),
+        })),
+      },
+    });
+  } catch (error) {
+    console.error('Fetch album detail error:', error);
+    res.status(500).json({ error: '获取专辑详情失败' });
+  }
+});
+
+app.post('/api/albums', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const {
+      title,
+      artist,
+      cover,
+      description,
+      releaseDate,
+      trackDocIds,
+    } = req.body as {
+      title?: string;
+      artist?: string;
+      cover?: string;
+      description?: string;
+      releaseDate?: string;
+      trackDocIds?: string[];
+    };
+
+    const normalizedTitle = typeof title === 'string' ? title.trim() : '';
+    const normalizedArtist = typeof artist === 'string' ? artist.trim() : '';
+    const normalizedCover = typeof cover === 'string' ? cover.trim() : '';
+    const normalizedTrackDocIds = parseTrackDocIdList(trackDocIds);
+
+    if (!normalizedTitle || !normalizedArtist || !normalizedCover) {
+      res.status(400).json({ error: '缺少专辑标题、歌手或封面' });
+      return;
+    }
+
+    if (!normalizedTrackDocIds.length) {
+      res.status(400).json({ error: '专辑至少需要一首歌曲' });
+      return;
+    }
+
+    const tracks = await prisma.musicTrack.findMany({
+      where: {
+        docId: { in: normalizedTrackDocIds },
+      },
+      select: {
+        docId: true,
+      },
+    });
+
+    if (tracks.length !== normalizedTrackDocIds.length) {
+      res.status(400).json({ error: '包含无效歌曲 ID' });
+      return;
+    }
+
+    const parsedReleaseDate = typeof releaseDate === 'string' && releaseDate.trim()
+      ? parseDate(releaseDate)
+      : null;
+
+    const album = await prisma.album.create({
+      data: {
+        title: normalizedTitle,
+        artist: normalizedArtist,
+        cover: normalizedCover,
+        description: typeof description === 'string' && description.trim() ? description.trim() : null,
+        releaseDate: parsedReleaseDate,
+        createdBy: req.authUser?.uid,
+        tracks: {
+          create: normalizedTrackDocIds.map((docId, index) => ({
+            trackDocId: docId,
+            trackOrder: index,
+          })),
+        },
+      },
+      include: {
+        tracks: {
+          include: {
+            track: true,
+          },
+          orderBy: { trackOrder: 'asc' },
+        },
+      },
+    });
+
+    res.status(201).json({
+      album: {
+        id: album.id,
+        title: album.title,
+        artist: album.artist,
+        cover: album.cover,
+        description: album.description,
+        releaseDate: album.releaseDate ? album.releaseDate.toISOString() : null,
+        createdBy: album.createdBy,
+        createdAt: album.createdAt.toISOString(),
+        updatedAt: album.updatedAt.toISOString(),
+        tracks: album.tracks.map((entry) => ({
+          ...entry.track,
+          trackOrder: entry.trackOrder,
+          createdAt: entry.track.createdAt.toISOString(),
+          updatedAt: entry.track.updatedAt.toISOString(),
+        })),
+      },
+    });
+  } catch (error) {
+    console.error('Create album error:', error);
+    res.status(500).json({ error: '创建专辑失败' });
+  }
+});
+
+app.patch('/api/albums/:id', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const {
+      title,
+      artist,
+      cover,
+      description,
+      releaseDate,
+      trackDocIds,
+    } = req.body as {
+      title?: string;
+      artist?: string;
+      cover?: string;
+      description?: string;
+      releaseDate?: string | null;
+      trackDocIds?: string[];
+    };
+
+    const existing = await prisma.album.findUnique({
+      where: { id: req.params.id },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      res.status(404).json({ error: '专辑不存在' });
+      return;
+    }
+
+    const normalizedTrackDocIds = trackDocIds ? parseTrackDocIdList(trackDocIds) : null;
+
+    if (normalizedTrackDocIds && normalizedTrackDocIds.length === 0) {
+      res.status(400).json({ error: '专辑至少需要一首歌曲' });
+      return;
+    }
+
+    if (normalizedTrackDocIds) {
+      const tracks = await prisma.musicTrack.findMany({
+        where: {
+          docId: { in: normalizedTrackDocIds },
+        },
+        select: { docId: true },
+      });
+
+      if (tracks.length !== normalizedTrackDocIds.length) {
+        res.status(400).json({ error: '包含无效歌曲 ID' });
+        return;
+      }
+    }
+
+    const parsedReleaseDate = releaseDate === null
+      ? null
+      : typeof releaseDate === 'string' && releaseDate.trim()
+        ? parseDate(releaseDate)
+        : undefined;
+
+    const album = await prisma.$transaction(async (tx) => {
+      if (normalizedTrackDocIds) {
+        await tx.trackInAlbum.deleteMany({
+          where: { albumId: req.params.id },
+        });
+      }
+
+      const updatedAlbum = await tx.album.update({
+        where: { id: req.params.id },
+        data: {
+          title: typeof title === 'string' && title.trim() ? title.trim() : undefined,
+          artist: typeof artist === 'string' && artist.trim() ? artist.trim() : undefined,
+          cover: typeof cover === 'string' && cover.trim() ? cover.trim() : undefined,
+          description: typeof description === 'string'
+            ? (description.trim() ? description.trim() : null)
+            : undefined,
+          releaseDate: parsedReleaseDate,
+        },
+      });
+
+      if (normalizedTrackDocIds) {
+        await tx.trackInAlbum.createMany({
+          data: normalizedTrackDocIds.map((docId, index) => ({
+            albumId: req.params.id,
+            trackDocId: docId,
+            trackOrder: index,
+          })),
+        });
+      }
+
+      return updatedAlbum;
+    });
+
+    const fullAlbum = await prisma.album.findUnique({
+      where: { id: album.id },
+      include: {
+        tracks: {
+          include: {
+            track: true,
+          },
+          orderBy: { trackOrder: 'asc' },
+        },
+      },
+    });
+
+    if (!fullAlbum) {
+      res.status(404).json({ error: '专辑不存在' });
+      return;
+    }
+
+    res.json({
+      album: {
+        id: fullAlbum.id,
+        title: fullAlbum.title,
+        artist: fullAlbum.artist,
+        cover: fullAlbum.cover,
+        description: fullAlbum.description,
+        releaseDate: fullAlbum.releaseDate ? fullAlbum.releaseDate.toISOString() : null,
+        createdBy: fullAlbum.createdBy,
+        createdAt: fullAlbum.createdAt.toISOString(),
+        updatedAt: fullAlbum.updatedAt.toISOString(),
+        tracks: fullAlbum.tracks.map((entry) => ({
+          ...entry.track,
+          trackOrder: entry.trackOrder,
+          createdAt: entry.track.createdAt.toISOString(),
+          updatedAt: entry.track.updatedAt.toISOString(),
+        })),
+      },
+    });
+  } catch (error) {
+    console.error('Update album error:', error);
+    res.status(500).json({ error: '更新专辑失败' });
+  }
+});
+
+app.delete('/api/albums/:id', requireAdmin, async (req, res) => {
+  try {
+    const album = await prisma.album.findUnique({
+      where: { id: req.params.id },
+      select: { id: true },
+    });
+
+    if (!album) {
+      res.status(404).json({ error: '专辑不存在' });
+      return;
+    }
+
+    await prisma.album.delete({
+      where: { id: req.params.id },
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete album error:', error);
+    res.status(500).json({ error: '删除专辑失败' });
   }
 });
 
@@ -3966,6 +5339,7 @@ app.get('/api/search', async (req: AuthenticatedRequest, res) => {
   try {
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     const type = typeof req.query.type === 'string' ? req.query.type : 'all';
+    const sort = parseSearchSort(req.query.sort);
     const category = typeof req.query.category === 'string' ? req.query.category : undefined;
     const startDate = typeof req.query.startDate === 'string' ? parseDate(req.query.startDate) : null;
     const endDate = typeof req.query.endDate === 'string' ? parseDate(req.query.endDate) : null;
@@ -4040,6 +5414,9 @@ app.get('/api/search', async (req: AuthenticatedRequest, res) => {
       ? prisma.gallery.findMany({
           include: {
             images: {
+              include: {
+                asset: true,
+              },
               orderBy: { sortOrder: 'asc' },
             },
           },
@@ -4068,10 +5445,77 @@ app.get('/api/search', async (req: AuthenticatedRequest, res) => {
 
     const [wiki, posts, galleries] = await Promise.all([wikiPromise, postsPromise, galleriesPromise]);
 
+    const wikiScored = wiki
+      .map((item) => {
+        const keywordScore = calculateKeywordMatchScore(q, [item.title, item.content, item.slug]);
+        const hotScore = calculateWikiHotScore(item);
+        const recencyScore = calculateRecencyScore(item.updatedAt);
+        const score = calculateSearchCompositeScore(sort, keywordScore, hotScore, recencyScore);
+        return {
+          item,
+          _searchScore: score,
+          _searchMeta: {
+            keywordScore,
+            hotScore,
+            recencyScore,
+          },
+        };
+      })
+      .sort((a, b) => b._searchScore - a._searchScore);
+
+    const postsScored = posts
+      .map((item) => {
+        const keywordScore = calculateKeywordMatchScore(q, [item.title, item.content, item.section]);
+        const hotScore = calculatePostSearchHotScore(item);
+        const recencyScore = calculateRecencyScore(item.updatedAt);
+        const score = calculateSearchCompositeScore(sort, keywordScore, hotScore, recencyScore);
+        return {
+          item,
+          _searchScore: score,
+          _searchMeta: {
+            keywordScore,
+            hotScore,
+            recencyScore,
+          },
+        };
+      })
+      .sort((a, b) => b._searchScore - a._searchScore);
+
+    const galleriesScored = galleries
+      .map((item) => {
+        const keywordScore = calculateKeywordMatchScore(q, [item.title, item.description]);
+        const hotScore = calculateGalleryHotScore(item);
+        const recencyScore = calculateRecencyScore(item.updatedAt);
+        const score = calculateSearchCompositeScore(sort, keywordScore, hotScore, recencyScore);
+        return {
+          item,
+          _searchScore: score,
+          _searchMeta: {
+            keywordScore,
+            hotScore,
+            recencyScore,
+          },
+        };
+      })
+      .sort((a, b) => b._searchScore - a._searchScore);
+
     res.json({
-      wiki: wiki.map(toWikiResponse),
-      posts: posts.map(toPostResponse),
-      galleries: galleries.map(toGalleryResponse),
+      sort,
+      wiki: wikiScored.map((entry) => ({
+        ...toWikiResponse(entry.item),
+        searchScore: entry._searchScore,
+        searchMeta: entry._searchMeta,
+      })),
+      posts: postsScored.map((entry) => ({
+        ...toPostResponse(entry.item),
+        searchScore: entry._searchScore,
+        searchMeta: entry._searchMeta,
+      })),
+      galleries: galleriesScored.map((entry) => ({
+        ...toGalleryResponse(entry.item),
+        searchScore: entry._searchScore,
+        searchMeta: entry._searchMeta,
+      })),
     });
   } catch (error) {
     console.error('Search error:', error);
@@ -4095,6 +5539,326 @@ app.get('/api/search/hot-keywords', async (_req, res) => {
   } catch (error) {
     console.error('Fetch hot keywords error:', error);
     res.status(500).json({ error: '获取热门关键词失败' });
+  }
+});
+
+app.post('/api/search/by-image', searchImageUpload.single('image'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const requestedLimit = parseInteger(req.body?.limit, IMAGE_SEARCH_RESULT_LIMIT, {
+      min: 1,
+      max: 60,
+    });
+    const minScore = parseMinSimilarityScore(req.body?.minScore);
+
+    let imageBuffer: Buffer | null = null;
+    const uploadedFile = req.file;
+
+    if (uploadedFile?.buffer && uploadedFile.buffer.length > 0) {
+      imageBuffer = uploadedFile.buffer;
+    } else {
+      const base64Payload = extractBase64Payload(req.body?.imageBase64);
+      if (base64Payload) {
+        try {
+          imageBuffer = Buffer.from(base64Payload, 'base64');
+        } catch {
+          imageBuffer = null;
+        }
+      }
+    }
+
+    if (!imageBuffer || imageBuffer.length === 0) {
+      res.status(400).json({ error: '请上传图片文件，或提供 imageBase64' });
+      return;
+    }
+
+    const queryVector = await generateImageEmbedding(imageBuffer);
+    const matches = await searchImageEmbeddingPoints({
+      vector: queryVector,
+      limit: requestedLimit,
+      minScore,
+    });
+
+    const seenGalleryIds = new Set<string>();
+    const seenImageIds = new Set<string>();
+    const orderedGalleryIds: string[] = [];
+    const scoreByGalleryId = new Map<string, number>();
+
+    matches.forEach((match) => {
+      const parsed = toEmbeddingPayload(match.payload);
+      if (!parsed) {
+        return;
+      }
+
+      if (!seenImageIds.has(parsed.galleryImageId)) {
+        seenImageIds.add(parsed.galleryImageId);
+      }
+
+      const score = typeof match.score === 'number' ? match.score : 0;
+      const previousBest = scoreByGalleryId.get(parsed.galleryId);
+      if (previousBest === undefined || score > previousBest) {
+        scoreByGalleryId.set(parsed.galleryId, score);
+      }
+
+      if (!seenGalleryIds.has(parsed.galleryId)) {
+        seenGalleryIds.add(parsed.galleryId);
+        orderedGalleryIds.push(parsed.galleryId);
+      }
+    });
+
+    if (!orderedGalleryIds.length) {
+      res.json({
+        mode: 'semantic_image',
+        totalMatches: 0,
+        totalGalleries: 0,
+        galleries: [],
+      });
+      return;
+    }
+
+    const galleryRows = await prisma.gallery.findMany({
+      where: {
+        id: { in: orderedGalleryIds },
+      },
+      include: {
+        images: {
+          include: {
+            asset: true,
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    const galleryById = new Map(galleryRows.map((gallery) => [gallery.id, gallery]));
+    const galleries = orderedGalleryIds
+      .map((galleryId) => {
+        const gallery = galleryById.get(galleryId);
+        if (!gallery) {
+          return null;
+        }
+        return {
+          ...toGalleryResponse(gallery),
+          similarity: Number((scoreByGalleryId.get(galleryId) ?? 0).toFixed(4)),
+        };
+      })
+      .filter((item): item is ReturnType<typeof toGalleryResponse> & { similarity: number } => item !== null);
+
+    res.json({
+      mode: 'semantic_image',
+      totalMatches: seenImageIds.size,
+      totalGalleries: galleries.length,
+      galleries,
+    });
+  } catch (error) {
+    console.error('Image semantic search error:', error);
+    res.status(500).json({ error: '图片语义搜索失败' });
+  }
+});
+
+app.get('/api/embeddings/status', requireAdmin, async (_req: AuthenticatedRequest, res) => {
+  try {
+    const [pending, processing, ready, failed] = await Promise.all([
+      prisma.imageEmbedding.count({ where: { status: 'pending' } }),
+      prisma.imageEmbedding.count({ where: { status: 'processing' } }),
+      prisma.imageEmbedding.count({ where: { status: 'ready' } }),
+      prisma.imageEmbedding.count({ where: { status: 'failed' } }),
+    ]);
+
+    const summary = {
+      pending,
+      processing,
+      ready,
+      failed,
+      total: pending + processing + ready + failed,
+    };
+
+    res.json({
+      modelName: getEmbeddingModelName(),
+      vectorSize: getEmbeddingVectorSize(),
+      qdrantCollection: getQdrantCollectionName(),
+      summary,
+    });
+  } catch (error) {
+    console.error('Fetch embeddings status error:', error);
+    res.status(500).json({ error: '获取向量状态失败' });
+  }
+});
+
+app.post('/api/embeddings/enqueue-missing', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const limit = parseInteger(req.body?.limit, IMAGE_EMBEDDING_BATCH_SIZE, {
+      min: 1,
+      max: 2000,
+    });
+    const result = await enqueueMissingImageEmbeddings(prisma, limit);
+    res.json({
+      ...result,
+      limit,
+    });
+  } catch (error) {
+    console.error('Enqueue missing embeddings error:', error);
+    res.status(500).json({ error: '补齐向量队列失败' });
+  }
+});
+
+app.post('/api/embeddings/sync-batch', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const galleryImageIdsRaw = Array.isArray(req.body?.galleryImageIds)
+      ? req.body.galleryImageIds
+      : [];
+    const galleryImageIds = galleryImageIdsRaw
+      .filter((item: unknown): item is string => typeof item === 'string')
+      .map((item: string) => item.trim())
+      .filter(Boolean);
+
+    const limit = parseInteger(req.body?.limit, IMAGE_EMBEDDING_BATCH_SIZE, {
+      min: 1,
+      max: 500,
+    });
+    const includeFailed = parseBoolean(req.body?.includeFailed, false);
+    const forceRebuild = parseBoolean(req.body?.forceRebuild, false);
+
+    const result = await syncImageEmbeddingBatch(prisma, uploadsDir, {
+      limit,
+      includeFailed,
+      forceRebuild,
+      galleryImageIds,
+    });
+
+    res.json({
+      ...result,
+      limit,
+      includeFailed,
+      forceRebuild,
+      modelName: getEmbeddingModelName(),
+      vectorSize: getEmbeddingVectorSize(),
+      qdrantCollection: getQdrantCollectionName(),
+    });
+  } catch (error) {
+    console.error('Sync embeddings batch error:', error);
+    res.status(500).json({ error: '批量生成向量失败' });
+  }
+});
+
+app.get('/api/embeddings/errors', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const limit = parseInteger(req.query.limit, 20, {
+      min: 1,
+      max: 200,
+    });
+
+    const failed = await prisma.imageEmbedding.findMany({
+      where: {
+        status: 'failed',
+      },
+      include: {
+        galleryImage: {
+          include: {
+            gallery: {
+              select: {
+                id: true,
+                title: true,
+              },
+            },
+            asset: {
+              select: {
+                id: true,
+                publicUrl: true,
+                storageKey: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+      take: limit,
+    });
+
+    res.json({
+      items: failed.map((item) => ({
+        id: item.id,
+        galleryImageId: item.galleryImageId,
+        galleryId: item.galleryImage.galleryId,
+        galleryTitle: item.galleryImage.gallery.title,
+        imageUrl: item.galleryImage.asset?.publicUrl || item.galleryImage.url,
+        modelName: item.modelName,
+        vectorSize: item.vectorSize,
+        status: item.status,
+        lastError: item.lastError,
+        embeddedAt: item.embeddedAt ? item.embeddedAt.toISOString() : null,
+        updatedAt: item.updatedAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    console.error('Fetch embedding errors error:', error);
+    res.status(500).json({ error: '获取向量失败记录失败' });
+  }
+});
+
+app.post('/api/embeddings/retry-failed', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const limit = parseInteger(req.body?.limit, IMAGE_EMBEDDING_BATCH_SIZE, {
+      min: 1,
+      max: 500,
+    });
+
+    const updated = await prisma.imageEmbedding.updateMany({
+      where: {
+        status: 'failed',
+      },
+      data: {
+        status: 'pending',
+        lastError: null,
+      },
+    });
+
+    const result = await syncImageEmbeddingBatch(prisma, uploadsDir, {
+      limit,
+      includeFailed: true,
+      forceRebuild: false,
+    });
+
+    res.json({
+      resetCount: updated.count,
+      ...result,
+      limit,
+    });
+  } catch (error) {
+    console.error('Retry failed embeddings error:', error);
+    res.status(500).json({ error: '重试失败向量任务失败' });
+  }
+});
+
+app.post('/api/embeddings/rebuild-all', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const limit = parseInteger(req.body?.limit, IMAGE_EMBEDDING_BATCH_SIZE, {
+      min: 1,
+      max: 500,
+    });
+
+    const updated = await prisma.imageEmbedding.updateMany({
+      data: {
+        status: 'pending',
+        lastError: null,
+      },
+    });
+
+    const result = await syncImageEmbeddingBatch(prisma, uploadsDir, {
+      limit,
+      includeFailed: true,
+      forceRebuild: true,
+    });
+
+    res.json({
+      resetCount: updated.count,
+      ...result,
+      limit,
+    });
+  } catch (error) {
+    console.error('Rebuild all embeddings error:', error);
+    res.status(500).json({ error: '重建全部向量失败' });
   }
 });
 
@@ -4187,6 +5951,9 @@ app.get('/api/admin/:tab', requireAdmin, async (req, res) => {
       const data = await prisma.gallery.findMany({
         include: {
           images: {
+            include: {
+              asset: true,
+            },
             orderBy: { sortOrder: 'asc' },
           },
         },
@@ -4253,6 +6020,41 @@ app.get('/api/admin/:tab', requireAdmin, async (req, res) => {
       return;
     }
 
+    if (tab === 'albums') {
+      const data = await prisma.album.findMany({
+        include: {
+          tracks: {
+            include: {
+              track: true,
+            },
+            orderBy: { trackOrder: 'asc' },
+          },
+        },
+        orderBy: [{ releaseDate: 'desc' }, { createdAt: 'desc' }],
+        take: 100,
+      });
+      res.json({
+        data: data.map((album) => ({
+          id: album.id,
+          title: album.title,
+          artist: album.artist,
+          cover: album.cover,
+          description: album.description,
+          releaseDate: album.releaseDate ? album.releaseDate.toISOString() : null,
+          createdBy: album.createdBy,
+          createdAt: album.createdAt.toISOString(),
+          updatedAt: album.updatedAt.toISOString(),
+          tracks: album.tracks.map((entry) => ({
+            ...entry.track,
+            trackOrder: entry.trackOrder,
+            createdAt: entry.track.createdAt.toISOString(),
+            updatedAt: entry.track.updatedAt.toISOString(),
+          })),
+        })),
+      });
+      return;
+    }
+
     res.status(400).json({ error: '未知数据类型' });
   } catch (error) {
     console.error('Fetch admin data error:', error);
@@ -4290,6 +6092,9 @@ app.get('/api/admin/:tab/:id', requireAdmin, async (req, res) => {
         where: { id },
         include: {
           images: {
+            include: {
+              asset: true,
+            },
             orderBy: { sortOrder: 'asc' },
           },
         },
@@ -4364,6 +6169,44 @@ app.get('/api/admin/:tab/:id', requireAdmin, async (req, res) => {
       return;
     }
 
+    if (tab === 'albums') {
+      const item = await prisma.album.findUnique({
+        where: { id },
+        include: {
+          tracks: {
+            include: {
+              track: true,
+            },
+            orderBy: { trackOrder: 'asc' },
+          },
+        },
+      });
+      if (!item) {
+        res.status(404).json({ error: '记录不存在' });
+        return;
+      }
+      res.json({
+        item: {
+          id: item.id,
+          title: item.title,
+          artist: item.artist,
+          cover: item.cover,
+          description: item.description,
+          releaseDate: item.releaseDate ? item.releaseDate.toISOString() : null,
+          createdBy: item.createdBy,
+          createdAt: item.createdAt.toISOString(),
+          updatedAt: item.updatedAt.toISOString(),
+          tracks: item.tracks.map((entry) => ({
+            ...entry.track,
+            trackOrder: entry.trackOrder,
+            createdAt: entry.track.createdAt.toISOString(),
+            updatedAt: entry.track.updatedAt.toISOString(),
+          })),
+        },
+      });
+      return;
+    }
+
     res.status(400).json({ error: '未知数据类型' });
   } catch (error) {
     console.error('Fetch admin item error:', error);
@@ -4387,7 +6230,35 @@ app.delete('/api/admin/:tab/:id', requireAdmin, async (req: AuthenticatedRequest
       return;
     }
     if (tab === 'galleries') {
+      const gallery = await prisma.gallery.findUnique({
+        where: { id },
+        include: { images: true },
+      });
+      if (!gallery) {
+        res.status(404).json({ error: '图集不存在' });
+        return;
+      }
       await prisma.gallery.delete({ where: { id } });
+
+      await Promise.all(
+        gallery.images.map(async (image) => {
+          if (image.assetId) {
+            const linked = await prisma.galleryImage.count({ where: { assetId: image.assetId } });
+            if (linked === 0) {
+              const asset = await prisma.mediaAsset.findUnique({ where: { id: image.assetId } });
+              if (asset) {
+                await safeDeleteUploadFileByStorageKey(asset.storageKey);
+                await prisma.mediaAsset.update({
+                  where: { id: asset.id },
+                  data: { status: 'deleted' },
+                });
+              }
+            }
+          } else {
+            await safeDeleteUploadFileByUrl(image.url);
+          }
+        }),
+      );
       res.json({ success: true });
       return;
     }
@@ -4416,6 +6287,11 @@ app.delete('/api/admin/:tab/:id', requireAdmin, async (req: AuthenticatedRequest
       res.json({ success: true });
       return;
     }
+    if (tab === 'albums') {
+      await prisma.album.delete({ where: { id } });
+      res.json({ success: true });
+      return;
+    }
 
     res.status(400).json({ error: '未知删除类型' });
   } catch (error) {
@@ -4425,6 +6301,20 @@ app.delete('/api/admin/:tab/:id', requireAdmin, async (req: AuthenticatedRequest
 });
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      res.status(413).json({ error: '单张图片不能超过 20MB' });
+      return;
+    }
+    res.status(400).json({ error: err.message || '上传参数不合法' });
+    return;
+  }
+
+  if (err.message?.includes('仅支持')) {
+    res.status(400).json({ error: err.message });
+    return;
+  }
+
   console.error('Unhandled server error:', err);
   res.status(500).json({ error: '服务器内部错误' });
 });

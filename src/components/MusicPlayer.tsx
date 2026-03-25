@@ -6,6 +6,7 @@ import { clsx } from 'clsx';
 
 interface Song {
   id: string;
+  docId?: string;
   title: string;
   artist: string;
   album: string;
@@ -36,7 +37,7 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
   }, [songId]);
 
   const togglePlay = () => {
-    if (currentSong?.id !== song?.id) {
+    if (currentSong?.id !== song?.id || (song.docId && currentSong?.docId !== song.docId)) {
       setCurrentSong(song);
       setIsPlaying(true);
     } else {

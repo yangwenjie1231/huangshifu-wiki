@@ -10,6 +10,10 @@ USE_PM2="${USE_PM2:-1}"
 PULL_LATEST="${PULL_LATEST:-0}"
 SKIP_SEED="${SKIP_SEED:-0}"
 INSTALL_MODE="${INSTALL_MODE:-ci}"
+ENABLE_VECTOR_SYNC="${ENABLE_VECTOR_SYNC:-1}"
+VECTOR_SYNC_LIMIT="${VECTOR_SYNC_LIMIT:-100}"
+HEALTHCHECK_RETRIES="${HEALTHCHECK_RETRIES:-15}"
+HEALTHCHECK_DELAY_SECONDS="${HEALTHCHECK_DELAY_SECONDS:-2}"
 
 log() {
   printf '[deploy] %s\n' "$*"
@@ -20,6 +24,32 @@ require_cmd() {
     printf '[deploy] missing required command: %s\n' "$1" >&2
     exit 1
   fi
+}
+
+wait_for_healthcheck() {
+  local url="$1"
+  local retries="$2"
+  local delay_seconds="$3"
+  local attempt=1
+
+  while (( attempt <= retries )); do
+    if curl -fsS "$url" >/dev/null 2>&1; then
+      log "health check passed (attempt ${attempt}/${retries})"
+      curl -fsS "$url"
+      printf '\n'
+      return 0
+    fi
+
+    if (( attempt < retries )); then
+      log "health check failed (attempt ${attempt}/${retries}), retrying in ${delay_seconds}s"
+      sleep "$delay_seconds"
+    fi
+
+    attempt=$((attempt + 1))
+  done
+
+  log "health check failed after ${retries} attempts"
+  return 1
 }
 
 require_cmd npm
@@ -74,13 +104,20 @@ fi
 log "building frontend"
 npm run build
 
+if [[ "$ENABLE_VECTOR_SYNC" == "1" ]]; then
+  log "running initial embedding sync batch (limit=${VECTOR_SYNC_LIMIT})"
+  npm run embeddings:sync -- --limit="$VECTOR_SYNC_LIMIT" || log "embedding sync failed, continue deployment"
+else
+  log "skip embedding sync (ENABLE_VECTOR_SYNC=$ENABLE_VECTOR_SYNC)"
+fi
+
 if [[ "$USE_PM2" == "1" ]]; then
   require_cmd pm2
   log "starting or restarting pm2 service: $APP_NAME"
   if pm2 describe "$APP_NAME" >/dev/null 2>&1; then
-    pm2 restart "$APP_NAME"
+    pm2 restart "$APP_NAME" --update-env
   else
-    pm2 start "NODE_ENV=production npx tsx server.ts" --name "$APP_NAME"
+    pm2 start "NODE_ENV=production npx tsx server.ts" --name "$APP_NAME" --cwd "$ROOT_DIR"
   fi
   pm2 save >/dev/null 2>&1 || true
 else
@@ -90,7 +127,6 @@ else
 fi
 
 log "health check: http://127.0.0.1:${APP_PORT}/api/health"
-curl -fsS "http://127.0.0.1:${APP_PORT}/api/health"
-printf '\n'
+wait_for_healthcheck "http://127.0.0.1:${APP_PORT}/api/health" "$HEALTHCHECK_RETRIES" "$HEALTHCHECK_DELAY_SECONDS"
 
 log "deploy completed"

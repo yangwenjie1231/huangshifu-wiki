@@ -6,10 +6,19 @@ interface Song {
   title: string;
   artist: string;
   album: string;
+  albumId?: string | null;
+  albumTitle?: string | null;
+  trackOrder?: number;
   cover: string;
   audioUrl: string;
   lyric?: string | null;
 }
+
+type PlaylistSource = {
+  type: 'songs' | 'album';
+  albumId?: string;
+  albumTitle?: string;
+};
 
 interface MusicContextType {
   currentSong: Song | null;
@@ -18,7 +27,9 @@ interface MusicContextType {
   setIsPlaying: (playing: boolean) => void;
   playlist: Song[];
   currentIndex: number;
-  setPlaylist: (songs: Song[]) => void;
+  playlistSource: PlaylistSource;
+  setPlaylist: (songs: Song[], source?: PlaylistSource) => void;
+  playAlbumTracks: (albumId: string, albumTitle: string, tracks: Song[], startIndex?: number) => void;
   playSongAtIndex: (index: number) => void;
   playNext: () => void;
   playPrevious: () => void;
@@ -31,9 +42,11 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [playlist, setPlaylistState] = useState<Song[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
+  const [playlistSource, setPlaylistSource] = useState<PlaylistSource>({ type: 'songs' });
 
-  const setPlaylist = useCallback((songs: Song[]) => {
+  const setPlaylist = useCallback((songs: Song[], source: PlaylistSource = { type: 'songs' }) => {
     setPlaylistState(songs);
+    setPlaylistSource(source);
 
     if (!songs.length) {
       setCurrentIndex(-1);
@@ -62,6 +75,25 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
       return matched;
     });
   }, [currentSong]);
+
+  const playAlbumTracks = useCallback((albumId: string, albumTitle: string, tracks: Song[], startIndex = 0) => {
+    if (!tracks.length) {
+      return;
+    }
+
+    setPlaylistState(tracks);
+    setPlaylistSource({
+      type: 'album',
+      albumId,
+      albumTitle,
+    });
+
+    const safeIndex = Math.max(0, Math.min(startIndex, tracks.length - 1));
+    const song = tracks[safeIndex];
+    setCurrentIndex(safeIndex);
+    setCurrentSongState(song);
+    setIsPlaying(true);
+  }, []);
 
   const setCurrentSong = useCallback((song: Song | null) => {
     if (!song) {
@@ -117,7 +149,9 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
       setIsPlaying,
       playlist,
       currentIndex,
+      playlistSource,
       setPlaylist,
+      playAlbumTracks,
       playSongAtIndex,
       playNext,
       playPrevious,
@@ -128,7 +162,9 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
       isPlaying,
       playlist,
       currentIndex,
+      playlistSource,
       setPlaylist,
+      playAlbumTracks,
       playSongAtIndex,
       playNext,
       playPrevious,

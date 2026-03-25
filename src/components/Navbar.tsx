@@ -123,6 +123,12 @@ export const Navbar = () => {
     }
   };
 
+  const openNotificationsPage = () => {
+    setNotifPanelOpen(false);
+    setIsMenuOpen(false);
+    navigate('/notifications');
+  };
+
   const getNotificationLink = (notif: NotificationItem) => {
     if (notif.type === 'reply' || notif.type === 'like') {
       const postId = typeof notif.payload.postId === 'string' ? notif.payload.postId : null;
@@ -274,14 +280,22 @@ export const Navbar = () => {
                             >
                               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                                 <span className="font-bold text-gray-900">通知</span>
-                                {unreadCount > 0 && (
+                                <div className="flex items-center gap-3">
+                                  {unreadCount > 0 && (
+                                    <button
+                                      onClick={markAllNotificationsRead}
+                                      className="text-xs text-brand-olive hover:underline"
+                                    >
+                                      全部已读
+                                    </button>
+                                  )}
                                   <button
-                                    onClick={markAllNotificationsRead}
+                                    onClick={openNotificationsPage}
                                     className="text-xs text-brand-olive hover:underline"
                                   >
-                                    全部已读
+                                    查看全部
                                   </button>
-                                )}
+                                </div>
                               </div>
                               <div className="max-h-80 overflow-y-auto">
                                 {notifLoading ? (

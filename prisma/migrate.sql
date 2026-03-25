@@ -188,14 +188,51 @@ CREATE TABLE IF NOT EXISTS `Gallery` (
   CONSTRAINT `Gallery_authorUid_fkey` FOREIGN KEY (`authorUid`) REFERENCES `User` (`uid`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `UploadSession` (
+  `id` varchar(191) NOT NULL,
+  `ownerUid` varchar(191) NOT NULL,
+  `status` enum('open','finalized','expired') NOT NULL DEFAULT 'open',
+  `maxFiles` int NOT NULL DEFAULT 50,
+  `uploadedFiles` int NOT NULL DEFAULT 0,
+  `expiresAt` datetime(3) NOT NULL,
+  `createdAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` datetime(3) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `UploadSession_ownerUid_status_expiresAt_idx` (`ownerUid`,`status`,`expiresAt`),
+  CONSTRAINT `UploadSession_ownerUid_fkey` FOREIGN KEY (`ownerUid`) REFERENCES `User` (`uid`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `MediaAsset` (
+  `id` varchar(191) NOT NULL,
+  `ownerUid` varchar(191) NOT NULL,
+  `sessionId` varchar(191) DEFAULT NULL,
+  `storageKey` varchar(191) NOT NULL,
+  `publicUrl` text NOT NULL,
+  `fileName` varchar(191) NOT NULL,
+  `mimeType` varchar(191) NOT NULL,
+  `sizeBytes` int NOT NULL,
+  `status` enum('uploaded','ready','deleted') NOT NULL DEFAULT 'ready',
+  `createdAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` datetime(3) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `MediaAsset_storageKey_key` (`storageKey`),
+  KEY `MediaAsset_ownerUid_createdAt_idx` (`ownerUid`,`createdAt`),
+  KEY `MediaAsset_sessionId_idx` (`sessionId`),
+  CONSTRAINT `MediaAsset_ownerUid_fkey` FOREIGN KEY (`ownerUid`) REFERENCES `User` (`uid`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `MediaAsset_sessionId_fkey` FOREIGN KEY (`sessionId`) REFERENCES `UploadSession` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `GalleryImage` (
   `id` varchar(191) NOT NULL,
   `galleryId` varchar(191) NOT NULL,
+  `assetId` varchar(191) DEFAULT NULL,
   `url` text NOT NULL,
   `name` varchar(191) NOT NULL,
   `sortOrder` int NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `GalleryImage_galleryId_sortOrder_idx` (`galleryId`,`sortOrder`),
+  KEY `GalleryImage_assetId_idx` (`assetId`),
+  CONSTRAINT `GalleryImage_assetId_fkey` FOREIGN KEY (`assetId`) REFERENCES `MediaAsset` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `GalleryImage_galleryId_fkey` FOREIGN KEY (`galleryId`) REFERENCES `Gallery` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -215,6 +252,34 @@ CREATE TABLE IF NOT EXISTS `MusicTrack` (
   UNIQUE KEY `MusicTrack_id_key` (`id`),
   KEY `MusicTrack_createdAt_idx` (`createdAt`),
   CONSTRAINT `MusicTrack_addedBy_fkey` FOREIGN KEY (`addedBy`) REFERENCES `User` (`uid`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `Album` (
+  `id` varchar(191) NOT NULL,
+  `title` varchar(191) NOT NULL,
+  `artist` varchar(191) NOT NULL,
+  `cover` text NOT NULL,
+  `description` text DEFAULT NULL,
+  `releaseDate` datetime(3) DEFAULT NULL,
+  `createdBy` varchar(191) DEFAULT NULL,
+  `createdAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` datetime(3) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `Album_createdAt_idx` (`createdAt`),
+  KEY `Album_artist_createdAt_idx` (`artist`,`createdAt`),
+  CONSTRAINT `Album_createdBy_fkey` FOREIGN KEY (`createdBy`) REFERENCES `User` (`uid`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `TrackInAlbum` (
+  `albumId` varchar(191) NOT NULL,
+  `trackDocId` varchar(191) NOT NULL,
+  `trackOrder` int NOT NULL DEFAULT 0,
+  `createdAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`albumId`,`trackDocId`),
+  KEY `TrackInAlbum_albumId_trackOrder_idx` (`albumId`,`trackOrder`),
+  KEY `TrackInAlbum_trackDocId_idx` (`trackDocId`),
+  CONSTRAINT `TrackInAlbum_albumId_fkey` FOREIGN KEY (`albumId`) REFERENCES `Album` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `TrackInAlbum_trackDocId_fkey` FOREIGN KEY (`trackDocId`) REFERENCES `MusicTrack` (`docId`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `ImageMap` (
@@ -263,6 +328,21 @@ CREATE TABLE IF NOT EXISTS `SearchKeyword` (
   KEY `SearchKeyword_count_updatedAt_idx` (`count`,`updatedAt`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `ImageEmbedding` (
+  `id` varchar(191) NOT NULL,
+  `galleryImageId` varchar(191) NOT NULL,
+  `modelName` varchar(191) NOT NULL DEFAULT 'Xenova/clip-vit-base-patch32',
+  `vectorSize` int NOT NULL DEFAULT 512,
+  `status` enum('pending','processing','ready','failed') NOT NULL DEFAULT 'pending',
+  `lastError` text DEFAULT NULL,
+  `embeddedAt` datetime(3) DEFAULT NULL,
+  `createdAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` datetime(3) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ImageEmbedding_galleryImageId_key` (`galleryImageId`),
+  KEY `ImageEmbedding_status_updatedAt_idx` (`status`,`updatedAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET @has_user_wechat_openid := (
   SELECT COUNT(*)
   FROM INFORMATION_SCHEMA.COLUMNS
@@ -271,6 +351,132 @@ SET @has_user_wechat_openid := (
 SET @sql := IF(
   @has_user_wechat_openid = 0,
   'ALTER TABLE `User` ADD COLUMN `wechatOpenId` varchar(191) DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_gallery_image_asset_id := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'GalleryImage' AND COLUMN_NAME = 'assetId'
+);
+SET @sql := IF(
+  @has_gallery_image_asset_id = 0,
+  'ALTER TABLE `GalleryImage` ADD COLUMN `assetId` varchar(191) DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_gallery_image_asset_id_idx := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'GalleryImage' AND INDEX_NAME = 'GalleryImage_assetId_idx'
+);
+SET @sql := IF(
+  @has_gallery_image_asset_id_idx = 0,
+  'CREATE INDEX `GalleryImage_assetId_idx` ON `GalleryImage` (`assetId`)',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_gallery_image_asset_fk := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'GalleryImage' AND CONSTRAINT_NAME = 'GalleryImage_assetId_fkey'
+);
+SET @sql := IF(
+  @has_gallery_image_asset_fk = 0,
+  'ALTER TABLE `GalleryImage` ADD CONSTRAINT `GalleryImage_assetId_fkey` FOREIGN KEY (`assetId`) REFERENCES `MediaAsset` (`id`) ON DELETE SET NULL ON UPDATE CASCADE',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_image_embedding_model_name := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ImageEmbedding' AND COLUMN_NAME = 'modelName'
+);
+SET @sql := IF(
+  @has_image_embedding_model_name = 0,
+  'ALTER TABLE `ImageEmbedding` ADD COLUMN `modelName` varchar(191) NOT NULL DEFAULT ''Xenova/clip-vit-base-patch32''',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_image_embedding_vector_size := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ImageEmbedding' AND COLUMN_NAME = 'vectorSize'
+);
+SET @sql := IF(
+  @has_image_embedding_vector_size = 0,
+  'ALTER TABLE `ImageEmbedding` ADD COLUMN `vectorSize` int NOT NULL DEFAULT 512',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_image_embedding_status := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ImageEmbedding' AND COLUMN_NAME = 'status'
+);
+SET @sql := IF(
+  @has_image_embedding_status = 0,
+  'ALTER TABLE `ImageEmbedding` ADD COLUMN `status` enum(''pending'',''processing'',''ready'',''failed'') NOT NULL DEFAULT ''pending''',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_image_embedding_last_error := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ImageEmbedding' AND COLUMN_NAME = 'lastError'
+);
+SET @sql := IF(
+  @has_image_embedding_last_error = 0,
+  'ALTER TABLE `ImageEmbedding` ADD COLUMN `lastError` text DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_image_embedding_embedded_at := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ImageEmbedding' AND COLUMN_NAME = 'embeddedAt'
+);
+SET @sql := IF(
+  @has_image_embedding_embedded_at = 0,
+  'ALTER TABLE `ImageEmbedding` ADD COLUMN `embeddedAt` datetime(3) DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_image_embedding_status_idx := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ImageEmbedding' AND INDEX_NAME = 'ImageEmbedding_status_updatedAt_idx'
+);
+SET @sql := IF(
+  @has_image_embedding_status_idx = 0,
+  'CREATE INDEX `ImageEmbedding_status_updatedAt_idx` ON `ImageEmbedding` (`status`,`updatedAt`)',
   'SELECT 1'
 );
 PREPARE stmt FROM @sql;

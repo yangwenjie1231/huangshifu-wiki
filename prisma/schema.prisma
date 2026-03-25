@@ -60,6 +60,25 @@ enum BrowsingTargetType {
   music
 }
 
+enum UploadSessionStatus {
+  open
+  finalized
+  expired
+}
+
+enum MediaAssetStatus {
+  uploaded
+  ready
+  deleted
+}
+
+enum EmbeddingStatus {
+  pending
+  processing
+  ready
+  failed
+}
+
 model User {
   uid           String         @id @default(cuid())
   email         String         @unique
@@ -89,6 +108,9 @@ model User {
   userBanTargets UserBanLog[]  @relation("UserBanActionTarget")
   notifications Notification[]
   browsingHistories BrowsingHistory[]
+  uploadSessions UploadSession[]
+  mediaAssets   MediaAsset[]
+  albumsCreated Album[]        @relation("AlbumCreatedBy")
 
   @@index([status, createdAt])
   @@index([wechatUnionId])
@@ -269,15 +291,69 @@ model Gallery {
   @@index([createdAt])
 }
 
+model UploadSession {
+  id           String             @id @default(cuid())
+  ownerUid     String
+  status       UploadSessionStatus @default(open)
+  maxFiles     Int                @default(50)
+  uploadedFiles Int               @default(0)
+  expiresAt    DateTime
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  owner        User               @relation(fields: [ownerUid], references: [uid], onDelete: Cascade)
+  assets       MediaAsset[]
+
+  @@index([ownerUid, status, expiresAt])
+}
+
+model MediaAsset {
+  id         String          @id @default(cuid())
+  ownerUid   String
+  sessionId  String?
+  storageKey String          @unique
+  publicUrl  String          @db.Text
+  fileName   String
+  mimeType   String
+  sizeBytes  Int
+  status     MediaAssetStatus @default(ready)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  owner      User            @relation(fields: [ownerUid], references: [uid], onDelete: Cascade)
+  session    UploadSession?  @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  galleryImages GalleryImage[] @relation("GalleryImageAsset")
+
+  @@index([ownerUid, createdAt])
+  @@index([sessionId])
+}
+
 model GalleryImage {
   id        String   @id @default(cuid())
   galleryId String
+  assetId   String?
   url       String   @db.Text
   name      String
   sortOrder Int      @default(0)
   gallery   Gallery  @relation(fields: [galleryId], references: [id], onDelete: Cascade)
+  asset     MediaAsset? @relation("GalleryImageAsset", fields: [assetId], references: [id], onDelete: SetNull)
+  embedding ImageEmbedding?
 
   @@index([galleryId, sortOrder])
+  @@index([assetId])
+}
+
+model ImageEmbedding {
+  id             String          @id @default(cuid())
+  galleryImageId String          @unique
+  modelName      String          @default("Xenova/clip-vit-base-patch32")
+  vectorSize     Int             @default(512)
+  status         EmbeddingStatus @default(pending)
+  lastError      String?         @db.Text
+  embeddedAt     DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  galleryImage   GalleryImage    @relation(fields: [galleryImageId], references: [id], onDelete: Cascade)
+
+  @@index([status, updatedAt])
 }
 
 model MusicTrack {
@@ -293,8 +369,39 @@ model MusicTrack {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   adder     User?    @relation("MusicAddedBy", fields: [addedBy], references: [uid], onDelete: SetNull)
+  albumEntries TrackInAlbum[]
 
   @@index([createdAt])
+}
+
+model Album {
+  id          String        @id @default(cuid())
+  title       String
+  artist      String
+  cover       String        @db.Text
+  description String?       @db.Text
+  releaseDate DateTime?
+  createdBy   String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  creator     User?         @relation("AlbumCreatedBy", fields: [createdBy], references: [uid], onDelete: SetNull)
+  tracks      TrackInAlbum[]
+
+  @@index([createdAt])
+  @@index([artist, createdAt])
+}
+
+model TrackInAlbum {
+  albumId    String
+  trackDocId String
+  trackOrder Int       @default(0)
+  createdAt  DateTime  @default(now())
+  album      Album     @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  track      MusicTrack @relation(fields: [trackDocId], references: [docId], onDelete: Cascade)
+
+  @@id([albumId, trackDocId])
+  @@index([albumId, trackOrder])
+  @@index([trackDocId])
 }
 
 model ImageMap {

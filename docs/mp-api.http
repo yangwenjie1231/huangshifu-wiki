@@ -1,0 +1,32 @@
+### WeChat login (mock mode)
+POST http://localhost:3000/api/auth/wechat/login
+Content-Type: application/json
+
+{
+  "code": "mock:demo_openid:demo_unionid",
+  "displayName": "小程序测试用户"
+}
+
+### MP wiki list
+GET http://localhost:3000/api/mp/wiki?category=all&page=1&limit=5
+
+### MP create post
+POST http://localhost:3000/api/mp/posts
+Content-Type: application/json
+
+{
+  "title": "小程序发帖联调",
+  "section": "music",
+  "content": "来自小程序接口的首条内容",
+  "tags": ["mp", "wechat"]
+}
+
+### MP create comment
+POST http://localhost:3000/api/mp/comments
+Content-Type: application/json
+
+{
+  "postId": "REPLACE_POST_ID",
+  "content": "这是来自 mp 的评论",
+  "parentId": null
+}

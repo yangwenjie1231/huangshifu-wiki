@@ -1,17 +1,54 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, db, ref, uploadBytes, getDownloadURL, storage } from '../firebase';
+import { collection, query, orderBy, onSnapshot, db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { Image as ImageIcon, Plus, Folder, X, Upload, Tag, Clock, User as UserIcon, ChevronRight } from 'lucide-react';
+import { Image as ImageIcon, Plus, Folder, X, Upload, Clock, User as UserIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
-import { clsx } from 'clsx';
 import { SmartImage } from '../components/SmartImage';
+import { apiPost } from '../lib/apiClient';
 
 const toDateValue = (value: string | null | undefined) => {
   if (!value) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+type UploadSessionResponse = {
+  session: {
+    id: string;
+    status: 'open' | 'finalized' | 'expired';
+    maxFiles: number;
+    uploadedFiles: number;
+    expiresAt: string;
+  };
+};
+
+type UploadFileResponse = {
+  session: {
+    id: string;
+    status: 'open' | 'finalized' | 'expired';
+    uploadedFiles: number;
+    maxFiles: number;
+  };
+  asset: {
+    id: string;
+    url: string;
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+  };
+};
+
+type LocalPreviewFile = {
+  file: File;
+  previewUrl: string;
+};
+
+type GalleryCreateResponse = {
+  gallery: {
+    id: string;
+  };
 };
 
 const GalleryList = () => {
@@ -103,25 +140,44 @@ const GalleryList = () => {
 };
 
 const UploadModal = ({ onClose }: { onClose: () => void }) => {
-  const { user, profile, isBanned } = useAuth();
+  const { user, isBanned } = useAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
-  const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<LocalPreviewFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [currentFileIndex, setCurrentFileIndex] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const filesRef = useRef<LocalPreviewFile[]>([]);
+
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
+
+  useEffect(() => {
+    return () => {
+      filesRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    };
+  }, []);
+
+  const handleClose = () => {
+    files.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    setFiles([]);
+    onClose();
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const newFiles = Array.from(e.target.files!);
+      const newFiles = Array.from(e.target.files!).map((file) => ({
+        file,
+        previewUrl: URL.createObjectURL(file),
+      }));
       setFiles(prev => [...prev, ...newFiles]);
       
       // If title is empty and we have a folder path, try to use the folder name
-      if (!title && newFiles[0] && (newFiles[0] as any).webkitRelativePath) {
-        const path = (newFiles[0] as any).webkitRelativePath;
+      if (!title && newFiles[0]?.file && (newFiles[0].file as any).webkitRelativePath) {
+        const path = (newFiles[0].file as any).webkitRelativePath;
         const folderName = path.split('/')[0];
         if (folderName) setTitle(folderName);
       }
@@ -129,7 +185,34 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
   };
 
   const removeFile = (index: number) => {
-    setFiles(prev => prev.filter((_, i) => i !== index));
+    setFiles(prev => {
+      const target = prev[index];
+      if (target) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const uploadFileToSession = async (sessionId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`/api/uploads/sessions/${sessionId}/files`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData,
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = typeof data === 'object' && data && 'error' in data
+        ? String((data as Record<string, unknown>).error)
+        : '上传图片失败';
+      throw new Error(message);
+    }
+
+    return data as UploadFileResponse;
   };
 
   const handleUpload = async () => {
@@ -138,55 +221,53 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
     
     // Group files by folder if possible
     const groups: { [key: string]: File[] } = {};
-    files.forEach(file => {
-      const path = (file as any).webkitRelativePath || '';
+    files.forEach((entry) => {
+      const path = (entry.file as any).webkitRelativePath || '';
       const folderName = path.split('/')[0] || '默认图集';
       if (!groups[folderName]) groups[folderName] = [];
-      groups[folderName].push(file);
+      groups[folderName].push(entry.file);
     });
 
     setUploading(true);
     setProgress(0);
-    setCurrentFileIndex(0);
 
     try {
       const groupNames = Object.keys(groups);
-      let totalFiles = files.length;
+      const totalFiles = files.length;
       let uploadedCount = 0;
 
       for (const groupName of groupNames) {
         const groupFiles = groups[groupName];
-        const imageUrls: { url: string; name: string }[] = [];
+        const sessionData = await apiPost<UploadSessionResponse>('/api/uploads/sessions', {
+          maxFiles: groupFiles.length,
+        });
+        const sessionId = sessionData.session.id;
+        const uploadedAssetIds: string[] = [];
         
         // Use user-provided title for the first/only group if it's not a folder upload
         // or if it's a single folder. If multiple folders, use folder names.
         const galleryTitle = groupNames.length === 1 && title ? title : groupName;
 
         for (const file of groupFiles) {
-          const storageRef = ref(storage, `galleries/${user.uid}/${Date.now()}_${file.name}`);
-          const uploadResult = await uploadBytes(storageRef, file);
-          const url = await getDownloadURL(uploadResult);
-          imageUrls.push({ url, name: file.name });
+          const uploadData = await uploadFileToSession(sessionId, file);
+          uploadedAssetIds.push(uploadData.asset.id);
           
           uploadedCount++;
-          setCurrentFileIndex(uploadedCount);
           setProgress(Math.round((uploadedCount / totalFiles) * 100));
         }
 
-        await addDoc(collection(db, 'galleries'), {
-          id: crypto.randomUUID(),
+        await apiPost(`/api/uploads/sessions/${sessionId}/finalize`);
+
+        await apiPost<GalleryCreateResponse>('/api/galleries', {
           title: galleryTitle,
           description: description || `来自 ${groupName} 的图集`,
-          authorUid: user.uid,
-          authorName: profile?.displayName || user.displayName || '匿名用户',
-          images: imageUrls,
+          uploadSessionId: sessionId,
+          assetIds: uploadedAssetIds,
           tags: tags.split(',').map(t => t.trim()).filter(t => t),
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
         });
       }
 
-      onClose();
+      handleClose();
     } catch (e) {
       console.error("Error uploading gallery:", e);
       alert('上传失败，请重试');
@@ -210,7 +291,7 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
       >
         <div className="p-8 border-b border-gray-100 flex justify-between items-center">
           <h2 className="text-3xl font-serif font-bold text-brand-olive">上传新图集</h2>
-          <button onClick={onClose} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
+          <button onClick={handleClose} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
             <X size={24} />
           </button>
         </div>
@@ -289,10 +370,10 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
 
             {files.length > 0 && (
               <div className="grid grid-cols-4 sm:grid-cols-6 gap-4 p-4 bg-brand-cream rounded-3xl">
-                {files.map((file, i) => (
+                {files.map((item, i) => (
                   <div key={i} className="relative aspect-square rounded-xl overflow-hidden group">
                     <img 
-                      src={URL.createObjectURL(file)} 
+                      src={item.previewUrl}
                       alt="" 
                       className="w-full h-full object-cover" 
                     />

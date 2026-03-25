@@ -5,7 +5,7 @@ import { useMusic } from '../context/MusicContext';
 import { clsx } from 'clsx';
 
 export const GlobalMusicPlayer = () => {
-  const { currentSong, setCurrentSong, isPlaying, setIsPlaying, playNext, playPrevious } = useMusic();
+  const { currentSong, setCurrentSong, isPlaying, setIsPlaying, playNext, playPrevious, playlistSource } = useMusic();
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -164,6 +164,11 @@ export const GlobalMusicPlayer = () => {
                     <div>
                       <h3 className="text-2xl font-serif font-bold text-gray-900">{currentSong.title}</h3>
                       <p className="text-brand-primary font-bold">{currentSong.artist} — {currentSong.album}</p>
+                      {playlistSource.type === 'album' && playlistSource.albumTitle ? (
+                        <p className="text-xs text-gray-500 mt-1">
+                          来自专辑《{playlistSource.albumTitle}》
+                        </p>
+                      ) : null}
                     </div>
                     <div className="text-sm font-bold text-gray-400">
                       {formatTime(currentTime)} / {formatTime(duration)}

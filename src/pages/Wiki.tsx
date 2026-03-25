@@ -553,7 +553,12 @@ const WikiEditor = () => {
     try {
       const docRef = doc(db, 'wiki', pageSlug!);
       if (isNew) {
-        await setDoc(docRef, pageData);
+        const existingSnap = await getDoc(docRef);
+        if (existingSnap.exists()) {
+          await updateDoc(docRef, pageData);
+        } else {
+          await setDoc(docRef, pageData);
+        }
       } else {
         await updateDoc(docRef, pageData);
       }

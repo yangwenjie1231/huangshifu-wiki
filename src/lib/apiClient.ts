@@ -6,6 +6,23 @@ const API_JSON_HEADERS = {
   'Content-Type': 'application/json',
 };
 
+function getAuthToken() {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+  return localStorage.getItem('mp_auth_token') || '';
+}
+
+function buildAuthHeaders() {
+  const token = getAuthToken();
+  if (!token) {
+    return {};
+  }
+  return {
+    Authorization: `Bearer ${token}`,
+  };
+}
+
 function buildUrl(path: string, query?: RequestOptions['query']) {
   if (!query) return path;
   const params = new URLSearchParams();
@@ -35,6 +52,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}) 
     credentials: 'include',
     headers: {
       ...API_JSON_HEADERS,
+      ...buildAuthHeaders(),
       ...(headers || {}),
     },
     ...rest,
@@ -76,6 +94,9 @@ export async function apiUpload<T>(path: string, formData: FormData) {
   const response = await fetch(path, {
     method: 'POST',
     credentials: 'include',
+    headers: {
+      ...buildAuthHeaders(),
+    },
     body: formData,
   });
   return parseResponse<T>(response);
