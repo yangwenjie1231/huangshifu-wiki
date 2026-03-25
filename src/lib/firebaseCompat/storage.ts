@@ -16,7 +16,7 @@ export async function uploadBytes(storageRef: StorageReference, file: File) {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await apiUpload<{ file: { url: string; name: string } }>(
+  const response = await apiUpload<{ file: { assetId?: string; url: string; name: string; mimeType?: string; sizeBytes?: number } }>(
     '/api/uploads',
     formData,
   );
@@ -30,6 +30,9 @@ export async function uploadBytes(storageRef: StorageReference, file: File) {
     metadata: {
       fullPath: storageRef.path,
     },
+    assetId: uploaded.assetId,
+    mimeType: uploaded.mimeType,
+    sizeBytes: uploaded.sizeBytes,
     url: uploaded.url,
   };
 }
