@@ -16,7 +16,6 @@ import GalleryDetail from './pages/GalleryDetail';
 import Music from './pages/Music';
 import AlbumDetail from './pages/AlbumDetail';
 import Search from './pages/Search';
-import Notifications from './pages/Notifications';
 import Admin from './pages/Admin';
 
 const MainLayout = () => {
@@ -37,9 +36,8 @@ const MainLayout = () => {
           <Route path="/gallery" element={<Gallery />} />
           <Route path="/gallery/:galleryId" element={<GalleryDetail />} />
           <Route path="/music" element={<Music />} />
-          <Route path="/album/:albumId" element={<AlbumDetail />} />
+          <Route path="/albums/:albumId" element={<AlbumDetail />} />
           <Route path="/search" element={<Search />} />
-          <Route path="/notifications" element={<Notifications />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/admin" element={<Admin />} />
         </Routes>

@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Routes, Route, Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, orderBy, addDoc, limit, db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -11,7 +10,7 @@ import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { summarizeWikiContent, generateWikiIntro } from '../services/aiService';
 import { uploadImageToCDNs, getImageUrl } from '../services/imageService';
-import { apiDelete, apiPost } from '../lib/apiClient';
+import { apiDelete, apiGet, apiPost, apiPut } from '../lib/apiClient';
 import MdEditor from 'react-markdown-editor-lite';
 import MarkdownIt from 'markdown-it';
 import 'react-markdown-editor-lite/lib/index.css';
@@ -36,7 +35,6 @@ const formatDate = (value: string | null | undefined, pattern: string) => {
 type ContentStatus = 'draft' | 'pending' | 'published' | 'rejected';
 
 type WikiItem = {
-  id: string;
   slug: string;
   title: string;
   category: string;
@@ -133,13 +131,10 @@ const WikiList = () => {
     const fetchPages = async () => {
       setLoading(true);
       try {
-        const wikiRef = collection(db, 'wiki');
-        let q = query(wikiRef, orderBy('updatedAt', 'desc'));
-        if (category !== 'all') {
-          q = query(wikiRef, where('category', '==', category), orderBy('updatedAt', 'desc'));
-        }
-        const snapshot = await getDocs(q);
-        setPages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WikiItem)));
+        const data = await apiGet<{ pages: WikiItem[] }>('/api/wiki', {
+          category,
+        });
+        setPages(data.pages || []);
       } catch (e) {
         console.error("Error fetching wiki pages:", e);
       }
@@ -199,7 +194,7 @@ const WikiList = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {pages.map((page) => (
             <Link 
-              key={page.id} 
+              key={page.slug} 
               to={`/wiki/${page.slug}`}
               className="bg-white p-8 rounded-[32px] border border-gray-100 hover:border-brand-olive/20 hover:shadow-xl transition-all group"
             >
@@ -247,24 +242,22 @@ const WikiPageView = () => {
 
   useEffect(() => {
     const fetchPage = async () => {
+      if (!slug) {
+        setPage(null);
+        setBacklinks([]);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       try {
-        const docRef = doc(db, 'wiki', slug!);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setPage(docSnap.data() as WikiItem);
-          
-          // Fetch Backlinks
-          const wikiRef = collection(db, 'wiki');
-          const q = query(wikiRef, limit(100)); // Simplified: fetch all and filter client-side for [[slug]]
-          const snapshot = await getDocs(q);
-          const links = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() } as WikiItem))
-            .filter(p => p.slug !== slug && p.content.includes(`[[${slug}]]`));
-          setBacklinks(links);
-        }
+        const data = await apiGet<{ page: WikiItem; backlinks?: WikiItem[] }>(`/api/wiki/${slug}`);
+        setPage(data.page || null);
+        setBacklinks(data.backlinks || []);
       } catch (e) {
         console.error("Error fetching page:", e);
+        setPage(null);
+        setBacklinks([]);
       }
       setLoading(false);
     };
@@ -441,7 +434,7 @@ const WikiPageView = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {backlinks.map(link => (
                 <Link 
-                  key={link.id} 
+                  key={link.slug} 
                   to={`/wiki/${link.slug}`}
                   className="p-4 bg-brand-cream/30 border border-brand-cream rounded-2xl hover:bg-brand-cream transition-all group"
                 >
@@ -474,7 +467,7 @@ const WikiEditor = () => {
   const { slug } = useParams();
   const isNew = !slug || slug === 'new';
   const navigate = useNavigate();
-  const { user, profile, isAdmin, isBanned } = useAuth();
+  const { user, isAdmin, isBanned } = useAuth();
   
   const [formData, setFormData] = useState({
     title: '',
@@ -490,18 +483,22 @@ const WikiEditor = () => {
   useEffect(() => {
     if (!isNew) {
       const fetchPage = async () => {
-        const docRef = doc(db, 'wiki', slug!);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setFormData({
-            title: data.title,
-            slug: data.slug,
-            category: data.category,
-            content: data.content,
-            tags: data.tags?.join(', ') || '',
-            eventDate: data.eventDate || ''
-          });
+        if (!slug) return;
+        try {
+          const response = await apiGet<{ page: WikiItem }>(`/api/wiki/${slug}`);
+          if (response.page) {
+            const data = response.page;
+            setFormData({
+              title: data.title,
+              slug: data.slug,
+              category: data.category,
+              content: data.content,
+              tags: data.tags?.join(', ') || '',
+              eventDate: data.eventDate || ''
+            });
+          }
+        } catch (error) {
+          console.error('Load wiki page for edit failed:', error);
         }
       };
       fetchPage();
@@ -533,47 +530,22 @@ const WikiEditor = () => {
     
     setSavingMode(status);
 
-    const pageData: any = {
+    const payload = {
       title: formData.title,
       slug: pageSlug,
       category: formData.category,
       content: formData.content,
       tags: formData.tags.split(',').map(t => t.trim()).filter(t => t),
-      eventDate: formData.eventDate,
+      eventDate: formData.eventDate || undefined,
       status,
-      lastEditorUid: user.uid,
-      lastEditorName: profile?.displayName || user.displayName || '匿名用户',
-      updatedAt: serverTimestamp(),
     };
 
-    if (isNew) {
-      pageData.createdAt = serverTimestamp();
-    }
-
     try {
-      const docRef = doc(db, 'wiki', pageSlug!);
       if (isNew) {
-        const existingSnap = await getDoc(docRef);
-        if (existingSnap.exists()) {
-          await updateDoc(docRef, pageData);
-        } else {
-          await setDoc(docRef, pageData);
-        }
+        await apiPost('/api/wiki', payload);
       } else {
-        await updateDoc(docRef, pageData);
+        await apiPut(`/api/wiki/${slug}`, payload);
       }
-
-      // Save Revision
-      const revisionsRef = collection(db, 'wiki', pageSlug!, 'revisions');
-      await addDoc(revisionsRef, {
-        id: crypto.randomUUID(),
-        pageSlug,
-        title: formData.title,
-        content: formData.content,
-        editorUid: user.uid,
-        editorName: profile?.displayName || user.displayName || '匿名用户',
-        createdAt: serverTimestamp()
-      });
 
       navigate(`/wiki/${pageSlug}`);
     } catch (e) {
@@ -738,10 +710,12 @@ const WikiHistory = () => {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const revisionsRef = collection(db, 'wiki', slug!, 'revisions');
-        const q = query(revisionsRef, orderBy('createdAt', 'desc'));
-        const snapshot = await getDocs(q);
-        setRevisions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        if (!slug) {
+          setRevisions([]);
+          return;
+        }
+        const data = await apiGet<{ revisions: any[] }>(`/api/wiki/${slug}/history`);
+        setRevisions(data.revisions || []);
       } catch (e) {
         console.error("Error fetching history:", e);
       }
@@ -873,13 +847,8 @@ const WikiTimeline = () => {
   useEffect(() => {
     const fetchEvents = async () => {
       try {
-        const wikiRef = collection(db, 'wiki');
-        // Fetch pages that have an eventDate
-        const q = query(wikiRef, orderBy('eventDate', 'asc'));
-        const snapshot = await getDocs(q);
-        const allEvents = snapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() } as WikiItem))
-          .filter((p) => p.eventDate); // Ensure they have a date
+        const data = await apiGet<{ events: WikiItem[] }>('/api/wiki/timeline');
+        const allEvents = (data.events || []).filter((item) => item.eventDate);
         setEvents(allEvents);
       } catch (e) {
         console.error("Error fetching timeline events:", e);
@@ -913,7 +882,7 @@ const WikiTimeline = () => {
         <div className="relative border-l-2 border-brand-olive/20 ml-4 md:ml-32 pl-8 md:pl-12 space-y-16 pb-20">
           {events.map((event, idx) => (
             <motion.div 
-              key={event.id}
+              key={event.slug}
               initial={{ opacity: 0, x: -20 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}

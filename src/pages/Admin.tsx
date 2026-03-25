@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, getDocs, doc, deleteDoc, updateDoc, orderBy, limit, setDoc, addDoc, serverTimestamp, db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Shield, Book, MessageSquare, Image as ImageIcon, Users, Trash2, CheckCircle, XCircle, AlertTriangle, ChevronRight, Layers, Plus, Save, Edit2, Megaphone, Music as MusicIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'motion/react';
-import { apiGet, apiPost } from '../lib/apiClient';
+import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/apiClient';
 
 const toDateValue = (value: string | null | undefined) => {
   if (!value) return null;
@@ -23,28 +22,55 @@ const Admin = () => {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [newSection, setNewSection] = useState({ name: '', description: '', order: 0 });
   const [newAnnouncement, setNewAnnouncement] = useState({ content: '', link: '', active: true });
-  const [, setEditingSection] = useState<string | null>(null);
 
   const isSuperAdmin = profile?.role === 'super_admin' || user?.email === 'yangwenjie1231@gmail.com';
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const colRef = collection(db, activeTab);
-      let q;
-      if (activeTab === 'users') {
-        q = query(colRef, limit(100));
-      } else if (activeTab === 'sections' || activeTab === 'announcements') {
-        q = query(colRef, orderBy('createdAt', 'desc'), limit(100));
-      } else {
-        q = query(colRef, orderBy('updatedAt', 'desc'), limit(100));
-      }
-      const snapshot = await getDocs(q);
-      setData(snapshot.docs.map(doc => ({ ...(doc.data() as any), docId: doc.id })));
+      const response = await apiGet<{ data: any[] }>(`/api/admin/${activeTab}`);
+      const rows = response.data || [];
+      const withEntityId = rows.map((item) => ({
+        ...item,
+        __entityId: item.docId || item.id || item.slug || item.uid,
+      }));
+      setData(withEntityId);
     } catch (e) {
       console.error("Error fetching admin data:", e);
+      setData([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("确定要删除这项内容吗？此操作不可撤销。")) return;
+    try {
+      if (activeTab === 'users') {
+        alert('用户删除请改用封禁/解封治理，避免误删账号数据');
+        return;
+      }
+      if (activeTab === 'posts') {
+        await apiDelete(`/api/posts/${id}`);
+      } else if (activeTab === 'sections') {
+        await apiDelete(`/api/sections/${id}`);
+      } else if (activeTab === 'announcements') {
+        await apiDelete(`/api/announcements/${id}`);
+      } else if (activeTab === 'music') {
+        await apiDelete(`/api/music/${id}`);
+      } else if (activeTab === 'galleries') {
+        await apiDelete(`/api/galleries/${id}`);
+      } else if (activeTab === 'wiki') {
+        await apiDelete(`/api/admin/wiki/${id}`);
+      } else {
+        await apiDelete(`/api/admin/${activeTab}/${id}`);
+      }
+
+      setData(prev => prev.filter(item => item.__entityId !== id));
+    } catch (e) {
+      console.error("Delete error:", e);
+      alert("删除失败");
+    }
   };
 
   const fetchReviewQueue = async () => {
@@ -126,17 +152,6 @@ const Admin = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm("确定要删除这项内容吗？此操作不可撤销。")) return;
-    try {
-      await deleteDoc(doc(db, activeTab, id));
-      setData(prev => prev.filter(item => item.docId !== id && item.uid !== id));
-    } catch (e) {
-      console.error("Delete error:", e);
-      alert("删除失败");
-    }
-  };
-
   const toggleAdmin = async (targetUser: any) => {
     if (!isSuperAdmin) {
       alert("只有超级管理员可以更改权限");
@@ -145,7 +160,7 @@ const Admin = () => {
     const newRole = targetUser.role === 'admin' ? 'user' : 'admin';
     if (!window.confirm(`确定要将 ${targetUser.displayName} 的角色更改为 ${newRole} 吗？`)) return;
     try {
-      await updateDoc(doc(db, 'users', targetUser.uid), { role: newRole });
+      await apiPatch(`/api/users/${targetUser.uid}/role`, { role: newRole });
       setData(prev => prev.map(u => u.uid === targetUser.uid ? { ...u, role: newRole } : u));
     } catch (e) {
       console.error("Update role error:", e);
@@ -156,10 +171,13 @@ const Admin = () => {
   const handleAddSection = async () => {
     if (!newSection.name) return;
     try {
-      const id = newSection.name.toLowerCase().replace(/\s+/g, '-');
-      await setDoc(doc(db, 'sections', id), { ...newSection, id, createdAt: serverTimestamp() });
+      await apiPost('/api/sections', {
+        name: newSection.name,
+        description: newSection.description,
+        order: Number.isFinite(newSection.order) ? newSection.order : 0,
+      });
       setNewSection({ name: '', description: '', order: 0 });
-      fetchData();
+      await fetchData();
     } catch (e) {
       console.error("Add section error:", e);
     }
@@ -168,13 +186,13 @@ const Admin = () => {
   const handleAddAnnouncement = async () => {
     if (!newAnnouncement.content) return;
     try {
-      await addDoc(collection(db, 'announcements'), {
-        ...newAnnouncement,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+      await apiPost('/api/announcements', {
+        content: newAnnouncement.content,
+        link: newAnnouncement.link || null,
+        active: newAnnouncement.active,
       });
       setNewAnnouncement({ content: '', link: '', active: true });
-      fetchData();
+      await fetchData();
     } catch (e) {
       console.error("Add announcement error:", e);
     }
@@ -182,7 +200,7 @@ const Admin = () => {
 
   const toggleAnnouncement = async (ann: any) => {
     try {
-      await updateDoc(doc(db, 'announcements', ann.id), { active: !ann.active });
+      await apiPatch(`/api/announcements/${ann.id}`, { active: !ann.active });
       setData(prev => prev.map(a => a.id === ann.id ? { ...a, active: !ann.active } : a));
     } catch (e) {
       console.error("Toggle announcement error:", e);
@@ -416,7 +434,7 @@ const Admin = () => {
                   </tr>
                 ))
               ) : data.length > 0 ? data.map((item) => (
-                <tr key={item.docId || item.uid} className="hover:bg-gray-50/50 transition-colors group">
+                <tr key={item.__entityId || item.id || item.uid || item.docId || item.slug} className="hover:bg-gray-50/50 transition-colors group">
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-4">
                       {activeTab === 'users' ? (
@@ -496,8 +514,8 @@ const Admin = () => {
                           {item.status === 'banned' ? <CheckCircle size={18} /> : <AlertTriangle size={18} />}
                         </button>
                       )}
-                      <button 
-                        onClick={() => handleDelete(item.docId || item.uid)}
+                      <button
+                        onClick={() => handleDelete(item.__entityId || item.id || item.uid || item.docId || item.slug)}
                         className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-all"
                         title="删除"
                       >

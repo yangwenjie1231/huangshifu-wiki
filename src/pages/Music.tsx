@@ -1,25 +1,26 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Music as MusicIcon,
-  Plus,
-  Trash2,
-  Heart,
+  Disc,
   ExternalLink,
-  Sparkles,
-  ChevronRight,
   Headphones,
-  X,
-  ListMusic,
-  Disc3,
+  Heart,
+  Link2,
+  List,
+  Music as MusicIcon,
   Play,
-  Album as AlbumIcon,
+  Plus,
+  Sparkles,
+  Trash2,
+  X,
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import { motion, AnimatePresence } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
+
 import { useAuth } from '../context/AuthContext';
 import { useMusic } from '../context/MusicContext';
 import { MusicPlayer } from '../components/MusicPlayer';
+import { MusicImportModal } from '../components/MusicImportModal';
 import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
 
 type SongItem = {
@@ -30,11 +31,10 @@ type SongItem = {
   album: string;
   cover: string;
   audioUrl: string;
+  sourcePlatform?: string | null;
+  sourceUrl?: string | null;
   lyric?: string | null;
   favoritedByMe?: boolean;
-  albumId?: string | null;
-  albumTitle?: string | null;
-  trackOrder?: number;
 };
 
 type AlbumItem = {
@@ -43,9 +43,10 @@ type AlbumItem = {
   artist: string;
   cover: string;
   description?: string | null;
-  releaseDate?: string | null;
-  trackCount: number;
-  tracks: SongItem[];
+  tracksCount: number;
+  platform?: string | null;
+  platformId?: string | null;
+  platformUrl?: string | null;
 };
 
 type MusicListResponse = {
@@ -56,76 +57,71 @@ type AlbumListResponse = {
   albums: AlbumItem[];
 };
 
-type CreateAlbumPayload = {
-  title: string;
-  artist: string;
-  cover: string;
-  description?: string;
-  releaseDate?: string;
-  trackDocIds: string[];
-};
-
 const Music = () => {
   const [songs, setSongs] = useState<SongItem[]>([]);
   const [albums, setAlbums] = useState<AlbumItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'songs' | 'albums'>('songs');
+  const [loadingSongs, setLoadingSongs] = useState(true);
+  const [loadingAlbums, setLoadingAlbums] = useState(true);
   const [searchId, setSearchId] = useState('');
-  const [isAddingSong, setIsAddingSong] = useState(false);
-  const [isAddingAlbum, setIsAddingAlbum] = useState(false);
-  const [favoriting, setFavoriting] = useState<string | null>(null);
-  const [submittingAlbum, setSubmittingAlbum] = useState(false);
-  const [albumForm, setAlbumForm] = useState<{
-    title: string;
-    artist: string;
-    cover: string;
-    description: string;
-    releaseDate: string;
-    trackDocIds: string;
-  }>({
-    title: '',
-    artist: '',
-    cover: '',
-    description: '',
-    releaseDate: '',
-    trackDocIds: '',
+  const [isAdding, setIsAdding] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [selectedSongs, setSelectedSongs] = useState<Set<string>>(new Set());
+  const [isBatchMode, setIsBatchMode] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{ show: boolean; type: 'single' | 'batch'; id?: string }>({
+    show: false,
+    type: 'single',
   });
-  const { user, isAdmin, isBanned } = useAuth();
-  const {
-    currentSong,
-    setCurrentSong,
-    setIsPlaying,
-    setPlaylist,
-    playSongAtIndex,
-    playAlbumTracks,
-  } = useMusic();
+  const [favoriting, setFavoriting] = useState<string | null>(null);
+  const [busyAdding, setBusyAdding] = useState(false);
+  const [busyDeleting, setBusyDeleting] = useState(false);
 
-  const fetchSongsAndAlbums = async () => {
-    setLoading(true);
+  const { user, isAdmin, isBanned } = useAuth();
+  const { currentSong, setCurrentSong, setIsPlaying, setPlaylist, playSongAtIndex } = useMusic();
+
+  const loading = loadingSongs || loadingAlbums || busyAdding || busyDeleting;
+
+  const albumsPreview = useMemo(() => albums.slice(0, 6), [albums]);
+
+  const fetchSongs = async () => {
+    setLoadingSongs(true);
     try {
-      const [songsData, albumsData] = await Promise.all([
-        apiGet<MusicListResponse>('/api/music'),
-        apiGet<AlbumListResponse>('/api/albums', { includeTracks: true }),
-      ]);
-      const fetchedSongs = songsData.songs || [];
-      const fetchedAlbums = albumsData.albums || [];
-      setSongs(fetchedSongs);
-      setAlbums(fetchedAlbums);
-      setPlaylist(fetchedSongs, { type: 'songs' });
+      const response = await apiGet<MusicListResponse>('/api/music');
+      const nextSongs = response.songs || [];
+      setSongs(nextSongs);
+      setPlaylist(nextSongs);
     } catch (error) {
-      console.error('Fetch music data error:', error);
-      alert('加载音乐数据失败，请稍后重试');
+      console.error('Fetch music error:', error);
+      alert('加载音乐列表失败，请稍后重试');
     } finally {
-      setLoading(false);
+      setLoadingSongs(false);
     }
   };
 
+  const fetchAlbums = async () => {
+    setLoadingAlbums(true);
+    try {
+      const response = await apiGet<AlbumListResponse>('/api/albums');
+      setAlbums(response.albums || []);
+    } catch (error) {
+      console.error('Fetch albums error:', error);
+      setAlbums([]);
+    } finally {
+      setLoadingAlbums(false);
+    }
+  };
+
+  const refreshData = async () => {
+    await Promise.all([fetchSongs(), fetchAlbums()]);
+  };
+
   useEffect(() => {
-    fetchSongsAndAlbums();
+    refreshData();
   }, []);
 
   const handleAddSong = async () => {
-    if (!searchId.trim()) return;
+    if (!searchId.trim()) {
+      return;
+    }
     if (isBanned) {
       alert('账号已被封禁，无法执行此操作');
       return;
@@ -134,11 +130,14 @@ const Music = () => {
     const ids = searchId
       .split(/[\s,\n]+/)
       .map((raw) => {
-        let normalized = raw.trim();
-        if (normalized.includes('id=')) {
-          normalized = normalized.split('id=')[1].split('&')[0];
+        const value = raw.trim();
+        if (!value) {
+          return '';
         }
-        return normalized;
+        if (value.includes('id=')) {
+          return value.split('id=')[1]?.split('&')[0] || '';
+        }
+        return value;
       })
       .filter(Boolean);
 
@@ -146,107 +145,35 @@ const Music = () => {
       return;
     }
 
-    setLoading(true);
+    setBusyAdding(true);
     let addedCount = 0;
     let skippedCount = 0;
 
     for (const id of ids) {
       try {
-        await apiPost('/api/music/from-netease', { id });
+        await apiPost<{ song: SongItem; created: boolean }>('/api/music/from-netease', { id });
         addedCount += 1;
-      } catch {
+      } catch (error) {
+        console.error(`Add song failed: ${id}`, error);
         skippedCount += 1;
       }
     }
 
     alert(`添加完成！成功: ${addedCount}, 跳过/失败: ${skippedCount}`);
     setSearchId('');
-    setIsAddingSong(false);
-    await fetchSongsAndAlbums();
+    setIsAdding(false);
+    await refreshData();
+    setBusyAdding(false);
   };
 
-  const handleDeleteSong = async (songDocId: string) => {
-    if (isBanned) {
-      alert('账号已被封禁，无法执行此操作');
-      return;
-    }
-    if (!window.confirm('确认删除这首歌曲？此操作无法撤销。')) {
-      return;
-    }
-    try {
-      await apiDelete(`/api/music/${songDocId}`);
-      if (currentSong?.docId === songDocId) {
-        setCurrentSong(null);
-      }
-      await fetchSongsAndAlbums();
-    } catch (error) {
-      console.error('Delete song error:', error);
-      alert('删除失败，请稍后重试');
-    }
-  };
-
-  const handleDeleteAlbum = async (albumId: string) => {
-    if (isBanned) {
-      alert('账号已被封禁，无法执行此操作');
-      return;
-    }
-    if (!window.confirm('确认删除这个专辑？仅删除专辑关系，不删除歌曲。')) {
-      return;
-    }
-    try {
-      await apiDelete(`/api/albums/${albumId}`);
-      await fetchSongsAndAlbums();
-    } catch (error) {
-      console.error('Delete album error:', error);
-      alert('删除专辑失败，请稍后重试');
-    }
-  };
-
-  const toggleFavorite = async (song: SongItem) => {
-    if (!user || !song.docId) {
-      alert('请先登录后收藏');
+  const playSong = (song: SongItem) => {
+    if (isBatchMode) {
+      toggleSelect(song.docId);
       return;
     }
 
-    if (favoriting === song.docId) return;
-
-    setFavoriting(song.docId);
-    try {
-      if (song.favoritedByMe) {
-        await apiDelete(`/api/favorites/music/${song.docId}`);
-      } else {
-        await apiPost('/api/favorites', {
-          targetType: 'music',
-          targetId: song.docId,
-        });
-      }
-
-      setSongs((prev) => prev.map((item) => (
-        item.docId === song.docId
-          ? { ...item, favoritedByMe: !item.favoritedByMe }
-          : item
-      )));
-
-      setAlbums((prev) => prev.map((album) => ({
-        ...album,
-        tracks: album.tracks.map((track) => (
-          track.docId === song.docId
-            ? { ...track, favoritedByMe: !track.favoritedByMe }
-            : track
-        )),
-      })));
-    } catch (error) {
-      console.error('Toggle music favorite error:', error);
-      alert('收藏操作失败，请稍后重试');
-    } finally {
-      setFavoriting(null);
-    }
-  };
-
-  const handlePlaySongFromList = (song: SongItem) => {
     const index = songs.findIndex((item) => item.docId === song.docId);
     if (index >= 0) {
-      setPlaylist(songs, { type: 'songs' });
       playSongAtIndex(index);
       return;
     }
@@ -255,81 +182,94 @@ const Music = () => {
     setIsPlaying(true);
   };
 
-  const handlePlayAlbum = (album: AlbumItem, startIndex = 0) => {
-    if (!album.tracks.length) {
-      return;
-    }
-    const tracks = [...album.tracks].sort((a, b) => (a.trackOrder || 0) - (b.trackOrder || 0));
-    playAlbumTracks(album.id, album.title, tracks, startIndex);
-  };
-
-  const parseTrackDocIds = (value: string) => {
-    const tokens = value
-      .split(/[\s,\n]+/)
-      .map((item) => item.trim())
-      .filter(Boolean);
-    return Array.from(new Set(tokens));
-  };
-
-  const availableSongsMap = useMemo(() => {
-    const map = new Map<string, SongItem>();
-    songs.forEach((song) => {
-      map.set(song.docId, song);
-    });
-    return map;
-  }, [songs]);
-
-  const handleCreateAlbum = async () => {
-    if (isBanned) {
-      alert('账号已被封禁，无法执行此操作');
-      return;
-    }
-
-    const trackDocIds = parseTrackDocIds(albumForm.trackDocIds);
-    if (!albumForm.title.trim() || !albumForm.artist.trim() || !albumForm.cover.trim()) {
-      alert('请填写专辑名称、歌手、封面 URL');
-      return;
-    }
-    if (!trackDocIds.length) {
-      alert('请至少填写一个歌曲 docId');
-      return;
-    }
-
-    const unknownDocIds = trackDocIds.filter((docId) => !availableSongsMap.has(docId));
-    if (unknownDocIds.length) {
-      alert(`以下歌曲 docId 不存在：${unknownDocIds.join(', ')}`);
-      return;
-    }
-
-    const payload: CreateAlbumPayload = {
-      title: albumForm.title.trim(),
-      artist: albumForm.artist.trim(),
-      cover: albumForm.cover.trim(),
-      trackDocIds,
-      ...(albumForm.description.trim() ? { description: albumForm.description.trim() } : {}),
-      ...(albumForm.releaseDate ? { releaseDate: albumForm.releaseDate } : {}),
-    };
-
-    setSubmittingAlbum(true);
+  const handleDeleteSong = async (songId: string) => {
     try {
-      await apiPost('/api/albums', payload);
-      setAlbumForm({
-        title: '',
-        artist: '',
-        cover: '',
-        description: '',
-        releaseDate: '',
-        trackDocIds: '',
-      });
-      setIsAddingAlbum(false);
-      await fetchSongsAndAlbums();
-      setActiveTab('albums');
+      if (currentSong?.docId === songId) {
+        setCurrentSong(null);
+      }
+      await apiDelete<{ success: boolean }>(`/api/music/${songId}`);
+      setConfirmModal({ show: false, type: 'single' });
+      await refreshData();
     } catch (error) {
-      console.error('Create album error:', error);
-      alert(error instanceof Error ? error.message : '创建专辑失败');
-    } finally {
-      setSubmittingAlbum(false);
+      console.error('Delete song error:', error);
+      alert('删除失败，请检查权限');
     }
+  };
+
+  const handleToggleFavorite = async (song: SongItem) => {
+    if (!user || !song.docId) {
+      alert('请先登录后收藏');
+      return;
+    }
+
+    if (favoriting === song.docId) {
+      return;
+    }
+
+    setFavoriting(song.docId);
+    try {
+      if (song.favoritedByMe) {
+        await apiDelete(`/api/favorites/music/${song.docId}`);
+        setSongs((prev) => prev.map((item) => (item.docId === song.docId ? { ...item, favoritedByMe: false } : item)));
+      } else {
+        await apiPost('/api/favorites', {
+          targetType: 'music',
+          targetId: song.docId,
+        });
+        setSongs((prev) => prev.map((item) => (item.docId === song.docId ? { ...item, favoritedByMe: true } : item)));
+      }
+    } catch (error) {
+      console.error('Toggle music favorite error:', error);
+      alert('收藏操作失败，请稍后重试');
+    } finally {
+      setFavoriting(null);
+    }
+  };
+
+  const toggleSelect = (docId: string) => {
+    setSelectedSongs((prev) => {
+      const next = new Set(prev);
+      if (next.has(docId)) {
+        next.delete(docId);
+      } else {
+        next.add(docId);
+      }
+      return next;
+    });
+  };
+
+  const handleBatchDelete = async () => {
+    if (!selectedSongs.size) {
+      return;
+    }
+
+    setBusyDeleting(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const docId of Array.from(selectedSongs)) {
+      try {
+        await apiDelete(`/api/music/${docId}`);
+        successCount += 1;
+      } catch (error) {
+        console.error(`Delete song failed: ${docId}`, error);
+        failCount += 1;
+      }
+    }
+
+    if (failCount > 0) {
+      alert(`批量删除完成。成功: ${successCount}, 失败: ${failCount}`);
+    }
+
+    if (currentSong && selectedSongs.has(currentSong.docId || '')) {
+      setCurrentSong(null);
+    }
+
+    setSelectedSongs(new Set());
+    setIsBatchMode(false);
+    setConfirmModal({ show: false, type: 'single' });
+    await refreshData();
+    setBusyDeleting(false);
   };
 
   return (
@@ -342,84 +282,73 @@ const Music = () => {
             </div>
             <h1 className="text-5xl font-serif font-bold text-gray-900">音乐馆</h1>
           </div>
-          <p className="text-gray-500 italic">诗扶之声 · 歌曲与专辑双维度整理</p>
+          <p className="text-gray-500 italic">诗扶之声 · 记录每一首动人的旋律</p>
         </div>
 
-        {isAdmin && (
-          <div className="flex flex-wrap gap-4">
+        {isAdmin ? (
+          <div className="flex gap-4">
             <button
               onClick={() => {
                 if (isBanned) {
                   alert('账号已被封禁，无法执行此操作');
                   return;
                 }
-                setIsAddingSong((prev) => !prev);
-                if (isAddingAlbum) setIsAddingAlbum(false);
+                setIsBatchMode(!isBatchMode);
+                setSelectedSongs(new Set());
               }}
-              className="px-8 py-4 bg-gray-900 text-white rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-xl"
+              className={clsx(
+                'px-6 py-4 rounded-full font-bold transition-all flex items-center gap-2 shadow-xl',
+                isBatchMode ? 'bg-brand-primary text-gray-900' : 'bg-white text-gray-500 border border-gray-100',
+              )}
             >
-              {isAddingSong ? <X size={20} /> : <Plus size={20} />}
-              {isAddingSong ? '取消添加歌曲' : '添加歌曲'}
+              <List size={20} />
+              {isBatchMode ? '退出批量' : '批量管理'}
             </button>
-
             <button
               onClick={() => {
                 if (isBanned) {
                   alert('账号已被封禁，无法执行此操作');
                   return;
                 }
-                setIsAddingAlbum((prev) => !prev);
-                if (isAddingSong) setIsAddingSong(false);
+                setIsImportModalOpen(true);
               }}
               className="px-8 py-4 bg-brand-primary text-gray-900 rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-xl"
             >
-              {isAddingAlbum ? <X size={20} /> : <AlbumIcon size={20} />}
-              {isAddingAlbum ? '取消添加专辑' : '添加专辑'}
+              <Link2 size={20} />
+              链接导入
+            </button>
+            <button
+              onClick={() => {
+                if (isBanned) {
+                  alert('账号已被封禁，无法执行此操作');
+                  return;
+                }
+                setIsAdding(!isAdding);
+              }}
+              className="px-8 py-4 bg-gray-900 text-white rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-xl"
+            >
+              {isAdding ? <X size={20} /> : <Plus size={20} />}
+              {isAdding ? '取消添加' : '添加音乐'}
             </button>
           </div>
-        )}
+        ) : null}
       </header>
 
-      <div className="mb-8 flex items-center gap-3">
-        <button
-          onClick={() => setActiveTab('songs')}
-          className={clsx(
-            'px-5 py-2 rounded-full text-sm font-bold transition-all flex items-center gap-2',
-            activeTab === 'songs'
-              ? 'bg-brand-olive text-white'
-              : 'bg-white text-gray-500 border border-gray-200 hover:border-brand-olive/20',
-          )}
-        >
-          <ListMusic size={16} /> 歌曲
-        </button>
-        <button
-          onClick={() => setActiveTab('albums')}
-          className={clsx(
-            'px-5 py-2 rounded-full text-sm font-bold transition-all flex items-center gap-2',
-            activeTab === 'albums'
-              ? 'bg-brand-olive text-white'
-              : 'bg-white text-gray-500 border border-gray-200 hover:border-brand-olive/20',
-          )}
-        >
-          <Disc3 size={16} /> 专辑
-        </button>
-      </div>
-
       <AnimatePresence>
-        {isAddingSong && (
+        {isAdding ? (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="mb-10 p-8 bg-brand-cream/30 rounded-[40px] border border-brand-primary/10 overflow-hidden"
+            className="mb-12 p-8 bg-brand-cream/30 rounded-[40px] border border-brand-primary/10"
           >
             <h3 className="text-xl font-serif font-bold text-gray-900 mb-6 flex items-center gap-2">
-              <Sparkles size={20} className="text-brand-primary" /> 输入网易云音乐 ID 或链接（支持批量）
+              <Sparkles size={20} className="text-brand-primary" /> 输入网易云音乐 ID 或链接 (支持批量，用空格或逗号分隔)
             </h3>
             <div className="flex flex-col gap-4">
               <textarea
                 value={searchId}
-                onChange={(e) => setSearchId(e.target.value)}
+                onChange={(event) => setSearchId(event.target.value)}
                 placeholder="例如: 1335942780, 1335942781 或链接列表"
                 className="w-full px-6 py-4 bg-white rounded-3xl border-none focus:ring-2 focus:ring-brand-primary/20 shadow-sm min-h-[120px]"
               />
@@ -434,254 +363,225 @@ const Music = () => {
               </div>
             </div>
           </motion.div>
-        )}
+        ) : null}
       </AnimatePresence>
 
+      <MusicImportModal
+        open={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImported={async () => {
+          await refreshData();
+        }}
+      />
+
+      {isBatchMode && selectedSongs.size > 0 ? (
+        <motion.div
+          initial={{ y: 100 }}
+          animate={{ y: 0 }}
+          className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 bg-gray-900 text-white px-8 py-4 rounded-full shadow-2xl flex items-center gap-8"
+        >
+          <span className="text-sm font-bold">已选择 {selectedSongs.size} 首歌曲</span>
+          <div className="flex gap-4">
+            <button
+              onClick={() => setSelectedSongs(new Set())}
+              className="text-sm text-gray-400 hover:text-white"
+            >
+              取消选择
+            </button>
+            <button
+              onClick={() => setConfirmModal({ show: true, type: 'batch' })}
+              className="px-6 py-2 bg-red-500 text-white rounded-full text-sm font-bold hover:bg-red-600 transition-all"
+            >
+              批量删除
+            </button>
+          </div>
+        </motion.div>
+      ) : null}
+
       <AnimatePresence>
-        {isAddingAlbum && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="mb-10 p-8 bg-white rounded-[40px] border border-gray-100 shadow-sm overflow-hidden"
-          >
-            <h3 className="text-xl font-serif font-bold text-gray-900 mb-6 flex items-center gap-2">
-              <AlbumIcon size={20} className="text-brand-olive" /> 创建专辑（Album/Track）
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input
-                value={albumForm.title}
-                onChange={(e) => setAlbumForm((prev) => ({ ...prev, title: e.target.value }))}
-                placeholder="专辑名称"
-                className="px-4 py-3 rounded-2xl bg-brand-cream/40 border border-transparent focus:outline-none focus:border-brand-olive/30"
-              />
-              <input
-                value={albumForm.artist}
-                onChange={(e) => setAlbumForm((prev) => ({ ...prev, artist: e.target.value }))}
-                placeholder="歌手"
-                className="px-4 py-3 rounded-2xl bg-brand-cream/40 border border-transparent focus:outline-none focus:border-brand-olive/30"
-              />
-              <input
-                value={albumForm.cover}
-                onChange={(e) => setAlbumForm((prev) => ({ ...prev, cover: e.target.value }))}
-                placeholder="封面 URL"
-                className="px-4 py-3 rounded-2xl bg-brand-cream/40 border border-transparent focus:outline-none focus:border-brand-olive/30 md:col-span-2"
-              />
-              <input
-                type="date"
-                value={albumForm.releaseDate}
-                onChange={(e) => setAlbumForm((prev) => ({ ...prev, releaseDate: e.target.value }))}
-                className="px-4 py-3 rounded-2xl bg-brand-cream/40 border border-transparent focus:outline-none focus:border-brand-olive/30"
-              />
-              <input
-                value={albumForm.trackDocIds}
-                onChange={(e) => setAlbumForm((prev) => ({ ...prev, trackDocIds: e.target.value }))}
-                placeholder="歌曲 docId（逗号/空格分隔）"
-                className="px-4 py-3 rounded-2xl bg-brand-cream/40 border border-transparent focus:outline-none focus:border-brand-olive/30"
-              />
-              <textarea
-                value={albumForm.description}
-                onChange={(e) => setAlbumForm((prev) => ({ ...prev, description: e.target.value }))}
-                placeholder="专辑描述（可选）"
-                className="px-4 py-3 rounded-2xl bg-brand-cream/40 border border-transparent focus:outline-none focus:border-brand-olive/30 min-h-[96px] md:col-span-2"
-              />
-            </div>
-
-            <div className="mt-6 flex flex-wrap justify-between items-center gap-3">
-              <p className="text-xs text-gray-500">
-                可用歌曲 docId：{songs.slice(0, 6).map((song) => song.docId).join(', ')}{songs.length > 6 ? '...' : ''}
+        {confirmModal.show ? (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-[40px] p-8 max-w-md w-full shadow-2xl"
+            >
+              <h3 className="text-2xl font-serif font-bold text-gray-900 mb-4">确认删除</h3>
+              <p className="text-gray-500 mb-8">
+                {confirmModal.type === 'single'
+                  ? '您确定要删除这首歌曲吗？此操作无法撤销。'
+                  : `您确定要删除选中的 ${selectedSongs.size} 首歌曲吗？此操作无法撤销。`}
               </p>
-              <button
-                onClick={handleCreateAlbum}
-                disabled={submittingAlbum}
-                className="px-8 py-3 rounded-full bg-brand-olive text-white text-sm font-bold hover:bg-brand-olive/90 transition-all disabled:opacity-50"
-              >
-                {submittingAlbum ? '创建中...' : '创建专辑'}
-              </button>
-            </div>
-          </motion.div>
-        )}
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setConfirmModal({ show: false, type: 'single' })}
+                  className="flex-grow px-6 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-all"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={() => (confirmModal.type === 'single' ? handleDeleteSong(confirmModal.id!) : handleBatchDelete())}
+                  className="flex-grow px-6 py-4 bg-red-500 text-white rounded-2xl font-bold hover:bg-red-600 transition-all"
+                >
+                  确定删除
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        ) : null}
       </AnimatePresence>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-        <div className="lg:col-span-2">
-          {activeTab === 'songs' ? (
-            <div className="bg-white rounded-[40px] border border-gray-100 shadow-sm overflow-hidden">
-              <div className="p-8 border-b border-gray-50 flex justify-between items-center">
-                <h2 className="text-2xl font-serif font-bold text-gray-900 flex items-center gap-2">
-                  <ListMusic size={24} className="text-brand-primary" /> 歌曲列表
-                </h2>
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{songs.length} 首歌曲</span>
-              </div>
-
-              <div className="divide-y divide-gray-50">
-                {loading ? (
-                  [1, 2, 3, 4, 5].map((i) => (
-                    <div key={i} className="p-6 animate-pulse flex gap-4">
-                      <div className="w-12 h-12 bg-gray-100 rounded-xl" />
-                      <div className="flex-grow space-y-2">
-                        <div className="h-4 bg-gray-100 rounded w-1/3" />
-                        <div className="h-3 bg-gray-100 rounded w-1/4" />
-                      </div>
-                    </div>
-                  ))
-                ) : songs.length > 0 ? (
-                  songs.map((song, index) => (
-                    <div
-                      key={song.docId}
-                      onClick={() => handlePlaySongFromList(song)}
-                      className={clsx(
-                        'p-6 flex items-center gap-4 hover:bg-gray-50 transition-all cursor-pointer group',
-                        currentSong?.docId === song.docId && 'bg-brand-primary/5',
-                      )}
-                    >
-                      <span className="text-xs font-bold text-gray-300 w-4">{index + 1}</span>
-                      <div className="relative w-12 h-12 rounded-xl overflow-hidden shadow-md">
-                        <img src={song.cover} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        {currentSong?.docId === song.docId && (
-                          <div className="absolute inset-0 bg-brand-primary/40 flex items-center justify-center">
-                            <Play size={16} className="text-gray-900 fill-current" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-grow min-w-0">
-                        <h4 className="font-bold text-gray-900 group-hover:text-brand-primary transition-colors truncate">{song.title}</h4>
-                        <p className="text-xs text-gray-400 truncate">{song.artist} — {song.album}</p>
-                      </div>
-                      <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleFavorite(song);
-                          }}
-                          disabled={favoriting === song.docId}
-                          className={clsx(
-                            'p-2 transition-colors',
-                            song.favoritedByMe ? 'text-red-500' : 'text-gray-400 hover:text-red-500',
-                            favoriting === song.docId && 'opacity-50 cursor-not-allowed',
-                          )}
-                        >
-                          <Heart size={18} />
-                        </button>
-                        <a
-                          href={`https://music.163.com/song?id=${song.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <ExternalLink size={18} />
-                        </a>
-                        {isAdmin ? (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteSong(song.docId);
-                            }}
-                            className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="py-20 text-center text-gray-400 italic">暂无音乐，快去添加吧</div>
-                )}
-              </div>
+        <div className="lg:col-span-2 space-y-8">
+          <div className="bg-white rounded-[40px] border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-8 border-b border-gray-50 flex justify-between items-center">
+              <h2 className="text-2xl font-serif font-bold text-gray-900 flex items-center gap-2">
+                <List size={24} className="text-brand-primary" /> 播放列表
+              </h2>
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{songs.length} 首歌曲</span>
             </div>
-          ) : (
-            <div className="space-y-6">
-              {loading ? (
-                [1, 2, 3].map((i) => (
-                  <div key={i} className="h-48 rounded-[32px] border border-gray-100 bg-white animate-pulse" />
+
+            <div className="divide-y divide-gray-50">
+              {loadingSongs ? (
+                [1, 2, 3, 4, 5].map((item) => (
+                  <div key={item} className="p-6 animate-pulse flex gap-4">
+                    <div className="w-12 h-12 bg-gray-100 rounded-xl" />
+                    <div className="flex-grow space-y-2">
+                      <div className="h-4 bg-gray-100 rounded w-1/3" />
+                      <div className="h-3 bg-gray-100 rounded w-1/4" />
+                    </div>
+                  </div>
                 ))
-              ) : albums.length > 0 ? (
-                albums.map((album) => (
-                  <div key={album.id} className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="p-6 md:p-8 border-b border-gray-50 flex flex-col md:flex-row gap-5 md:items-center md:justify-between">
-                      <div className="flex items-center gap-4 min-w-0">
-                        <img src={album.cover} alt="" className="w-16 h-16 rounded-2xl object-cover shadow" referrerPolicy="no-referrer" />
-                        <div className="min-w-0">
-                          <h3 className="text-xl font-serif font-bold text-gray-900 truncate">{album.title}</h3>
-                          <p className="text-sm text-gray-500 truncate">{album.artist} · {album.trackCount} 首</p>
-                          {album.description ? <p className="text-xs text-gray-400 mt-1 line-clamp-2">{album.description}</p> : null}
+              ) : songs.length > 0 ? (
+                songs.map((song, index) => (
+                  <div
+                    key={song.docId}
+                    onClick={() => playSong(song)}
+                    className={clsx(
+                      'p-6 flex items-center gap-4 hover:bg-gray-50 transition-all cursor-pointer group',
+                      currentSong?.docId === song.docId && !isBatchMode && 'bg-brand-primary/5',
+                      isBatchMode && selectedSongs.has(song.docId) && 'bg-brand-primary/10',
+                    )}
+                  >
+                    {isBatchMode ? (
+                      <div
+                        className={clsx(
+                          'w-5 h-5 rounded border-2 flex items-center justify-center transition-all',
+                          selectedSongs.has(song.docId) ? 'bg-brand-primary border-brand-primary' : 'border-gray-200 bg-white',
+                        )}
+                      >
+                        {selectedSongs.has(song.docId) ? <X size={14} className="text-gray-900" /> : null}
+                      </div>
+                    ) : (
+                      <span className="text-xs font-bold text-gray-300 w-4">{index + 1}</span>
+                    )}
+
+                    <div className="relative w-12 h-12 rounded-xl overflow-hidden shadow-md">
+                      <img src={song.cover} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      {currentSong?.docId === song.docId && !isBatchMode ? (
+                        <div className="absolute inset-0 bg-brand-primary/40 flex items-center justify-center">
+                          <Play size={16} className="text-gray-900 fill-current" />
                         </div>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Link
-                          to={`/album/${album.id}`}
-                          className="px-4 py-2 rounded-full bg-gray-50 text-gray-700 text-xs font-bold hover:bg-gray-100 transition-all"
-                        >
-                          查看详情
-                        </Link>
-                        <button
-                          onClick={() => handlePlayAlbum(album, 0)}
-                          className="px-4 py-2 rounded-full bg-brand-olive text-white text-xs font-bold hover:bg-brand-olive/90 transition-all flex items-center gap-1"
-                        >
-                          <Play size={14} /> 播放专辑
-                        </button>
-                        {isAdmin ? (
-                          <button
-                            onClick={() => handleDeleteAlbum(album.id)}
-                            className="px-4 py-2 rounded-full bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 transition-all flex items-center gap-1"
-                          >
-                            <Trash2 size={14} /> 删除专辑
-                          </button>
-                        ) : null}
-                      </div>
+                      ) : null}
                     </div>
 
-                    <div className="divide-y divide-gray-50">
-                      {album.tracks.map((track, index) => (
-                        <div
-                          key={`${album.id}_${track.docId}`}
-                          onClick={() => handlePlayAlbum(album, index)}
-                          className={clsx(
-                            'px-6 md:px-8 py-4 flex items-center gap-3 hover:bg-gray-50 cursor-pointer transition-colors group',
-                            currentSong?.docId === track.docId && 'bg-brand-primary/5',
-                          )}
+                    <div className="flex-grow min-w-0">
+                      <h4 className="font-bold text-gray-900 group-hover:text-brand-primary transition-colors truncate">{song.title}</h4>
+                      <p className="text-xs text-gray-400 truncate">{song.artist} — {song.album}</p>
+                    </div>
+
+                    <div className="flex items-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {isAdmin && !isBatchMode ? (
+                        <button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setConfirmModal({ show: true, type: 'single', id: song.docId });
+                          }}
+                          className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                          title="删除歌曲"
                         >
-                          <span className="text-xs font-bold text-gray-300 w-4">{(track.trackOrder ?? index) + 1}</span>
-                          <div className="flex-grow min-w-0">
-                            <p className="text-sm font-medium text-gray-800 truncate group-hover:text-brand-olive">{track.title}</p>
-                            <p className="text-xs text-gray-400 truncate">{track.artist}</p>
-                          </div>
+                          <Trash2 size={18} />
+                        </button>
+                      ) : null}
+
+                      {!isBatchMode ? (
+                        <>
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleFavorite(track);
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleToggleFavorite(song);
                             }}
-                            disabled={favoriting === track.docId}
+                            disabled={favoriting === song.docId}
                             className={clsx(
                               'p-2 transition-colors',
-                              track.favoritedByMe ? 'text-red-500' : 'text-gray-400 hover:text-red-500',
-                              favoriting === track.docId && 'opacity-50 cursor-not-allowed',
+                              song.favoritedByMe ? 'text-red-500' : 'text-gray-400 hover:text-red-500',
+                              favoriting === song.docId && 'opacity-50 cursor-not-allowed',
                             )}
                           >
-                            <Heart size={16} />
+                            <Heart size={18} />
                           </button>
-                        </div>
-                      ))}
+                          <a
+                            href={song.sourceUrl || `https://music.163.com/song?id=${song.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <ExternalLink size={18} />
+                          </a>
+                        </>
+                      ) : null}
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="bg-white p-20 rounded-[40px] border border-gray-100 text-center">
-                  <Disc3 size={48} className="mx-auto text-brand-olive/20 mb-6" />
-                  <p className="text-gray-400 italic">暂无专辑，管理员可在上方创建</p>
-                </div>
+                <div className="py-20 text-center text-gray-400 italic">暂无音乐，快去添加吧</div>
               )}
             </div>
-          )}
+          </div>
+
+          <div className="bg-white rounded-[40px] border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-8 border-b border-gray-50 flex items-center justify-between">
+              <h2 className="text-2xl font-serif font-bold text-gray-900 flex items-center gap-2">
+                <Disc size={22} className="text-brand-primary" /> 专辑与歌单
+              </h2>
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{albums.length} 个</span>
+            </div>
+
+            {loadingAlbums ? (
+              <div className="p-8 space-y-4">
+                {[1, 2, 3].map((item) => (
+                  <div key={item} className="h-16 bg-gray-100 rounded-2xl animate-pulse" />
+                ))}
+              </div>
+            ) : albumsPreview.length ? (
+              <div className="divide-y divide-gray-50">
+                {albumsPreview.map((album) => (
+                  <Link
+                    key={album.id}
+                    to={`/albums/${album.id}`}
+                    className="px-6 py-4 flex items-center gap-4 hover:bg-gray-50 transition-colors"
+                  >
+                    <img src={album.cover} alt="" className="w-12 h-12 rounded-xl object-cover shadow-sm" referrerPolicy="no-referrer" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-gray-900 truncate">{album.title}</p>
+                      <p className="text-xs text-gray-400 truncate">{album.artist} · {album.tracksCount} 首</p>
+                    </div>
+                    <span className="text-xs text-brand-olive font-bold">查看详情</span>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="py-16 text-center text-gray-400 italic">暂无专辑或歌单</div>
+            )}
+          </div>
         </div>
 
         <div className="lg:col-span-1">
           <div className="sticky top-24">
             <h2 className="text-2xl font-serif font-bold text-gray-900 mb-6 flex items-center gap-2">
-              <MusicIcon size={24} className="text-brand-primary" /> 正在播放
+              <Disc size={24} className="text-brand-primary" /> 正在播放
             </h2>
             {currentSong ? (
               <MusicPlayer songId={currentSong.id} />
@@ -698,13 +598,10 @@ const Music = () => {
               <div className="absolute top-0 right-0 p-8 opacity-10">
                 <Sparkles size={120} />
               </div>
-              <h3 className="text-xl font-serif font-bold mb-4 relative z-10">中期增强进度</h3>
+              <h3 className="text-xl font-serif font-bold mb-4 relative z-10">音乐小贴士</h3>
               <p className="text-gray-400 text-sm leading-relaxed relative z-10">
-                已升级为歌曲 + 专辑双入口。可从专辑详情直接建立播放队列，支持专辑顺序播放。
+                支持粘贴网易云、QQ音乐、酷狗、百度、酷我的歌曲/专辑/歌单链接，系统会先解析并让您二次确认可导入曲目。
               </p>
-              <span className="mt-6 text-brand-primary font-bold text-sm flex items-center gap-1 relative z-10">
-                Album / Track 已上线 <ChevronRight size={16} />
-              </span>
             </div>
           </div>
         </div>

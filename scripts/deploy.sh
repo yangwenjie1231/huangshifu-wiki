@@ -12,8 +12,6 @@ SKIP_SEED="${SKIP_SEED:-0}"
 INSTALL_MODE="${INSTALL_MODE:-ci}"
 ENABLE_VECTOR_SYNC="${ENABLE_VECTOR_SYNC:-1}"
 VECTOR_SYNC_LIMIT="${VECTOR_SYNC_LIMIT:-100}"
-HEALTHCHECK_RETRIES="${HEALTHCHECK_RETRIES:-15}"
-HEALTHCHECK_DELAY_SECONDS="${HEALTHCHECK_DELAY_SECONDS:-2}"
 
 log() {
   printf '[deploy] %s\n' "$*"
@@ -24,32 +22,6 @@ require_cmd() {
     printf '[deploy] missing required command: %s\n' "$1" >&2
     exit 1
   fi
-}
-
-wait_for_healthcheck() {
-  local url="$1"
-  local retries="$2"
-  local delay_seconds="$3"
-  local attempt=1
-
-  while (( attempt <= retries )); do
-    if curl -fsS "$url" >/dev/null 2>&1; then
-      log "health check passed (attempt ${attempt}/${retries})"
-      curl -fsS "$url"
-      printf '\n'
-      return 0
-    fi
-
-    if (( attempt < retries )); then
-      log "health check failed (attempt ${attempt}/${retries}), retrying in ${delay_seconds}s"
-      sleep "$delay_seconds"
-    fi
-
-    attempt=$((attempt + 1))
-  done
-
-  log "health check failed after ${retries} attempts"
-  return 1
 }
 
 require_cmd npm
@@ -127,6 +99,7 @@ else
 fi
 
 log "health check: http://127.0.0.1:${APP_PORT}/api/health"
-wait_for_healthcheck "http://127.0.0.1:${APP_PORT}/api/health" "$HEALTHCHECK_RETRIES" "$HEALTHCHECK_DELAY_SECONDS"
+curl -fsS "http://127.0.0.1:${APP_PORT}/api/health"
+printf '\n'
 
 log "deploy completed"

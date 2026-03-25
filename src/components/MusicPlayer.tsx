@@ -6,7 +6,6 @@ import { clsx } from 'clsx';
 
 interface Song {
   id: string;
-  docId?: string;
   title: string;
   artist: string;
   album: string;
@@ -24,7 +23,10 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
     const fetchSong = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`/api/music/song/${songId}`);
+        const response = await fetch(`/api/music/song/${encodeURIComponent(songId)}`);
+        if (!response.ok) {
+          throw new Error(`Request failed: ${response.status}`);
+        }
         const data = await response.json();
         setSong(data);
       } catch (e) {
@@ -37,7 +39,7 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
   }, [songId]);
 
   const togglePlay = () => {
-    if (currentSong?.id !== song?.id || (song.docId && currentSong?.docId !== song.docId)) {
+    if (currentSong?.id !== song?.id) {
       setCurrentSong(song);
       setIsPlaying(true);
     } else {

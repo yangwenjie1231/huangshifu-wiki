@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Music, Book, MessageSquare, Image as ImageIcon, Home, Bell } from 'lucide-react';
+import { Music, Book, MessageSquare, Image as ImageIcon, Search, Home } from 'lucide-react';
 import { clsx } from 'clsx';
 
 export const BottomNav = () => {
@@ -60,17 +60,6 @@ export const BottomNav = () => {
         >
           <Music size={20} />
           <span className="text-[10px] font-bold uppercase tracking-widest">音乐</span>
-        </NavLink>
-
-        <NavLink 
-          to="/notifications"
-          className={({ isActive }) => clsx(
-            "flex flex-col items-center gap-1 transition-all",
-            isActive ? "text-brand-olive scale-110" : "text-gray-400"
-          )}
-        >
-          <Bell size={20} />
-          <span className="text-[10px] font-bold uppercase tracking-widest">通知</span>
         </NavLink>
       </div>
     </nav>

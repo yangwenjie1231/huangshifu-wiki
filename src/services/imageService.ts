@@ -1,5 +1,5 @@
-import { collection, doc, setDoc, getDoc, addDoc, serverTimestamp, query, where, getDocs, db } from '../firebase';
 import SparkMD5 from 'spark-md5';
+import { apiGet, apiPost } from '../lib/apiClient';
 
 export interface ImageMap {
   id: string;
@@ -8,7 +8,7 @@ export interface ImageMap {
   weiboUrl?: string;
   smmsUrl?: string;
   superbedUrl?: string;
-  createdAt: any;
+  createdAt?: string;
 }
 
 /**
@@ -41,13 +41,10 @@ export const uploadImageToCDNs = async (file: File): Promise<string> => {
   const md5 = await calculateMD5(file);
 
   // 2. Check if image with same MD5 already exists
-  const imageMapsRef = collection(db, 'imageMaps');
-  const q = query(imageMapsRef, where('md5', '==', md5));
-  const snapshot = await getDocs(q);
-
-  if (!snapshot.empty) {
-    // Image already exists, return the existing ID
-    return snapshot.docs[0].id;
+  const exists = await apiGet<{ items: ImageMap[] }>('/api/image-maps', { md5 });
+  const existing = exists.items?.[0];
+  if (existing?.id) {
+    return existing.id;
   }
 
   // 3. Simulate local upload (using URL.createObjectURL for demo, in real app use Firebase Storage)
@@ -67,11 +64,10 @@ export const uploadImageToCDNs = async (file: File): Promise<string> => {
     weiboUrl,
     smmsUrl,
     superbedUrl,
-    createdAt: serverTimestamp()
   };
 
-  // 5. Store mapping in Firestore
-  await setDoc(doc(db, 'imageMaps', imageId), imageMap as unknown as Record<string, unknown>);
+  // 5. Store mapping through REST API
+  await apiPost('/api/image-maps', imageMap);
 
   return imageId;
 };
@@ -81,15 +77,15 @@ export const uploadImageToCDNs = async (file: File): Promise<string> => {
  */
 export const getImageUrl = async (imageId: string): Promise<string[]> => {
   try {
-    const docSnap = await getDoc(doc(db, 'imageMaps', imageId));
-    if (docSnap.exists()) {
-      const data = docSnap.data() as ImageMap;
+    const data = await apiGet<{ item?: ImageMap }>(`/api/image-maps/${imageId}`);
+    if (data.item) {
+      const item = data.item;
       // Order of preference: Weibo -> SM.MS -> Superbed -> Local
       return [
-        data.weiboUrl,
-        data.smmsUrl,
-        data.superbedUrl,
-        data.localUrl
+        item.weiboUrl,
+        item.smmsUrl,
+        item.superbedUrl,
+        item.localUrl
       ].filter(Boolean) as string[];
     }
   } catch (e) {

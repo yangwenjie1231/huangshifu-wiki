@@ -110,7 +110,6 @@ model User {
   browsingHistories BrowsingHistory[]
   uploadSessions UploadSession[]
   mediaAssets   MediaAsset[]
-  albumsCreated Album[]        @relation("AlbumCreatedBy")
 
   @@index([status, createdAt])
   @@index([wechatUnionId])
@@ -357,50 +356,55 @@ model ImageEmbedding {
 }
 
 model MusicTrack {
-  docId     String   @id @default(cuid())
-  id        String   @unique
-  title     String
-  artist    String
-  album     String
-  cover     String   @db.Text
-  audioUrl  String   @db.Text
-  lyric     String?  @db.LongText
-  addedBy   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  adder     User?    @relation("MusicAddedBy", fields: [addedBy], references: [uid], onDelete: SetNull)
-  albumEntries TrackInAlbum[]
+  docId           String          @id @default(cuid())
+  id              String          @unique
+  title           String
+  artist          String
+  album           String
+  cover           String          @db.Text
+  audioUrl        String          @db.Text
+  lyric           String?         @db.LongText
+  sourcePlatform  String?
+  sourceUrl       String?         @db.Text
+  addedBy         String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  adder           User?           @relation("MusicAddedBy", fields: [addedBy], references: [uid], onDelete: SetNull)
+  playlistEntries PlaylistTrack[]
 
   @@index([createdAt])
 }
 
-model Album {
-  id          String        @id @default(cuid())
-  title       String
-  artist      String
-  cover       String        @db.Text
-  description String?       @db.Text
-  releaseDate DateTime?
-  createdBy   String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  creator     User?         @relation("AlbumCreatedBy", fields: [createdBy], references: [uid], onDelete: SetNull)
-  tracks      TrackInAlbum[]
+model Playlist {
+  docId        String          @id @default(cuid())
+  title        String
+  artist       String
+  description  String?         @db.Text
+  cover        String          @db.Text
+  resourceType String          @default("playlist")
+  platform     String
+  platformId   String
+  platformUrl  String          @db.Text
+  createdBy    String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  tracks       PlaylistTrack[]
 
   @@index([createdAt])
-  @@index([artist, createdAt])
+  @@index([platform, platformId])
+  @@index([resourceType, updatedAt])
 }
 
-model TrackInAlbum {
-  albumId    String
-  trackDocId String
-  trackOrder Int       @default(0)
-  createdAt  DateTime  @default(now())
-  album      Album     @relation(fields: [albumId], references: [id], onDelete: Cascade)
-  track      MusicTrack @relation(fields: [trackDocId], references: [docId], onDelete: Cascade)
+model PlaylistTrack {
+  playlistDocId String
+  trackDocId    String
+  trackOrder    Int        @default(0)
+  addedAt       DateTime   @default(now())
+  playlist      Playlist   @relation(fields: [playlistDocId], references: [docId], onDelete: Cascade)
+  track         MusicTrack @relation(fields: [trackDocId], references: [docId], onDelete: Cascade)
 
-  @@id([albumId, trackDocId])
-  @@index([albumId, trackOrder])
+  @@id([playlistDocId, trackDocId])
+  @@index([playlistDocId, trackOrder])
   @@index([trackDocId])
 }
 

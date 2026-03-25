@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Disc3, Play, Heart } from 'lucide-react';
+import { ArrowLeft, Disc3, Play, Heart, ExternalLink } from 'lucide-react';
 import { clsx } from 'clsx';
+
 import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
 import { useMusic } from '../context/MusicContext';
 import { useAuth } from '../context/AuthContext';
@@ -14,6 +15,7 @@ type SongItem = {
   album: string;
   cover: string;
   audioUrl: string;
+  sourceUrl?: string | null;
   lyric?: string | null;
   favoritedByMe?: boolean;
   trackOrder?: number;
@@ -26,7 +28,7 @@ type AlbumResponse = {
     artist: string;
     cover: string;
     description?: string | null;
-    releaseDate?: string | null;
+    platformUrl?: string | null;
     tracks: SongItem[];
   };
 };
@@ -40,10 +42,7 @@ const AlbumDetail = () => {
   const { currentSong, playAlbumTracks } = useMusic();
 
   const fetchAlbum = async () => {
-    if (!albumId) {
-      return;
-    }
-
+    if (!albumId) return;
     setLoading(true);
     try {
       const response = await apiGet<AlbumResponse>(`/api/albums/${albumId}`);
@@ -61,18 +60,14 @@ const AlbumDetail = () => {
   }, [albumId]);
 
   const handlePlay = (index = 0) => {
-    if (!album) {
-      return;
-    }
+    if (!album) return;
     const tracks = [...album.tracks].sort((a, b) => (a.trackOrder || 0) - (b.trackOrder || 0));
     playAlbumTracks(album.id, album.title, tracks, index);
   };
 
   const toggleFavorite = async (song: SongItem) => {
     if (!user || !song.docId || favoriting === song.docId) {
-      if (!user) {
-        alert('请先登录后收藏');
-      }
+      if (!user) alert('请先登录后收藏');
       return;
     }
 
@@ -144,13 +139,25 @@ const AlbumDetail = () => {
             </div>
           </div>
 
-          <button
-            onClick={() => handlePlay(0)}
-            disabled={album.tracks.length === 0}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-brand-olive text-white text-sm font-bold hover:bg-brand-olive/90 disabled:opacity-50"
-          >
-            <Play size={16} /> 播放专辑
-          </button>
+          <div className="flex items-center gap-3">
+            {album.platformUrl ? (
+              <a
+                href={album.platformUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 text-sm text-gray-600 hover:text-brand-olive hover:border-brand-olive/40"
+              >
+                <ExternalLink size={14} /> 原始链接
+              </a>
+            ) : null}
+            <button
+              onClick={() => handlePlay(0)}
+              disabled={album.tracks.length === 0}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-brand-olive text-white text-sm font-bold hover:bg-brand-olive/90 disabled:opacity-50"
+            >
+              <Play size={16} /> 播放专辑
+            </button>
+          </div>
         </header>
 
         <ul>

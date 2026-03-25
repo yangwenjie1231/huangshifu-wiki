@@ -141,7 +141,7 @@ docker compose ps
 curl http://127.0.0.1:6333/healthz
 ```
 
-若返回 `healthz check passed`（或版本等效健康响应）说明 Qdrant 正常。
+若返回 `{"status":"ok"}` 说明 Qdrant 正常。
 
 ---
 
@@ -602,27 +602,90 @@ USE_PM2=0 ./scripts/deploy.sh
 - `INSTALL_MODE`：依赖安装模式（`ci` 或 `install`，默认 `ci`）
 - `ENABLE_VECTOR_SYNC`：部署时是否自动执行一次向量同步（默认 `1`）
 - `VECTOR_SYNC_LIMIT`：部署时向量同步批次大小（默认 `100`）
-- `HEALTHCHECK_RETRIES`：部署后健康检查重试次数（默认 `15`）
-- `HEALTHCHECK_DELAY_SECONDS`：健康检查重试间隔秒数（默认 `2`）
 
-### Qdrant 版本对齐（建议）
+---
 
-`docker-compose.yml` 已将 Qdrant 镜像固定为 `qdrant/qdrant:v1.17.0`，与当前 `@qdrant/js-client-rest` 兼容范围一致。
+## 16. 中期重构版（v4）上线记录
 
-若线上已运行旧版本容器，执行：
+### 16.1 本次范围
+
+- Wiki / Gallery / Admin 页面前端数据访问已统一走 REST API。
+- 音乐全局播放器增强：歌词同步、音量控制、随机播放、循环模式、播放历史。
+- Wiki 接口补充兼容路由：`GET /api/wiki/:slug/revisions`（与 `history` 同内容）。
+- Wiki 管理删除能力补齐：`DELETE /api/wiki/:slug`（管理员）。
+
+### 16.2 部署命令（无旧数据迁移）
 
 ```bash
 cd /root/huangshifu-wiki
-docker compose pull qdrant
-docker compose up -d qdrant
-curl http://127.0.0.1:6333/healthz
+chmod +x scripts/deploy.sh
+SKIP_SEED=1 ./scripts/deploy.sh
+
+# 验证
+curl http://127.0.0.1:3000/api/health
+pm2 status
 ```
 
-若需要强制重建容器（不删除 `qdrant_storage` 卷）：
+### 16.3 接口验证清单
+
+```bash
+# Wiki 列表 / 详情 / 历史
+curl "http://127.0.0.1:3000/api/wiki?category=all"
+curl "http://127.0.0.1:3000/api/wiki/<slug>"
+curl "http://127.0.0.1:3000/api/wiki/<slug>/history"
+curl "http://127.0.0.1:3000/api/wiki/<slug>/revisions"
+
+# 管理能力（需管理员 cookie）
+curl "http://127.0.0.1:3000/api/admin/wiki" -b cookie.txt -c cookie.txt
+curl -X DELETE "http://127.0.0.1:3000/api/wiki/<slug>" -b cookie.txt -c cookie.txt
+curl "http://127.0.0.1:3000/api/admin/galleries" -b cookie.txt -c cookie.txt
+curl "http://127.0.0.1:3000/api/admin/users" -b cookie.txt -c cookie.txt
+```
+
+### 16.4 前端回归验证点
+
+1. Wiki 页面：列表、详情、编辑、历史、回滚、收藏、提交审核均可用。
+2. Gallery 页面：图集列表正常，上传后可立即看到新图集。
+3. Admin 页面：审核队列、公告/版块管理、用户封禁与角色管理、内容删除可用。
+4. 音乐播放器：
+   - 歌词自动高亮；
+   - 音量可调；
+   - 随机模式可切换；
+   - 循环模式可在不循环/列表循环/单曲循环间切换；
+   - 历史列表可回播。
+
+### 16.5 v4.1 继续迁移（Music 页面）
+
+- `src/pages/Music.tsx` 已完成从 `../firebase` 直连迁移为 REST：
+  - 列表读取：`GET /api/music`
+  - 收藏切换：`POST /api/favorites`、`DELETE /api/favorites/music/:id`
+  - 删除歌曲：`DELETE /api/music/:docId`
+  - 专辑入口：`GET /api/albums`（页面内展示并跳转 `/albums/:id`）
+  - 网易云快捷添加：`POST /api/music/from-netease`
+- 批量删除、单曲删除、播放列表联动（`setPlaylist` / `playSongAtIndex`）均已保持。
+- 本地验证结果：
+  - `npm run lint` 通过；
+  - `npm run build` 通过（仅保留 Vite 大包体积 warning，不阻断部署）。
+
+### 16.6 v4.1 部署执行与排障记录
+
+- 已使用上传脚本 `tmp_remote_sync_deploy.py` 进行自动上传 + 执行 `SKIP_SEED=1 ./scripts/deploy.sh`。
+- 首轮失败原因：远端缺少 `src/server/music/metingService.ts`，PM2 日志报 `ERR_MODULE_NOT_FOUND`。
+- 已修复脚本上传清单，确保同时上传：
+  - `src/server/music/musicUrlParser.ts`
+  - `src/server/music/metingService.ts`
+- 脚本补充了目录自动创建与上传重试机制（规避偶发 SFTP size mismatch）。
+- 若远端再次出现 SSH banner 超时（`Error reading SSH protocol banner`），可在服务器重启后重试：
 
 ```bash
 cd /root/huangshifu-wiki
-docker compose up -d --force-recreate qdrant
+chmod +x scripts/deploy.sh
+SKIP_SEED=1 ./scripts/deploy.sh
+
+# 验证
+pm2 status
+pm2 logs huangshifu-wiki --lines 120 --nostream
+curl http://127.0.0.1:3000/api/health
 ```
 
 ---
@@ -645,224 +708,104 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 
 ---
 
-## 16. 近期更新记录
+## 17. 音乐导入功能（v5）
 
-### 16.1 CLIP 图像预处理修复（v2）
+### 17.1 功能概述
 
-**问题**：使用 `RawImage.fromBlob()` 读取图片时，sharp 转 RGBA 后触发 `Conversion failed due to unsupported number of channels: 4` 错误，导致所有图片向量生成失败。
+支持从 5 个音乐平台导入歌曲、专辑、歌单：
 
-**修复**：在向量生成前增加 `sharp` 预处理管道，对所有图片统一做旋转/去 alpha 通道/转 sRGB/输出 PNG，再送入 CLIP 模型：
+- 网易云音乐（netease）
+- QQ 音乐（tencent）
+- 酷狗音乐（kugou）
+- 百度音乐（baidu）
+- 酷我音乐（kuwo）
 
-```typescript
-// src/server/vector/clipEmbedding.ts
-async function normalizeEmbeddingImageBuffer(imageBuffer: Buffer) {
-  try {
-    return await sharp(imageBuffer)
-      .rotate()
-      .flatten({ background: { r: 255, g: 255, b: 255 } })
-      .toColorspace('srgb')
-      .png()
-      .toBuffer();
-  } catch (error) {
-    console.error('Normalize image for embedding failed:', error);
-    return imageBuffer;
-  }
-}
-```
+**仅管理员可用**。用户粘贴链接后，系统自动解析并展示资源预览，支持选择性导入。
 
-这确保所有图片以 3 通道 RGB PNG 格式进入 CLIP 推理，避免 sharp+RawImage 路径下的通道数不一致问题。
+### 17.2 数据库变更
 
-**验证**：执行一次同步后确认 `ready=1, failed=0`：
+本次更新新增 2 张表、扩展 `MusicTrack` 2 个字段：
 
-```bash
-npm run embeddings:sync -- --limit=10 --include-failed
-# expected: picked:1, ready:1, failed:0
-```
+- `Playlist`：存储专辑/歌单元数据（标题、封面、平台来源等）
+- `PlaylistTrack`：存储专辑/歌单与歌曲的多对多关系
+- `MusicTrack.sourcePlatform`：歌曲来源平台（如 `netease`）
+- `MusicTrack.sourceUrl`：歌曲原始页面链接
 
-### 16.2 Qdrant 版本对齐
+迁移已包含在 `prisma/migrate.sql`，执行部署时会自动创建。
 
-**原因**：`@qdrant/js-client-rest` 1.17.0 与服务器 Qdrant v1.9.4 存在 major version 不匹配警告（client 1.17 vs server 1.9.4），虽然功能可用但存在隐患。
+### 17.3 核心 API
 
-**修复**：`docker-compose.yml` 中 Qdrant 镜像从 `v1.9.4` 升级到 `v1.17.0`：
+| 方法 | 路径 | 说明 | 权限 |
+|------|------|------|------|
+| `POST` | `/api/music/parse-url` | 解析音乐链接，返回预览 | 管理员 |
+| `POST` | `/api/music/import` | 导入歌曲/专辑/歌单 | 管理员 |
+| `GET` | `/api/albums` | 获取专辑列表 | 公开 |
+| `GET` | `/api/albums/:id` | 获取专辑详情（含歌曲） | 公开 |
+| `GET` | `/api/playlists` | 获取歌单列表 | 公开 |
+| `POST` | `/api/playlists` | 创建歌单 | 管理员 |
+| `PATCH` | `/api/playlists/:docId` | 更新歌单 | 管理员 |
+| `DELETE` | `/api/playlists/:docId` | 删除歌单 | 管理员 |
 
-```yaml
-services:
-  qdrant:
-    image: qdrant/qdrant:v1.17.0   # 原为 v1.9.4
-```
-
-升级后无需重新创建 volume，数据持久化不受影响：
+### 17.4 导入 API 用法示例
 
 ```bash
-cd /root/huangshifu-wiki
-docker compose pull qdrant
-docker compose up -d qdrant
-curl http://127.0.0.1:6333/healthz
-# expected: healthz check passed
+# 1) 解析链接（支持歌曲/专辑/歌单）
+curl -X POST http://127.0.0.1:3000/api/music/parse-url \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"url":"https://music.163.com/#/album?id=123456"}'
+
+# 返回预览：{ resource: { title, artist, cover, platform, type, songs: [...] } }
+
+# 2) 导入全部歌曲
+curl -X POST http://127.0.0.1:3000/api/music/import \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"url":"https://music.163.com/#/album?id=123456"}'
+
+# 3) 选择性导入（只导入指定歌曲）
+curl -X POST http://127.0.0.1:3000/api/music/import \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"url":"https://music.163.com/#/playlist?id=123456","selectedSongIds":["song_id_1","song_id_2"]}'
+
+# 返回：{ summary: { imported, skipped, failed }, songs: [...], collection: {...} }
 ```
 
-### 16.3 部署健康检查重试机制
+### 17.5 平台 URL 示例
 
-**原因**：原 `deploy.sh` 中 PM2 重启后直接执行一次 `curl` 检查健康，应用进程通常需要数秒完成初始化，导致偶发性部署失败误报。
+```
+# 网易云音乐
+https://music.163.com/#/song?id=123456
+https://music.163.com/#/album?id=123456
+https://music.163.com/#/playlist?id=123456
 
-**修复**：新增 `wait_for_healthcheck()` 函数，支持按间隔重试直到成功或达到上限：
+# QQ 音乐
+https://y.qq.com/n/ryqq/playlist/123456
+https://y.qq.com/n/ryqq/album/123456
 
-```bash
-HEALTHCHECK_RETRIES=15          # 默认重试 15 次
-HEALTHCHECK_DELAY_SECONDS=2      # 每次间隔 2 秒
+# 酷狗音乐
+https://www.kugou.com/yy/single/123456.html
+
+# 百度音乐
+https://music.baidu.com/song/123456
+
+# 酷我音乐
+https://www.kuwo.cn/play_detail/123456
 ```
 
-两个变量均可通过环境变量覆盖，适应不同服务器性能：
+### 17.6 部署验证清单
 
 ```bash
-HEALTHCHECK_RETRIES=30 HEALTHCHECK_DELAY_SECONDS=3 ./scripts/deploy.sh
-```
-
-### 16.4 语义搜图端到端验证清单
-
-上线后推荐按以下顺序验证语义搜图全流程：
-
-```bash
-# 1. 确认 Qdrant 在线
-curl http://127.0.0.1:6333/healthz
-
-# 2. 确认应用在线
+# 健康检查
 curl http://127.0.0.1:3000/api/health
 
-# 3. 查看 embedding 状态
-curl http://127.0.0.1:3000/api/embeddings/status \
-  -b cookie.txt -c cookie.txt
+# 专辑列表（无需登录）
+curl "http://127.0.0.1:3000/api/albums"
 
-# 4. 上传一张测试图到任意 Gallery（会自动入队）
+# 专辑详情（含歌曲）
+curl "http://127.0.0.1:3000/api/albums/<album_doc_id>?includeTracks=true"
 
-# 5. 手动触发一次同步
-npm run embeddings:sync -- --limit=50
-
-# 6. 用同一张图测试语义搜索（需认证 Cookie）
-curl -X POST http://127.0.0.1:3000/api/search/by-image \
-  -b cookie.txt -c cookie.txt \
-  -F "image=@uploads/<your_test_image>.png" \
-  -F "limit=12"
-
-# expected: mode=semantic_image, totalMatches>=1, totalGalleries>=1
-```
-
-如搜索返回空结果但 embedding ready，说明 Qdrant collection 状态正常但查询向量与库中向量相似度不足，可适当降低 `minScore` 参数。
-
-### 16.5 中期迭代功能更新（v3）
-
-本次部署包含以下中期增强功能：
-
-#### 通知中心（Notification Center）
-
-支持按类型过滤通知列表：
-
-```bash
-# 全部通知
-curl "http://127.0.0.1:3000/api/notifications?page=1&limit=20"
-
-# 仅回复通知
-curl "http://127.0.0.1:3000/api/notifications?type=reply&page=1&limit=20"
-
-# 仅点赞通知
-curl "http://127.0.0.1:3000/api/notifications?type=like&page=1&limit=20"
-
-# 仅评审结果通知
-curl "http://127.0.0.1:3000/api/notifications?type=review_result&page=1&limit=20"
-```
-
-后端返回字段新增 `searchMeta` 结构（`totalCount`、`page`、`limit`、`sort`）。
-
-#### 搜索排序升级（Search Ranking）
-
-搜索 API 支持 `sort` 参数指定排序策略：
-
-| sort 值 | 含义 | 默认 |
-|---------|------|------|
-| `relevance` | 相关度优先（默认） | ✅ |
-| `hot` | 热度优先（综合浏览/点赞/评论） | |
-| `latest` | 最新发布优先 | |
-
-```bash
-# 相关度排序（默认）
-curl "http://127.0.0.1:3000/api/search?q=关键词"
-
-# 热度排序
-curl "http://127.0.0.1:3000/api/search?q=关键词&sort=hot"
-
-# 最新排序
-curl "http://127.0.0.1:3000/api/search?q=关键词&sort=latest"
-```
-
-返回结构新增字段：
-- `sort`: 当前排序方式
-- `searchScore`: 综合相关度评分（0-100）
-- `searchMeta.sort`: 排序策略
-
-#### 专辑/曲目库（Album / Track Library）
-
-新增专辑管理 API，支持完整的 CRUD 操作：
-
-```bash
-# 登录（示例）
-curl -X POST http://127.0.0.1:3000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -c cookie.txt -b cookie.txt \
-  -d '{"email":"admin@example.com","password":"管理员密码"}'
-
-# 获取专辑列表
-curl "http://127.0.0.1:3000/api/albums?page=1&limit=10" -b cookie.txt -c cookie.txt
-
-# 获取单个专辑（含曲目列表）
-curl "http://127.0.0.1:3000/api/albums/:albumId" -b cookie.txt -c cookie.txt
-
-# 创建专辑（需管理员权限）
-curl -X POST http://127.0.0.1:3000/api/albums \
-  -H "Content-Type: application/json" \
-  -b cookie.txt -c cookie.txt \
-  -d '{
-    "title":"专辑名称",
-    "artist":"艺术家",
-    "cover":"/uploads/album-covers/cover.jpg",
-    "description":"专辑描述",
-    "releaseDate":"2025-01-01"
-  }'
-
-# 更新专辑
-curl -X PATCH http://127.0.0.1:3000/api/albums/:albumId \
-  -H "Content-Type: application/json" \
-  -b cookie.txt -c cookie.txt \
-  -d '{"title":"更新后的专辑名称"}'
-
-# 删除专辑
-curl -X DELETE "http://127.0.0.1:3000/api/albums/:albumId" -b cookie.txt -c cookie.txt
-
-# 管理端专辑列表（含所有字段）
-curl "http://127.0.0.1:3000/api/admin/albums?page=1&limit=20" -b cookie.txt -c cookie.txt
-```
-
-数据库验证专辑表已创建：
-
-```bash
-cat > /tmp/check_album.sql <<'EOF'
-SELECT COUNT(*) AS cnt
-FROM information_schema.tables
-WHERE table_schema = DATABASE() AND table_name = 'Album';
-EOF
-
-npx prisma db execute --file /tmp/check_album.sql --schema prisma/schema.prisma
-```
-
-#### 小程序 WebView 鉴权兼容
-
-小程序 WebView 嵌入时无法共享 Cookie，平台支持通过 `Authorization: Bearer <token>` header 传递登录凭证。
-
-前端 `src/lib/apiClient.ts` 已升级：自动读取 `localStorage.getItem('mp_auth_token')` 并附加到请求 header。
-
-如需独立验证：
-
-```bash
-# 模拟 WebView 认证请求
-curl "http://127.0.0.1:3000/api/albums" \
-  -H "Authorization: Bearer <登录后获取的JWT>"
+# 歌单列表
+curl "http://127.0.0.1:3000/api/playlists"
 ```

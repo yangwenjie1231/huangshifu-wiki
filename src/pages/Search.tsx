@@ -20,39 +20,19 @@ type SearchSuggestion = {
   id?: string;
 };
 
-type SearchSort = 'relevance' | 'hot' | 'latest';
-
-type SearchResultMeta = {
-  searchScore?: number;
-  searchMeta?: {
-    keywordScore?: number;
-    hotScore?: number;
-    recencyScore?: number;
-  };
-};
-
-const parseSearchSort = (value: string | null): SearchSort => {
-  if (value === 'hot' || value === 'latest' || value === 'relevance') {
-    return value;
-  }
-  return 'relevance';
-};
-
 const Search = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const initialQuery = searchParams.get('q') || '';
-  const initialSort = parseSearchSort(searchParams.get('sort'));
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [results, setResults] = useState<{
-    wiki: Array<any & SearchResultMeta>;
-    posts: Array<any & SearchResultMeta>;
-    galleries: Array<any & SearchResultMeta>;
+    wiki: any[];
+    posts: any[];
+    galleries: any[];
   }>({ wiki: [], posts: [], galleries: [] });
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(Boolean(initialQuery));
   const [activeTab, setActiveTab] = useState<'all' | 'wiki' | 'posts' | 'galleries'>('all');
-  const [searchSort, setSearchSort] = useState<SearchSort>(initialSort);
   
   // Advanced Filters
   const [showFilters, setShowFilters] = useState(false);
@@ -116,13 +96,12 @@ const Search = () => {
     suggestTimeoutRef.current = setTimeout(() => fetchSuggestions(val), 300);
   };
 
-  const handleSearch = async (q: string, filtersOverride?: any, sortOverride?: SearchSort) => {
+  const handleSearch = async (q: string, filtersOverride?: any) => {
     setLoading(true);
     setHasSearched(true);
     setShowSuggest(false);
     const currentQuery = q || searchQuery;
-    const currentSort = sortOverride || searchSort;
-    setSearchParams({ q: currentQuery, sort: currentSort });
+    setSearchParams({ q: currentQuery });
     setSearchQuery(currentQuery);
 
     const filters = filtersOverride || { selectedTags, dateRange, contentType };
@@ -135,10 +114,9 @@ const Search = () => {
       };
       const apiType = filters.contentType === 'all' ? 'all' : typeMap[filters.contentType] || 'all';
 
-      const data = await apiGet<{ wiki: any[]; posts: any[]; galleries: any[]; sort?: SearchSort }>('/api/search', {
+      const data = await apiGet<{ wiki: any[]; posts: any[]; galleries: any[] }>('/api/search', {
         q: currentQuery,
         type: apiType,
-        sort: currentSort,
         ...(filters.dateRange.start ? { startDate: filters.dateRange.start } : {}),
         ...(filters.dateRange.end ? { endDate: filters.dateRange.end } : {}),
       });
@@ -159,32 +137,11 @@ const Search = () => {
         posts: allResults.posts.filter(filterFn),
         galleries: allResults.galleries.filter(filterFn),
       });
-
-      if (data.sort) {
-        setSearchSort(data.sort);
-      }
     } catch (e) {
       console.error("Search error:", e);
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    const querySort = parseSearchSort(searchParams.get('sort'));
-    setSearchSort(querySort);
-  }, [searchParams]);
-
-  const handleSortChange = (nextSort: SearchSort) => {
-    setSearchSort(nextSort);
-    if (hasSearched || searchQuery.trim()) {
-      handleSearch(searchQuery, undefined, nextSort);
-      return;
-    }
-
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.set('sort', nextSort);
-    setSearchParams(nextParams);
   };
 
   const handleImageSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -200,7 +157,7 @@ const Search = () => {
       formData.append('image', file);
       formData.append('limit', '24');
 
-      const data = await apiUpload<{ galleries: Array<any & SearchResultMeta> }>('/api/search/by-image', formData);
+      const data = await apiUpload<{ galleries: any[] }>('/api/search/by-image', formData);
 
       setResults({
         wiki: [],
@@ -307,28 +264,6 @@ const Search = () => {
             </div>
             <input type="file" ref={fileInputRef} onChange={handleImageSearch} accept="image/*" className="hidden" />
           </form>
-
-          <div className="mb-6 flex items-center gap-2">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">排序:</span>
-            {[
-              { id: 'relevance', label: '相关度' },
-              { id: 'hot', label: '热度' },
-              { id: 'latest', label: '最新' },
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => handleSortChange(item.id as SearchSort)}
-                className={clsx(
-                  'px-3 py-1.5 rounded-full text-xs font-medium transition-all',
-                  searchSort === item.id
-                    ? 'bg-brand-olive text-white'
-                    : 'bg-gray-50 text-gray-500 hover:bg-gray-100',
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
 
           <div className="flex items-center justify-between">
             <div className="flex flex-wrap items-center gap-3">
@@ -508,9 +443,6 @@ const Search = () => {
                         <p className="text-gray-400 text-sm line-clamp-2 mb-4 italic leading-relaxed">
                           {page.content.replace(/[#*`]/g, '').substring(0, 100)}...
                         </p>
-                        {typeof page.searchScore === 'number' ? (
-                          <p className="text-[10px] text-brand-olive/70 mb-2">匹配度 {Math.round(page.searchScore * 100)}%</p>
-                        ) : null}
                         <div className="flex items-center justify-between text-gray-400 text-[10px]">
                           <span className="flex items-center gap-1"><Clock size={12} /> {toDateValue(page.updatedAt) ? format(toDateValue(page.updatedAt)!, 'yyyy-MM-dd') : '刚刚'}</span>
                           <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
@@ -543,9 +475,6 @@ const Search = () => {
                           <span className="text-[10px] text-gray-400 flex items-center gap-1"><Clock size={10} /> {toDateValue(post.updatedAt) ? format(toDateValue(post.updatedAt)!, 'yyyy-MM-dd') : '刚刚'}</span>
                         </div>
                         <h3 className="text-xl font-serif font-bold group-hover:text-brand-olive transition-colors">{post.title}</h3>
-                        {typeof post.searchScore === 'number' ? (
-                          <p className="text-[10px] text-brand-olive/70 mt-1">匹配度 {Math.round(post.searchScore * 100)}%</p>
-                        ) : null}
                       </Link>
                     ))}
                   </div>
@@ -575,9 +504,6 @@ const Search = () => {
                         <div className="p-4">
                           <h3 className="text-sm font-serif font-bold truncate group-hover:text-brand-olive transition-colors">{gallery.title}</h3>
                           <p className="text-[10px] text-gray-400">{gallery.images.length} 张图片</p>
-                          {typeof gallery.searchScore === 'number' ? (
-                            <p className="text-[10px] text-brand-olive/70 mt-1">匹配度 {Math.round(gallery.searchScore * 100)}%</p>
-                          ) : null}
                         </div>
                       </Link>
                     ))}

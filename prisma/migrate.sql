@@ -254,34 +254,6 @@ CREATE TABLE IF NOT EXISTS `MusicTrack` (
   CONSTRAINT `MusicTrack_addedBy_fkey` FOREIGN KEY (`addedBy`) REFERENCES `User` (`uid`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `Album` (
-  `id` varchar(191) NOT NULL,
-  `title` varchar(191) NOT NULL,
-  `artist` varchar(191) NOT NULL,
-  `cover` text NOT NULL,
-  `description` text DEFAULT NULL,
-  `releaseDate` datetime(3) DEFAULT NULL,
-  `createdBy` varchar(191) DEFAULT NULL,
-  `createdAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  `updatedAt` datetime(3) NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `Album_createdAt_idx` (`createdAt`),
-  KEY `Album_artist_createdAt_idx` (`artist`,`createdAt`),
-  CONSTRAINT `Album_createdBy_fkey` FOREIGN KEY (`createdBy`) REFERENCES `User` (`uid`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS `TrackInAlbum` (
-  `albumId` varchar(191) NOT NULL,
-  `trackDocId` varchar(191) NOT NULL,
-  `trackOrder` int NOT NULL DEFAULT 0,
-  `createdAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  PRIMARY KEY (`albumId`,`trackDocId`),
-  KEY `TrackInAlbum_albumId_trackOrder_idx` (`albumId`,`trackOrder`),
-  KEY `TrackInAlbum_trackDocId_idx` (`trackDocId`),
-  CONSTRAINT `TrackInAlbum_albumId_fkey` FOREIGN KEY (`albumId`) REFERENCES `Album` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `TrackInAlbum_trackDocId_fkey` FOREIGN KEY (`trackDocId`) REFERENCES `MusicTrack` (`docId`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 CREATE TABLE IF NOT EXISTS `ImageMap` (
   `id` varchar(191) NOT NULL,
   `md5` varchar(191) NOT NULL,
@@ -575,6 +547,89 @@ SET @has_post_hot_score_index := (
 SET @sql := IF(
   @has_post_hot_score_index = 0,
   'CREATE INDEX `Post_hotScore_updatedAt_idx` ON `Post` (`hotScore`, `updatedAt`)',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_music_source_platform := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'MusicTrack' AND COLUMN_NAME = 'sourcePlatform'
+);
+SET @sql := IF(
+  @has_music_source_platform = 0,
+  'ALTER TABLE `MusicTrack` ADD COLUMN `sourcePlatform` varchar(191) DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_music_source_url := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'MusicTrack' AND COLUMN_NAME = 'sourceUrl'
+);
+SET @sql := IF(
+  @has_music_source_url = 0,
+  'ALTER TABLE `MusicTrack` ADD COLUMN `sourceUrl` text DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_playlist_table := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.TABLES
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Playlist'
+);
+SET @sql := IF(
+  @has_playlist_table = 0,
+  "CREATE TABLE IF NOT EXISTS `Playlist` (
+    `docId` varchar(191) NOT NULL,
+    `title` varchar(191) NOT NULL,
+    `artist` varchar(191) NOT NULL,
+    `description` text DEFAULT NULL,
+    `cover` text NOT NULL,
+    `resourceType` varchar(191) NOT NULL DEFAULT 'playlist',
+    `platform` varchar(191) NOT NULL,
+    `platformId` varchar(191) NOT NULL,
+    `platformUrl` text NOT NULL,
+    `createdBy` varchar(191) DEFAULT NULL,
+    `createdAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` datetime(3) NOT NULL,
+    PRIMARY KEY (`docId`),
+    KEY `Playlist_createdAt_idx` (`createdAt`),
+    KEY `Playlist_platform_platformId_idx` (`platform`,`platformId`),
+    KEY `Playlist_resourceType_updatedAt_idx` (`resourceType`,`updatedAt`)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_playlist_track_table := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.TABLES
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'PlaylistTrack'
+);
+SET @sql := IF(
+  @has_playlist_track_table = 0,
+  "CREATE TABLE IF NOT EXISTS `PlaylistTrack` (
+    `playlistDocId` varchar(191) NOT NULL,
+    `trackDocId` varchar(191) NOT NULL,
+    `trackOrder` int NOT NULL DEFAULT 0,
+    `addedAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (`playlistDocId`,`trackDocId`),
+    KEY `PlaylistTrack_playlistDocId_trackOrder_idx` (`playlistDocId`,`trackOrder`),
+    KEY `PlaylistTrack_trackDocId_idx` (`trackDocId`),
+    CONSTRAINT `PlaylistTrack_playlistDocId_fkey` FOREIGN KEY (`playlistDocId`) REFERENCES `Playlist` (`docId`) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT `PlaylistTrack_trackDocId_fkey` FOREIGN KEY (`trackDocId`) REFERENCES `MusicTrack` (`docId`) ON DELETE CASCADE ON UPDATE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
   'SELECT 1'
 );
 PREPARE stmt FROM @sql;
