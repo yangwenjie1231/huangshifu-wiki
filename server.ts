@@ -921,7 +921,7 @@ function parseContentStatus(value: unknown): ContentStatus | null {
 function normalizeWikiWriteStatus(rawStatus: unknown, authUser: ApiUser) {
   const status = parseContentStatus(rawStatus);
   if (isAdminRole(authUser.role)) {
-    return status || 'published';
+    return status === 'pending' || status === 'draft' ? 'published' : (status || 'published');
   }
   if (status === 'pending') return 'pending';
   if (status === 'rejected') return 'rejected';
@@ -931,7 +931,7 @@ function normalizeWikiWriteStatus(rawStatus: unknown, authUser: ApiUser) {
 function normalizePostWriteStatus(rawStatus: unknown, authUser: ApiUser) {
   const status = parseContentStatus(rawStatus);
   if (isAdminRole(authUser.role)) {
-    return status || 'published';
+    return status === 'pending' || status === 'draft' ? 'published' : (status || 'published');
   }
   if (status === 'pending') return 'pending';
   if (status === 'rejected') return 'rejected';
