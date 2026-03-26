@@ -2,6 +2,13 @@
 
 本文档用于将当前项目部署到 Linux 服务器，并完成数据库、进程守护、反向代理、HTTPS 与向量检索相关配置。
 
+快速结论（无旧数据迁移场景）：
+
+- 数据库使用 PostgreSQL 18。
+- 向量检索继续使用 Qdrant，不启用 pgvector。
+- 数据库初始化使用 Prisma Migration：`npm run db:deploy`。
+- 首次上线后执行一次 `npm run db:seed` 初始化管理员账号。
+
 适用架构：
 
 - 前端：Vite + React
@@ -47,6 +54,18 @@ curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
 apt install -y nodejs
 node -v
 npm -v
+```
+
+安装 PostgreSQL 18（Debian/Ubuntu，官方仓库示例）：
+
+```bash
+apt install -y gnupg ca-certificates lsb-release
+install -d /usr/share/postgresql-common/pgdg
+curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+apt update
+apt install -y postgresql-18 postgresql-client-18
+systemctl enable --now postgresql
 ```
 
 ---
@@ -162,6 +181,13 @@ npm run db:deploy
 npm run db:seed
 ```
 
+可选：先查看 migration 状态（建议首次部署执行）：
+
+```bash
+cd /root/huangshifu-wiki
+npx prisma migrate status
+```
+
 `db:seed` 会创建初始管理员账号（来自 `SEED_SUPER_ADMIN_EMAIL` / `SEED_SUPER_ADMIN_PASSWORD`）。
 
 建议迁移后快速检查核心表是否创建成功：
@@ -197,6 +223,19 @@ psql "postgresql://hsf_app:请替换为强密码@127.0.0.1:5432/huangshifu_wiki"
 - 封面与关系独立建模：`SongCover`、`AlbumCover`、`SongAlbumRelation`、`SongInstrumentalRelation`。
 
 本次发布策略为“直切”，明确不做旧数据迁移。
+
+### 6.2 首次迁移失败时的重建步骤（仅适用于无旧数据）
+
+如果你确认数据库里没有需要保留的数据，可直接重建 `public` schema：
+
+```bash
+psql "postgresql://hsf_app:请替换为强密码@127.0.0.1:5432/huangshifu_wiki" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+cd /root/huangshifu-wiki
+npm run db:deploy
+npm run db:seed
+```
+
+注意：此操作会清空当前数据库全部业务表。
 
 ---
 
@@ -390,6 +429,14 @@ pm2 restart huangshifu-wiki --update-env
 psql "postgresql://hsf_app:请替换为强密码@127.0.0.1:5432/huangshifu_wiki" -c "SELECT 1;"
 ```
 
+- 若报 `P1000 Authentication failed`：
+
+```bash
+sudo -u postgres psql -c "ALTER USER hsf_app WITH ENCRYPTED PASSWORD '请替换为强密码';"
+```
+
+- 若是远程数据库，还需检查 `postgresql.conf` 的 `listen_addresses` 和 `pg_hba.conf` 放行规则。
+
 ### 12.3 `permission denied for schema public`
 
 ```bash
@@ -436,6 +483,12 @@ npm run build
 npm run embeddings:sync -- --limit=100
 pm2 restart huangshifu-wiki --update-env
 pm2 save
+```
+
+发布后建议补一条数据库状态检查：
+
+```bash
+npx prisma migrate status
 ```
 
 ### 一键部署脚本（推荐）
