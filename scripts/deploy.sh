@@ -5,7 +5,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="${APP_NAME:-huangshifu-wiki}"
 APP_PORT="${APP_PORT:-3000}"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env}"
-MIGRATION_FILE="${MIGRATION_FILE:-$ROOT_DIR/prisma/migrate.sql}"
 USE_PM2="${USE_PM2:-1}"
 PULL_LATEST="${PULL_LATEST:-0}"
 SKIP_SEED="${SKIP_SEED:-0}"
@@ -34,11 +33,6 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
-if [[ ! -f "$MIGRATION_FILE" ]]; then
-  printf '[deploy] migration file not found: %s\n' "$MIGRATION_FILE" >&2
-  exit 1
-fi
-
 cd "$ROOT_DIR"
 
 log "loading environment from $ENV_FILE"
@@ -63,8 +57,8 @@ fi
 log "generating prisma client"
 npm run db:generate
 
-log "executing schema migration SQL"
-npx prisma db execute --file "$MIGRATION_FILE" --schema "$ROOT_DIR/prisma/schema.prisma"
+log "applying prisma migrations"
+npm run db:deploy
 
 if [[ "$SKIP_SEED" != "1" ]]; then
   log "running seed"
