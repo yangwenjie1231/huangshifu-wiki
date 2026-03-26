@@ -809,3 +809,118 @@ curl "http://127.0.0.1:3000/api/albums/<album_doc_id>?includeTracks=true"
 # 歌单列表
 curl "http://127.0.0.1:3000/api/playlists"
 ```
+
+---
+
+## 18. P0 增量（v6）上线记录：编辑锁 + 图集发布流
+
+### 18.1 本次范围
+
+- 新增 **编辑锁 API**（记录级并发编辑保护）：
+  - `POST /api/admin/locks` 申请/接管锁
+  - `PATCH /api/admin/locks/:id/renew` 锁续期
+  - `DELETE /api/admin/locks/:id` 释放锁
+  - `DELETE /api/admin/locks/:collection/:recordId` 管理员强制解锁
+  - 管理后台 `Admin` 新增 `编辑锁` tab（通过 `/api/admin/locks` 数据源展示）
+- 新增 **图集发布流与存量编辑 API**：
+  - `PATCH /api/galleries/:id` 更新图集基础信息
+  - `PATCH /api/galleries/:id/publish` 发布/取消发布
+  - `POST /api/galleries/:id/images` 为已有图集追加图片（使用 `assetIds`）
+  - `DELETE /api/galleries/:id/images/:imageId` 删除图集图片
+  - `PATCH /api/galleries/:id/images/reorder` 批量重排
+- 调整图集前台可见性：
+  - `GET /api/galleries`：游客仅看 `published=true`
+  - `GET /api/galleries/:id`：未发布图集仅作者/管理员可见
+
+### 18.2 数据库变更
+
+本次变更已写入 `prisma/schema.prisma` 和 `prisma/migrate.sql`：
+
+- 新增表：`EditLock`
+  - 唯一键：`(collection, recordId)`
+  - 索引：`userId`, `expiresAt`
+- 扩展表：`Gallery`
+  - 新增字段：`published`（默认 true）、`publishedAt`
+  - 新增索引：`(published, updatedAt)`
+
+### 18.3 新增环境变量
+
+```env
+EDIT_LOCK_TTL_MINUTES="20"
+```
+
+- 可选项，默认值 `20`
+- 控制编辑锁过期时间（分钟）
+
+### 18.4 部署命令（无旧数据迁移）
+
+```bash
+cd /root/huangshifu-wiki
+chmod +x scripts/deploy.sh
+SKIP_SEED=1 ./scripts/deploy.sh
+
+# 验证
+curl http://127.0.0.1:3000/api/health
+pm2 status
+```
+
+> 如果是全新数据库首次部署，且还没有管理员账号，可仅首次改为 `SKIP_SEED=0` 初始化管理员；后续继续使用 `SKIP_SEED=1`。
+
+### 18.5 接口验证（编辑锁）
+
+```bash
+# 0) 登录管理员并保存 cookie
+curl -X POST http://127.0.0.1:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -c cookie.txt -b cookie.txt \
+  -d '{"email":"admin@example.com","password":"请替换为管理员密码"}'
+
+# 1) 申请锁
+curl -X POST http://127.0.0.1:3000/api/admin/locks \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"collection":"galleries","recordId":"demo-gallery-id"}'
+
+# 2) 查看锁列表（管理后台数据源）
+curl "http://127.0.0.1:3000/api/admin/locks" -b cookie.txt -c cookie.txt
+
+# 3) 续期锁（将 <lock_id> 替换为上一步返回值）
+curl -X PATCH "http://127.0.0.1:3000/api/admin/locks/<lock_id>/renew" \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt
+
+# 4) 释放锁
+curl -X DELETE "http://127.0.0.1:3000/api/admin/locks/<lock_id>" -b cookie.txt -c cookie.txt
+```
+
+### 18.6 接口验证（图集发布流）
+
+```bash
+# 前置：先按既有上传会话流程创建图集，得到 <gallery_id>
+
+# 1) 更新图集基础信息
+curl -X PATCH "http://127.0.0.1:3000/api/galleries/<gallery_id>" \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"title":"部署验证图集-已编辑","description":"更新描述","tags":["deploy","edit"]}'
+
+# 2) 设置为草稿（未发布）
+curl -X PATCH "http://127.0.0.1:3000/api/galleries/<gallery_id>/publish" \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"published":false}'
+
+# 3) 游客访问应不可见（404）
+curl -i "http://127.0.0.1:3000/api/galleries/<gallery_id>"
+
+# 4) 重新发布
+curl -X PATCH "http://127.0.0.1:3000/api/galleries/<gallery_id>/publish" \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"published":true}'
+```
+
+### 18.7 本地回归结果
+
+- `npm run lint` 通过
+- `npm run build` 通过（仅保留 Vite chunk size warning，不阻断部署）

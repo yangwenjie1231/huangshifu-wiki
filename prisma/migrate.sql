@@ -329,6 +329,63 @@ PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
+CREATE TABLE IF NOT EXISTS `EditLock` (
+  `id` varchar(191) NOT NULL,
+  `collection` varchar(191) NOT NULL,
+  `recordId` varchar(191) NOT NULL,
+  `userId` varchar(191) NOT NULL,
+  `username` varchar(191) NOT NULL,
+  `createdAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` datetime(3) NOT NULL,
+  `expiresAt` datetime(3) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `EditLock_collection_recordId_key` (`collection`, `recordId`),
+  KEY `EditLock_userId_idx` (`userId`),
+  KEY `EditLock_expiresAt_idx` (`expiresAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+SET @has_gallery_published := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Gallery' AND COLUMN_NAME = 'published'
+);
+SET @sql := IF(
+  @has_gallery_published = 0,
+  'ALTER TABLE `Gallery` ADD COLUMN `published` tinyint(1) NOT NULL DEFAULT 1',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_gallery_published_at := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Gallery' AND COLUMN_NAME = 'publishedAt'
+);
+SET @sql := IF(
+  @has_gallery_published_at = 0,
+  'ALTER TABLE `Gallery` ADD COLUMN `publishedAt` datetime(3) DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_gallery_published_updated_idx := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Gallery' AND INDEX_NAME = 'Gallery_published_updatedAt_idx'
+);
+SET @sql := IF(
+  @has_gallery_published_updated_idx = 0,
+  'CREATE INDEX `Gallery_published_updatedAt_idx` ON `Gallery` (`published`,`updatedAt`)',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 SET @has_gallery_image_asset_id := (
   SELECT COUNT(*)
   FROM INFORMATION_SCHEMA.COLUMNS

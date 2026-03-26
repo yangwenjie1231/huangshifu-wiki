@@ -56,6 +56,8 @@ type GalleryItem = {
   tags?: string[];
   createdAt?: string;
   authorUid?: string;
+  published?: boolean;
+  publishedAt?: string | null;
   images: Array<{ url: string }>;
 };
 

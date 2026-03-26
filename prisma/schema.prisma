@@ -282,12 +282,30 @@ model Gallery {
   authorUid  String
   authorName String
   tags       Json?
+  published  Boolean        @default(true)
+  publishedAt DateTime?
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
   author     User           @relation("UserGalleries", fields: [authorUid], references: [uid], onDelete: Cascade)
   images     GalleryImage[]
 
   @@index([createdAt])
+  @@index([published, updatedAt])
+}
+
+model EditLock {
+  id         String   @id @default(cuid())
+  collection String
+  recordId   String
+  userId     String
+  username   String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  expiresAt  DateTime
+
+  @@unique([collection, recordId])
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model UploadSession {

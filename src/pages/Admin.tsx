@@ -14,7 +14,7 @@ const toDateValue = (value: string | null | undefined) => {
 
 const Admin = () => {
   const { user, profile, isAdmin } = useAuth();
-  const [activeTab, setActiveTab] = useState<'reviews' | 'wiki' | 'posts' | 'galleries' | 'users' | 'sections' | 'announcements' | 'music'>('wiki');
+  const [activeTab, setActiveTab] = useState<'reviews' | 'wiki' | 'posts' | 'galleries' | 'locks' | 'users' | 'sections' | 'announcements' | 'music'>('wiki');
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'wiki' | 'posts'>('all');
@@ -60,6 +60,8 @@ const Admin = () => {
         await apiDelete(`/api/music/${id}`);
       } else if (activeTab === 'galleries') {
         await apiDelete(`/api/galleries/${id}`);
+      } else if (activeTab === 'locks') {
+        await apiDelete(`/api/admin/locks/${id}`);
       } else if (activeTab === 'wiki') {
         await apiDelete(`/api/admin/wiki/${id}`);
       } else {
@@ -240,6 +242,7 @@ const Admin = () => {
           { id: 'sections', label: '版块管理', icon: Layers },
           { id: 'announcements', label: '公告管理', icon: Megaphone },
           { id: 'galleries', label: '图集管理', icon: ImageIcon },
+          { id: 'locks', label: '编辑锁', icon: Edit2 },
           { id: 'users', label: '用户管理', icon: Users },
         ].map(tab => (
           <button
@@ -441,6 +444,10 @@ const Admin = () => {
                         <img src={item.photoURL} alt="" className="w-10 h-10 rounded-full object-cover" referrerPolicy="no-referrer" />
                       ) : activeTab === 'galleries' ? (
                         <img src={item.images?.[0]?.url} alt="" className="w-12 h-12 rounded-xl object-cover" referrerPolicy="no-referrer" />
+                      ) : activeTab === 'locks' ? (
+                        <div className="w-10 h-10 rounded-full bg-brand-cream flex items-center justify-center text-brand-olive">
+                          <Edit2 size={18} />
+                        </div>
                       ) : activeTab === 'music' ? (
                         <img src={item.cover} alt="" className="w-12 h-12 rounded-xl object-cover" referrerPolicy="no-referrer" />
                       ) : (
@@ -449,8 +456,12 @@ const Admin = () => {
                         </div>
                       )}
                       <div>
-                        <p className="font-bold text-gray-700">{item.title || item.displayName || item.slug}</p>
-                        <p className="text-xs text-gray-400 truncate max-w-xs">{item.content?.substring(0, 50) || item.email || item.description || item.artist}</p>
+                        <p className="font-bold text-gray-700">{item.title || item.displayName || item.slug || (activeTab === 'locks' ? `${item.collection}/${item.recordId}` : '')}</p>
+                        <p className="text-xs text-gray-400 truncate max-w-xs">
+                          {activeTab === 'locks'
+                            ? `${item.username || item.userId} · 到期 ${toDateValue(item.expiresAt) ? format(toDateValue(item.expiresAt)!, 'MM-dd HH:mm') : 'N/A'}`
+                            : item.content?.substring(0, 50) || item.email || item.description || item.artist}
+                        </p>
                       </div>
                     </div>
                   </td>
@@ -461,7 +472,7 @@ const Admin = () => {
                         item.role === 'super_admin' ? "bg-purple-100 text-purple-600" :
                         item.role === 'admin' ? "bg-red-100 text-red-600" : "bg-brand-cream text-brand-olive"
                       )}>
-                        {item.role === 'super_admin' ? '超级管理员' : item.category || item.section || item.role || item.name || '默认'}
+                        {item.role === 'super_admin' ? '超级管理员' : item.category || item.section || item.role || item.name || (activeTab === 'locks' ? item.collection : '默认')}
                       </span>
                       {activeTab === 'users' && (
                         <span className={clsx(
@@ -469,6 +480,14 @@ const Admin = () => {
                           item.status === 'banned' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700',
                         )}>
                           {item.status === 'banned' ? '已封禁' : '正常'}
+                        </span>
+                      )}
+                      {activeTab === 'locks' && (
+                        <span className={clsx(
+                          'px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider',
+                          item.isExpired ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700',
+                        )}>
+                          {item.isExpired ? '已过期' : '有效'}
                         </span>
                       )}
                     </div>
