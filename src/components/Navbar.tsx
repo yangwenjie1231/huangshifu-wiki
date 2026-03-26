@@ -1,6 +1,5 @@
 import React from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import { Music, Book, MessageSquare, User as UserIcon, LogIn, LogOut, Shield, Image as ImageIcon, Search, MessageCircle, Menu, X, Bell } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -449,117 +448,114 @@ export const Navbar = () => {
         )}
       </AnimatePresence>
 
-      {typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
-          {authModalOpen && (
+      <AnimatePresence>
+        {authModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          >
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              className="w-full max-w-md bg-white rounded-3xl border border-gray-100 shadow-2xl p-8"
             >
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 8 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 8 }}
-                className="w-full max-w-md bg-white rounded-3xl border border-gray-100 shadow-2xl p-8"
-              >
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-2xl font-serif font-bold text-brand-olive">
-                    {authMode === 'wechat' ? '微信登录' : authMode === 'login' ? '账号登录' : '账号注册'}
-                  </h3>
-                  <button
-                    onClick={() => setAuthModalOpen(false)}
-                    className="text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-serif font-bold text-brand-olive">
+                  {authMode === 'wechat' ? '微信登录' : authMode === 'login' ? '账号登录' : '账号注册'}
+                </h3>
+                <button
+                  onClick={() => setAuthModalOpen(false)}
+                  className="text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
 
-                <form onSubmit={handleAuthSubmit} className="space-y-4">
-                  {(authMode === 'register' || authMode === 'wechat') && (
+              <form onSubmit={handleAuthSubmit} className="space-y-4">
+                {(authMode === 'register' || authMode === 'wechat') && (
+                  <input
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder={authMode === 'wechat' ? '微信昵称（可选）' : '昵称（可选）'}
+                    className="w-full px-4 py-3 bg-brand-cream rounded-xl border-none focus:ring-2 focus:ring-brand-olive/20"
+                  />
+                )}
+                {authMode === 'wechat' ? (
+                  <>
                     <input
                       type="text"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      placeholder={authMode === 'wechat' ? '微信昵称（可选）' : '昵称（可选）'}
+                      required
+                      value={wechatCode}
+                      onChange={(e) => setWechatCode(e.target.value)}
+                      placeholder="小程序 wx.login code"
                       className="w-full px-4 py-3 bg-brand-cream rounded-xl border-none focus:ring-2 focus:ring-brand-olive/20"
                     />
-                  )}
-                  {authMode === 'wechat' ? (
-                    <>
-                      <input
-                        type="text"
-                        required
-                        value={wechatCode}
-                        onChange={(e) => setWechatCode(e.target.value)}
-                        placeholder="小程序 wx.login code"
-                        className="w-full px-4 py-3 bg-brand-cream rounded-xl border-none focus:ring-2 focus:ring-brand-olive/20"
-                      />
-                      <input
-                        type="url"
-                        value={wechatPhotoURL}
-                        onChange={(e) => setWechatPhotoURL(e.target.value)}
-                        placeholder="头像 URL（可选）"
-                        className="w-full px-4 py-3 bg-brand-cream rounded-xl border-none focus:ring-2 focus:ring-brand-olive/20"
-                      />
-                      <p className="text-xs text-gray-500 leading-relaxed">
-                        开发环境可使用 mock code：`mock:openId` 或 `mock:openId:unionId`。
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <input
-                        type="email"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="邮箱"
-                        className="w-full px-4 py-3 bg-brand-cream rounded-xl border-none focus:ring-2 focus:ring-brand-olive/20"
-                      />
-                      <input
-                        type="password"
-                        required
-                        minLength={6}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="密码（至少 6 位）"
-                        className="w-full px-4 py-3 bg-brand-cream rounded-xl border-none focus:ring-2 focus:ring-brand-olive/20"
-                      />
-                    </>
-                  )}
+                    <input
+                      type="url"
+                      value={wechatPhotoURL}
+                      onChange={(e) => setWechatPhotoURL(e.target.value)}
+                      placeholder="头像 URL（可选）"
+                      className="w-full px-4 py-3 bg-brand-cream rounded-xl border-none focus:ring-2 focus:ring-brand-olive/20"
+                    />
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      开发环境可使用 mock code：`mock:openId` 或 `mock:openId:unionId`。
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="邮箱"
+                      className="w-full px-4 py-3 bg-brand-cream rounded-xl border-none focus:ring-2 focus:ring-brand-olive/20"
+                    />
+                    <input
+                      type="password"
+                      required
+                      minLength={6}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="密码（至少 6 位）"
+                      className="w-full px-4 py-3 bg-brand-cream rounded-xl border-none focus:ring-2 focus:ring-brand-olive/20"
+                    />
+                  </>
+                )}
 
-                  <button
-                    type="submit"
-                    disabled={authLoading}
-                    className="w-full px-4 py-3 bg-brand-olive text-white rounded-xl font-bold hover:bg-brand-olive/90 transition-all disabled:opacity-50"
-                  >
-                    {authLoading
-                      ? (authMode === 'login' ? '登录中...' : authMode === 'register' ? '注册中...' : '登录中...')
-                      : (authMode === 'login' ? '登录' : authMode === 'register' ? '注册' : '微信登录')}
-                  </button>
-                </form>
+                <button
+                  type="submit"
+                  disabled={authLoading}
+                  className="w-full px-4 py-3 bg-brand-olive text-white rounded-xl font-bold hover:bg-brand-olive/90 transition-all disabled:opacity-50"
+                >
+                  {authLoading
+                    ? (authMode === 'login' ? '登录中...' : authMode === 'register' ? '注册中...' : '登录中...')
+                    : (authMode === 'login' ? '登录' : authMode === 'register' ? '注册' : '微信登录')}
+                </button>
+              </form>
 
-                <div className="mt-4 flex items-center justify-between gap-2 text-sm">
-                  <button
-                    onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
-                    className="font-medium text-brand-olive hover:underline"
-                  >
-                    {authMode === 'login' ? '没有账号？去注册' : '已有账号？去登录'}
-                  </button>
-                  <button
-                    onClick={() => setAuthMode(authMode === 'wechat' ? 'login' : 'wechat')}
-                    className="font-medium text-brand-olive hover:underline"
-                  >
-                    {authMode === 'wechat' ? '改用账号密码' : '改用微信登录'}
-                  </button>
-                </div>
-              </motion.div>
+              <div className="mt-4 flex items-center justify-between gap-2 text-sm">
+                <button
+                  onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
+                  className="font-medium text-brand-olive hover:underline"
+                >
+                  {authMode === 'login' ? '没有账号？去注册' : '已有账号？去登录'}
+                </button>
+                <button
+                  onClick={() => setAuthMode(authMode === 'wechat' ? 'login' : 'wechat')}
+                  className="font-medium text-brand-olive hover:underline"
+                >
+                  {authMode === 'wechat' ? '改用账号密码' : '改用微信登录'}
+                </button>
+              </div>
             </motion.div>
-          )}
-        </AnimatePresence>,
-        document.body
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </nav>
   );
 };
