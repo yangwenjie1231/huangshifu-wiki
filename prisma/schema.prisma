@@ -79,6 +79,20 @@ enum EmbeddingStatus {
   failed
 }
 
+enum WikiBranchStatus {
+  draft
+  pending_review
+  merged
+  rejected
+  conflict
+}
+
+enum WikiPullRequestStatus {
+  open
+  merged
+  rejected
+}
+
 model User {
   uid           String         @id @default(cuid())
   email         String         @unique
@@ -99,6 +113,10 @@ model User {
   comments      PostComment[]  @relation("UserComments")
   wikiEdits     WikiPage[]     @relation("WikiLastEditor")
   revisions     WikiRevision[] @relation("WikiRevisionEditor")
+  wikiBranches  WikiBranch[]   @relation("WikiBranchEditor")
+  wikiPullRequests WikiPullRequest[] @relation("WikiPullRequestCreator")
+  wikiReviewedPullRequests WikiPullRequest[] @relation("WikiPullRequestReviewer")
+  wikiPullRequestComments WikiPullRequestComment[] @relation("WikiPRCommentAuthor")
   galleries     Gallery[]      @relation("UserGalleries")
   musicAdded    MusicTrack[]   @relation("MusicAddedBy")
   postLikes     PostLike[]
@@ -178,6 +196,7 @@ model WikiPage {
   category      String
   content       String         @db.LongText
   tags          Json?
+  relations     Json?
   eventDate     String?
   status        ContentStatus  @default(published)
   reviewNote    String?        @db.Text
@@ -187,14 +206,19 @@ model WikiPage {
   favoritesCount Int           @default(0)
   lastEditorUid String
   lastEditorName String
+  mainBranchId  String?
+  mergedAt      DateTime?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   lastEditor    User           @relation("WikiLastEditor", fields: [lastEditorUid], references: [uid], onDelete: Cascade)
   revisions     WikiRevision[]
+  branches      WikiBranch[]
+  pullRequests  WikiPullRequest[]
 
   @@index([category, updatedAt])
   @@index([status, updatedAt])
   @@index([eventDate])
+  @@index([mainBranchId])
 }
 
 model PostLike {
@@ -253,15 +277,85 @@ model UserBanLog {
 model WikiRevision {
   id         String   @id @default(cuid())
   pageSlug   String
+  branchId   String?
   title      String
   content    String   @db.LongText
+  slug       String?
+  category   String?
+  tags       Json?
+  relations  Json?
+  eventDate  String?
   editorUid  String
   editorName String
+  isAutoSave Boolean  @default(false)
   createdAt  DateTime @default(now())
   page       WikiPage @relation(fields: [pageSlug], references: [slug], onDelete: Cascade)
   editor     User     @relation("WikiRevisionEditor", fields: [editorUid], references: [uid], onDelete: Cascade)
+  branch     WikiBranch? @relation("WikiBranchRevisions", fields: [branchId], references: [id], onDelete: SetNull)
 
   @@index([pageSlug, createdAt])
+  @@index([branchId, createdAt])
+}
+
+model WikiBranch {
+  id               String           @id @default(cuid())
+  pageSlug         String
+  editorUid        String
+  editorName       String
+  status           WikiBranchStatus @default(draft)
+  latestRevisionId String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  page             WikiPage         @relation(fields: [pageSlug], references: [slug], onDelete: Cascade)
+  editor           User             @relation("WikiBranchEditor", fields: [editorUid], references: [uid], onDelete: Cascade)
+  revisions        WikiRevision[]   @relation("WikiBranchRevisions")
+  pullRequests     WikiPullRequest[]
+
+  @@unique([pageSlug, editorUid])
+  @@index([pageSlug, status])
+  @@index([editorUid])
+}
+
+model WikiPullRequest {
+  id             String                @id @default(cuid())
+  branchId       String
+  pageSlug       String
+  title          String
+  description    String?               @db.Text
+  status         WikiPullRequestStatus @default(open)
+  createdByUid   String
+  createdByName  String
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  mergedAt       DateTime?
+  baseRevisionId String?
+  conflictData   Json?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  branch         WikiBranch            @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  page           WikiPage              @relation(fields: [pageSlug], references: [slug], onDelete: Cascade)
+  creator        User                  @relation("WikiPullRequestCreator", fields: [createdByUid], references: [uid], onDelete: Cascade)
+  reviewer       User?                 @relation("WikiPullRequestReviewer", fields: [reviewedBy], references: [uid], onDelete: SetNull)
+  comments       WikiPullRequestComment[]
+
+  @@unique([branchId])
+  @@index([status, createdAt])
+  @@index([pageSlug, status])
+  @@index([createdByUid, createdAt])
+}
+
+model WikiPullRequestComment {
+  id         String          @id @default(cuid())
+  prId       String
+  authorUid  String
+  authorName String
+  content    String          @db.Text
+  createdAt  DateTime        @default(now())
+  pr         WikiPullRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
+  author     User            @relation("WikiPRCommentAuthor", fields: [authorUid], references: [uid], onDelete: Cascade)
+
+  @@index([prId, createdAt])
+  @@index([authorUid, createdAt])
 }
 
 model Announcement {
