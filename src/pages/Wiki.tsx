@@ -7,9 +7,10 @@ import { format } from 'date-fns';
 import MarkdownIt from 'markdown-it';
 import MdEditor from 'react-markdown-editor-lite';
 import { clsx } from 'clsx';
-import { ArrowLeft, Book, Calendar, Edit3, GitBranch, GitPullRequest, Save } from 'lucide-react';
+import { ArrowLeft, Book, Calendar, Edit3, GitBranch, GitPullRequest, Plus, Save, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { apiGet, apiPost } from '../lib/apiClient';
+import RelationGraph, { type RelationGraphData, type WikiRelationType } from '../components/wiki/RelationGraph';
 import 'react-markdown-editor-lite/lib/index.css';
 
 const mdParser = new MarkdownIt({ html: true, linkify: true, typographer: true });
@@ -18,6 +19,19 @@ type ContentStatus = 'draft' | 'pending' | 'published' | 'rejected';
 type BranchStatus = 'draft' | 'pending_review' | 'merged' | 'rejected' | 'conflict';
 type PrStatus = 'open' | 'merged' | 'rejected';
 
+type WikiRelation = {
+  type: WikiRelationType;
+  targetSlug: string;
+  label?: string;
+  bidirectional: boolean;
+  typeLabel?: string;
+  targetTitle?: string;
+  targetCategory?: string;
+  inferred?: boolean;
+  sourceSlug?: string;
+  sourceTitle?: string;
+};
+
 type WikiPage = {
   id: string;
   slug: string;
@@ -25,6 +39,7 @@ type WikiPage = {
   category: string;
   content: string;
   tags: string[];
+  relations?: WikiRelation[];
   eventDate?: string | null;
   status: ContentStatus;
   updatedAt: string;
@@ -58,12 +73,27 @@ type WikiRevision = {
   slug?: string | null;
   category?: string | null;
   tags?: string[];
+  relations?: WikiRelation[];
   eventDate?: string | null;
   editorUid: string;
   editorName: string;
   isAutoSave?: boolean;
   createdAt: string;
 };
+
+type WikiPageDetailResponse = {
+  page: WikiPage;
+  backlinks?: WikiPage[];
+  relations?: WikiRelation[];
+  relationGraph?: RelationGraphData;
+};
+
+const RELATION_TYPE_OPTIONS: Array<{ value: WikiRelationType; label: string }> = [
+  { value: 'related_person', label: '相关人物' },
+  { value: 'work_relation', label: '作品关联' },
+  { value: 'timeline_relation', label: '时间线关联' },
+  { value: 'custom', label: '自定义关系' },
+];
 
 type WikiPullRequest = {
   id: string;
@@ -93,6 +123,15 @@ type WikiPullRequest = {
     content: string;
     createdAt: string;
   }[];
+};
+
+type WikiDiffSnapshot = {
+  title: string;
+  content: string;
+  category: string;
+  tags: string[];
+  relations?: WikiRelation[];
+  eventDate?: string | null;
 };
 
 const toDate = (value?: string | null) => {
@@ -134,6 +173,54 @@ const prStatusLabel = (status: PrStatus) => {
   if (status === 'open') return '待处理';
   if (status === 'merged') return '已合并';
   return '已驳回';
+};
+
+const relationTypeLabel = (value: WikiRelationType) => {
+  const found = RELATION_TYPE_OPTIONS.find((item) => item.value === value);
+  return found?.label || '自定义关系';
+};
+
+const normalizeRelationItems = (value: unknown, sourceSlug?: string) => {
+  if (!Array.isArray(value)) return [] as WikiRelation[];
+
+  const seen = new Set<string>();
+  const safeSourceSlug = String(sourceSlug || '').trim().toLowerCase();
+  const output: WikiRelation[] = [];
+
+  value.forEach((item) => {
+    if (!item || typeof item !== 'object') return;
+    const relation = item as Partial<WikiRelation> & Record<string, unknown>;
+    const type = relation.type;
+    if (type !== 'related_person' && type !== 'work_relation' && type !== 'timeline_relation' && type !== 'custom') {
+      return;
+    }
+
+    const targetSlug = typeof relation.targetSlug === 'string' ? relation.targetSlug.trim().toLowerCase() : '';
+    if (!targetSlug) return;
+    if (safeSourceSlug && targetSlug === safeSourceSlug) return;
+
+    const label = typeof relation.label === 'string' ? relation.label.trim() : '';
+    const bidirectional = relation.bidirectional !== false;
+
+    const key = `${type}|${targetSlug}|${label.toLowerCase()}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+
+    output.push({
+      type,
+      targetSlug,
+      label: label || undefined,
+      bidirectional,
+    });
+  });
+
+  return output;
+};
+
+const relationOptionLabel = (pages: WikiPage[], slug: string) => {
+  const page = pages.find((item) => item.slug === slug);
+  if (!page) return slug;
+  return `${page.title} (${page.slug})`;
 };
 
 const WikiMarkdown = ({ content }: { content: string }) => {
@@ -257,8 +344,11 @@ const WikiList = () => {
 
 const WikiPageView = () => {
   const { slug } = useParams();
+  const navigate = useNavigate();
   const { user, isBanned } = useAuth();
   const [page, setPage] = useState<WikiPage | null>(null);
+  const [relations, setRelations] = useState<WikiRelation[]>([]);
+  const [relationGraph, setRelationGraph] = useState<RelationGraphData>({ nodes: [], edges: [] });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -267,11 +357,17 @@ const WikiPageView = () => {
       if (!slug) return;
       setLoading(true);
       try {
-        const data = await apiGet<{ page: WikiPage }>(`/api/wiki/${slug}`);
-        if (active) setPage(data.page || null);
+        const data = await apiGet<WikiPageDetailResponse>(`/api/wiki/${slug}`);
+        if (!active) return;
+        setPage(data.page || null);
+        setRelations(Array.isArray(data.relations) ? data.relations : []);
+        setRelationGraph(data.relationGraph || { nodes: [], edges: [] });
       } catch (error) {
         console.error('Fetch wiki page failed:', error);
-        if (active) setPage(null);
+        if (!active) return;
+        setPage(null);
+        setRelations([]);
+        setRelationGraph({ nodes: [], edges: [] });
       } finally {
         if (active) setLoading(false);
       }
@@ -325,6 +421,54 @@ const WikiPageView = () => {
           <WikiMarkdown content={page.content || ''} />
         </div>
       </article>
+
+      {relations.length ? (
+        <section className="mt-8 bg-white border border-gray-100 rounded-3xl p-6 sm:p-8">
+          <h2 className="font-serif text-2xl font-bold text-brand-olive mb-5">关联页面</h2>
+          {RELATION_TYPE_OPTIONS.map((option) => {
+            const grouped = relations.filter((item) => item.type === option.value);
+            if (!grouped.length) return null;
+
+            return (
+              <div key={option.value} className="mb-5 last:mb-0">
+                <h3 className="text-sm font-bold text-gray-700 mb-3">{option.label}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {grouped.map((item) => (
+                    <Link
+                      key={`${item.type}-${item.targetSlug}-${item.label || 'none'}-${item.sourceSlug || 'direct'}`}
+                      to={`/wiki/${item.targetSlug}`}
+                      className="rounded-2xl border border-brand-cream bg-brand-cream/25 px-4 py-3 hover:bg-brand-cream/50"
+                    >
+                      <div className="font-bold text-brand-olive">
+                        {item.targetTitle || item.targetSlug}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {item.label || relationTypeLabel(item.type)}
+                        {item.inferred ? ' · 反向推断' : ''}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </section>
+      ) : null}
+
+      {relationGraph.nodes.length ? (
+        <section className="mt-8 bg-white border border-gray-100 rounded-3xl p-6 sm:p-8">
+          <h2 className="font-serif text-2xl font-bold text-brand-olive mb-5">关系图谱（2层）</h2>
+          <RelationGraph
+            graph={relationGraph}
+            currentSlug={page.slug}
+            onNodeClick={(nextSlug) => {
+              if (nextSlug && nextSlug !== page.slug) {
+                navigate(`/wiki/${nextSlug}`);
+              }
+            }}
+          />
+        </section>
+      ) : null}
     </div>
   );
 };
@@ -335,6 +479,7 @@ const WikiEditor = () => {
   const navigate = useNavigate();
   const { user, profile, isBanned } = useAuth();
 
+  const [allPages, setAllPages] = useState<WikiPage[]>([]);
   const [pageSlug, setPageSlug] = useState<string>(slug || '');
   const [branch, setBranch] = useState<WikiBranch | null>(null);
   const [formData, setFormData] = useState({
@@ -342,6 +487,7 @@ const WikiEditor = () => {
     category: 'biography',
     content: '',
     tags: '',
+    relations: [] as WikiRelation[],
     eventDate: '',
   });
   const [saving, setSaving] = useState(false);
@@ -349,11 +495,81 @@ const WikiEditor = () => {
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [prDescription, setPrDescription] = useState('');
   const [submittingPr, setSubmittingPr] = useState(false);
+  const [pendingRelationType, setPendingRelationType] = useState<WikiRelationType>('related_person');
+  const [pendingRelationTargetSlug, setPendingRelationTargetSlug] = useState('');
+  const [pendingRelationLabel, setPendingRelationLabel] = useState('');
+  const [pendingRelationBidirectional, setPendingRelationBidirectional] = useState(true);
 
   const normalizedTags = useMemo(
     () => formData.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
     [formData.tags],
   );
+
+  const availableRelationTargets = useMemo(() => {
+    const normalizedCurrentSlug = (pageSlug || slug || '').trim().toLowerCase();
+    return allPages.filter((item) => item.slug !== normalizedCurrentSlug);
+  }, [allPages, pageSlug, slug]);
+
+  const groupedRelations = useMemo(() => {
+    return RELATION_TYPE_OPTIONS.map((option) => ({
+      ...option,
+      items: formData.relations.filter((item) => item.type === option.value),
+    })).filter((item) => item.items.length > 0);
+  }, [formData.relations]);
+
+  const addRelation = () => {
+    const targetSlug = pendingRelationTargetSlug.trim().toLowerCase();
+    if (!targetSlug) return;
+
+    const label = pendingRelationLabel.trim();
+    const exists = formData.relations.some(
+      (item) => item.type === pendingRelationType
+        && item.targetSlug === targetSlug
+        && (item.label || '').trim().toLowerCase() === label.toLowerCase(),
+    );
+    if (exists) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      relations: [
+        ...prev.relations,
+        {
+          type: pendingRelationType,
+          targetSlug,
+          label: label || undefined,
+          bidirectional: pendingRelationBidirectional,
+        },
+      ],
+    }));
+    setPendingRelationTargetSlug('');
+    setPendingRelationLabel('');
+  };
+
+  const removeRelation = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      relations: prev.relations.filter((_, idx) => idx !== index),
+    }));
+  };
+
+  useEffect(() => {
+    let active = true;
+    const loadPages = async () => {
+      try {
+        const data = await apiGet<{ pages: WikiPage[] }>('/api/wiki', { category: 'all' });
+        if (!active) return;
+        setAllPages(data.pages || []);
+      } catch (error) {
+        console.error('Fetch wiki pages for relation editor failed:', error);
+        if (active) setAllPages([]);
+      }
+    };
+
+    loadPages();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const ensureBranch = async (targetSlug: string) => {
     const result = await apiPost<{ branch: WikiBranch }>(`/api/wiki/${targetSlug}/branches`);
@@ -367,7 +583,7 @@ const WikiEditor = () => {
       if (!user || isBanned) return;
 
       if (isNew) {
-        setFormData({ title: '', category: 'biography', content: '', tags: '', eventDate: '' });
+        setFormData({ title: '', category: 'biography', content: '', tags: '', relations: [], eventDate: '' });
         return;
       }
 
@@ -380,6 +596,7 @@ const WikiEditor = () => {
           category: pageData.page.category,
           content: pageData.page.content,
           tags: (pageData.page.tags || []).join(', '),
+          relations: normalizeRelationItems(pageData.page.relations, pageData.page.slug),
           eventDate: pageData.page.eventDate || '',
         });
 
@@ -391,6 +608,7 @@ const WikiEditor = () => {
             category: detail.latestRevision.category || pageData.page.category,
             content: detail.latestRevision.content,
             tags: (detail.latestRevision.tags || []).join(', '),
+            relations: normalizeRelationItems(detail.latestRevision.relations, pageData.page.slug),
             eventDate: detail.latestRevision.eventDate || '',
           });
         }
@@ -431,6 +649,7 @@ const WikiEditor = () => {
           category: formData.category,
           content: formData.content,
           tags: normalizedTags,
+          relations: formData.relations,
           eventDate: formData.eventDate || null,
           status: 'draft',
         });
@@ -444,6 +663,7 @@ const WikiEditor = () => {
         slug: targetSlug,
         category: formData.category,
         tags: normalizedTags,
+        relations: formData.relations,
         eventDate: formData.eventDate || null,
         isAutoSave,
       });
@@ -554,6 +774,100 @@ const WikiEditor = () => {
           placeholder="标签，逗号分隔"
           className="w-full px-4 py-3 rounded-2xl bg-brand-cream border-none mb-4"
         />
+
+        <div className="bg-brand-cream/40 border border-brand-cream rounded-2xl p-4 mb-4">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="text-sm font-bold text-brand-olive">页面关系（支持反向推断）</div>
+            <div className="text-xs text-gray-500">以当前页面为中心建立语义关系</div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 mb-3">
+            <select
+              value={pendingRelationType}
+              onChange={(e) => setPendingRelationType(e.target.value as WikiRelationType)}
+              className="px-3 py-2 rounded-xl border border-gray-200 bg-white"
+            >
+              {RELATION_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+
+            <select
+              value={pendingRelationTargetSlug}
+              onChange={(e) => setPendingRelationTargetSlug(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-gray-200 bg-white"
+            >
+              <option value="">选择关联页面</option>
+          {availableRelationTargets.map((item) => (
+                <option key={item.slug} value={item.slug}>{relationOptionLabel(allPages, item.slug)}</option>
+              ))}
+            </select>
+
+            <input
+              value={pendingRelationLabel}
+              onChange={(e) => setPendingRelationLabel(e.target.value)}
+              placeholder="关系说明（可选）"
+              className="px-3 py-2 rounded-xl border border-gray-200 bg-white"
+            />
+
+            <button
+              type="button"
+              onClick={addRelation}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-olive px-3 py-2 text-white hover:bg-brand-olive/90"
+            >
+              <Plus size={14} /> 添加关系
+            </button>
+          </div>
+
+          <label className="inline-flex items-center gap-2 text-sm text-gray-600 mb-3">
+            <input
+              type="checkbox"
+              checked={pendingRelationBidirectional}
+              onChange={(e) => setPendingRelationBidirectional(e.target.checked)}
+              className="rounded border-gray-300"
+            />
+            自动推断反向关系
+          </label>
+
+          {groupedRelations.length ? (
+            <div className="space-y-3">
+              {groupedRelations.map((group) => (
+                <div key={group.value}>
+                  <div className="text-xs font-bold text-gray-600 mb-2">{group.label}</div>
+                  <div className="flex flex-wrap gap-2">
+                    {group.items.map((relation) => {
+                      const relationIndex = formData.relations.findIndex(
+                        (item) => item.type === relation.type
+                          && item.targetSlug === relation.targetSlug
+                          && (item.label || '') === (relation.label || ''),
+                      );
+
+                      return (
+                        <span
+                          key={`${relation.type}-${relation.targetSlug}-${relation.label || 'none'}`}
+                          className="inline-flex items-center gap-1 rounded-full bg-white border border-gray-200 px-3 py-1 text-xs text-gray-700"
+                        >
+                          {relationOptionLabel(allPages, relation.targetSlug)}
+                          <em className="not-italic text-gray-400">· {relation.label || relationTypeLabel(relation.type)}</em>
+                          {relation.bidirectional ? <em className="not-italic text-brand-olive/70">· 双向</em> : null}
+                          <button
+                            type="button"
+                            onClick={() => removeRelation(relationIndex)}
+                            className="ml-1 text-gray-400 hover:text-red-500"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500">暂未添加关系。</div>
+          )}
+        </div>
 
         <div className="border border-gray-100 rounded-3xl overflow-hidden mb-4">
           <MdEditor
@@ -778,8 +1092,8 @@ const WikiPullRequestDetail = () => {
   const { user, isAdmin } = useAuth();
   const [pr, setPr] = useState<WikiPullRequest | null>(null);
   const [diff, setDiff] = useState<{
-    base: { title: string; content: string; category: string; tags: string[]; eventDate?: string | null };
-    head: { title: string; content: string; category: string; tags: string[]; eventDate?: string | null };
+    base: WikiDiffSnapshot;
+    head: WikiDiffSnapshot;
   } | null>(null);
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(true);
@@ -901,6 +1215,15 @@ const WikiPullRequestDetail = () => {
               <div className="prose prose-stone max-w-none text-sm">
                 <WikiMarkdown content={diff.base.content || ''} />
               </div>
+              {(diff.base.relations || []).length ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {(diff.base.relations || []).map((item) => (
+                    <span key={`base-${item.type}-${item.targetSlug}-${item.label || 'none'}`} className="text-[11px] px-2 py-1 rounded-full bg-brand-cream/50 text-gray-600">
+                      {relationTypeLabel(item.type)}: {item.targetSlug}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </>
           ) : null}
         </div>
@@ -912,6 +1235,15 @@ const WikiPullRequestDetail = () => {
               <div className="prose prose-stone max-w-none text-sm">
                 <WikiMarkdown content={diff.head.content || ''} />
               </div>
+              {(diff.head.relations || []).length ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {(diff.head.relations || []).map((item) => (
+                    <span key={`head-${item.type}-${item.targetSlug}-${item.label || 'none'}`} className="text-[11px] px-2 py-1 rounded-full bg-brand-cream/50 text-gray-600">
+                      {relationTypeLabel(item.type)}: {item.targetSlug}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </>
           ) : null}
         </div>
@@ -958,6 +1290,7 @@ const WikiConflictResolver = () => {
     category: 'biography',
     content: '',
     tags: '',
+    relations: [] as WikiRelation[],
     eventDate: '',
   });
   const [saving, setSaving] = useState(false);
@@ -979,6 +1312,7 @@ const WikiConflictResolver = () => {
             category: data.latestRevision.category || 'biography',
             content: data.latestRevision.content,
             tags: (data.latestRevision.tags || []).join(', '),
+            relations: normalizeRelationItems(data.latestRevision.relations, data.branch.pageSlug),
             eventDate: data.latestRevision.eventDate || '',
           });
         }
@@ -1001,6 +1335,7 @@ const WikiConflictResolver = () => {
         content: formData.content,
         category: formData.category,
         tags: formData.tags.split(',').map((item) => item.trim()).filter(Boolean),
+        relations: formData.relations,
         eventDate: formData.eventDate || null,
       });
       alert('冲突已解决，PR 已更新为可审核状态');

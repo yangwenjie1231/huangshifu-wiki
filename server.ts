@@ -10,10 +10,25 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import * as cheerio from 'cheerio';
-import { Prisma, PrismaClient, UserRole as PrismaUserRole } from '@prisma/client';
+import {
+  Prisma,
+  PrismaClient,
+  UserRole as PrismaUserRole,
+} from '@prisma/client';
 import { getEmbeddingModelName, getEmbeddingVectorSize, generateImageEmbedding } from './src/server/vector/clipEmbedding';
 import { getQdrantCollectionName, searchImageEmbeddingPoints } from './src/server/vector/qdrantService';
 import { enqueueGalleryImageEmbeddings, enqueueMissingImageEmbeddings, syncImageEmbeddingBatch } from './src/server/vector/embeddingSync';
+import {
+  parseMusicUrl,
+  type MusicPlatform as ParsedMusicPlatform,
+  type MusicResourceType as ParsedMusicResourceType,
+} from './src/server/music/musicUrlParser';
+import {
+  getMusicResourcePreview,
+  resolveAudioUrl as resolveMetingAudioUrl,
+  resolveLyric as resolveMetingLyric,
+  resolveCoverUrl as resolveMetingCoverUrl,
+} from './src/server/music/metingService';
 
 dotenv.config({ path: '.env.local' });
 dotenv.config();
@@ -24,6 +39,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.set('trust proxy', 1);
 const prisma = new PrismaClient();
+const prismaAny = prisma as any;
 const uploadsDir = path.join(__dirname, 'uploads');
 fs.mkdirSync(uploadsDir, { recursive: true });
 
@@ -86,11 +102,118 @@ type UserStatus = 'active' | 'banned';
 type ContentStatus = 'draft' | 'pending' | 'published' | 'rejected';
 type WikiBranchStatus = 'draft' | 'pending_review' | 'merged' | 'rejected' | 'conflict';
 type WikiPullRequestStatus = 'open' | 'merged' | 'rejected';
+type WikiRelationType = 'related_person' | 'work_relation' | 'timeline_relation' | 'custom';
 type FavoriteTargetType = 'wiki' | 'post' | 'music';
 type ModerationTargetType = 'wiki' | 'post';
 type NotificationType = 'reply' | 'like' | 'review_result';
 type BrowsingTargetType = 'wiki' | 'post' | 'music';
 type PostSortType = 'latest' | 'hot' | 'recommended';
+
+type WikiRelationRecord = {
+  type: WikiRelationType;
+  targetSlug: string;
+  label?: string;
+  bidirectional: boolean;
+};
+
+type WikiRelationResolved = WikiRelationRecord & {
+  typeLabel: string;
+  targetTitle: string;
+  targetCategory: string;
+  inferred: boolean;
+  sourceSlug: string;
+  sourceTitle: string;
+};
+
+type WikiRelationGraphNode = {
+  slug: string;
+  title: string;
+  category: string;
+  depth: 0 | 1 | 2;
+  isCenter: boolean;
+};
+
+type WikiRelationGraphEdge = {
+  sourceSlug: string;
+  targetSlug: string;
+  type: WikiRelationType;
+  typeLabel: string;
+  label: string | null;
+  inferred: boolean;
+};
+type MusicPlatform = 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo';
+type DisplayAlbumMode = 'none' | 'linked' | 'manual';
+type MusicCollectionType = 'album' | 'playlist';
+
+type MusicTrackWithRelations = {
+  docId: string;
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  cover: string;
+  audioUrl: string;
+  lyric: string | null;
+  primaryPlatform: MusicPlatform;
+  enabledPlatform: MusicPlatform | null;
+  neteaseId: string | null;
+  tencentId: string | null;
+  kugouId: string | null;
+  baiduId: string | null;
+  kuwoId: string | null;
+  displayAlbumMode: DisplayAlbumMode;
+  manualAlbumName: string | null;
+  defaultCoverSource: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  covers: Array<{
+    id: string;
+    publicUrl: string;
+    isDefault: boolean;
+    sortOrder: number;
+  }>;
+  albumRelations: Array<{
+    albumDocId: string;
+    discNumber: number;
+    trackOrder: number;
+    isDisplay: boolean;
+    album: {
+      docId: string;
+      title: string;
+      artist: string;
+      cover: string;
+      defaultCoverSource: string | null;
+      covers: Array<{
+        id: string;
+        publicUrl: string;
+        isDefault: boolean;
+      }>;
+    };
+  }>;
+};
+
+interface PlayUrlCacheValue {
+  platform: MusicPlatform;
+  sourceId: string;
+  url: string;
+  fetchedAt: number;
+  expiresAt: number;
+}
+
+interface ImportSongInput {
+  sourceId: string;
+  title: string;
+  artist: string;
+  album: string;
+  picId: string;
+  urlId: string;
+  lyricId: string;
+  cover: string;
+  sourceUrl: string;
+}
+
+const PLAY_URL_CACHE_TTL_MS = Math.max(60, Number(process.env.MUSIC_PLAY_URL_CACHE_TTL_SECONDS || 600)) * 1000;
+const playUrlCache = new Map<string, PlayUrlCacheValue>();
 
 type AuthenticatedRequest = Request & {
   authUser?: ApiUser;
@@ -163,6 +286,426 @@ function serializeTags(value: unknown) {
   if (!value) return [];
   if (Array.isArray(value)) return value;
   return [];
+}
+
+const WIKI_RELATION_TYPE_LABELS: Record<WikiRelationType, string> = {
+  related_person: '相关人物',
+  work_relation: '作品关联',
+  timeline_relation: '时间线关联',
+  custom: '自定义关系',
+};
+
+const WIKI_RELATION_SCAN_LIMIT = 800;
+
+function normalizeWikiSlug(value: unknown) {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+}
+
+function normalizeWikiRelationType(value: unknown): WikiRelationType | null {
+  if (value === 'related_person' || value === 'work_relation' || value === 'timeline_relation' || value === 'custom') {
+    return value;
+  }
+
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim();
+  if (normalized === '相关人物') return 'related_person';
+  if (normalized === '作品关联') return 'work_relation';
+  if (normalized === '时间线关联') return 'timeline_relation';
+  if (normalized === '自定义关系') return 'custom';
+  return null;
+}
+
+function normalizeWikiRelationLabel(value: unknown) {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const normalized = value.trim();
+  if (!normalized) {
+    return undefined;
+  }
+  return normalized.slice(0, 60);
+}
+
+function normalizeWikiRelationList(value: unknown, sourceSlug?: string) {
+  if (!Array.isArray(value)) {
+    return [] as WikiRelationRecord[];
+  }
+
+  const normalizedSourceSlug = normalizeWikiSlug(sourceSlug);
+  const deduped = new Set<string>();
+  const relations: WikiRelationRecord[] = [];
+
+  value.forEach((item) => {
+    if (!item || typeof item !== 'object') return;
+    const record = item as Record<string, unknown>;
+
+    const type = normalizeWikiRelationType(record.type);
+    if (!type) return;
+
+    const targetSlug = normalizeWikiSlug(record.targetSlug);
+    if (!targetSlug) return;
+    if (normalizedSourceSlug && targetSlug === normalizedSourceSlug) return;
+
+    const label = normalizeWikiRelationLabel(record.label);
+    const bidirectional = parseBoolean(record.bidirectional, true);
+
+    const dedupeKey = `${type}|${targetSlug}|${(label || '').toLowerCase()}`;
+    if (deduped.has(dedupeKey)) return;
+    deduped.add(dedupeKey);
+
+    relations.push({
+      type,
+      targetSlug,
+      label,
+      bidirectional,
+    });
+  });
+
+  return relations.slice(0, 80);
+}
+
+function serializeRelations(value: unknown, sourceSlug?: string) {
+  return normalizeWikiRelationList(value, sourceSlug);
+}
+
+function relationTypeLabel(type: WikiRelationType) {
+  return WIKI_RELATION_TYPE_LABELS[type] || '自定义关系';
+}
+
+function relationIdentityKey(relation: Pick<WikiRelationRecord, 'type' | 'targetSlug' | 'label'>) {
+  return `${relation.type}|${relation.targetSlug}|${(relation.label || '').toLowerCase()}`;
+}
+
+type WikiRelationPageLite = {
+  slug: string;
+  title: string;
+  category: string;
+  status: ContentStatus;
+  lastEditorUid: string;
+  relations: unknown;
+};
+
+type WikiResponseInput = {
+  id: string;
+  slug: string;
+  title: string;
+  category: string;
+  content: string;
+  tags: unknown;
+  relations?: unknown;
+  eventDate: string | null;
+  status: ContentStatus;
+  reviewNote: string | null;
+  reviewedBy: string | null;
+  reviewedAt: Date | null;
+  viewCount?: number;
+  favoritesCount: number;
+  lastEditorUid: string;
+  lastEditorName: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type WikiReverseRelationEntry = {
+  sourcePage: WikiRelationPageLite;
+  relation: WikiRelationRecord;
+};
+
+function buildWikiReverseRelationIndex(pages: WikiRelationPageLite[]) {
+  const index = new Map<string, WikiReverseRelationEntry[]>();
+
+  pages.forEach((page) => {
+    const relations = serializeRelations(page.relations, page.slug);
+    relations.forEach((relation) => {
+      if (!relation.bidirectional) return;
+      const list = index.get(relation.targetSlug) || [];
+      list.push({
+        sourcePage: page,
+        relation,
+      });
+      index.set(relation.targetSlug, list);
+    });
+  });
+
+  return index;
+}
+
+function buildResolvedWikiRelations(
+  centerPage: WikiRelationPageLite,
+  pageMap: Map<string, WikiRelationPageLite>,
+  reverseIndex: Map<string, WikiReverseRelationEntry[]>,
+) {
+  const resolved: WikiRelationResolved[] = [];
+  const seen = new Set<string>();
+
+  const centerRelations = serializeRelations(centerPage.relations, centerPage.slug);
+  centerRelations.forEach((relation) => {
+    const target = pageMap.get(relation.targetSlug);
+    if (!target) return;
+
+    const key = relationIdentityKey({
+      type: relation.type,
+      targetSlug: target.slug,
+      label: relation.label,
+    });
+    if (seen.has(key)) return;
+    seen.add(key);
+
+    resolved.push({
+      type: relation.type,
+      typeLabel: relationTypeLabel(relation.type),
+      targetSlug: target.slug,
+      targetTitle: target.title,
+      targetCategory: target.category,
+      label: relation.label,
+      bidirectional: relation.bidirectional,
+      inferred: false,
+      sourceSlug: centerPage.slug,
+      sourceTitle: centerPage.title,
+    });
+  });
+
+  const reverseEntries = reverseIndex.get(centerPage.slug) || [];
+  reverseEntries.forEach((entry) => {
+    if (entry.sourcePage.slug === centerPage.slug) return;
+
+    const key = relationIdentityKey({
+      type: entry.relation.type,
+      targetSlug: entry.sourcePage.slug,
+      label: entry.relation.label,
+    });
+    if (seen.has(key)) return;
+    seen.add(key);
+
+    resolved.push({
+      type: entry.relation.type,
+      typeLabel: relationTypeLabel(entry.relation.type),
+      targetSlug: entry.sourcePage.slug,
+      targetTitle: entry.sourcePage.title,
+      targetCategory: entry.sourcePage.category,
+      label: entry.relation.label,
+      bidirectional: entry.relation.bidirectional,
+      inferred: true,
+      sourceSlug: entry.sourcePage.slug,
+      sourceTitle: entry.sourcePage.title,
+    });
+  });
+
+  return resolved.sort((a, b) => {
+    const typeCompare = a.typeLabel.localeCompare(b.typeLabel, 'zh-CN');
+    if (typeCompare !== 0) return typeCompare;
+    return a.targetTitle.localeCompare(b.targetTitle, 'zh-CN');
+  });
+}
+
+function buildWikiRelationGraph(
+  centerPage: WikiRelationPageLite,
+  pageMap: Map<string, WikiRelationPageLite>,
+  reverseIndex: Map<string, WikiReverseRelationEntry[]>,
+) {
+  const edges: WikiRelationGraphEdge[] = [];
+  const edgeSet = new Set<string>();
+
+  const addEdge = (sourceSlug: string, targetSlug: string, relation: WikiRelationRecord, inferred: boolean) => {
+    if (sourceSlug === targetSlug) return;
+    if (!pageMap.has(sourceSlug) || !pageMap.has(targetSlug)) return;
+
+    const edgeKey = `${sourceSlug}|${targetSlug}|${relation.type}|${(relation.label || '').toLowerCase()}`;
+    if (edgeSet.has(edgeKey)) return;
+    edgeSet.add(edgeKey);
+
+    edges.push({
+      sourceSlug,
+      targetSlug,
+      type: relation.type,
+      typeLabel: relationTypeLabel(relation.type),
+      label: relation.label || null,
+      inferred,
+    });
+  };
+
+  const centerRelations = serializeRelations(centerPage.relations, centerPage.slug);
+  centerRelations.forEach((relation) => addEdge(centerPage.slug, relation.targetSlug, relation, false));
+
+  const centerReverse = reverseIndex.get(centerPage.slug) || [];
+  centerReverse.forEach((entry) => addEdge(entry.sourcePage.slug, centerPage.slug, entry.relation, true));
+
+  const firstLayer = new Set<string>();
+  edges.forEach((edge) => {
+    if (edge.sourceSlug === centerPage.slug) {
+      firstLayer.add(edge.targetSlug);
+    }
+    if (edge.targetSlug === centerPage.slug) {
+      firstLayer.add(edge.sourceSlug);
+    }
+  });
+
+  firstLayer.forEach((slug) => {
+    const page = pageMap.get(slug);
+    if (!page) return;
+
+    const relations = serializeRelations(page.relations, page.slug);
+    relations.forEach((relation) => addEdge(page.slug, relation.targetSlug, relation, false));
+
+    const reverseEntries = reverseIndex.get(page.slug) || [];
+    reverseEntries.forEach((entry) => addEdge(entry.sourcePage.slug, page.slug, entry.relation, true));
+  });
+
+  const adjacency = new Map<string, Set<string>>();
+  edges.forEach((edge) => {
+    const sourceNeighbors = adjacency.get(edge.sourceSlug) || new Set<string>();
+    sourceNeighbors.add(edge.targetSlug);
+    adjacency.set(edge.sourceSlug, sourceNeighbors);
+
+    const targetNeighbors = adjacency.get(edge.targetSlug) || new Set<string>();
+    targetNeighbors.add(edge.sourceSlug);
+    adjacency.set(edge.targetSlug, targetNeighbors);
+  });
+
+  const depthMap = new Map<string, number>();
+  depthMap.set(centerPage.slug, 0);
+  const queue: string[] = [centerPage.slug];
+
+  while (queue.length) {
+    const current = queue.shift();
+    if (!current) continue;
+    const currentDepth = depthMap.get(current);
+    if (currentDepth === undefined || currentDepth >= 2) continue;
+
+    const neighbors = adjacency.get(current);
+    if (!neighbors) continue;
+
+    neighbors.forEach((nextSlug) => {
+      if (depthMap.has(nextSlug)) return;
+      const nextDepth = currentDepth + 1;
+      if (nextDepth > 2) return;
+      depthMap.set(nextSlug, nextDepth);
+      queue.push(nextSlug);
+    });
+  }
+
+  const nodes: WikiRelationGraphNode[] = [];
+  depthMap.forEach((depth, slug) => {
+    const page = pageMap.get(slug);
+    if (!page) return;
+
+    nodes.push({
+      slug,
+      title: page.title,
+      category: page.category,
+      depth: depth as 0 | 1 | 2,
+      isCenter: slug === centerPage.slug,
+    });
+  });
+
+  const nodeSet = new Set(nodes.map((node) => node.slug));
+  const filteredEdges = edges.filter((edge) => nodeSet.has(edge.sourceSlug) && nodeSet.has(edge.targetSlug));
+
+  nodes.sort((a, b) => {
+    if (a.depth !== b.depth) return a.depth - b.depth;
+    if (a.isCenter !== b.isCenter) return a.isCenter ? -1 : 1;
+    return a.title.localeCompare(b.title, 'zh-CN');
+  });
+
+  return {
+    nodes,
+    edges: filteredEdges,
+  };
+}
+
+type WikiRelationBundle = {
+  centerPage: WikiRelationPageLite;
+  relations: WikiRelationResolved[];
+  graph: {
+    nodes: WikiRelationGraphNode[];
+    edges: WikiRelationGraphEdge[];
+  };
+};
+
+async function findWikiRelationCenterPage(slug: string, authUser?: ApiUser) {
+  const centerPage = await prisma.wikiPage.findUnique({
+    where: { slug },
+    select: {
+      slug: true,
+      title: true,
+      category: true,
+      status: true,
+      lastEditorUid: true,
+      relations: true,
+    },
+  });
+
+  if (!centerPage || !canViewWikiPage(centerPage, authUser)) {
+    return null;
+  }
+
+  return centerPage as WikiRelationPageLite;
+}
+
+async function buildWikiRelationBundle(centerPage: WikiRelationPageLite, authUser?: ApiUser): Promise<WikiRelationBundle> {
+  const visibilityWhere = buildWikiVisibilityWhere(authUser);
+
+  const relationPages = await prisma.wikiPage.findMany({
+    where: visibilityWhere,
+    select: {
+      slug: true,
+      title: true,
+      category: true,
+      status: true,
+      lastEditorUid: true,
+      relations: true,
+    },
+    orderBy: { updatedAt: 'desc' },
+    take: WIKI_RELATION_SCAN_LIMIT,
+  });
+
+  const pageMap = new Map<string, WikiRelationPageLite>();
+  relationPages.forEach((page) => {
+    pageMap.set(page.slug, page as WikiRelationPageLite);
+  });
+
+  if (!pageMap.has(centerPage.slug)) {
+    pageMap.set(centerPage.slug, centerPage);
+  }
+
+  const directTargetSlugs = [...new Set(serializeRelations(centerPage.relations, centerPage.slug).map((item) => item.targetSlug))];
+  const missingDirectTargets = directTargetSlugs.filter((slug) => !pageMap.has(slug));
+
+  if (missingDirectTargets.length) {
+    const extraPages = await prisma.wikiPage.findMany({
+      where: {
+        ...visibilityWhere,
+        slug: { in: missingDirectTargets },
+      },
+      select: {
+        slug: true,
+        title: true,
+        category: true,
+        status: true,
+        lastEditorUid: true,
+        relations: true,
+      },
+    });
+
+    extraPages.forEach((page) => {
+      pageMap.set(page.slug, page as WikiRelationPageLite);
+    });
+  }
+
+  const allPages = [...pageMap.values()];
+  const reverseIndex = buildWikiReverseRelationIndex(allPages);
+  const relations = buildResolvedWikiRelations(centerPage, pageMap, reverseIndex);
+  const graph = buildWikiRelationGraph(centerPage, pageMap, reverseIndex);
+
+  return {
+    centerPage,
+    relations,
+    graph,
+  };
 }
 
 function parseDate(date: string | Date | null | undefined) {
@@ -264,6 +807,28 @@ function normalizeTagList(value: unknown) {
     .map((item) => (typeof item === 'string' ? item.trim() : ''))
     .filter(Boolean)
     .slice(0, 30);
+}
+
+async function normalizeWikiRelationListForWrite(value: unknown, sourceSlug?: string) {
+  const normalizedSourceSlug = normalizeWikiSlug(sourceSlug);
+  const relations = normalizeWikiRelationList(value, normalizedSourceSlug);
+  if (!relations.length) {
+    return [] as WikiRelationRecord[];
+  }
+
+  const uniqueTargets = [...new Set(relations.map((item) => item.targetSlug))];
+  const existingTargets = await prisma.wikiPage.findMany({
+    where: {
+      slug: {
+        in: uniqueTargets,
+      },
+    },
+    select: {
+      slug: true,
+    },
+  });
+  const targetSet = new Set(existingTargets.map((item) => item.slug));
+  return relations.filter((item) => targetSet.has(item.targetSlug));
 }
 
 function parseAssetIdList(value: unknown) {
@@ -466,6 +1031,698 @@ function toMediaAssetResponse(asset: {
     createdAt: asset.createdAt.toISOString(),
     updatedAt: asset.updatedAt.toISOString(),
   };
+}
+
+function clearExpiredPlayUrlCache() {
+  const now = Date.now();
+  for (const [cacheKey, value] of playUrlCache.entries()) {
+    if (value.expiresAt <= now) {
+      playUrlCache.delete(cacheKey);
+    }
+  }
+}
+
+function getCachedPlayUrl(cacheKey: string) {
+  const cached = playUrlCache.get(cacheKey);
+  if (!cached) {
+    return null;
+  }
+  if (cached.expiresAt <= Date.now()) {
+    playUrlCache.delete(cacheKey);
+    return null;
+  }
+  return cached;
+}
+
+function setCachedPlayUrl(cacheKey: string, value: Omit<PlayUrlCacheValue, 'fetchedAt' | 'expiresAt'>) {
+  const now = Date.now();
+  const record: PlayUrlCacheValue = {
+    ...value,
+    fetchedAt: now,
+    expiresAt: now + PLAY_URL_CACHE_TTL_MS,
+  };
+  playUrlCache.set(cacheKey, record);
+  return record;
+}
+
+function normalizeTrackDiscPayload(rawTracks: unknown) {
+  if (!Array.isArray(rawTracks)) {
+    return [] as Array<{
+      disc: number;
+      name: string;
+      songs: Array<{ songDocId: string; trackOrder: number }>;
+    }>;
+  }
+
+  const normalized = rawTracks
+    .map((item, index) => {
+      if (!item || typeof item !== 'object') {
+        return null;
+      }
+      const record = item as Record<string, unknown>;
+      const disc = parseInteger(record.disc, index + 1, { min: 1, max: 20 });
+      const nameRaw = typeof record.name === 'string' ? record.name.trim() : '';
+      const name = nameRaw || `Disc ${disc}`;
+      const songsRaw = Array.isArray(record.songs) ? record.songs : [];
+
+      const songs = songsRaw
+        .map((songItem, songIndex) => {
+          if (!songItem || typeof songItem !== 'object') {
+            return null;
+          }
+          const songRecord = songItem as Record<string, unknown>;
+          const songDocId = typeof songRecord.songDocId === 'string' ? songRecord.songDocId.trim() : '';
+          if (!songDocId) {
+            return null;
+          }
+          const trackOrder = parseInteger(songRecord.trackOrder, songIndex, { min: 0, max: 5000 });
+          return {
+            songDocId,
+            trackOrder,
+          };
+        })
+        .filter((entry): entry is { songDocId: string; trackOrder: number } => Boolean(entry));
+
+      return {
+        disc,
+        name,
+        songs,
+      };
+    })
+    .filter((entry): entry is { disc: number; name: string; songs: Array<{ songDocId: string; trackOrder: number }> } => Boolean(entry));
+
+  normalized.sort((a, b) => a.disc - b.disc);
+  return normalized;
+}
+
+function resolveSongDisplayAlbum(song: {
+  displayAlbumMode: DisplayAlbumMode;
+  manualAlbumName: string | null;
+  albumRelations: Array<{
+    isDisplay: boolean;
+    album: {
+      docId: string;
+      title: string;
+    };
+  }>;
+}) {
+  if (song.displayAlbumMode === 'none') {
+    return {
+      mode: 'none' as const,
+      albumDocId: null,
+      title: '',
+    };
+  }
+
+  if (song.displayAlbumMode === 'manual') {
+    return {
+      mode: 'manual' as const,
+      albumDocId: null,
+      title: song.manualAlbumName || '',
+    };
+  }
+
+  const displayRelation = song.albumRelations.find((item) => item.isDisplay) || song.albumRelations[0] || null;
+  if (!displayRelation) {
+    return {
+      mode: 'linked' as const,
+      albumDocId: null,
+      title: '',
+    };
+  }
+
+  return {
+    mode: 'linked' as const,
+    albumDocId: displayRelation.album.docId,
+    title: displayRelation.album.title,
+  };
+}
+
+function resolveSongCoverUrl(song: Pick<MusicTrackWithRelations, 'cover' | 'defaultCoverSource' | 'covers' | 'albumRelations'>) {
+  const source = (song.defaultCoverSource || '').trim();
+  if (!source || source === 'old_cover') {
+    return song.cover || '';
+  }
+
+  if (source.startsWith('song_cover:')) {
+    const coverId = source.slice('song_cover:'.length);
+    const matched = song.covers.find((item) => item.id === coverId);
+    return matched?.publicUrl || song.cover || '';
+  }
+
+  if (source.startsWith('album_cover:')) {
+    const coverId = source.slice('album_cover:'.length);
+    for (const relation of song.albumRelations) {
+      const matched = relation.album.covers.find((item) => item.id === coverId);
+      if (matched?.publicUrl) {
+        return matched.publicUrl;
+      }
+    }
+    return song.cover || '';
+  }
+
+  return song.cover || '';
+}
+
+function toSongResponse(song: MusicTrackWithRelations, options?: { favoritedByMe?: boolean }) {
+  const displayAlbum = resolveSongDisplayAlbum(song);
+  const coverUrl = resolveSongCoverUrl(song);
+
+  return {
+    docId: song.docId,
+    id: song.id,
+    title: song.title,
+    artist: song.artist,
+    album: song.album,
+    cover: coverUrl,
+    audioUrl: song.audioUrl,
+    lyric: song.lyric,
+    primaryPlatform: song.primaryPlatform,
+    enabledPlatform: song.enabledPlatform,
+    platformIds: {
+      neteaseId: song.neteaseId,
+      tencentId: song.tencentId,
+      kugouId: song.kugouId,
+      baiduId: song.baiduId,
+      kuwoId: song.kuwoId,
+    },
+    displayAlbumMode: song.displayAlbumMode,
+    displayAlbum,
+    manualAlbumName: song.manualAlbumName,
+    defaultCoverSource: song.defaultCoverSource,
+    covers: song.covers.map((cover) => ({
+      id: cover.id,
+      url: cover.publicUrl,
+      isDefault: cover.isDefault,
+      sortOrder: cover.sortOrder,
+    })),
+    linkedAlbums: song.albumRelations.map((relation) => ({
+      albumDocId: relation.albumDocId,
+      albumId: relation.album.docId,
+      title: relation.album.title,
+      artist: relation.album.artist,
+      discNumber: relation.discNumber,
+      trackOrder: relation.trackOrder,
+      isDisplay: relation.isDisplay,
+    })),
+    favoritedByMe: Boolean(options?.favoritedByMe),
+    createdAt: song.createdAt.toISOString(),
+    updatedAt: song.updatedAt.toISOString(),
+  };
+}
+
+function toAlbumResponse(album: {
+  docId: string;
+  id: string;
+  resourceType: MusicCollectionType;
+  platform: MusicPlatform;
+  sourceId: string;
+  title: string;
+  artist: string;
+  cover: string;
+  description: string | null;
+  platformUrl: string | null;
+  tracks: Prisma.JsonValue;
+  defaultCoverSource: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  covers?: Array<{
+    id: string;
+    publicUrl: string;
+    isDefault: boolean;
+    sortOrder: number;
+  }>;
+  songRelations?: Array<{
+    songDocId: string;
+    discNumber: number;
+    trackOrder: number;
+    isDisplay: boolean;
+    song?: {
+      docId: string;
+      id: string;
+      title: string;
+      artist: string;
+      cover: string;
+    };
+  }>;
+}) {
+  return {
+    docId: album.docId,
+    id: album.id,
+    resourceType: album.resourceType,
+    platform: album.platform,
+    sourceId: album.sourceId,
+    title: album.title,
+    artist: album.artist,
+    cover: album.cover,
+    description: album.description,
+    platformUrl: album.platformUrl,
+    tracks: album.tracks || [],
+    defaultCoverSource: album.defaultCoverSource,
+    covers: (album.covers || []).map((cover) => ({
+      id: cover.id,
+      url: cover.publicUrl,
+      isDefault: cover.isDefault,
+      sortOrder: cover.sortOrder,
+    })),
+    songs: (album.songRelations || []).map((relation) => ({
+      songDocId: relation.songDocId,
+      discNumber: relation.discNumber,
+      trackOrder: relation.trackOrder,
+      isDisplay: relation.isDisplay,
+      song: relation.song
+        ? {
+            docId: relation.song.docId,
+            id: relation.song.id,
+            title: relation.song.title,
+            artist: relation.song.artist,
+            cover: relation.song.cover,
+          }
+        : null,
+    })),
+    createdAt: album.createdAt.toISOString(),
+    updatedAt: album.updatedAt.toISOString(),
+  };
+}
+
+async function fetchSongWithRelationsByDocId(songDocId: string) {
+  const song = await prismaAny.musicTrack.findUnique({
+    where: { docId: songDocId },
+    include: {
+      covers: {
+        orderBy: { sortOrder: 'asc' },
+      },
+      albumRelations: {
+        include: {
+          album: {
+            include: {
+              covers: {
+                orderBy: { sortOrder: 'asc' },
+              },
+            },
+          },
+        },
+        orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
+      },
+    },
+  });
+  return song as unknown as MusicTrackWithRelations | null;
+}
+
+async function resolveMusicPlayUrl(song: {
+  docId: string;
+  id: string;
+  audioUrl: string;
+  primaryPlatform: MusicPlatform;
+  enabledPlatform: MusicPlatform | null;
+  neteaseId: string | null;
+  tencentId: string | null;
+  kugouId: string | null;
+  baiduId: string | null;
+  kuwoId: string | null;
+}) {
+  clearExpiredPlayUrlCache();
+
+  const candidates = buildPlaybackPlatformCandidates(song);
+  const errors: Array<{ platform: MusicPlatform; reason: string }> = [];
+
+  for (const platform of candidates) {
+    const sourceId = getPlatformSourceId(song, platform);
+    if (!sourceId) {
+      continue;
+    }
+
+    const cacheKey = `${song.docId}:${platform}:${sourceId}`;
+    const cached = getCachedPlayUrl(cacheKey);
+    if (cached?.url) {
+      return {
+        platform: cached.platform,
+        sourceId: cached.sourceId,
+        playUrl: cached.url,
+        cached: true,
+        cacheExpiresAt: new Date(cached.expiresAt).toISOString(),
+      };
+    }
+
+    try {
+      const resolvedUrl = await resolveMetingAudioUrl(platform as ParsedMusicPlatform, sourceId);
+      if (!resolvedUrl) {
+        errors.push({ platform, reason: 'empty_url' });
+        continue;
+      }
+
+      const cachedRecord = setCachedPlayUrl(cacheKey, {
+        platform,
+        sourceId,
+        url: resolvedUrl,
+      });
+
+      return {
+        platform,
+        sourceId,
+        playUrl: resolvedUrl,
+        cached: false,
+        cacheExpiresAt: new Date(cachedRecord.expiresAt).toISOString(),
+      };
+    } catch (error) {
+      errors.push({ platform, reason: error instanceof Error ? error.message : 'resolve_failed' });
+    }
+  }
+
+  const fallbackUrl = song.audioUrl?.trim() || '';
+  if (fallbackUrl) {
+    return {
+      platform: song.primaryPlatform,
+      sourceId: song.id,
+      playUrl: fallbackUrl,
+      cached: false,
+      cacheExpiresAt: null,
+      fallback: true,
+      errors,
+    };
+  }
+
+  return {
+    platform: song.primaryPlatform,
+    sourceId: song.id,
+    playUrl: '',
+    cached: false,
+    cacheExpiresAt: null,
+    errors,
+  };
+}
+
+function normalizeMusicImportTracks(input: unknown) {
+  if (!Array.isArray(input)) {
+    return [] as ImportSongInput[];
+  }
+
+  return input
+    .map((item) => {
+      if (!item || typeof item !== 'object') {
+        return null;
+      }
+      const record = item as Record<string, unknown>;
+      const sourceId = typeof record.sourceId === 'string' ? record.sourceId.trim() : '';
+      if (!sourceId) {
+        return null;
+      }
+
+      return {
+        sourceId,
+        title: typeof record.title === 'string' ? record.title.trim() : '',
+        artist: typeof record.artist === 'string' ? record.artist.trim() : '',
+        album: typeof record.album === 'string' ? record.album.trim() : '',
+        picId: typeof record.picId === 'string' ? record.picId.trim() : sourceId,
+        urlId: typeof record.urlId === 'string' ? record.urlId.trim() : sourceId,
+        lyricId: typeof record.lyricId === 'string' ? record.lyricId.trim() : sourceId,
+        cover: typeof record.cover === 'string' ? record.cover.trim() : '',
+        sourceUrl: typeof record.sourceUrl === 'string' ? record.sourceUrl.trim() : '',
+      };
+    })
+    .filter((item): item is ImportSongInput => Boolean(item));
+}
+
+function buildAlbumTracksPayload(relations: Array<{
+  songDocId: string;
+  trackOrder: number;
+  discNumber: number;
+  song: {
+    docId: string;
+    title: string;
+    artist: string;
+    cover: string;
+    id: string;
+  };
+}>) {
+  const byDisc = new Map<number, Array<{ songDocId: string; trackOrder: number; song: { docId: string; title: string; artist: string; cover: string; id: string } }>>();
+
+  relations.forEach((relation) => {
+    const disc = relation.discNumber > 0 ? relation.discNumber : 1;
+    if (!byDisc.has(disc)) {
+      byDisc.set(disc, []);
+    }
+    byDisc.get(disc)!.push({
+      songDocId: relation.songDocId,
+      trackOrder: relation.trackOrder,
+      song: relation.song,
+    });
+  });
+
+  return [...byDisc.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([disc, songs]) => ({
+      disc,
+      name: `Disc ${disc}`,
+      songs: songs
+        .sort((a, b) => a.trackOrder - b.trackOrder)
+        .map((entry) => ({
+          songDocId: entry.songDocId,
+          trackOrder: entry.trackOrder,
+          song: entry.song,
+        })),
+    }));
+}
+
+async function applyAlbumTracksToRelations(albumDocId: string, tracks: ReturnType<typeof normalizeTrackDiscPayload>) {
+  await prismaAny.songAlbumRelation.deleteMany({ where: { albumDocId } });
+
+  const createRows: Array<{
+    songDocId: string;
+    albumDocId: string;
+    discNumber: number;
+    trackOrder: number;
+    isDisplay: boolean;
+  }> = [];
+
+  tracks.forEach((discEntry) => {
+    discEntry.songs.forEach((songEntry) => {
+      createRows.push({
+        songDocId: songEntry.songDocId,
+        albumDocId,
+        discNumber: discEntry.disc,
+        trackOrder: songEntry.trackOrder,
+        isDisplay: false,
+      });
+    });
+  });
+
+  if (!createRows.length) {
+    return;
+  }
+
+  await prismaAny.songAlbumRelation.createMany({
+    data: createRows,
+    skipDuplicates: true,
+  });
+}
+
+async function addSongCoverFromAsset(songDocId: string, assetId: string, markDefault = false) {
+  const asset = await prisma.mediaAsset.findUnique({
+    where: { id: assetId },
+    select: {
+      id: true,
+      storageKey: true,
+      publicUrl: true,
+      status: true,
+    },
+  });
+
+  if (!asset || asset.status !== 'ready') {
+    throw new Error('媒体资源不存在或不可用');
+  }
+
+  const currentCount = await prismaAny.songCover.count({ where: { songDocId } });
+
+  const cover = await prismaAny.songCover.create({
+    data: {
+      songDocId,
+      assetId: asset.id,
+      storageKey: asset.storageKey,
+      publicUrl: asset.publicUrl,
+      sortOrder: currentCount,
+      isDefault: markDefault,
+    },
+  });
+
+  if (markDefault) {
+    await prismaAny.songCover.updateMany({
+      where: {
+        songDocId,
+        id: { not: cover.id },
+      },
+      data: {
+        isDefault: false,
+      },
+    });
+    await prismaAny.musicTrack.update({
+      where: { docId: songDocId },
+      data: {
+        defaultCoverSource: `song_cover:${cover.id}`,
+      },
+    });
+  }
+
+  return cover;
+}
+
+async function addAlbumCoverFromAsset(albumDocId: string, assetId: string, markDefault = false) {
+  const asset = await prisma.mediaAsset.findUnique({
+    where: { id: assetId },
+    select: {
+      id: true,
+      storageKey: true,
+      publicUrl: true,
+      status: true,
+    },
+  });
+
+  if (!asset || asset.status !== 'ready') {
+    throw new Error('媒体资源不存在或不可用');
+  }
+
+  const currentCount = await prismaAny.albumCover.count({ where: { albumDocId } });
+
+  const cover = await prismaAny.albumCover.create({
+    data: {
+      albumDocId,
+      assetId: asset.id,
+      storageKey: asset.storageKey,
+      publicUrl: asset.publicUrl,
+      sortOrder: currentCount,
+      isDefault: markDefault,
+    },
+  });
+
+  if (markDefault) {
+    await prismaAny.albumCover.updateMany({
+      where: {
+        albumDocId,
+        id: { not: cover.id },
+      },
+      data: {
+        isDefault: false,
+      },
+    });
+    await prismaAny.album.update({
+      where: { docId: albumDocId },
+      data: {
+        defaultCoverSource: `album_cover:${cover.id}`,
+      },
+    });
+  }
+
+  return cover;
+}
+
+async function createOrUpdateImportedSong(params: {
+  platform: MusicPlatform;
+  track: ImportSongInput;
+  userUid: string;
+  albumNameFallback?: string;
+}) {
+  const { platform, track, userUid, albumNameFallback } = params;
+  const sourceField = getPlatformSourceField(platform);
+  const platformId = track.sourceId;
+
+  const existing = await prismaAny.musicTrack.findFirst({
+    where: {
+      OR: [
+        { [sourceField]: platformId },
+        { id: track.sourceId },
+      ] as Prisma.MusicTrackWhereInput[],
+    },
+  });
+
+  const fallbackTitle = `未命名歌曲 ${track.sourceId}`;
+  const title = track.title || fallbackTitle;
+  const artist = track.artist || '未知歌手';
+  const album = track.album || albumNameFallback || '未知专辑';
+
+  const resolvedCover = (await resolveMetingCoverUrl(platform as ParsedMusicPlatform, track.picId, track.cover)) || track.cover;
+  const resolvedAudioUrl = (await resolveMetingAudioUrl(platform as ParsedMusicPlatform, track.urlId)) || '';
+  const resolvedLyric = (await resolveMetingLyric(platform as ParsedMusicPlatform, track.lyricId)) || '';
+
+  const updateData: Record<string, unknown> = {
+    id: existing?.id || track.sourceId,
+    title,
+    artist,
+    album,
+    cover: resolvedCover || '',
+    audioUrl: resolvedAudioUrl || '',
+    lyric: resolvedLyric || null,
+    primaryPlatform: platform,
+    enabledPlatform: platform,
+    [sourceField]: platformId,
+  };
+
+  if (existing) {
+    const song = await prismaAny.musicTrack.update({
+      where: { docId: existing.docId },
+      data: updateData,
+    });
+    return {
+      song,
+      created: false,
+    };
+  }
+
+  const song = await prismaAny.musicTrack.create({
+    data: {
+      id: track.sourceId,
+      title,
+      artist,
+      album,
+      cover: resolvedCover || '',
+      audioUrl: resolvedAudioUrl || '',
+      lyric: resolvedLyric || null,
+      primaryPlatform: platform,
+      enabledPlatform: platform,
+      [sourceField]: platformId,
+      addedBy: userUid,
+    },
+  });
+
+  return {
+    song,
+    created: true,
+  };
+}
+
+async function fetchSongsWithRelations(where?: Record<string, unknown>) {
+  const songs = await prismaAny.musicTrack.findMany({
+    where,
+    include: {
+      covers: {
+        orderBy: { sortOrder: 'asc' },
+      },
+      albumRelations: {
+        include: {
+          album: {
+            include: {
+              covers: {
+                orderBy: { sortOrder: 'asc' },
+              },
+            },
+          },
+        },
+        orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  return songs as MusicTrackWithRelations[];
+}
+
+function ensureDisplayRelation(relations: any[]) {
+  const hasDisplay = relations.some((relation) => relation.isDisplay);
+  if (hasDisplay || !relations.length) {
+    return relations;
+  }
+  return relations.map((relation, index) => ({
+    ...relation,
+    isDisplay: index === 0,
+  }));
 }
 
 function createWechatPlaceholderEmail(openId: string) {
@@ -812,6 +2069,71 @@ function parseFavoriteType(value: unknown): FavoriteTargetType | null {
   return null;
 }
 
+function parseMusicPlatform(value: unknown): MusicPlatform | null {
+  if (value === 'netease' || value === 'tencent' || value === 'kugou' || value === 'baidu' || value === 'kuwo') {
+    return value;
+  }
+  return null;
+}
+
+function parseDisplayAlbumMode(value: unknown): DisplayAlbumMode | null {
+  if (value === 'none' || value === 'linked' || value === 'manual') {
+    return value;
+  }
+  return null;
+}
+
+function parseMusicCollectionType(value: unknown): MusicCollectionType | null {
+  if (value === 'album' || value === 'playlist') {
+    return value;
+  }
+  return null;
+}
+
+function getPlatformSourceId(song: {
+  neteaseId?: string | null;
+  tencentId?: string | null;
+  kugouId?: string | null;
+  baiduId?: string | null;
+  kuwoId?: string | null;
+  id?: string | null;
+}, platform: MusicPlatform): string {
+  if (platform === 'netease') return song.neteaseId?.trim() || '';
+  if (platform === 'tencent') return song.tencentId?.trim() || '';
+  if (platform === 'kugou') return song.kugouId?.trim() || '';
+  if (platform === 'baidu') return song.baiduId?.trim() || '';
+  if (platform === 'kuwo') return song.kuwoId?.trim() || '';
+  return song.id?.trim() || '';
+}
+
+function getPlatformSourceField(platform: MusicPlatform):
+  | 'neteaseId'
+  | 'tencentId'
+  | 'kugouId'
+  | 'baiduId'
+  | 'kuwoId' {
+  if (platform === 'netease') return 'neteaseId';
+  if (platform === 'tencent') return 'tencentId';
+  if (platform === 'kugou') return 'kugouId';
+  if (platform === 'baidu') return 'baiduId';
+  return 'kuwoId';
+}
+
+const DEFAULT_MUSIC_PLATFORMS: MusicPlatform[] = ['netease', 'tencent', 'kugou', 'baidu', 'kuwo'];
+
+function buildPlaybackPlatformCandidates(song: {
+  enabledPlatform?: MusicPlatform | null;
+  primaryPlatform?: MusicPlatform | null;
+}): MusicPlatform[] {
+  const preferred = song.enabledPlatform || song.primaryPlatform || null;
+  const deduped = new Set<MusicPlatform>();
+  if (preferred) {
+    deduped.add(preferred);
+  }
+  DEFAULT_MUSIC_PLATFORMS.forEach((platform) => deduped.add(platform));
+  return [...deduped.values()];
+}
+
 function parseBrowsingTargetType(value: unknown): BrowsingTargetType | null {
   if (value === 'wiki' || value === 'post' || value === 'music') {
     return value;
@@ -961,25 +2283,7 @@ function requireSuperAdmin(req: AuthenticatedRequest, res: Response, next: NextF
   next();
 }
 
-function toWikiResponse(page: {
-  id: string;
-  slug: string;
-  title: string;
-  category: string;
-  content: string;
-  tags: unknown;
-  eventDate: string | null;
-  status: ContentStatus;
-  reviewNote: string | null;
-  reviewedBy: string | null;
-  reviewedAt: Date | null;
-  viewCount?: number;
-  favoritesCount: number;
-  lastEditorUid: string;
-  lastEditorName: string;
-  createdAt: Date;
-  updatedAt: Date;
-}) {
+function toWikiResponse(page: WikiResponseInput) {
   return {
     id: page.id,
     slug: page.slug,
@@ -987,6 +2291,7 @@ function toWikiResponse(page: {
     category: page.category,
     content: page.content,
     tags: serializeTags(page.tags),
+    relations: serializeRelations(page.relations, page.slug),
     eventDate: page.eventDate,
     status: page.status,
     reviewNote: page.reviewNote,
@@ -2314,6 +3619,18 @@ app.get('/api/wiki/:slug', async (req: AuthenticatedRequest, res) => {
       orderBy: { updatedAt: 'desc' },
     });
 
+    const relationBundle = await buildWikiRelationBundle(
+      {
+        slug: freshPage.slug,
+        title: freshPage.title,
+        category: freshPage.category,
+        status: freshPage.status,
+        lastEditorUid: freshPage.lastEditorUid,
+        relations: freshPage.relations,
+      },
+      req.authUser,
+    );
+
     const favoritedByMe = req.authUser
       ? (await prisma.favorite.count({
           where: {
@@ -2330,6 +3647,8 @@ app.get('/api/wiki/:slug', async (req: AuthenticatedRequest, res) => {
         favoritedByMe,
       },
       backlinks: backlinks.map(toWikiResponse),
+      relations: relationBundle.relations,
+      relationGraph: relationBundle.graph,
     });
   } catch (error) {
     console.error('Fetch wiki page error:', error);
@@ -2435,6 +3754,7 @@ app.post('/api/wiki', requireAuth, requireActiveUser, async (req: AuthenticatedR
       category,
       content,
       tags,
+      relations,
       eventDate,
       status,
     } = req.body as {
@@ -2443,6 +3763,7 @@ app.post('/api/wiki', requireAuth, requireActiveUser, async (req: AuthenticatedR
       category?: string;
       content?: string;
       tags?: string[];
+      relations?: unknown;
       eventDate?: string;
       status?: ContentStatus;
     };
@@ -2460,6 +3781,7 @@ app.post('/api/wiki', requireAuth, requireActiveUser, async (req: AuthenticatedR
     const pageSlug = slug.trim().toLowerCase();
     const existing = await prisma.wikiPage.findUnique({ where: { slug: pageSlug } });
     const nextStatus = normalizeWikiWriteStatus(status, req.authUser!);
+    const normalizedRelations = await normalizeWikiRelationListForWrite(relations, pageSlug);
 
     if (existing && !isAdminRole(req.authUser!.role) && existing.lastEditorUid !== req.authUser!.uid) {
       res.status(409).json({ error: '该 slug 已存在' });
@@ -2474,6 +3796,7 @@ app.post('/api/wiki', requireAuth, requireActiveUser, async (req: AuthenticatedR
         category,
         content,
         tags: tags || [],
+        relations: normalizedRelations,
         eventDate: eventDate || null,
         status: nextStatus,
         reviewNote: null,
@@ -2487,6 +3810,7 @@ app.post('/api/wiki', requireAuth, requireActiveUser, async (req: AuthenticatedR
         category,
         content,
         tags: tags || [],
+        relations: normalizedRelations,
         eventDate: eventDate || null,
         status: nextStatus,
         reviewNote: null,
@@ -2505,6 +3829,7 @@ app.post('/api/wiki', requireAuth, requireActiveUser, async (req: AuthenticatedR
         slug: pageSlug,
         category,
         tags: tags || [],
+        relations: normalizedRelations,
         eventDate: eventDate || null,
         editorUid: req.authUser!.uid,
         editorName: req.authUser!.displayName,
@@ -2557,6 +3882,7 @@ app.post('/api/wiki/legacy', requireAuth, requireActiveUser, async (req: Authent
       category,
       content,
       tags,
+      relations,
       eventDate,
       status,
     } = req.body as {
@@ -2565,6 +3891,7 @@ app.post('/api/wiki/legacy', requireAuth, requireActiveUser, async (req: Authent
       category?: string;
       content?: string;
       tags?: string[];
+      relations?: unknown;
       eventDate?: string;
       status?: ContentStatus;
     };
@@ -2588,6 +3915,7 @@ app.post('/api/wiki/legacy', requireAuth, requireActiveUser, async (req: Authent
     }
 
     const nextStatus = normalizeWikiWriteStatus(status, req.authUser!);
+    const normalizedRelations = await normalizeWikiRelationListForWrite(relations, pageSlug);
     const page = await prisma.wikiPage.upsert({
       where: { slug: pageSlug },
       create: {
@@ -2596,6 +3924,7 @@ app.post('/api/wiki/legacy', requireAuth, requireActiveUser, async (req: Authent
         category,
         content,
         tags: tags || [],
+        relations: normalizedRelations,
         eventDate: eventDate || null,
         status: nextStatus,
         reviewNote: null,
@@ -2609,6 +3938,7 @@ app.post('/api/wiki/legacy', requireAuth, requireActiveUser, async (req: Authent
         category,
         content,
         tags: tags || [],
+        relations: normalizedRelations,
         eventDate: eventDate || null,
         status: nextStatus,
         reviewNote: null,
@@ -2627,6 +3957,7 @@ app.post('/api/wiki/legacy', requireAuth, requireActiveUser, async (req: Authent
         slug: pageSlug,
         category,
         tags: tags || [],
+        relations: normalizedRelations,
         eventDate: eventDate || null,
         editorUid: req.authUser!.uid,
         editorName: req.authUser!.displayName,
@@ -2647,6 +3978,7 @@ app.put('/api/wiki/:slug', requireAuth, requireActiveUser, async (req: Authentic
       category,
       content,
       tags,
+      relations,
       eventDate,
       status,
     } = req.body as {
@@ -2654,6 +3986,7 @@ app.put('/api/wiki/:slug', requireAuth, requireActiveUser, async (req: Authentic
       category?: string;
       content?: string;
       tags?: string[];
+      relations?: unknown;
       eventDate?: string;
       status?: ContentStatus;
     };
@@ -2675,6 +4008,7 @@ app.put('/api/wiki/:slug', requireAuth, requireActiveUser, async (req: Authentic
     }
 
     const nextStatus = normalizeWikiWriteStatus(status, req.authUser!);
+    const normalizedRelations = await normalizeWikiRelationListForWrite(relations, req.params.slug);
     const updated = await prisma.wikiPage.update({
       where: { slug: req.params.slug },
       data: {
@@ -2682,6 +4016,7 @@ app.put('/api/wiki/:slug', requireAuth, requireActiveUser, async (req: Authentic
         category,
         content,
         tags: tags || [],
+        relations: normalizedRelations,
         eventDate: eventDate || null,
         status: nextStatus,
         reviewNote: null,
@@ -2700,6 +4035,7 @@ app.put('/api/wiki/:slug', requireAuth, requireActiveUser, async (req: Authentic
         slug: req.params.slug,
         category,
         tags: tags || [],
+        relations: normalizedRelations,
         eventDate: eventDate || null,
         editorUid: req.authUser!.uid,
         editorName: req.authUser!.displayName,
@@ -2746,6 +4082,7 @@ app.post('/api/wiki/:slug/branches', requireAuth, requireActiveUser, async (req:
         slug: page.slug,
         category: page.category,
         tags: page.tags,
+        relations: page.relations,
         eventDate: page.eventDate,
         editorUid: req.authUser!.uid,
         editorName: req.authUser!.displayName,
@@ -2852,6 +4189,7 @@ app.get('/api/wiki/branches/:branchId', requireAuth, async (req: AuthenticatedRe
         ? {
             ...latestRevision,
             tags: serializeTags(latestRevision.tags),
+            relations: serializeRelations(latestRevision.relations, latestRevision.pageSlug),
             createdAt: latestRevision.createdAt.toISOString(),
           }
         : null,
@@ -2887,6 +4225,7 @@ app.get('/api/wiki/branches/:branchId/revisions', requireAuth, async (req: Authe
       revisions: revisions.map((revision) => ({
         ...revision,
         tags: serializeTags(revision.tags),
+        relations: serializeRelations(revision.relations, revision.pageSlug),
         createdAt: revision.createdAt.toISOString(),
       })),
     });
@@ -2917,6 +4256,7 @@ app.post('/api/wiki/branches/:branchId/revisions', requireAuth, requireActiveUse
       slug,
       category,
       tags,
+      relations,
       eventDate,
       isAutoSave,
     } = req.body as {
@@ -2925,6 +4265,7 @@ app.post('/api/wiki/branches/:branchId/revisions', requireAuth, requireActiveUse
       slug?: string;
       category?: string;
       tags?: string[];
+      relations?: unknown;
       eventDate?: string | null;
       isAutoSave?: boolean;
     };
@@ -2933,6 +4274,8 @@ app.post('/api/wiki/branches/:branchId/revisions', requireAuth, requireActiveUse
       res.status(400).json({ error: '缺少必要字段' });
       return;
     }
+
+    const normalizedRelations = await normalizeWikiRelationListForWrite(relations, branch.pageSlug);
 
     const revision = await prisma.wikiRevision.create({
       data: {
@@ -2943,6 +4286,7 @@ app.post('/api/wiki/branches/:branchId/revisions', requireAuth, requireActiveUse
         slug: (slug || branch.pageSlug).trim().toLowerCase(),
         category,
         tags: Array.isArray(tags) ? tags : [],
+        relations: normalizedRelations,
         eventDate: eventDate || null,
         editorUid: req.authUser!.uid,
         editorName: req.authUser!.displayName,
@@ -2968,6 +4312,7 @@ app.post('/api/wiki/branches/:branchId/revisions', requireAuth, requireActiveUse
       revision: {
         ...revision,
         tags: serializeTags(revision.tags),
+        relations: serializeRelations(revision.relations, revision.pageSlug),
         createdAt: revision.createdAt.toISOString(),
       },
     });
@@ -3129,6 +4474,7 @@ app.get('/api/wiki/pull-requests/:prId/diff', requireAuth, async (req: Authentic
               content: mainRevision.content,
               category: mainRevision.category || pr.page.category,
               tags: serializeTags(mainRevision.tags),
+              relations: serializeRelations(mainRevision.relations, pr.pageSlug),
               eventDate: mainRevision.eventDate,
             }
           : {
@@ -3136,6 +4482,7 @@ app.get('/api/wiki/pull-requests/:prId/diff', requireAuth, async (req: Authentic
               content: pr.page.content,
               category: pr.page.category,
               tags: serializeTags(pr.page.tags),
+              relations: serializeRelations(pr.page.relations, pr.page.slug),
               eventDate: pr.page.eventDate,
             },
         head: branchRevision
@@ -3144,6 +4491,7 @@ app.get('/api/wiki/pull-requests/:prId/diff', requireAuth, async (req: Authentic
               content: branchRevision.content,
               category: branchRevision.category || pr.page.category,
               tags: serializeTags(branchRevision.tags),
+              relations: serializeRelations(branchRevision.relations, pr.pageSlug),
               eventDate: branchRevision.eventDate,
             }
           : {
@@ -3151,6 +4499,7 @@ app.get('/api/wiki/pull-requests/:prId/diff', requireAuth, async (req: Authentic
               content: pr.page.content,
               category: pr.page.category,
               tags: serializeTags(pr.page.tags),
+              relations: serializeRelations(pr.page.relations, pr.page.slug),
               eventDate: pr.page.eventDate,
             },
       },
@@ -3255,6 +4604,7 @@ app.post('/api/wiki/pull-requests/:prId/merge', requireAuth, requireAdmin, async
         slug: headRevision.slug || pr.pageSlug,
         category: headRevision.category || pr.page.category,
         tags: headRevision.tags || [],
+        relations: headRevision.relations || [],
         eventDate: headRevision.eventDate || null,
         editorUid: req.authUser!.uid,
         editorName: req.authUser!.displayName,
@@ -3270,6 +4620,7 @@ app.post('/api/wiki/pull-requests/:prId/merge', requireAuth, requireAdmin, async
           content: mergedSnapshot.content,
           category: mergedSnapshot.category || pr.page.category,
           tags: mergedSnapshot.tags || [],
+          relations: mergedSnapshot.relations || [],
           eventDate: mergedSnapshot.eventDate || null,
           status: 'published',
           reviewNote: null,
@@ -3388,12 +4739,15 @@ app.post('/api/wiki/branches/:branchId/resolve-conflict', requireAuth, requireAc
       content?: string;
       category?: string;
       tags?: string[];
+      relations?: unknown;
       eventDate?: string | null;
     };
     if (!payload.title || !payload.content || !payload.category) {
       res.status(400).json({ error: '缺少必要字段' });
       return;
     }
+
+    const normalizedRelations = await normalizeWikiRelationListForWrite(payload.relations, branch.pageSlug);
 
     const revision = await prisma.wikiRevision.create({
       data: {
@@ -3404,6 +4758,7 @@ app.post('/api/wiki/branches/:branchId/resolve-conflict', requireAuth, requireAc
         slug: branch.pageSlug,
         category: payload.category,
         tags: Array.isArray(payload.tags) ? payload.tags : [],
+        relations: normalizedRelations,
         eventDate: payload.eventDate || null,
         editorUid: req.authUser!.uid,
         editorName: req.authUser!.displayName,
@@ -3437,6 +4792,7 @@ app.post('/api/wiki/branches/:branchId/resolve-conflict', requireAuth, requireAc
       revision: {
         ...revision,
         tags: serializeTags(revision.tags),
+        relations: serializeRelations(revision.relations, revision.pageSlug),
         createdAt: revision.createdAt.toISOString(),
       },
     });
@@ -3481,6 +4837,7 @@ app.post('/api/wiki/:slug/rollback/:revisionId', requireAuth, requireActiveUser,
         content: revision.content,
         category: revision.category || undefined,
         tags: revision.tags || undefined,
+        relations: revision.relations || undefined,
         eventDate: revision.eventDate || undefined,
         status: isAdminRole(req.authUser!.role) ? 'published' : 'pending',
         reviewNote: null,
@@ -5404,9 +6761,18 @@ app.delete('/api/galleries/:id', requireAdmin, async (req, res) => {
 
 app.get('/api/music', async (req: AuthenticatedRequest, res) => {
   try {
-    const songs = await prisma.musicTrack.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
+    const albumDocId = typeof req.query.albumDocId === 'string' ? req.query.albumDocId.trim() : '';
+    const where = albumDocId
+      ? {
+          albumRelations: {
+            some: {
+              albumDocId,
+            },
+          },
+        }
+      : undefined;
+
+    const songs = await fetchSongsWithRelations(where);
 
     const favoritedMusicSet = new Set<string>();
     if (req.authUser && songs.length) {
@@ -5422,12 +6788,7 @@ app.get('/api/music', async (req: AuthenticatedRequest, res) => {
     }
 
     res.json({
-      songs: songs.map((song) => ({
-        ...song,
-        favoritedByMe: favoritedMusicSet.has(song.docId),
-        createdAt: song.createdAt.toISOString(),
-        updatedAt: song.updatedAt.toISOString(),
-      })),
+      songs: songs.map((song) => toSongResponse(song, { favoritedByMe: favoritedMusicSet.has(song.docId) })),
     });
   } catch (error) {
     console.error('Fetch music error:', error);
@@ -5437,31 +6798,30 @@ app.get('/api/music', async (req: AuthenticatedRequest, res) => {
 
 app.post('/api/music', requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
-    const { id, title, artist, album, cover, audioUrl, lyric } = req.body as {
-      id?: string;
-      title?: string;
-      artist?: string;
-      album?: string;
-      cover?: string;
-      audioUrl?: string;
-      lyric?: string;
-    };
+    const body = (req.body || {}) as Record<string, unknown>;
+    const id = typeof body.id === 'string' ? body.id.trim() : '';
+    const title = typeof body.title === 'string' ? body.title.trim() : '';
+    const artist = typeof body.artist === 'string' ? body.artist.trim() : '';
+    const album = typeof body.album === 'string' ? body.album.trim() : '';
+    const cover = typeof body.cover === 'string' ? body.cover.trim() : '';
+    const audioUrl = typeof body.audioUrl === 'string' ? body.audioUrl.trim() : '';
+    const lyric = typeof body.lyric === 'string' ? body.lyric : null;
+    const primaryPlatform = parseMusicPlatform(body.primaryPlatform || body.platform) || 'netease';
+    const enabledPlatform = parseMusicPlatform(body.enabledPlatform) || primaryPlatform;
 
-    if (!id || !title || !artist || !album || !cover || !audioUrl) {
+    if (!id || !title || !artist) {
       res.status(400).json({ error: '缺少歌曲信息' });
       return;
     }
 
-    const existing = await prisma.musicTrack.findUnique({
-      where: { id },
-    });
-
+    const existing = await prisma.musicTrack.findUnique({ where: { id } });
     if (existing) {
       res.status(409).json({ error: '该歌曲已存在' });
       return;
     }
 
-    const song = await prisma.musicTrack.create({
+    const sourceField = getPlatformSourceField(primaryPlatform);
+    const song = await prismaAny.musicTrack.create({
       data: {
         id,
         title,
@@ -5469,17 +6829,17 @@ app.post('/api/music', requireAdmin, async (req: AuthenticatedRequest, res) => {
         album,
         cover,
         audioUrl,
-        lyric: lyric || null,
+        lyric,
+        primaryPlatform,
+        enabledPlatform,
+        [sourceField]: id,
         addedBy: req.authUser!.uid,
       },
     });
 
+    const hydrated = await fetchSongWithRelationsByDocId(song.docId);
     res.status(201).json({
-      song: {
-        ...song,
-        createdAt: song.createdAt.toISOString(),
-        updatedAt: song.updatedAt.toISOString(),
-      },
+      song: hydrated ? toSongResponse(hydrated) : song,
     });
   } catch (error) {
     console.error('Add music error:', error);
@@ -5487,83 +6847,214 @@ app.post('/api/music', requireAdmin, async (req: AuthenticatedRequest, res) => {
   }
 });
 
+app.post('/api/music/parse-url', requireAdmin, async (req, res) => {
+  try {
+    const rawUrl = typeof req.body?.url === 'string' ? req.body.url.trim() : '';
+    if (!rawUrl) {
+      res.status(400).json({ error: '请提供音乐链接' });
+      return;
+    }
+
+    const parsed = parseMusicUrl(rawUrl);
+    if (!parsed) {
+      res.status(400).json({ error: '无法识别的音乐链接' });
+      return;
+    }
+
+    const preview = await getMusicResourcePreview(parsed.platform, parsed.type, parsed.id);
+
+    res.json({
+      resource: {
+        ...preview,
+        totalSongs: preview.songs.length,
+      },
+    });
+  } catch (error) {
+    console.error('Parse music url error:', error);
+    res.status(500).json({ error: '解析音乐链接失败' });
+  }
+});
+
+app.post('/api/music/import', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const rawUrl = typeof req.body?.url === 'string' ? req.body.url.trim() : '';
+    if (!rawUrl) {
+      res.status(400).json({ error: '请提供音乐链接' });
+      return;
+    }
+
+    const parsed = parseMusicUrl(rawUrl);
+    if (!parsed) {
+      res.status(400).json({ error: '无法识别的音乐链接' });
+      return;
+    }
+
+    const preview = await getMusicResourcePreview(parsed.platform, parsed.type, parsed.id);
+    const selectedSongIdsRaw = Array.isArray(req.body?.selectedSongIds) ? req.body.selectedSongIds : [];
+    const selectedSongIds = selectedSongIdsRaw
+      .filter((item: unknown): item is string => typeof item === 'string')
+      .map((item: string) => item.trim())
+      .filter(Boolean);
+    const selectedSet = selectedSongIds.length ? new Set(selectedSongIds) : null;
+
+    const tracks = normalizeMusicImportTracks(preview.songs).filter((track) => {
+      if (!selectedSet) return true;
+      return selectedSet.has(track.sourceId);
+    });
+
+    if (!tracks.length) {
+      res.status(400).json({ error: '没有可导入的歌曲' });
+      return;
+    }
+
+    let imported = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    const importedSongs: Array<{ docId: string; trackOrder: number }> = [];
+    for (let index = 0; index < tracks.length; index += 1) {
+      const track = tracks[index];
+      try {
+        const result = await createOrUpdateImportedSong({
+          platform: preview.platform,
+          track,
+          userUid: req.authUser!.uid,
+          albumNameFallback: preview.title,
+        });
+        if (result.created) {
+          imported += 1;
+        } else {
+          skipped += 1;
+        }
+        importedSongs.push({ docId: result.song.docId, trackOrder: index });
+      } catch (error) {
+        failed += 1;
+        console.error('Import single song failed:', error);
+      }
+    }
+
+    let collection: { docId: string; title: string; resourceType: ParsedMusicResourceType } | null = null;
+    if (parsed.type === 'album' || parsed.type === 'playlist') {
+      const resourceType: MusicCollectionType = parsed.type === 'album' ? 'album' : 'playlist';
+      const albumUniqueId = `${preview.platform}_${resourceType}_${preview.id}`;
+      const existingAlbum = await prismaAny.album.findFirst({
+        where: {
+          platform: preview.platform,
+          sourceId: preview.id,
+          resourceType,
+        },
+      });
+
+      const normalizedTracks = [
+        {
+          disc: 1,
+          name: 'Disc 1',
+          songs: importedSongs,
+        },
+      ];
+
+      let albumDocId = '';
+      if (existingAlbum) {
+        const updated = await prismaAny.album.update({
+          where: { docId: existingAlbum.docId },
+          data: {
+            title: preview.title,
+            artist: preview.artist,
+            cover: preview.cover || existingAlbum.cover,
+            description: preview.description || null,
+            platformUrl: preview.platformUrl || null,
+            tracks: normalizedTracks,
+          },
+        });
+        albumDocId = updated.docId;
+      } else {
+        const createdAlbum = await prismaAny.album.create({
+          data: {
+            id: albumUniqueId,
+            resourceType,
+            platform: preview.platform,
+            sourceId: preview.id,
+            title: preview.title,
+            artist: preview.artist,
+            cover: preview.cover || '',
+            description: preview.description || null,
+            platformUrl: preview.platformUrl || null,
+            tracks: normalizedTracks,
+          },
+        });
+        albumDocId = createdAlbum.docId;
+      }
+
+      await applyAlbumTracksToRelations(albumDocId, normalizeTrackDiscPayload(normalizedTracks));
+      await prismaAny.songAlbumRelation.updateMany({
+        where: {
+          albumDocId,
+          songDocId: { in: importedSongs.map((item) => item.docId) },
+        },
+        data: {
+          isDisplay: false,
+        },
+      });
+      if (importedSongs[0]?.docId) {
+        await prismaAny.songAlbumRelation.updateMany({
+          where: {
+            albumDocId,
+            songDocId: importedSongs[0].docId,
+          },
+          data: {
+            isDisplay: true,
+          },
+        });
+      }
+
+      collection = {
+        docId: albumDocId,
+        title: preview.title,
+        resourceType: parsed.type,
+      };
+    }
+
+    res.json({
+      summary: {
+        imported,
+        skipped,
+        failed,
+      },
+      collection,
+    });
+  } catch (error) {
+    console.error('Import music error:', error);
+    res.status(500).json({ error: '导入音乐失败' });
+  }
+});
+
 app.post('/api/music/from-netease', requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
-    const { id } = req.body as { id?: string | number };
+    const id = typeof req.body?.id === 'string' || typeof req.body?.id === 'number'
+      ? String(req.body.id).trim()
+      : '';
     if (!id) {
       res.status(400).json({ error: '歌曲 ID 不能为空' });
       return;
     }
 
-    const songId = String(id);
-    const existing = await prisma.musicTrack.findUnique({
-      where: { id: songId },
-    });
-
-    if (existing) {
-      res.status(409).json({ error: '该歌曲已存在' });
+    const preview = await getMusicResourcePreview('netease', 'song', id);
+    const track = normalizeMusicImportTracks(preview.songs)[0];
+    if (!track) {
+      res.status(404).json({ error: '未找到可导入的歌曲' });
       return;
     }
 
-    const url = `https://music.163.com/song?id=${songId}`;
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
+    const result = await createOrUpdateImportedSong({
+      platform: 'netease',
+      track,
+      userUid: req.authUser!.uid,
+      albumNameFallback: preview.title,
     });
 
-    const $ = cheerio.load(response.data);
-    const metadata: {
-      title?: string;
-      cover?: string;
-      artist?: string;
-      album?: string;
-      lyric?: string;
-    } = {};
-
-    $('meta').each((_, el) => {
-      const property = $(el).attr('property');
-      const content = $(el).attr('content');
-      if (!content) return;
-      if (property === 'og:title') metadata.title = content;
-      if (property === 'og:image') metadata.cover = content;
-      if (property === 'og:music:artist') metadata.artist = content;
-      if (property === 'og:music:album') metadata.album = content;
-    });
-
-    try {
-      const lrcResponse = await axios.get(`https://music.163.com/api/song/media?id=${songId}`);
-      if (lrcResponse.data?.lyric) {
-        metadata.lyric = lrcResponse.data.lyric;
-      }
-    } catch (error) {
-      console.error('Fetch lyric failed:', error);
-    }
-
-    if (!metadata.title || !metadata.artist || !metadata.album || !metadata.cover) {
-      res.status(500).json({ error: '获取歌曲元数据失败' });
-      return;
-    }
-
-    const song = await prisma.musicTrack.create({
-      data: {
-        id: songId,
-        title: metadata.title,
-        artist: metadata.artist,
-        album: metadata.album,
-        cover: metadata.cover,
-        audioUrl: `https://music.163.com/song/media/outer/url?id=${songId}.mp3`,
-        lyric: metadata.lyric || null,
-        addedBy: req.authUser!.uid,
-      },
-    });
-
-    res.status(201).json({
-      song: {
-        ...song,
-        createdAt: song.createdAt.toISOString(),
-        updatedAt: song.updatedAt.toISOString(),
-      },
+    const song = await fetchSongWithRelationsByDocId(result.song.docId);
+    res.status(result.created ? 201 : 200).json({
+      song: song ? toSongResponse(song) : result.song,
     });
   } catch (error) {
     console.error('Add song from netease failed:', error);
@@ -5571,15 +7062,1614 @@ app.post('/api/music/from-netease', requireAdmin, async (req: AuthenticatedReque
   }
 });
 
+app.post('/api/music/from-qq', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = typeof req.body?.id === 'string' || typeof req.body?.id === 'number'
+      ? String(req.body.id).trim()
+      : '';
+    if (!id) {
+      res.status(400).json({ error: '歌曲 ID 不能为空' });
+      return;
+    }
+
+    const preview = await getMusicResourcePreview('tencent', 'song', id);
+    const track = normalizeMusicImportTracks(preview.songs)[0];
+    if (!track) {
+      res.status(404).json({ error: '未找到可导入的歌曲' });
+      return;
+    }
+
+    const result = await createOrUpdateImportedSong({
+      platform: 'tencent',
+      track,
+      userUid: req.authUser!.uid,
+      albumNameFallback: preview.title,
+    });
+
+    const song = await fetchSongWithRelationsByDocId(result.song.docId);
+    res.status(result.created ? 201 : 200).json({
+      song: song ? toSongResponse(song) : result.song,
+    });
+  } catch (error) {
+    console.error('Add song from qq failed:', error);
+    res.status(500).json({ error: '添加歌曲失败' });
+  }
+});
+
+app.get('/api/music/:docId/play-url', async (req, res) => {
+  try {
+    const song = await prismaAny.musicTrack.findUnique({
+      where: { docId: req.params.docId },
+      select: {
+        docId: true,
+        id: true,
+        audioUrl: true,
+        primaryPlatform: true,
+        enabledPlatform: true,
+        neteaseId: true,
+        tencentId: true,
+        kugouId: true,
+        baiduId: true,
+        kuwoId: true,
+      },
+    });
+
+    if (!song) {
+      res.status(404).json({ error: '歌曲不存在' });
+      return;
+    }
+
+    const resolved = await resolveMusicPlayUrl(song);
+    if (!resolved.playUrl) {
+      res.status(502).json({ error: '未获取到可播放地址', meta: resolved });
+      return;
+    }
+
+    res.json({
+      docId: song.docId,
+      ...resolved,
+    });
+  } catch (error) {
+    console.error('Resolve play url error:', error);
+    res.status(500).json({ error: '获取播放地址失败' });
+  }
+});
+
 app.delete('/api/music/:docId', requireAdmin, async (req, res) => {
   try {
-    await prisma.musicTrack.delete({
-      where: { docId: req.params.docId },
+    const docId = req.params.docId;
+    const song = await prismaAny.musicTrack.findUnique({
+      where: { docId },
+      include: {
+        covers: true,
+      },
     });
+
+    if (!song) {
+      res.status(404).json({ error: '歌曲不存在' });
+      return;
+    }
+
+    await prismaAny.songInstrumentalRelation.deleteMany({
+      where: {
+        OR: [{ songDocId: docId }, { targetSongDocId: docId }],
+      },
+    });
+
+    await prismaAny.songAlbumRelation.deleteMany({ where: { songDocId: docId } });
+
+    for (const cover of song.covers || []) {
+      if (cover.assetId) {
+        const [songLinked, albumLinked, galleryLinked] = await Promise.all([
+          prismaAny.songCover.count({ where: { assetId: cover.assetId, id: { not: cover.id } } }),
+          prismaAny.albumCover.count({ where: { assetId: cover.assetId } }),
+          prisma.galleryImage.count({ where: { assetId: cover.assetId } }),
+        ]);
+        if (songLinked + albumLinked + galleryLinked === 0) {
+          const asset = await prisma.mediaAsset.findUnique({ where: { id: cover.assetId } });
+          if (asset) {
+            await safeDeleteUploadFileByStorageKey(asset.storageKey);
+            await prisma.mediaAsset.update({
+              where: { id: asset.id },
+              data: { status: 'deleted' },
+            });
+          }
+        }
+      } else {
+        await safeDeleteUploadFileByStorageKey(cover.storageKey);
+      }
+    }
+
+    await prismaAny.songCover.deleteMany({ where: { songDocId: docId } });
+    await prisma.musicTrack.delete({ where: { docId } });
+
+    for (const cacheKey of [...playUrlCache.keys()]) {
+      if (cacheKey.startsWith(`${docId}:`)) {
+        playUrlCache.delete(cacheKey);
+      }
+    }
+
     res.json({ success: true });
   } catch (error) {
     console.error('Delete music error:', error);
     res.status(500).json({ error: '删除歌曲失败' });
+  }
+});
+
+app.patch('/api/music/:docId', requireAdmin, async (req, res) => {
+  try {
+    const docId = req.params.docId;
+    const existing = await prismaAny.musicTrack.findUnique({ where: { docId } });
+    if (!existing) {
+      res.status(404).json({ error: '歌曲不存在' });
+      return;
+    }
+
+    const body = (req.body || {}) as Record<string, unknown>;
+    const updateData: Record<string, unknown> = {};
+
+    if (typeof body.title === 'string') updateData.title = body.title.trim();
+    if (typeof body.artist === 'string') updateData.artist = body.artist.trim();
+    if (typeof body.album === 'string') updateData.album = body.album.trim();
+    if (typeof body.cover === 'string') updateData.cover = body.cover.trim();
+    if (typeof body.audioUrl === 'string') updateData.audioUrl = body.audioUrl.trim();
+    if (typeof body.lyric === 'string' || body.lyric === null) updateData.lyric = body.lyric;
+
+    const primaryPlatform = parseMusicPlatform(body.primaryPlatform);
+    if (primaryPlatform) updateData.primaryPlatform = primaryPlatform;
+    const enabledPlatform = parseMusicPlatform(body.enabledPlatform);
+    if (enabledPlatform) updateData.enabledPlatform = enabledPlatform;
+
+    const displayAlbumMode = parseDisplayAlbumMode(body.displayAlbumMode);
+    if (displayAlbumMode) {
+      updateData.displayAlbumMode = displayAlbumMode;
+      if (displayAlbumMode !== 'manual') {
+        updateData.manualAlbumName = null;
+      }
+    }
+    if (typeof body.manualAlbumName === 'string') {
+      updateData.manualAlbumName = body.manualAlbumName.trim();
+    }
+    if (typeof body.defaultCoverSource === 'string' || body.defaultCoverSource === null) {
+      updateData.defaultCoverSource = body.defaultCoverSource;
+    }
+
+    const neteaseId = typeof body.neteaseId === 'string' ? body.neteaseId.trim() : '';
+    const tencentId = typeof body.tencentId === 'string' ? body.tencentId.trim() : '';
+    const kugouId = typeof body.kugouId === 'string' ? body.kugouId.trim() : '';
+    const baiduId = typeof body.baiduId === 'string' ? body.baiduId.trim() : '';
+    const kuwoId = typeof body.kuwoId === 'string' ? body.kuwoId.trim() : '';
+    if (neteaseId) updateData.neteaseId = neteaseId;
+    if (tencentId) updateData.tencentId = tencentId;
+    if (kugouId) updateData.kugouId = kugouId;
+    if (baiduId) updateData.baiduId = baiduId;
+    if (kuwoId) updateData.kuwoId = kuwoId;
+
+    await prismaAny.musicTrack.update({
+      where: { docId },
+      data: updateData,
+    });
+
+    const song = await fetchSongWithRelationsByDocId(docId);
+    if (!song) {
+      res.status(404).json({ error: '歌曲不存在' });
+      return;
+    }
+
+    res.json({ song: toSongResponse(song) });
+  } catch (error) {
+    console.error('Update music error:', error);
+    res.status(500).json({ error: '更新歌曲失败' });
+  }
+});
+
+app.get('/api/music/:docId/covers', async (req, res) => {
+  try {
+    const song = await prismaAny.musicTrack.findUnique({
+      where: { docId: req.params.docId },
+      include: {
+        covers: {
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    if (!song) {
+      res.status(404).json({ error: '歌曲不存在' });
+      return;
+    }
+
+    res.json({
+      covers: (song.covers || []).map((cover: any) => ({
+        id: cover.id,
+        assetId: cover.assetId,
+        storageKey: cover.storageKey,
+        url: cover.publicUrl,
+        isDefault: cover.isDefault,
+        sortOrder: cover.sortOrder,
+      })),
+    });
+  } catch (error) {
+    console.error('Fetch song covers error:', error);
+    res.status(500).json({ error: '获取歌曲封面失败' });
+  }
+});
+
+app.post('/api/music/:docId/covers', requireAdmin, async (req, res) => {
+  try {
+    const songDocId = req.params.docId;
+    const assetId = typeof req.body?.assetId === 'string' ? req.body.assetId.trim() : '';
+    const isDefault = parseBoolean(req.body?.isDefault, false);
+
+    if (!assetId) {
+      res.status(400).json({ error: '缺少 assetId' });
+      return;
+    }
+
+    const song = await prismaAny.musicTrack.findUnique({ where: { docId: songDocId } });
+    if (!song) {
+      res.status(404).json({ error: '歌曲不存在' });
+      return;
+    }
+
+    const cover = await addSongCoverFromAsset(songDocId, assetId, isDefault);
+    if (isDefault) {
+      await prismaAny.musicTrack.update({
+        where: { docId: songDocId },
+        data: {
+          cover: cover.publicUrl,
+        },
+      });
+    }
+
+    res.status(201).json({
+      cover: {
+        id: cover.id,
+        assetId: cover.assetId,
+        storageKey: cover.storageKey,
+        url: cover.publicUrl,
+        isDefault: cover.isDefault,
+        sortOrder: cover.sortOrder,
+      },
+    });
+  } catch (error) {
+    console.error('Create song cover error:', error);
+    res.status(500).json({ error: '添加歌曲封面失败' });
+  }
+});
+
+app.delete('/api/music/:docId/covers/:coverId', requireAdmin, async (req, res) => {
+  try {
+    const { docId, coverId } = req.params;
+    const cover = await prismaAny.songCover.findFirst({
+      where: {
+        id: coverId,
+        songDocId: docId,
+      },
+    });
+
+    if (!cover) {
+      res.status(404).json({ error: '封面不存在' });
+      return;
+    }
+
+    await prismaAny.songCover.delete({ where: { id: cover.id } });
+
+    if (cover.assetId) {
+      const [songLinked, albumLinked, galleryLinked] = await Promise.all([
+        prismaAny.songCover.count({ where: { assetId: cover.assetId } }),
+        prismaAny.albumCover.count({ where: { assetId: cover.assetId } }),
+        prisma.galleryImage.count({ where: { assetId: cover.assetId } }),
+      ]);
+      if (songLinked + albumLinked + galleryLinked === 0) {
+        const asset = await prisma.mediaAsset.findUnique({ where: { id: cover.assetId } });
+        if (asset) {
+          await safeDeleteUploadFileByStorageKey(asset.storageKey);
+          await prisma.mediaAsset.update({
+            where: { id: asset.id },
+            data: { status: 'deleted' },
+          });
+        }
+      }
+    }
+
+    const remaining = await prismaAny.songCover.findMany({
+      where: { songDocId: docId },
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    if (!remaining.length) {
+      await prismaAny.musicTrack.update({
+        where: { docId },
+        data: {
+          defaultCoverSource: null,
+          cover: '',
+        },
+      });
+    } else {
+      const hasDefault = remaining.some((item: any) => item.isDefault);
+      const first = remaining[0];
+      if (!hasDefault) {
+        await prismaAny.songCover.update({
+          where: { id: first.id },
+          data: { isDefault: true },
+        });
+        await prismaAny.musicTrack.update({
+          where: { docId },
+          data: {
+            defaultCoverSource: `song_cover:${first.id}`,
+            cover: first.publicUrl,
+          },
+        });
+      }
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete song cover error:', error);
+    res.status(500).json({ error: '删除歌曲封面失败' });
+  }
+});
+
+app.patch('/api/music/:docId/covers/:coverId/default', requireAdmin, async (req, res) => {
+  try {
+    const { docId, coverId } = req.params;
+    const cover = await prismaAny.songCover.findFirst({
+      where: {
+        id: coverId,
+        songDocId: docId,
+      },
+    });
+    if (!cover) {
+      res.status(404).json({ error: '封面不存在' });
+      return;
+    }
+
+    await prismaAny.songCover.updateMany({
+      where: { songDocId: docId },
+      data: { isDefault: false },
+    });
+    await prismaAny.songCover.update({
+      where: { id: coverId },
+      data: { isDefault: true },
+    });
+    await prismaAny.musicTrack.update({
+      where: { docId },
+      data: {
+        defaultCoverSource: `song_cover:${coverId}`,
+        cover: cover.publicUrl,
+      },
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Set song default cover error:', error);
+    res.status(500).json({ error: '设置默认封面失败' });
+  }
+});
+
+app.get('/api/music/:docId/albums', async (req, res) => {
+  try {
+    const songDocId = req.params.docId;
+    const relationsRaw = await prismaAny.songAlbumRelation.findMany({
+      where: { songDocId },
+      include: {
+        album: {
+          include: {
+            covers: {
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
+        },
+      },
+      orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
+    });
+
+    const relations = ensureDisplayRelation(relationsRaw);
+    for (const relation of relations) {
+      await prismaAny.songAlbumRelation.update({
+        where: { id: relation.id },
+        data: { isDisplay: relation.isDisplay },
+      });
+    }
+
+    res.json({
+      relations: relations.map((relation) => ({
+        id: relation.id,
+        songDocId: relation.songDocId,
+        albumDocId: relation.albumDocId,
+        discNumber: relation.discNumber,
+        trackOrder: relation.trackOrder,
+        isDisplay: relation.isDisplay,
+        album: {
+          docId: relation.album.docId,
+          title: relation.album.title,
+          artist: relation.album.artist,
+          cover: relation.album.cover,
+          defaultCoverSource: relation.album.defaultCoverSource,
+        },
+      })),
+    });
+  } catch (error) {
+    console.error('Fetch song albums error:', error);
+    res.status(500).json({ error: '获取歌曲关联专辑失败' });
+  }
+});
+
+app.post('/api/music/:docId/albums', requireAdmin, async (req, res) => {
+  try {
+    const songDocId = req.params.docId;
+    const albumDocId = typeof req.body?.albumDocId === 'string' ? req.body.albumDocId.trim() : '';
+    const discNumber = parseInteger(req.body?.discNumber, 1, { min: 1, max: 20 });
+    const trackOrder = parseInteger(req.body?.trackOrder, 0, { min: 0, max: 5000 });
+    const isDisplay = parseBoolean(req.body?.isDisplay, false);
+
+    if (!albumDocId) {
+      res.status(400).json({ error: '缺少 albumDocId' });
+      return;
+    }
+
+    const [song, album] = await Promise.all([
+      prismaAny.musicTrack.findUnique({ where: { docId: songDocId } }),
+      prismaAny.album.findUnique({ where: { docId: albumDocId } }),
+    ]);
+
+    if (!song || !album) {
+      res.status(404).json({ error: '歌曲或专辑不存在' });
+      return;
+    }
+
+    const relation = await prismaAny.songAlbumRelation.upsert({
+      where: {
+        songDocId_albumDocId: {
+          songDocId,
+          albumDocId,
+        },
+      },
+      create: {
+        songDocId,
+        albumDocId,
+        discNumber,
+        trackOrder,
+        isDisplay,
+      },
+      update: {
+        discNumber,
+        trackOrder,
+        isDisplay,
+      },
+    });
+
+    if (isDisplay) {
+      await prismaAny.songAlbumRelation.updateMany({
+        where: {
+          songDocId,
+          id: { not: relation.id },
+        },
+        data: { isDisplay: false },
+      });
+    }
+
+    const tracksFromAlbum = await prismaAny.songAlbumRelation.findMany({
+      where: { albumDocId },
+      include: {
+        song: {
+          select: {
+            docId: true,
+            id: true,
+            title: true,
+            artist: true,
+            cover: true,
+          },
+        },
+      },
+      orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
+    });
+    await prismaAny.album.update({
+      where: { docId: albumDocId },
+      data: {
+        tracks: buildAlbumTracksPayload(tracksFromAlbum),
+      },
+    });
+
+    const updatedSong = await fetchSongWithRelationsByDocId(songDocId);
+    res.status(201).json({
+      song: updatedSong ? toSongResponse(updatedSong) : null,
+    });
+  } catch (error) {
+    console.error('Create song album relation error:', error);
+    res.status(500).json({ error: '创建歌曲专辑关联失败' });
+  }
+});
+
+app.patch('/api/music/:docId/albums/:albumDocId', requireAdmin, async (req, res) => {
+  try {
+    const { docId: songDocId, albumDocId } = req.params;
+    const existing = await prismaAny.songAlbumRelation.findUnique({
+      where: {
+        songDocId_albumDocId: {
+          songDocId,
+          albumDocId,
+        },
+      },
+    });
+
+    if (!existing) {
+      res.status(404).json({ error: '关联不存在' });
+      return;
+    }
+
+    const updateData: Record<string, unknown> = {};
+    if (req.body?.discNumber !== undefined) {
+      updateData.discNumber = parseInteger(req.body.discNumber, existing.discNumber, { min: 1, max: 20 });
+    }
+    if (req.body?.trackOrder !== undefined) {
+      updateData.trackOrder = parseInteger(req.body.trackOrder, existing.trackOrder, { min: 0, max: 5000 });
+    }
+    if (req.body?.isDisplay !== undefined) {
+      updateData.isDisplay = parseBoolean(req.body.isDisplay, existing.isDisplay);
+    }
+
+    const updated = await prismaAny.songAlbumRelation.update({
+      where: { id: existing.id },
+      data: updateData,
+    });
+
+    if (updated.isDisplay) {
+      await prismaAny.songAlbumRelation.updateMany({
+        where: {
+          songDocId,
+          id: { not: updated.id },
+        },
+        data: { isDisplay: false },
+      });
+    }
+
+    const tracksFromAlbum = await prismaAny.songAlbumRelation.findMany({
+      where: { albumDocId },
+      include: {
+        song: {
+          select: {
+            docId: true,
+            id: true,
+            title: true,
+            artist: true,
+            cover: true,
+          },
+        },
+      },
+      orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
+    });
+    await prismaAny.album.update({
+      where: { docId: albumDocId },
+      data: {
+        tracks: buildAlbumTracksPayload(tracksFromAlbum),
+      },
+    });
+
+    const song = await fetchSongWithRelationsByDocId(songDocId);
+    res.json({ song: song ? toSongResponse(song) : null });
+  } catch (error) {
+    console.error('Update song album relation error:', error);
+    res.status(500).json({ error: '更新歌曲专辑关联失败' });
+  }
+});
+
+app.delete('/api/music/:docId/albums/:albumDocId', requireAdmin, async (req, res) => {
+  try {
+    const { docId: songDocId, albumDocId } = req.params;
+    const existing = await prismaAny.songAlbumRelation.findUnique({
+      where: {
+        songDocId_albumDocId: {
+          songDocId,
+          albumDocId,
+        },
+      },
+    });
+
+    if (!existing) {
+      res.status(404).json({ error: '关联不存在' });
+      return;
+    }
+
+    await prismaAny.songAlbumRelation.delete({ where: { id: existing.id } });
+
+    const remaining = await prismaAny.songAlbumRelation.findMany({
+      where: { songDocId },
+      orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
+    });
+    if (remaining.length && !remaining.some((item: any) => item.isDisplay)) {
+      await prismaAny.songAlbumRelation.update({
+        where: { id: remaining[0].id },
+        data: { isDisplay: true },
+      });
+    }
+
+    const tracksFromAlbum = await prismaAny.songAlbumRelation.findMany({
+      where: { albumDocId },
+      include: {
+        song: {
+          select: {
+            docId: true,
+            id: true,
+            title: true,
+            artist: true,
+            cover: true,
+          },
+        },
+      },
+      orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
+    });
+    await prismaAny.album.update({
+      where: { docId: albumDocId },
+      data: {
+        tracks: buildAlbumTracksPayload(tracksFromAlbum),
+      },
+    });
+
+    const song = await fetchSongWithRelationsByDocId(songDocId);
+    res.json({ song: song ? toSongResponse(song) : null });
+  } catch (error) {
+    console.error('Delete song album relation error:', error);
+    res.status(500).json({ error: '删除歌曲专辑关联失败' });
+  }
+});
+
+app.get('/api/music/:docId/instrumentals', async (req, res) => {
+  try {
+    const docId = req.params.docId;
+    const relations = await prismaAny.songInstrumentalRelation.findMany({
+      where: {
+        targetSongDocId: docId,
+      },
+      include: {
+        song: {
+          include: {
+            covers: {
+              orderBy: { sortOrder: 'asc' },
+            },
+            albumRelations: {
+              include: {
+                album: {
+                  include: {
+                    covers: {
+                      orderBy: { sortOrder: 'asc' },
+                    },
+                  },
+                },
+              },
+              orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    res.json({
+      songs: relations.map((relation: any) => toSongResponse(relation.song)),
+    });
+  } catch (error) {
+    console.error('Fetch song instrumentals error:', error);
+    res.status(500).json({ error: '获取伴奏列表失败' });
+  }
+});
+
+app.get('/api/music/:docId/instrumental-for', async (req, res) => {
+  try {
+    const docId = req.params.docId;
+    const relations = await prismaAny.songInstrumentalRelation.findMany({
+      where: {
+        songDocId: docId,
+      },
+      include: {
+        targetSong: {
+          include: {
+            covers: {
+              orderBy: { sortOrder: 'asc' },
+            },
+            albumRelations: {
+              include: {
+                album: {
+                  include: {
+                    covers: {
+                      orderBy: { sortOrder: 'asc' },
+                    },
+                  },
+                },
+              },
+              orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    res.json({
+      songs: relations.map((relation: any) => toSongResponse(relation.targetSong)),
+    });
+  } catch (error) {
+    console.error('Fetch instrumental for error:', error);
+    res.status(500).json({ error: '获取伴奏关联失败' });
+  }
+});
+
+app.post('/api/music/:docId/instrumentals', requireAdmin, async (req, res) => {
+  try {
+    const targetSongDocId = req.params.docId;
+    const instrumentalSongDocId =
+      typeof req.body?.instrumentalSongDocId === 'string'
+        ? req.body.instrumentalSongDocId.trim()
+        : typeof req.body?.songDocId === 'string'
+          ? req.body.songDocId.trim()
+          : '';
+
+    if (!instrumentalSongDocId) {
+      res.status(400).json({ error: '缺少伴奏歌曲 ID' });
+      return;
+    }
+    if (instrumentalSongDocId === targetSongDocId) {
+      res.status(400).json({ error: '不能将歌曲自身设为伴奏' });
+      return;
+    }
+
+    const [targetSong, instrumentalSong] = await Promise.all([
+      prismaAny.musicTrack.findUnique({ where: { docId: targetSongDocId } }),
+      prismaAny.musicTrack.findUnique({ where: { docId: instrumentalSongDocId } }),
+    ]);
+    if (!targetSong || !instrumentalSong) {
+      res.status(404).json({ error: '歌曲不存在' });
+      return;
+    }
+
+    await prismaAny.songInstrumentalRelation.upsert({
+      where: {
+        songDocId_targetSongDocId: {
+          songDocId: instrumentalSongDocId,
+          targetSongDocId,
+        },
+      },
+      update: {},
+      create: {
+        songDocId: instrumentalSongDocId,
+        targetSongDocId,
+      },
+    });
+
+    res.status(201).json({ success: true });
+  } catch (error) {
+    console.error('Create instrumental relation error:', error);
+    res.status(500).json({ error: '创建伴奏关联失败' });
+  }
+});
+
+app.delete('/api/music/:docId/instrumentals/:instrumentalSongDocId', requireAdmin, async (req, res) => {
+  try {
+    const targetSongDocId = req.params.docId;
+    const instrumentalSongDocId = req.params.instrumentalSongDocId;
+
+    await prismaAny.songInstrumentalRelation.deleteMany({
+      where: {
+        songDocId: instrumentalSongDocId,
+        targetSongDocId,
+      },
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete instrumental relation error:', error);
+    res.status(500).json({ error: '删除伴奏关联失败' });
+  }
+});
+
+app.get('/api/albums', async (req: AuthenticatedRequest, res) => {
+  try {
+    const platform = parseMusicPlatform(req.query.platform);
+    const resourceType = parseMusicCollectionType(req.query.resourceType);
+
+    const albums = await prismaAny.album.findMany({
+      where: {
+        ...(platform ? { platform } : {}),
+        ...(resourceType ? { resourceType } : {}),
+      },
+      include: {
+        covers: {
+          orderBy: { sortOrder: 'asc' },
+        },
+        songRelations: {
+          include: {
+            song: {
+              select: {
+                docId: true,
+                id: true,
+                title: true,
+                artist: true,
+                cover: true,
+              },
+            },
+          },
+          orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({
+      albums: albums.map((album: any) => {
+        const response = toAlbumResponse(album);
+        return {
+          ...response,
+          tracks: response.tracks,
+          trackCount: response.songs.length,
+        };
+      }),
+    });
+  } catch (error) {
+    console.error('Fetch albums error:', error);
+    res.status(500).json({ error: '获取专辑失败' });
+  }
+});
+
+app.get('/api/albums/:id', async (req: AuthenticatedRequest, res) => {
+  try {
+    const identifier = req.params.id;
+    let album = await prismaAny.album.findUnique({
+      where: { docId: identifier },
+      include: {
+        covers: {
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    if (!album) {
+      album = await prismaAny.album.findUnique({
+        where: { id: identifier },
+        include: {
+          covers: {
+            orderBy: { sortOrder: 'asc' },
+          },
+        },
+      });
+    }
+
+    if (!album) {
+      res.status(404).json({ error: '专辑不存在' });
+      return;
+    }
+
+    const relations = await prismaAny.songAlbumRelation.findMany({
+      where: { albumDocId: album.docId },
+      include: {
+        song: {
+          include: {
+            covers: {
+              orderBy: { sortOrder: 'asc' },
+            },
+            albumRelations: {
+              include: {
+                album: {
+                  include: {
+                    covers: {
+                      orderBy: { sortOrder: 'asc' },
+                    },
+                  },
+                },
+              },
+              orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
+            },
+          },
+        },
+      },
+      orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
+    });
+
+    const favoritedMusicSet = new Set<string>();
+    if (req.authUser && relations.length) {
+      const favorites = await prisma.favorite.findMany({
+        where: {
+          userUid: req.authUser.uid,
+          targetType: 'music',
+          targetId: { in: relations.map((item: any) => item.songDocId) },
+        },
+        select: { targetId: true },
+      });
+      favorites.forEach((item) => favoritedMusicSet.add(item.targetId));
+    }
+
+    const tracks = relations.map((relation: any) => ({
+      ...toSongResponse(relation.song, { favoritedByMe: favoritedMusicSet.has(relation.songDocId) }),
+      trackOrder: relation.trackOrder,
+      discNumber: relation.discNumber,
+    }));
+
+    const albumResponse = toAlbumResponse({
+      ...album,
+      songRelations: relations,
+    });
+
+    const coverFromDefault = (() => {
+      const source = typeof album.defaultCoverSource === 'string' ? album.defaultCoverSource.trim() : '';
+      if (!source) return '';
+      if (source === 'old_cover') return album.cover || '';
+      if (source.startsWith('album_cover:')) {
+        const id = source.slice('album_cover:'.length);
+        const matched = (album.covers || []).find((cover: any) => cover.id === id);
+        return matched?.publicUrl || '';
+      }
+      return '';
+    })();
+
+    res.json({
+      album: {
+        ...albumResponse,
+        id: album.docId,
+        cover: coverFromDefault || album.cover,
+        tracks,
+        discs: normalizeTrackDiscPayload(album.tracks),
+      },
+    });
+  } catch (error) {
+    console.error('Fetch album detail error:', error);
+    res.status(500).json({ error: '获取专辑详情失败' });
+  }
+});
+
+app.post('/api/albums', requireAdmin, async (req, res) => {
+  try {
+    const body = (req.body || {}) as Record<string, unknown>;
+    const title = typeof body.title === 'string' ? body.title.trim() : '';
+    const artist = typeof body.artist === 'string' ? body.artist.trim() : '';
+    const id = typeof body.id === 'string' ? body.id.trim() : '';
+    const sourceId = typeof body.sourceId === 'string' ? body.sourceId.trim() : id;
+    const platform = parseMusicPlatform(body.platform) || 'netease';
+    const resourceType = parseMusicCollectionType(body.resourceType) || 'album';
+    const description = typeof body.description === 'string' ? body.description.trim() : null;
+    const platformUrl = typeof body.platformUrl === 'string' ? body.platformUrl.trim() : null;
+    const cover = typeof body.cover === 'string' ? body.cover.trim() : '';
+    const tracks = normalizeTrackDiscPayload(body.tracks);
+
+    if (!title || !artist) {
+      res.status(400).json({ error: '缺少专辑信息' });
+      return;
+    }
+
+    const finalSourceId = sourceId || id || `${Date.now()}`;
+    const finalId = id || `${platform}_${resourceType}_${finalSourceId}`;
+
+    const existing = await prismaAny.album.findUnique({ where: { id: finalId } });
+    if (existing) {
+      res.status(409).json({ error: '专辑已存在' });
+      return;
+    }
+
+    const created = await prismaAny.album.create({
+      data: {
+        id: finalId,
+        resourceType,
+        platform,
+        sourceId: finalSourceId,
+        title,
+        artist,
+        description,
+        platformUrl,
+        cover,
+        tracks,
+      },
+      include: {
+        covers: {
+          orderBy: { sortOrder: 'asc' },
+        },
+        songRelations: {
+          include: {
+            song: {
+              select: {
+                docId: true,
+                id: true,
+                title: true,
+                artist: true,
+                cover: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (tracks.length) {
+      await applyAlbumTracksToRelations(created.docId, tracks);
+    }
+
+    res.status(201).json({
+      album: toAlbumResponse(created),
+    });
+  } catch (error) {
+    console.error('Create album error:', error);
+    res.status(500).json({ error: '创建专辑失败' });
+  }
+});
+
+app.patch('/api/albums/:docId', requireAdmin, async (req, res) => {
+  try {
+    const docId = req.params.docId;
+    const existing = await prismaAny.album.findUnique({ where: { docId } });
+    if (!existing) {
+      res.status(404).json({ error: '专辑不存在' });
+      return;
+    }
+
+    const body = (req.body || {}) as Record<string, unknown>;
+    const updateData: Record<string, unknown> = {};
+
+    if (typeof body.title === 'string') updateData.title = body.title.trim();
+    if (typeof body.artist === 'string') updateData.artist = body.artist.trim();
+    if (typeof body.description === 'string' || body.description === null) updateData.description = body.description;
+    if (typeof body.platformUrl === 'string' || body.platformUrl === null) updateData.platformUrl = body.platformUrl;
+    if (typeof body.cover === 'string') updateData.cover = body.cover.trim();
+
+    const platform = parseMusicPlatform(body.platform);
+    if (platform) updateData.platform = platform;
+    const resourceType = parseMusicCollectionType(body.resourceType);
+    if (resourceType) updateData.resourceType = resourceType;
+    if (typeof body.sourceId === 'string') updateData.sourceId = body.sourceId.trim();
+    if (typeof body.defaultCoverSource === 'string' || body.defaultCoverSource === null) {
+      updateData.defaultCoverSource = body.defaultCoverSource;
+    }
+
+    if (body.tracks !== undefined) {
+      const normalizedTracks = normalizeTrackDiscPayload(body.tracks);
+      updateData.tracks = normalizedTracks;
+      await applyAlbumTracksToRelations(docId, normalizedTracks);
+    }
+
+    const updated = await prismaAny.album.update({
+      where: { docId },
+      data: updateData,
+      include: {
+        covers: {
+          orderBy: { sortOrder: 'asc' },
+        },
+        songRelations: {
+          include: {
+            song: {
+              select: {
+                docId: true,
+                id: true,
+                title: true,
+                artist: true,
+                cover: true,
+              },
+            },
+          },
+          orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
+        },
+      },
+    });
+
+    res.json({ album: toAlbumResponse(updated) });
+  } catch (error) {
+    console.error('Update album error:', error);
+    res.status(500).json({ error: '更新专辑失败' });
+  }
+});
+
+app.delete('/api/albums/:docId', requireAdmin, async (req, res) => {
+  try {
+    const docId = req.params.docId;
+    const album = await prismaAny.album.findUnique({
+      where: { docId },
+      include: {
+        covers: true,
+      },
+    });
+    if (!album) {
+      res.status(404).json({ error: '专辑不存在' });
+      return;
+    }
+
+    const relations = await prismaAny.songAlbumRelation.findMany({ where: { albumDocId: docId } });
+    const songDocIds = relations.map((item: any) => item.songDocId);
+
+    await prismaAny.songAlbumRelation.deleteMany({ where: { albumDocId: docId } });
+
+    const coverSources = (album.covers || []).map((cover: any) => `album_cover:${cover.id}`);
+    if (coverSources.length) {
+      await prismaAny.musicTrack.updateMany({
+        where: {
+          docId: { in: songDocIds },
+          defaultCoverSource: { in: coverSources },
+        },
+        data: {
+          defaultCoverSource: null,
+        },
+      });
+    }
+
+    for (const cover of album.covers || []) {
+      if (cover.assetId) {
+        const [songLinked, albumLinked, galleryLinked] = await Promise.all([
+          prismaAny.songCover.count({ where: { assetId: cover.assetId } }),
+          prismaAny.albumCover.count({ where: { assetId: cover.assetId, id: { not: cover.id } } }),
+          prisma.galleryImage.count({ where: { assetId: cover.assetId } }),
+        ]);
+        if (songLinked + albumLinked + galleryLinked === 0) {
+          const asset = await prisma.mediaAsset.findUnique({ where: { id: cover.assetId } });
+          if (asset) {
+            await safeDeleteUploadFileByStorageKey(asset.storageKey);
+            await prisma.mediaAsset.update({
+              where: { id: asset.id },
+              data: { status: 'deleted' },
+            });
+          }
+        }
+      } else {
+        await safeDeleteUploadFileByStorageKey(cover.storageKey);
+      }
+    }
+
+    await prismaAny.albumCover.deleteMany({ where: { albumDocId: docId } });
+    await prismaAny.album.delete({ where: { docId } });
+
+    if (songDocIds.length) {
+      const songs = await prismaAny.songAlbumRelation.findMany({
+        where: { songDocId: { in: songDocIds } },
+      });
+      const groupedBySong = new Map<string, Array<{ id: string; isDisplay: boolean }>>();
+      for (const relation of songs) {
+        if (!groupedBySong.has(relation.songDocId)) {
+          groupedBySong.set(relation.songDocId, []);
+        }
+        groupedBySong.get(relation.songDocId)!.push({ id: relation.id, isDisplay: relation.isDisplay });
+      }
+      for (const [, relationList] of groupedBySong.entries()) {
+        if (!relationList.some((relation) => relation.isDisplay) && relationList[0]) {
+          await prismaAny.songAlbumRelation.update({
+            where: { id: relationList[0].id },
+            data: { isDisplay: true },
+          });
+        }
+      }
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete album error:', error);
+    res.status(500).json({ error: '删除专辑失败' });
+  }
+});
+
+app.get('/api/albums/:docId/covers', async (req, res) => {
+  try {
+    const album = await prismaAny.album.findUnique({
+      where: { docId: req.params.docId },
+      include: {
+        covers: {
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    if (!album) {
+      res.status(404).json({ error: '专辑不存在' });
+      return;
+    }
+
+    res.json({
+      covers: (album.covers || []).map((cover: any) => ({
+        id: cover.id,
+        assetId: cover.assetId,
+        storageKey: cover.storageKey,
+        url: cover.publicUrl,
+        isDefault: cover.isDefault,
+        sortOrder: cover.sortOrder,
+      })),
+    });
+  } catch (error) {
+    console.error('Fetch album covers error:', error);
+    res.status(500).json({ error: '获取专辑封面失败' });
+  }
+});
+
+app.post('/api/albums/:docId/covers', requireAdmin, async (req, res) => {
+  try {
+    const albumDocId = req.params.docId;
+    const assetId = typeof req.body?.assetId === 'string' ? req.body.assetId.trim() : '';
+    const isDefault = parseBoolean(req.body?.isDefault, false);
+
+    if (!assetId) {
+      res.status(400).json({ error: '缺少 assetId' });
+      return;
+    }
+
+    const album = await prismaAny.album.findUnique({ where: { docId: albumDocId } });
+    if (!album) {
+      res.status(404).json({ error: '专辑不存在' });
+      return;
+    }
+
+    const cover = await addAlbumCoverFromAsset(albumDocId, assetId, isDefault);
+    if (isDefault) {
+      await prismaAny.album.update({
+        where: { docId: albumDocId },
+        data: {
+          cover: cover.publicUrl,
+        },
+      });
+    }
+
+    res.status(201).json({
+      cover: {
+        id: cover.id,
+        assetId: cover.assetId,
+        storageKey: cover.storageKey,
+        url: cover.publicUrl,
+        isDefault: cover.isDefault,
+        sortOrder: cover.sortOrder,
+      },
+    });
+  } catch (error) {
+    console.error('Create album cover error:', error);
+    res.status(500).json({ error: '添加专辑封面失败' });
+  }
+});
+
+app.delete('/api/albums/:docId/covers/:coverId', requireAdmin, async (req, res) => {
+  try {
+    const { docId: albumDocId, coverId } = req.params;
+    const cover = await prismaAny.albumCover.findFirst({
+      where: {
+        id: coverId,
+        albumDocId,
+      },
+    });
+
+    if (!cover) {
+      res.status(404).json({ error: '封面不存在' });
+      return;
+    }
+
+    await prismaAny.albumCover.delete({ where: { id: cover.id } });
+
+    if (cover.assetId) {
+      const [songLinked, albumLinked, galleryLinked] = await Promise.all([
+        prismaAny.songCover.count({ where: { assetId: cover.assetId } }),
+        prismaAny.albumCover.count({ where: { assetId: cover.assetId } }),
+        prisma.galleryImage.count({ where: { assetId: cover.assetId } }),
+      ]);
+      if (songLinked + albumLinked + galleryLinked === 0) {
+        const asset = await prisma.mediaAsset.findUnique({ where: { id: cover.assetId } });
+        if (asset) {
+          await safeDeleteUploadFileByStorageKey(asset.storageKey);
+          await prisma.mediaAsset.update({
+            where: { id: asset.id },
+            data: { status: 'deleted' },
+          });
+        }
+      }
+    }
+
+    const remaining = await prismaAny.albumCover.findMany({
+      where: { albumDocId },
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    if (!remaining.length) {
+      await prismaAny.album.update({
+        where: { docId: albumDocId },
+        data: {
+          defaultCoverSource: 'old_cover',
+        },
+      });
+    } else {
+      const hasDefault = remaining.some((item: any) => item.isDefault);
+      const first = remaining[0];
+      if (!hasDefault) {
+        await prismaAny.albumCover.update({
+          where: { id: first.id },
+          data: { isDefault: true },
+        });
+        await prismaAny.album.update({
+          where: { docId: albumDocId },
+          data: {
+            defaultCoverSource: `album_cover:${first.id}`,
+            cover: first.publicUrl,
+          },
+        });
+      }
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete album cover error:', error);
+    res.status(500).json({ error: '删除专辑封面失败' });
+  }
+});
+
+app.patch('/api/albums/:docId/covers/:coverId/default', requireAdmin, async (req, res) => {
+  try {
+    const { docId: albumDocId, coverId } = req.params;
+    const cover = await prismaAny.albumCover.findFirst({
+      where: {
+        id: coverId,
+        albumDocId,
+      },
+    });
+    if (!cover) {
+      res.status(404).json({ error: '封面不存在' });
+      return;
+    }
+
+    await prismaAny.albumCover.updateMany({
+      where: { albumDocId },
+      data: { isDefault: false },
+    });
+    await prismaAny.albumCover.update({
+      where: { id: coverId },
+      data: { isDefault: true },
+    });
+    await prismaAny.album.update({
+      where: { docId: albumDocId },
+      data: {
+        defaultCoverSource: `album_cover:${coverId}`,
+        cover: cover.publicUrl,
+      },
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Set album default cover error:', error);
+    res.status(500).json({ error: '设置默认封面失败' });
+  }
+});
+
+app.post('/api/albums/:docId/sync-covers-to-songs', requireAdmin, async (req, res) => {
+  try {
+    const albumDocId = req.params.docId;
+    const coverId = typeof req.body?.coverId === 'string' ? req.body.coverId.trim() : '';
+    const songDocIdsRaw = Array.isArray(req.body?.songDocIds) ? req.body.songDocIds : [];
+    const songDocIds = songDocIdsRaw
+      .filter((item: unknown): item is string => typeof item === 'string')
+      .map((item: string) => item.trim())
+      .filter(Boolean);
+
+    const album = await prismaAny.album.findUnique({
+      where: { docId: albumDocId },
+      include: {
+        covers: true,
+      },
+    });
+    if (!album) {
+      res.status(404).json({ error: '专辑不存在' });
+      return;
+    }
+
+    let selectedCover: any = null;
+    if (coverId) {
+      selectedCover = album.covers.find((item: any) => item.id === coverId) || null;
+    }
+    if (!selectedCover) {
+      selectedCover = album.covers.find((item: any) => item.isDefault) || album.covers[0] || null;
+    }
+    if (!selectedCover) {
+      res.status(400).json({ error: '专辑没有可同步的封面' });
+      return;
+    }
+
+    const relations = await prismaAny.songAlbumRelation.findMany({
+      where: {
+        albumDocId,
+        ...(songDocIds.length ? { songDocId: { in: songDocIds } } : {}),
+      },
+      select: {
+        songDocId: true,
+      },
+    });
+
+    const targetSongDocIds = relations.map((item: any) => item.songDocId);
+    if (!targetSongDocIds.length) {
+      res.status(400).json({ error: '没有可同步的歌曲' });
+      return;
+    }
+
+    await prismaAny.musicTrack.updateMany({
+      where: {
+        docId: { in: targetSongDocIds },
+      },
+      data: {
+        cover: selectedCover.publicUrl,
+        defaultCoverSource: `album_cover:${selectedCover.id}`,
+      },
+    });
+
+    res.json({
+      success: true,
+      syncedCount: targetSongDocIds.length,
+      cover: {
+        id: selectedCover.id,
+        url: selectedCover.publicUrl,
+      },
+    });
+  } catch (error) {
+    console.error('Sync album covers to songs error:', error);
+    res.status(500).json({ error: '同步专辑封面失败' });
+  }
+});
+
+app.post('/api/albums/:docId/discs', requireAdmin, async (req, res) => {
+  try {
+    const docId = req.params.docId;
+    const album = await prismaAny.album.findUnique({ where: { docId } });
+    if (!album) {
+      res.status(404).json({ error: '专辑不存在' });
+      return;
+    }
+
+    const tracks = normalizeTrackDiscPayload(album.tracks);
+    const requestedDisc = parseInteger(req.body?.discNumber, 0, { min: 1, max: 20 });
+    const nextDisc = requestedDisc || (tracks.length ? tracks[tracks.length - 1].disc + 1 : 1);
+    if (tracks.some((item) => item.disc === nextDisc)) {
+      res.status(400).json({ error: 'Disc 已存在' });
+      return;
+    }
+
+    const discName = typeof req.body?.name === 'string' && req.body.name.trim()
+      ? req.body.name.trim()
+      : `Disc ${nextDisc}`;
+    tracks.push({
+      disc: nextDisc,
+      name: discName,
+      songs: [],
+    });
+    tracks.sort((a, b) => a.disc - b.disc);
+
+    await prismaAny.album.update({
+      where: { docId },
+      data: {
+        tracks,
+      },
+    });
+
+    res.status(201).json({
+      disc: {
+        disc: nextDisc,
+        name: discName,
+      },
+    });
+  } catch (error) {
+    console.error('Create album disc error:', error);
+    res.status(500).json({ error: '新增 Disc 失败' });
+  }
+});
+
+app.delete('/api/albums/:docId/discs/:discNumber', requireAdmin, async (req, res) => {
+  try {
+    const docId = req.params.docId;
+    const discNumber = parseInteger(req.params.discNumber, 0, { min: 1, max: 20 });
+    if (!discNumber) {
+      res.status(400).json({ error: 'Disc 参数无效' });
+      return;
+    }
+
+    const album = await prismaAny.album.findUnique({ where: { docId } });
+    if (!album) {
+      res.status(404).json({ error: '专辑不存在' });
+      return;
+    }
+
+    const tracks = normalizeTrackDiscPayload(album.tracks);
+    const target = tracks.find((item) => item.disc === discNumber);
+    if (!target) {
+      res.status(404).json({ error: 'Disc 不存在' });
+      return;
+    }
+    if (target.songs.length) {
+      res.status(400).json({ error: 'Disc 下仍有歌曲，无法删除' });
+      return;
+    }
+
+    const nextTracks = tracks.filter((item) => item.disc !== discNumber);
+    await prismaAny.album.update({
+      where: { docId },
+      data: {
+        tracks: nextTracks,
+      },
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete album disc error:', error);
+    res.status(500).json({ error: '删除 Disc 失败' });
+  }
+});
+
+app.patch('/api/albums/:docId/tracks/reorder', requireAdmin, async (req, res) => {
+  try {
+    const docId = req.params.docId;
+    const album = await prismaAny.album.findUnique({ where: { docId } });
+    if (!album) {
+      res.status(404).json({ error: '专辑不存在' });
+      return;
+    }
+
+    const tracks = normalizeTrackDiscPayload(req.body?.tracks);
+    await prismaAny.album.update({
+      where: { docId },
+      data: {
+        tracks,
+      },
+    });
+    await applyAlbumTracksToRelations(docId, tracks);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Reorder album tracks error:', error);
+    res.status(500).json({ error: '重排专辑曲目失败' });
+  }
+});
+
+app.post('/api/albums/:docId/sync-display-to-songs', requireAdmin, async (req, res) => {
+  try {
+    const albumDocId = req.params.docId;
+    const relationRows = await prismaAny.songAlbumRelation.findMany({
+      where: { albumDocId },
+      orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
+    });
+
+    if (!relationRows.length) {
+      res.json({ success: true, updated: 0 });
+      return;
+    }
+
+    const songDocIdsRaw = Array.isArray(req.body?.songDocIds) ? req.body.songDocIds : [];
+    const selectedSongDocIds = songDocIdsRaw
+      .filter((item: unknown): item is string => typeof item === 'string')
+      .map((item: string) => item.trim())
+      .filter(Boolean);
+
+    const targetSongDocIds = selectedSongDocIds.length
+      ? relationRows
+        .map((item: any) => item.songDocId)
+        .filter((id: string) => selectedSongDocIds.includes(id))
+      : relationRows.map((item: any) => item.songDocId);
+
+    if (!targetSongDocIds.length) {
+      res.json({ success: true, updated: 0 });
+      return;
+    }
+
+    await prismaAny.songAlbumRelation.updateMany({
+      where: {
+        songDocId: { in: targetSongDocIds },
+      },
+      data: {
+        isDisplay: false,
+      },
+    });
+
+    for (const songDocId of targetSongDocIds) {
+      await prismaAny.songAlbumRelation.updateMany({
+        where: {
+          songDocId,
+          albumDocId,
+        },
+        data: {
+          isDisplay: true,
+        },
+      });
+    }
+
+    await prismaAny.musicTrack.updateMany({
+      where: { docId: { in: targetSongDocIds } },
+      data: {
+        displayAlbumMode: 'linked',
+      },
+    });
+
+    res.json({ success: true, updated: targetSongDocIds.length });
+  } catch (error) {
+    console.error('Sync display album info error:', error);
+    res.status(500).json({ error: '同步展示专辑失败' });
   }
 });
 
@@ -5679,61 +8769,85 @@ app.get('/api/music/song/:id', async (req, res) => {
   const { id } = req.params;
 
   try {
-    const existing = await prisma.musicTrack.findUnique({
-      where: { id },
+    const existing = await prismaAny.musicTrack.findFirst({
+      where: {
+        OR: [
+          { id },
+          { neteaseId: id },
+          { tencentId: id },
+          { kugouId: id },
+          { baiduId: id },
+          { kuwoId: id },
+        ],
+      },
+      include: {
+        covers: {
+          orderBy: { sortOrder: 'asc' },
+        },
+        albumRelations: {
+          include: {
+            album: {
+              include: {
+                covers: {
+                  orderBy: { sortOrder: 'asc' },
+                },
+              },
+            },
+          },
+          orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
+        },
+      },
     });
 
     if (existing) {
+      const resolved = await resolveMusicPlayUrl(existing);
+      const song = toSongResponse(existing as MusicTrackWithRelations);
       res.json({
-        ...existing,
-        docId: existing.docId,
+        ...song,
+        playUrl: resolved.playUrl || song.audioUrl,
+        playMeta: {
+          platform: resolved.platform,
+          sourceId: resolved.sourceId,
+          cached: resolved.cached,
+          cacheExpiresAt: resolved.cacheExpiresAt,
+          fallback: Boolean((resolved as { fallback?: boolean }).fallback),
+        },
       });
       return;
     }
 
-    const url = `https://music.163.com/song?id=${id}`;
-
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
-    });
-
-    const $ = cheerio.load(response.data);
-    const metadata: {
-      id: string;
-      audioUrl: string;
-      title?: string;
-      cover?: string;
-      artist?: string;
-      album?: string;
-      lyric?: string;
-    } = {
-      id,
-      audioUrl: `https://music.163.com/song/media/outer/url?id=${id}.mp3`,
-    };
-
-    $('meta').each((_, el) => {
-      const property = $(el).attr('property');
-      const content = $(el).attr('content');
-      if (!content) return;
-
-      if (property === 'og:title') metadata.title = content;
-      if (property === 'og:image') metadata.cover = content;
-      if (property === 'og:music:artist') metadata.artist = content;
-      if (property === 'og:music:album') metadata.album = content;
-    });
-
-    try {
-      const lrcResponse = await axios.get(`https://music.163.com/api/song/media?id=${id}`);
-      if (lrcResponse.data?.lyric) {
-        metadata.lyric = lrcResponse.data.lyric;
-      }
-    } catch (error) {
-      console.error('Error fetching lyrics:', error);
+    const preview = await getMusicResourcePreview('netease', 'song', id);
+    const track = normalizeMusicImportTracks(preview.songs)[0];
+    if (!track) {
+      res.status(404).json({ error: '未找到歌曲信息' });
+      return;
     }
 
-    res.json(metadata);
+    const audioUrl = await resolveMetingAudioUrl('netease', track.urlId);
+    const lyric = await resolveMetingLyric('netease', track.lyricId);
+
+    res.json({
+      docId: null,
+      id: track.sourceId,
+      title: track.title || preview.title,
+      artist: track.artist || preview.artist,
+      album: track.album || preview.title,
+      cover: track.cover || preview.cover,
+      audioUrl: audioUrl || '',
+      playUrl: audioUrl || '',
+      lyric: lyric || null,
+      primaryPlatform: 'netease',
+      enabledPlatform: 'netease',
+      platformIds: {
+        neteaseId: track.sourceId,
+        tencentId: null,
+        kugouId: null,
+        baiduId: null,
+        kuwoId: null,
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
   } catch (error) {
     console.error('Error fetching song metadata:', error);
     res.status(500).json({ error: 'Failed to fetch song metadata' });
@@ -6259,6 +9373,314 @@ app.get('/api/search/suggest', async (req: AuthenticatedRequest, res) => {
   } catch (error) {
     console.error('Search suggest error:', error);
     res.status(500).json({ error: '搜索建议失败' });
+  }
+});
+
+app.post('/api/admin/batch/song-covers/delete', requireAdmin, async (req, res) => {
+  try {
+    const coverIdsRaw = Array.isArray(req.body?.coverIds) ? req.body.coverIds : [];
+    const coverIds = coverIdsRaw
+      .filter((item: unknown): item is string => typeof item === 'string')
+      .map((item: string) => item.trim())
+      .filter(Boolean);
+
+    if (!coverIds.length) {
+      res.status(400).json({ error: '请选择要删除的封面' });
+      return;
+    }
+
+    const covers = await prismaAny.songCover.findMany({
+      where: { id: { in: coverIds } },
+      select: {
+        id: true,
+        songDocId: true,
+        assetId: true,
+        storageKey: true,
+        publicUrl: true,
+      },
+    });
+
+    if (!covers.length) {
+      res.json({ deleted: 0 });
+      return;
+    }
+
+    await prismaAny.songCover.deleteMany({
+      where: { id: { in: covers.map((cover: any) => cover.id) } },
+    });
+
+    const touchedSongIds = new Set<string>();
+    for (const cover of covers) {
+      touchedSongIds.add(cover.songDocId);
+      if (cover.assetId) {
+        const [songLinked, albumLinked, galleryLinked] = await Promise.all([
+          prismaAny.songCover.count({ where: { assetId: cover.assetId } }),
+          prismaAny.albumCover.count({ where: { assetId: cover.assetId } }),
+          prisma.galleryImage.count({ where: { assetId: cover.assetId } }),
+        ]);
+        if (songLinked + albumLinked + galleryLinked === 0) {
+          const asset = await prisma.mediaAsset.findUnique({ where: { id: cover.assetId } });
+          if (asset) {
+            await safeDeleteUploadFileByStorageKey(asset.storageKey);
+            await prisma.mediaAsset.update({
+              where: { id: asset.id },
+              data: { status: 'deleted' },
+            });
+          }
+        }
+      } else {
+        await safeDeleteUploadFileByStorageKey(cover.storageKey);
+      }
+    }
+
+    for (const songDocId of touchedSongIds) {
+      const remaining = await prismaAny.songCover.findMany({
+        where: { songDocId },
+        orderBy: { sortOrder: 'asc' },
+      });
+      if (!remaining.length) {
+        await prismaAny.musicTrack.update({
+          where: { docId: songDocId },
+          data: {
+            defaultCoverSource: null,
+            cover: '',
+          },
+        });
+        continue;
+      }
+      if (!remaining.some((item: any) => item.isDefault)) {
+        await prismaAny.songCover.update({
+          where: { id: remaining[0].id },
+          data: { isDefault: true },
+        });
+        await prismaAny.musicTrack.update({
+          where: { docId: songDocId },
+          data: {
+            defaultCoverSource: `song_cover:${remaining[0].id}`,
+            cover: remaining[0].publicUrl,
+          },
+        });
+      }
+    }
+
+    res.json({ deleted: covers.length });
+  } catch (error) {
+    console.error('Batch delete song covers error:', error);
+    res.status(500).json({ error: '批量删除歌曲封面失败' });
+  }
+});
+
+app.post('/api/admin/batch/album-covers/delete', requireAdmin, async (req, res) => {
+  try {
+    const coverIdsRaw = Array.isArray(req.body?.coverIds) ? req.body.coverIds : [];
+    const coverIds = coverIdsRaw
+      .filter((item: unknown): item is string => typeof item === 'string')
+      .map((item: string) => item.trim())
+      .filter(Boolean);
+
+    if (!coverIds.length) {
+      res.status(400).json({ error: '请选择要删除的封面' });
+      return;
+    }
+
+    const covers = await prismaAny.albumCover.findMany({
+      where: { id: { in: coverIds } },
+      select: {
+        id: true,
+        albumDocId: true,
+        assetId: true,
+        storageKey: true,
+        publicUrl: true,
+      },
+    });
+
+    if (!covers.length) {
+      res.json({ deleted: 0 });
+      return;
+    }
+
+    await prismaAny.albumCover.deleteMany({
+      where: { id: { in: covers.map((cover: any) => cover.id) } },
+    });
+
+    const touchedAlbumIds = new Set<string>();
+    for (const cover of covers) {
+      touchedAlbumIds.add(cover.albumDocId);
+      if (cover.assetId) {
+        const [songLinked, albumLinked, galleryLinked] = await Promise.all([
+          prismaAny.songCover.count({ where: { assetId: cover.assetId } }),
+          prismaAny.albumCover.count({ where: { assetId: cover.assetId } }),
+          prisma.galleryImage.count({ where: { assetId: cover.assetId } }),
+        ]);
+        if (songLinked + albumLinked + galleryLinked === 0) {
+          const asset = await prisma.mediaAsset.findUnique({ where: { id: cover.assetId } });
+          if (asset) {
+            await safeDeleteUploadFileByStorageKey(asset.storageKey);
+            await prisma.mediaAsset.update({
+              where: { id: asset.id },
+              data: { status: 'deleted' },
+            });
+          }
+        }
+      } else {
+        await safeDeleteUploadFileByStorageKey(cover.storageKey);
+      }
+    }
+
+    for (const albumDocId of touchedAlbumIds) {
+      const remaining = await prismaAny.albumCover.findMany({
+        where: { albumDocId },
+        orderBy: { sortOrder: 'asc' },
+      });
+      if (!remaining.length) {
+        await prismaAny.album.update({
+          where: { docId: albumDocId },
+          data: {
+            defaultCoverSource: 'old_cover',
+          },
+        });
+        continue;
+      }
+      if (!remaining.some((item: any) => item.isDefault)) {
+        await prismaAny.albumCover.update({
+          where: { id: remaining[0].id },
+          data: { isDefault: true },
+        });
+        await prismaAny.album.update({
+          where: { docId: albumDocId },
+          data: {
+            defaultCoverSource: `album_cover:${remaining[0].id}`,
+            cover: remaining[0].publicUrl,
+          },
+        });
+      }
+    }
+
+    res.json({ deleted: covers.length });
+  } catch (error) {
+    console.error('Batch delete album covers error:', error);
+    res.status(500).json({ error: '批量删除专辑封面失败' });
+  }
+});
+
+app.post('/api/admin/batch/album-covers/sync-to-songs', requireAdmin, async (req, res) => {
+  try {
+    const albumDocId = typeof req.body?.albumDocId === 'string' ? req.body.albumDocId.trim() : '';
+    const coverId = typeof req.body?.coverId === 'string' ? req.body.coverId.trim() : '';
+    const songDocIdsRaw = Array.isArray(req.body?.songDocIds) ? req.body.songDocIds : [];
+    const songDocIds = songDocIdsRaw
+      .filter((item: unknown): item is string => typeof item === 'string')
+      .map((item: string) => item.trim())
+      .filter(Boolean);
+
+    if (!albumDocId) {
+      res.status(400).json({ error: '缺少 albumDocId' });
+      return;
+    }
+
+    const album = await prismaAny.album.findUnique({
+      where: { docId: albumDocId },
+      include: { covers: true },
+    });
+    if (!album) {
+      res.status(404).json({ error: '专辑不存在' });
+      return;
+    }
+
+    const selectedCover = coverId
+      ? album.covers.find((item: any) => item.id === coverId)
+      : album.covers.find((item: any) => item.isDefault) || album.covers[0];
+
+    if (!selectedCover) {
+      res.status(400).json({ error: '专辑没有可同步的封面' });
+      return;
+    }
+
+    const relationRows = await prismaAny.songAlbumRelation.findMany({
+      where: {
+        albumDocId,
+        ...(songDocIds.length ? { songDocId: { in: songDocIds } } : {}),
+      },
+      select: { songDocId: true },
+    });
+    const targetSongIds = relationRows.map((item: any) => item.songDocId);
+
+    if (!targetSongIds.length) {
+      res.status(400).json({ error: '没有可同步的歌曲' });
+      return;
+    }
+
+    await prismaAny.musicTrack.updateMany({
+      where: { docId: { in: targetSongIds } },
+      data: {
+        cover: selectedCover.publicUrl,
+        defaultCoverSource: `album_cover:${selectedCover.id}`,
+      },
+    });
+
+    res.json({
+      synced: targetSongIds.length,
+      cover: {
+        id: selectedCover.id,
+        url: selectedCover.publicUrl,
+      },
+    });
+  } catch (error) {
+    console.error('Batch sync album covers error:', error);
+    res.status(500).json({ error: '批量同步专辑封面失败' });
+  }
+});
+
+app.patch('/api/admin/batch/songs/display-info', requireAdmin, async (req, res) => {
+  try {
+    const songDocIdsRaw = Array.isArray(req.body?.songDocIds) ? req.body.songDocIds : [];
+    const songDocIds = songDocIdsRaw
+      .filter((item: unknown): item is string => typeof item === 'string')
+      .map((item: string) => item.trim())
+      .filter(Boolean);
+
+    if (!songDocIds.length) {
+      res.status(400).json({ error: '缺少 songDocIds' });
+      return;
+    }
+
+    const displayAlbumMode = parseDisplayAlbumMode(req.body?.displayAlbumMode);
+    const manualAlbumName = typeof req.body?.manualAlbumName === 'string' ? req.body.manualAlbumName.trim() : undefined;
+    const defaultCoverSource =
+      typeof req.body?.defaultCoverSource === 'string' || req.body?.defaultCoverSource === null
+        ? req.body.defaultCoverSource
+        : undefined;
+
+    const updateData: Record<string, unknown> = {};
+    if (displayAlbumMode) {
+      updateData.displayAlbumMode = displayAlbumMode;
+      if (displayAlbumMode !== 'manual') {
+        updateData.manualAlbumName = null;
+      }
+    }
+    if (manualAlbumName !== undefined) {
+      updateData.manualAlbumName = manualAlbumName;
+    }
+    if (defaultCoverSource !== undefined) {
+      updateData.defaultCoverSource = defaultCoverSource;
+    }
+
+    if (!Object.keys(updateData).length) {
+      res.status(400).json({ error: '没有可更新的字段' });
+      return;
+    }
+
+    const result = await prismaAny.musicTrack.updateMany({
+      where: {
+        docId: { in: songDocIds },
+      },
+      data: updateData,
+    });
+
+    res.json({ updated: result.count });
+  } catch (error) {
+    console.error('Batch update songs display info error:', error);
+    res.status(500).json({ error: '批量更新歌曲展示信息失败' });
   }
 });
 

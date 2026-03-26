@@ -215,6 +215,7 @@ model WikiPage {
   category      String
   content       String         @db.LongText
   tags          Json?
+  relations     Json?
   eventDate     String?
   status        ContentStatus  @default(published)
   reviewNote    String?        @db.Text
@@ -301,6 +302,7 @@ model WikiRevision {
   slug       String?
   category   String?
   tags       Json?
+  relations  Json?
   eventDate  String?
   editorUid  String
   editorName String

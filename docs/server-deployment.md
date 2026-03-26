@@ -57,6 +57,23 @@ npm -v
 ## 2. 数据库初始化（MariaDB）
 
 建议使用独立数据库用户，不要让应用直接使用 `root`。
+# 1. 更新包索引
+sudo apt update
+
+# 2. 安装 MariaDB 服务器和客户端
+sudo apt install -y mariadb-server mariadb-client
+
+# 3. 验证安装
+mariadb --version
+# 或
+mysql --version
+
+# 4. 启动并启用开机自启
+sudo systemctl start mariadb
+sudo systemctl enable mariadb
+
+# 5. 查看运行状态
+sudo systemctl status mariadb
 
 ```bash
 # 进入 MariaDB
@@ -113,6 +130,7 @@ IMAGE_EMBEDDING_MODEL="Xenova/clip-vit-base-patch32"
 IMAGE_EMBEDDING_VECTOR_SIZE="512"
 IMAGE_EMBEDDING_BATCH_SIZE="100"
 IMAGE_SEARCH_RESULT_LIMIT="24"
+MUSIC_PLAY_URL_CACHE_TTL_SECONDS="600"
 EOF
 ```
 
@@ -127,6 +145,7 @@ EOF
 - `UPLOAD_SESSION_TTL_MINUTES` 控制图集上传会话有效期（分钟，默认 45）。
 - `QDRANT_URL` 指向本机 Qdrant 时建议保持 `http://127.0.0.1:6333`。
 - `IMAGE_EMBEDDING_MODEL` 当前实现默认 `Xenova/clip-vit-base-patch32`（CPU 友好）。
+- `MUSIC_PLAY_URL_CACHE_TTL_SECONDS` 控制音乐实时播放链接缓存时长（秒，默认 600，最小 60）。
 
 ---
 
@@ -168,10 +187,17 @@ npm run db:seed
 重点：部署时确保执行 `prisma/migrate.sql`，让以下结构存在：
 
 - `WikiPage.mainBranchId` / `WikiPage.mergedAt`
+- `WikiPage.relations`（知识图谱轻量关联）
 - `WikiBranch` 表
 - `WikiPullRequest` 表
 - `WikiPullRequestComment` 表
-- `WikiRevision` 的 `branchId/slug/category/tags/eventDate/isAutoSave`
+- `WikiRevision` 的 `branchId/slug/category/tags/relations/eventDate/isAutoSave`
+
+Wiki 关联能力说明：
+
+- 关联关系存储在 `WikiPage.relations` 与 `WikiRevision.relations`（JSON）。
+- 反向关系由服务端按 `bidirectional=true` 自动推断，无需写入第二条反向记录。
+- 前端图谱视图默认展示“当前页面为中心的 2 层关系网络”。
 
 `db:seed` 会创建初始管理员账号（来自 `SEED_SUPER_ADMIN_EMAIL` / `SEED_SUPER_ADMIN_PASSWORD`）。
 
@@ -188,6 +214,40 @@ npx prisma db execute --file /tmp/check_image_embedding.sql --schema prisma/sche
 ```
 
 若返回 `cnt=0`，可直接单独执行建表 SQL（见 `prisma/migrate.sql` 中 `CREATE TABLE IF NOT EXISTS ImageEmbedding` 段）后再重启服务。
+
+### 6.2 音乐模型升级说明（多平台 + 专辑一等模型）
+
+当前音乐模块已切换到新的数据结构，重点包括：
+
+- `MusicTrack` 支持多平台来源字段（网易云/QQ/酷狗/酷我/百度）
+- 播放链接改为运行时解析并缓存（`/api/music/:docId/play-url`）
+- 专辑从歌曲字段中拆分为独立 `Album` 模型
+- 歌曲封面、专辑封面、歌曲-专辑关系、伴奏关系改为独立关系表
+
+本仓库当前策略是“直切丢弃旧数据”，不做旧音乐结构的数据迁移。部署时只需确保最新 `prisma/migrate.sql` 已执行成功。
+
+建议执行后快速确认核心表存在：
+
+```bash
+cat > /tmp/check_music_tables.sql <<'EOF'
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = DATABASE()
+  AND table_name IN (
+    'MusicTrack',
+    'Album',
+    'SongCover',
+    'AlbumCover',
+    'SongAlbumRelation',
+    'SongInstrumentalRelation'
+  )
+ORDER BY table_name;
+EOF
+
+npx prisma db execute --file /tmp/check_music_tables.sql --schema prisma/schema.prisma
+```
+
+返回应包含上述 6 张表；若缺失，重新执行一次 `prisma/migrate.sql` 并检查输出报错。
 
 ---
 
@@ -394,6 +454,39 @@ curl -X POST http://127.0.0.1:3000/api/mp/posts \
 ```bash
 pm2 restart huangshifu-wiki --update-env
 ```
+
+### 11.4 音乐模块专项验证（新架构）
+
+建议至少做一次以下 API 自测（管理员态）：
+
+```bash
+# 1) URL 解析
+curl -X POST http://127.0.0.1:3000/api/music/parse-url \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"url":"https://music.163.com/#/song?id=29764545"}'
+
+# 2) 从解析结果导入
+curl -X POST http://127.0.0.1:3000/api/music/import \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"resource":"song","platform":"netease","id":"29764545"}'
+
+# 3) 拉取歌曲播放链接（命中运行时缓存）
+curl "http://127.0.0.1:3000/api/music/<docId>/play-url" \
+  -b cookie.txt -c cookie.txt
+
+# 4) 查看专辑列表
+curl "http://127.0.0.1:3000/api/albums?page=1&pageSize=20" \
+  -b cookie.txt -c cookie.txt
+```
+
+验证点：
+
+- `parse-url` 能识别平台、资源类型和资源 ID
+- `import` 后 `/api/music` 可看到新增曲目
+- 首次 `play-url` 解析成功，重复请求延迟明显下降（缓存生效）
+- `/api/albums` 可正常返回专辑分页结构
 
 ---
 

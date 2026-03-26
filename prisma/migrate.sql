@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS `WikiPage` (
   `category` varchar(191) NOT NULL,
   `content` longtext NOT NULL,
   `tags` json DEFAULT NULL,
+  `relations` json DEFAULT NULL,
   `eventDate` varchar(191) DEFAULT NULL,
   `status` enum('draft','pending','published','rejected') NOT NULL DEFAULT 'published',
   `reviewNote` text DEFAULT NULL,
@@ -154,6 +155,7 @@ CREATE TABLE IF NOT EXISTS `WikiRevision` (
   `pageSlug` varchar(191) NOT NULL,
   `title` varchar(191) NOT NULL,
   `content` longtext NOT NULL,
+  `relations` json DEFAULT NULL,
   `editorUid` varchar(191) NOT NULL,
   `editorName` varchar(191) NOT NULL,
   `createdAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -357,6 +359,20 @@ PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
+SET @has_wiki_page_relations := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiPage' AND COLUMN_NAME = 'relations'
+);
+SET @sql := IF(
+  @has_wiki_page_relations = 0,
+  'ALTER TABLE `WikiPage` ADD COLUMN `relations` json DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 SET @has_wiki_page_main_branch_idx := (
   SELECT COUNT(*)
   FROM INFORMATION_SCHEMA.STATISTICS
@@ -421,6 +437,20 @@ SET @has_wiki_revision_tags := (
 SET @sql := IF(
   @has_wiki_revision_tags = 0,
   'ALTER TABLE `WikiRevision` ADD COLUMN `tags` json DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_revision_relations := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiRevision' AND COLUMN_NAME = 'relations'
+);
+SET @sql := IF(
+  @has_wiki_revision_relations = 0,
+  'ALTER TABLE `WikiRevision` ADD COLUMN `relations` json DEFAULT NULL',
   'SELECT 1'
 );
 PREPARE stmt FROM @sql;
