@@ -10,6 +10,8 @@ Guidance for agentic coding assistants working in this repository.
 - Data/auth: Firebase Auth + Firestore.
 - AI integration: Gemini (`@google/genai`).
 - Package manager: npm (`package-lock.json` is present).
+- ORM: Prisma (with SQLite database).
+- Test runner: Vitest.
 
 ## Source of Truth for Commands
 
@@ -38,41 +40,34 @@ Run all commands from repo root.
 
 - `npm run preview`
 
-### Lint / Static Checks
+### Lint / Type Check
 
 - `npm run lint`
-- Current lint command is type-check only: `tsc --noEmit`.
+- Runs `tsc --noEmit` for type checking only.
 
 ### Clean Output
 
 - `npm run clean`
 
-### Tests (Current State)
+### Tests
 
-- There is no configured test runner right now.
-- No `test` script exists in `package.json`.
-- No test files (`*.test.*`, `*.spec.*`) were found.
+- `npm test` or `npm run test:unit` - Run all tests once with Vitest.
+- `npm run test:watch` - Run tests in watch mode.
+- `npm run test:coverage` - Run tests with coverage report.
 
-## Running a Single Test (Important)
+## Running a Single Test
 
-At this moment, single-test execution is not possible because tests are not configured.
+- Single file: `npx vitest run path/to/file.test.ts`
+- Single test name: `npx vitest run path/to/file.test.ts -t "test name"`
+- Single test file in watch: `npx vitest path/to/file.test.ts`
 
-When asked to run one test, report this clearly and run `npm run lint` as the nearest available validation.
-
-If a test framework is later added, use these patterns:
-
-- Vitest single file: `npx vitest run path/to/file.test.ts`
-- Vitest single test name: `npx vitest run path/to/file.test.ts -t "name"`
-- Jest single file: `npx jest path/to/file.test.ts`
-- Jest single test name: `npx jest path/to/file.test.ts -t "name"`
-
-Do not claim these commands work until corresponding dependencies/scripts exist.
+Test files are located in `tests/unit/`.
 
 ## Environment and Runtime Notes
 
-- Required local secret from README: `GEMINI_API_KEY` in `.env.local`.
+- Required local secret: `GEMINI_API_KEY` in `.env.local`.
 - `vite.config.ts` injects `process.env.GEMINI_API_KEY` via `define`.
-- `vite.config.ts` also gates HMR by `DISABLE_HMR`.
+- `vite.config.ts` gates HMR by `DISABLE_HMR`.
 - Keep existing env behavior unless explicitly asked to change it.
 
 ## Cursor and Copilot Rules Check
@@ -98,12 +93,12 @@ If any of these files appear later, treat them as high-priority instructions and
 
 - Prefer grouped ordering:
   - third-party packages,
-  - internal alias imports,
+  - internal alias imports (`@/`),
   - relative imports,
   - side-effect imports (e.g., CSS) last.
 - Remove unused imports.
 - Prefer named imports over namespace imports unless namespace is clearer.
-- Alias `@` is configured; use it consistently if the target file already uses it.
+- The `@` alias maps to project root (`@/*` → `./*`).
 
 ### 3) Formatting
 
@@ -166,5 +161,5 @@ If any of these files appear later, treat them as high-priority instructions and
 
 - Run `npm run lint` after code changes.
 - Run `npm run build` when changing build/runtime-sensitive code.
-- If no tests exist, state that explicitly in the handoff.
+- Run `npm test` to verify tests pass.
 - Do not invent command output or test results.
