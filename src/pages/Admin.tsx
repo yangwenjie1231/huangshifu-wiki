@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { collection, query, getDocs, doc, deleteDoc, updateDoc, orderBy, limit, setDoc, addDoc, serverTimestamp, db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Shield, Book, MessageSquare, Image as ImageIcon, Users, Trash2, CheckCircle, XCircle, AlertTriangle, ChevronRight, Layers, Plus, Save, Edit2, Megaphone, Music as MusicIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'motion/react';
-import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/apiClient';
+import { apiGet, apiPost } from '../lib/apiClient';
 
 const toDateValue = (value: string | null | undefined) => {
   if (!value) return null;
@@ -14,7 +16,7 @@ const toDateValue = (value: string | null | undefined) => {
 
 const Admin = () => {
   const { user, profile, isAdmin } = useAuth();
-  const [activeTab, setActiveTab] = useState<'reviews' | 'wiki' | 'posts' | 'galleries' | 'locks' | 'users' | 'sections' | 'announcements' | 'music'>('wiki');
+  const [activeTab, setActiveTab] = useState<'reviews' | 'wiki' | 'posts' | 'galleries' | 'users' | 'sections' | 'announcements' | 'music'>('wiki');
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'wiki' | 'posts'>('all');
@@ -22,57 +24,28 @@ const Admin = () => {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [newSection, setNewSection] = useState({ name: '', description: '', order: 0 });
   const [newAnnouncement, setNewAnnouncement] = useState({ content: '', link: '', active: true });
+  const [, setEditingSection] = useState<string | null>(null);
 
   const isSuperAdmin = profile?.role === 'super_admin' || user?.email === 'yangwenjie1231@gmail.com';
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await apiGet<{ data: any[] }>(`/api/admin/${activeTab}`);
-      const rows = response.data || [];
-      const withEntityId = rows.map((item) => ({
-        ...item,
-        __entityId: item.docId || item.id || item.slug || item.uid,
-      }));
-      setData(withEntityId);
+      const colRef = collection(db, activeTab);
+      let q;
+      if (activeTab === 'users') {
+        q = query(colRef, limit(100));
+      } else if (activeTab === 'sections' || activeTab === 'announcements') {
+        q = query(colRef, orderBy('createdAt', 'desc'), limit(100));
+      } else {
+        q = query(colRef, orderBy('updatedAt', 'desc'), limit(100));
+      }
+      const snapshot = await getDocs(q);
+      setData(snapshot.docs.map(doc => ({ ...(doc.data() as any), docId: doc.id })));
     } catch (e) {
       console.error("Error fetching admin data:", e);
-      setData([]);
-    } finally {
-      setLoading(false);
     }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!window.confirm("确定要删除这项内容吗？此操作不可撤销。")) return;
-    try {
-      if (activeTab === 'users') {
-        alert('用户删除请改用封禁/解封治理，避免误删账号数据');
-        return;
-      }
-      if (activeTab === 'posts') {
-        await apiDelete(`/api/posts/${id}`);
-      } else if (activeTab === 'sections') {
-        await apiDelete(`/api/sections/${id}`);
-      } else if (activeTab === 'announcements') {
-        await apiDelete(`/api/announcements/${id}`);
-      } else if (activeTab === 'music') {
-        await apiDelete(`/api/music/${id}`);
-      } else if (activeTab === 'galleries') {
-        await apiDelete(`/api/galleries/${id}`);
-      } else if (activeTab === 'locks') {
-        await apiDelete(`/api/admin/locks/${id}`);
-      } else if (activeTab === 'wiki') {
-        await apiDelete(`/api/admin/wiki/${id}`);
-      } else {
-        await apiDelete(`/api/admin/${activeTab}/${id}`);
-      }
-
-      setData(prev => prev.filter(item => item.__entityId !== id));
-    } catch (e) {
-      console.error("Delete error:", e);
-      alert("删除失败");
-    }
+    setLoading(false);
   };
 
   const fetchReviewQueue = async () => {
@@ -154,6 +127,17 @@ const Admin = () => {
     }
   };
 
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("确定要删除这项内容吗？此操作不可撤销。")) return;
+    try {
+      await deleteDoc(doc(db, activeTab, id));
+      setData(prev => prev.filter(item => item.docId !== id && item.uid !== id));
+    } catch (e) {
+      console.error("Delete error:", e);
+      alert("删除失败");
+    }
+  };
+
   const toggleAdmin = async (targetUser: any) => {
     if (!isSuperAdmin) {
       alert("只有超级管理员可以更改权限");
@@ -162,7 +146,7 @@ const Admin = () => {
     const newRole = targetUser.role === 'admin' ? 'user' : 'admin';
     if (!window.confirm(`确定要将 ${targetUser.displayName} 的角色更改为 ${newRole} 吗？`)) return;
     try {
-      await apiPatch(`/api/users/${targetUser.uid}/role`, { role: newRole });
+      await updateDoc(doc(db, 'users', targetUser.uid), { role: newRole });
       setData(prev => prev.map(u => u.uid === targetUser.uid ? { ...u, role: newRole } : u));
     } catch (e) {
       console.error("Update role error:", e);
@@ -173,13 +157,10 @@ const Admin = () => {
   const handleAddSection = async () => {
     if (!newSection.name) return;
     try {
-      await apiPost('/api/sections', {
-        name: newSection.name,
-        description: newSection.description,
-        order: Number.isFinite(newSection.order) ? newSection.order : 0,
-      });
+      const id = newSection.name.toLowerCase().replace(/\s+/g, '-');
+      await setDoc(doc(db, 'sections', id), { ...newSection, id, createdAt: serverTimestamp() });
       setNewSection({ name: '', description: '', order: 0 });
-      await fetchData();
+      fetchData();
     } catch (e) {
       console.error("Add section error:", e);
     }
@@ -188,13 +169,13 @@ const Admin = () => {
   const handleAddAnnouncement = async () => {
     if (!newAnnouncement.content) return;
     try {
-      await apiPost('/api/announcements', {
-        content: newAnnouncement.content,
-        link: newAnnouncement.link || null,
-        active: newAnnouncement.active,
+      await addDoc(collection(db, 'announcements'), {
+        ...newAnnouncement,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
       setNewAnnouncement({ content: '', link: '', active: true });
-      await fetchData();
+      fetchData();
     } catch (e) {
       console.error("Add announcement error:", e);
     }
@@ -202,7 +183,7 @@ const Admin = () => {
 
   const toggleAnnouncement = async (ann: any) => {
     try {
-      await apiPatch(`/api/announcements/${ann.id}`, { active: !ann.active });
+      await updateDoc(doc(db, 'announcements', ann.id), { active: !ann.active });
       setData(prev => prev.map(a => a.id === ann.id ? { ...a, active: !ann.active } : a));
     } catch (e) {
       console.error("Toggle announcement error:", e);
@@ -231,6 +212,14 @@ const Admin = () => {
             <p className="text-gray-500 italic">内容管理与社区维护</p>
           </div>
         </div>
+        <div className="mt-4">
+          <Link
+            to="/wiki/pull-requests"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-primary text-gray-900 font-bold hover:opacity-90"
+          >
+            <CheckCircle size={16} /> Wiki PR 审核
+          </Link>
+        </div>
       </header>
 
       <div className="flex flex-wrap gap-4 mb-8">
@@ -242,7 +231,6 @@ const Admin = () => {
           { id: 'sections', label: '版块管理', icon: Layers },
           { id: 'announcements', label: '公告管理', icon: Megaphone },
           { id: 'galleries', label: '图集管理', icon: ImageIcon },
-          { id: 'locks', label: '编辑锁', icon: Edit2 },
           { id: 'users', label: '用户管理', icon: Users },
         ].map(tab => (
           <button
@@ -437,17 +425,13 @@ const Admin = () => {
                   </tr>
                 ))
               ) : data.length > 0 ? data.map((item) => (
-                <tr key={item.__entityId || item.id || item.uid || item.docId || item.slug} className="hover:bg-gray-50/50 transition-colors group">
+                <tr key={item.docId || item.uid} className="hover:bg-gray-50/50 transition-colors group">
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-4">
                       {activeTab === 'users' ? (
                         <img src={item.photoURL} alt="" className="w-10 h-10 rounded-full object-cover" referrerPolicy="no-referrer" />
                       ) : activeTab === 'galleries' ? (
                         <img src={item.images?.[0]?.url} alt="" className="w-12 h-12 rounded-xl object-cover" referrerPolicy="no-referrer" />
-                      ) : activeTab === 'locks' ? (
-                        <div className="w-10 h-10 rounded-full bg-brand-cream flex items-center justify-center text-brand-olive">
-                          <Edit2 size={18} />
-                        </div>
                       ) : activeTab === 'music' ? (
                         <img src={item.cover} alt="" className="w-12 h-12 rounded-xl object-cover" referrerPolicy="no-referrer" />
                       ) : (
@@ -456,12 +440,8 @@ const Admin = () => {
                         </div>
                       )}
                       <div>
-                        <p className="font-bold text-gray-700">{item.title || item.displayName || item.slug || (activeTab === 'locks' ? `${item.collection}/${item.recordId}` : '')}</p>
-                        <p className="text-xs text-gray-400 truncate max-w-xs">
-                          {activeTab === 'locks'
-                            ? `${item.username || item.userId} · 到期 ${toDateValue(item.expiresAt) ? format(toDateValue(item.expiresAt)!, 'MM-dd HH:mm') : 'N/A'}`
-                            : item.content?.substring(0, 50) || item.email || item.description || item.artist}
-                        </p>
+                        <p className="font-bold text-gray-700">{item.title || item.displayName || item.slug}</p>
+                        <p className="text-xs text-gray-400 truncate max-w-xs">{item.content?.substring(0, 50) || item.email || item.description || item.artist}</p>
                       </div>
                     </div>
                   </td>
@@ -472,7 +452,7 @@ const Admin = () => {
                         item.role === 'super_admin' ? "bg-purple-100 text-purple-600" :
                         item.role === 'admin' ? "bg-red-100 text-red-600" : "bg-brand-cream text-brand-olive"
                       )}>
-                        {item.role === 'super_admin' ? '超级管理员' : item.category || item.section || item.role || item.name || (activeTab === 'locks' ? item.collection : '默认')}
+                        {item.role === 'super_admin' ? '超级管理员' : item.category || item.section || item.role || item.name || '默认'}
                       </span>
                       {activeTab === 'users' && (
                         <span className={clsx(
@@ -480,14 +460,6 @@ const Admin = () => {
                           item.status === 'banned' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700',
                         )}>
                           {item.status === 'banned' ? '已封禁' : '正常'}
-                        </span>
-                      )}
-                      {activeTab === 'locks' && (
-                        <span className={clsx(
-                          'px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider',
-                          item.isExpired ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700',
-                        )}>
-                          {item.isExpired ? '已过期' : '有效'}
                         </span>
                       )}
                     </div>
@@ -533,8 +505,8 @@ const Admin = () => {
                           {item.status === 'banned' ? <CheckCircle size={18} /> : <AlertTriangle size={18} />}
                         </button>
                       )}
-                      <button
-                        onClick={() => handleDelete(item.__entityId || item.id || item.uid || item.docId || item.slug)}
+                      <button 
+                        onClick={() => handleDelete(item.docId || item.uid)}
                         className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-all"
                         title="删除"
                       >

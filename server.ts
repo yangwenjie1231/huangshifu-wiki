@@ -9,24 +9,11 @@ import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
+import * as cheerio from 'cheerio';
 import { Prisma, PrismaClient, UserRole as PrismaUserRole } from '@prisma/client';
 import { getEmbeddingModelName, getEmbeddingVectorSize, generateImageEmbedding } from './src/server/vector/clipEmbedding';
 import { getQdrantCollectionName, searchImageEmbeddingPoints } from './src/server/vector/qdrantService';
 import { enqueueGalleryImageEmbeddings, enqueueMissingImageEmbeddings, syncImageEmbeddingBatch } from './src/server/vector/embeddingSync';
-import {
-  getMusicResourcePreview,
-  searchMusicResources,
-  resolveAudioUrl,
-  resolveCoverUrl,
-  resolveLyric,
-  type MusicImportTrack,
-} from './src/server/music/metingService';
-import {
-  parseMusicUrl,
-  type MusicPlatform,
-  type MusicResourceType,
-  buildPlatformResourceUrl,
-} from './src/server/music/musicUrlParser';
 
 dotenv.config({ path: '.env.local' });
 dotenv.config();
@@ -57,7 +44,6 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const AUTH_COOKIE_NAME = 'hsf_token';
 const IS_PROD = process.env.NODE_ENV === 'production';
 const UPLOAD_SESSION_TTL_MINUTES = Math.max(5, Number(process.env.UPLOAD_SESSION_TTL_MINUTES || 45));
-const EDIT_LOCK_TTL_MINUTES = Math.max(1, Number(process.env.EDIT_LOCK_TTL_MINUTES || 20));
 const IMAGE_EMBEDDING_BATCH_SIZE = Math.max(1, Number(process.env.IMAGE_EMBEDDING_BATCH_SIZE || 100));
 const IMAGE_SEARCH_RESULT_LIMIT = Math.max(1, Number(process.env.IMAGE_SEARCH_RESULT_LIMIT || 24));
 const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp']);
@@ -98,6 +84,8 @@ interface ApiUser {
 
 type UserStatus = 'active' | 'banned';
 type ContentStatus = 'draft' | 'pending' | 'published' | 'rejected';
+type WikiBranchStatus = 'draft' | 'pending_review' | 'merged' | 'rejected' | 'conflict';
+type WikiPullRequestStatus = 'open' | 'merged' | 'rejected';
 type FavoriteTargetType = 'wiki' | 'post' | 'music';
 type ModerationTargetType = 'wiki' | 'post';
 type NotificationType = 'reply' | 'like' | 'review_result';
@@ -278,32 +266,6 @@ function normalizeTagList(value: unknown) {
     .slice(0, 30);
 }
 
-function normalizeEditLockToken(value: unknown, options?: { maxLength?: number; lowerCase?: boolean }) {
-  if (typeof value !== 'string') {
-    return '';
-  }
-
-  const normalized = value.trim();
-  if (!normalized) {
-    return '';
-  }
-
-  const maxLength = options?.maxLength ?? 191;
-  if (normalized.length > maxLength) {
-    return '';
-  }
-
-  if (!/^[a-zA-Z0-9:_./-]+$/.test(normalized)) {
-    return '';
-  }
-
-  if (options?.lowerCase) {
-    return normalized.toLowerCase();
-  }
-
-  return normalized;
-}
-
 function parseAssetIdList(value: unknown) {
   if (!Array.isArray(value)) {
     return [] as string[];
@@ -325,55 +287,6 @@ function createUploadSessionExpiresAt() {
 
 function isUploadSessionExpired(expiresAt: Date) {
   return expiresAt.getTime() <= Date.now();
-}
-
-function createEditLockExpiresAt() {
-  return new Date(Date.now() + EDIT_LOCK_TTL_MINUTES * 60 * 1000);
-}
-
-function isEditLockExpired(expiresAt: Date) {
-  return expiresAt.getTime() <= Date.now();
-}
-
-async function purgeExpiredEditLocks() {
-  try {
-    await prisma.$executeRawUnsafe(
-      'DELETE FROM `EditLock` WHERE `expiresAt` <= NOW()'
-    );
-  } catch (error) {
-    console.error('Purge expired edit locks error:', error);
-  }
-}
-
-type EditLockRecordRaw = {
-  id: string;
-  collection: string;
-  recordId: string;
-  userId: string;
-  username: string;
-  createdAt: Date | string;
-  updatedAt: Date | string;
-  expiresAt: Date | string;
-};
-
-type EditLockRecord = {
-  id: string;
-  collection: string;
-  recordId: string;
-  userId: string;
-  username: string;
-  createdAt: Date;
-  updatedAt: Date;
-  expiresAt: Date;
-};
-
-function normalizeEditLockRecord(record: EditLockRecordRaw): EditLockRecord {
-  return {
-    ...record,
-    createdAt: parseDate(record.createdAt) || new Date(),
-    updatedAt: parseDate(record.updatedAt) || new Date(),
-    expiresAt: parseDate(record.expiresAt) || new Date(),
-  };
 }
 
 function buildUploadPublicUrl(fileName: string) {
@@ -421,55 +334,6 @@ async function safeDeleteUploadFileByUrl(url: string) {
     return;
   }
   await safeDeleteUploadFileByStorageKey(storageKey);
-}
-
-async function markMediaAssetDeletedIfOrphan(assetId: string | null | undefined) {
-  if (!assetId) {
-    return;
-  }
-
-  const linked = await prisma.galleryImage.count({
-    where: { assetId },
-  });
-  if (linked > 0) {
-    return;
-  }
-
-  const asset = await prisma.mediaAsset.findUnique({
-    where: { id: assetId },
-  });
-  if (!asset) {
-    return;
-  }
-
-  await safeDeleteUploadFileByStorageKey(asset.storageKey);
-  await prisma.mediaAsset.update({
-    where: { id: asset.id },
-    data: { status: 'deleted' },
-  });
-}
-
-async function normalizeGalleryImageSortOrder(client: PrismaClient | Prisma.TransactionClient, galleryId: string) {
-  const images = await client.galleryImage.findMany({
-    where: { galleryId },
-    orderBy: { sortOrder: 'asc' },
-    select: {
-      id: true,
-      sortOrder: true,
-    },
-  });
-
-  await Promise.all(
-    images.map((image, index) => {
-      if (image.sortOrder === index) {
-        return Promise.resolve();
-      }
-      return client.galleryImage.update({
-        where: { id: image.id },
-        data: { sortOrder: index },
-      });
-    }),
-  );
 }
 
 async function validateUploadedImage(file: Express.Multer.File) {
@@ -1137,6 +1001,115 @@ function toWikiResponse(page: {
   };
 }
 
+type WikiBranchWithPage = {
+  id: string;
+  pageSlug: string;
+  editorUid: string;
+  editorName: string;
+  status: WikiBranchStatus;
+  latestRevisionId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  page?: {
+    slug: string;
+    title: string;
+    category: string;
+  } | null;
+};
+
+type WikiPullRequestWithRelations = {
+  id: string;
+  branchId: string;
+  pageSlug: string;
+  title: string;
+  description: string | null;
+  status: WikiPullRequestStatus;
+  createdByUid: string;
+  createdByName: string;
+  reviewedBy: string | null;
+  reviewedAt: Date | null;
+  mergedAt: Date | null;
+  baseRevisionId: string | null;
+  conflictData: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+  branch?: WikiBranchWithPage | null;
+  page?: {
+    slug: string;
+    title: string;
+    category: string;
+  } | null;
+  comments?: {
+    id: string;
+    prId: string;
+    authorUid: string;
+    authorName: string;
+    content: string;
+    createdAt: Date;
+  }[];
+};
+
+function toWikiBranchResponse(branch: WikiBranchWithPage) {
+  return {
+    id: branch.id,
+    pageSlug: branch.pageSlug,
+    editorUid: branch.editorUid,
+    editorName: branch.editorName,
+    status: branch.status,
+    latestRevisionId: branch.latestRevisionId,
+    createdAt: branch.createdAt.toISOString(),
+    updatedAt: branch.updatedAt.toISOString(),
+    page: branch.page
+      ? {
+          slug: branch.page.slug,
+          title: branch.page.title,
+          category: branch.page.category,
+        }
+      : null,
+  };
+}
+
+function toWikiPullRequestResponse(pr: WikiPullRequestWithRelations) {
+  return {
+    id: pr.id,
+    branchId: pr.branchId,
+    pageSlug: pr.pageSlug,
+    title: pr.title,
+    description: pr.description,
+    status: pr.status,
+    createdByUid: pr.createdByUid,
+    createdByName: pr.createdByName,
+    reviewedBy: pr.reviewedBy,
+    reviewedAt: pr.reviewedAt ? pr.reviewedAt.toISOString() : null,
+    mergedAt: pr.mergedAt ? pr.mergedAt.toISOString() : null,
+    baseRevisionId: pr.baseRevisionId,
+    conflictData: pr.conflictData ?? null,
+    createdAt: pr.createdAt.toISOString(),
+    updatedAt: pr.updatedAt.toISOString(),
+    branch: pr.branch ? toWikiBranchResponse(pr.branch) : null,
+    page: pr.page
+      ? {
+          slug: pr.page.slug,
+          title: pr.page.title,
+          category: pr.page.category,
+        }
+      : null,
+    comments: (pr.comments || []).map((comment) => ({
+      id: comment.id,
+      prId: comment.prId,
+      authorUid: comment.authorUid,
+      authorName: comment.authorName,
+      content: comment.content,
+      createdAt: comment.createdAt.toISOString(),
+    })),
+  };
+}
+
+function canManageWikiPullRequest(pr: { createdByUid: string }, authUser: ApiUser) {
+  if (isAdminRole(authUser.role)) return true;
+  return pr.createdByUid === authUser.uid;
+}
+
 function toPostResponse(post: {
   id: string;
   title: string;
@@ -1189,8 +1162,6 @@ function toGalleryResponse(gallery: {
   authorUid: string;
   authorName: string;
   tags: unknown;
-  published?: boolean;
-  publishedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
   images: {
@@ -1216,8 +1187,6 @@ function toGalleryResponse(gallery: {
     authorUid: gallery.authorUid,
     authorName: gallery.authorName,
     tags: serializeTags(gallery.tags),
-    published: gallery.published ?? true,
-    publishedAt: gallery.publishedAt ? gallery.publishedAt.toISOString() : null,
     createdAt: gallery.createdAt.toISOString(),
     updatedAt: gallery.updatedAt.toISOString(),
     images: gallery.images
@@ -1230,323 +1199,6 @@ function toGalleryResponse(gallery: {
         sizeBytes: image.asset?.sizeBytes || null,
       })),
   };
-}
-
-function toEditLockResponse(lock: {
-  id: string;
-  collection: string;
-  recordId: string;
-  userId: string;
-  username: string;
-  createdAt: Date;
-  updatedAt: Date;
-  expiresAt: Date;
-}) {
-  return {
-    id: lock.id,
-    collection: lock.collection,
-    recordId: lock.recordId,
-    userId: lock.userId,
-    username: lock.username,
-    createdAt: lock.createdAt.toISOString(),
-    updatedAt: lock.updatedAt.toISOString(),
-    expiresAt: lock.expiresAt.toISOString(),
-    isExpired: isEditLockExpired(lock.expiresAt),
-  };
-}
-
-function parseMusicPlatform(value: unknown): MusicPlatform | null {
-  if (value === 'netease' || value === 'tencent' || value === 'kugou' || value === 'baidu' || value === 'kuwo') {
-    return value;
-  }
-  return null;
-}
-
-function parseMusicResourceType(value: unknown): MusicResourceType | null {
-  if (value === 'song' || value === 'album' || value === 'playlist') {
-    return value;
-  }
-  return null;
-}
-
-function normalizeStringArray(value: unknown) {
-  if (!Array.isArray(value)) {
-    return [] as string[];
-  }
-
-  return value
-    .filter((item): item is string => typeof item === 'string')
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function toMusicTrackResponse(track: {
-  docId: string;
-  id: string;
-  title: string;
-  artist: string;
-  album: string;
-  cover: string;
-  audioUrl: string;
-  lyric: string | null;
-  sourcePlatform: string | null;
-  sourceUrl: string | null;
-  addedBy: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}) {
-  return {
-    ...track,
-    createdAt: track.createdAt.toISOString(),
-    updatedAt: track.updatedAt.toISOString(),
-  };
-}
-
-function toPlaylistSummaryResponse(playlist: {
-  docId: string;
-  title: string;
-  artist?: string | null;
-  description: string | null;
-  cover: string;
-  resourceType: string;
-  platform: string;
-  platformId: string;
-  platformUrl: string;
-  createdBy: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  _count?: {
-    tracks: number;
-  };
-  tracks?: Array<{
-    track: {
-      artist: string;
-    };
-  }>;
-}) {
-  const fallbackArtist = Array.isArray(playlist.tracks) && playlist.tracks.length
-    ? playlist.tracks[0].track.artist
-    : '';
-
-  return {
-    docId: playlist.docId,
-    title: playlist.title,
-    artist: playlist.artist || fallbackArtist,
-    description: playlist.description,
-    cover: playlist.cover,
-    resourceType: playlist.resourceType,
-    platform: playlist.platform,
-    platformId: playlist.platformId,
-    platformUrl: playlist.platformUrl,
-    createdBy: playlist.createdBy,
-    tracksCount: playlist._count?.tracks ?? 0,
-    createdAt: playlist.createdAt.toISOString(),
-    updatedAt: playlist.updatedAt.toISOString(),
-  };
-}
-
-async function createOrReuseMusicTrack(
-  track: MusicImportTrack,
-  platform: MusicPlatform,
-  addedByUid: string,
-) {
-  const persistedId = `${platform}:${track.sourceId}`;
-  const legacyId = platform === 'netease' ? track.sourceId : '';
-  const existing = await prisma.musicTrack.findFirst({
-    where: {
-      OR: [
-        { id: persistedId },
-        ...(legacyId ? [{ id: legacyId }] : []),
-      ],
-    },
-  });
-
-  if (existing) {
-    if (!existing.sourcePlatform || !existing.sourceUrl) {
-      const updated = await prisma.musicTrack.update({
-        where: { docId: existing.docId },
-        data: {
-          sourcePlatform: existing.sourcePlatform || platform,
-          sourceUrl: existing.sourceUrl || track.sourceUrl || buildPlatformResourceUrl(platform, 'song', track.sourceId),
-        },
-      });
-      return {
-        created: false,
-        song: updated,
-      };
-    }
-
-    return {
-      created: false,
-      song: existing,
-    };
-  }
-
-  const [audioUrl, lyric, cover] = await Promise.all([
-    resolveAudioUrl(platform, track.urlId),
-    resolveLyric(platform, track.lyricId),
-    resolveCoverUrl(platform, track.picId, track.cover),
-  ]);
-
-  const song = await prisma.musicTrack.create({
-    data: {
-      id: persistedId,
-      title: track.title,
-      artist: track.artist,
-      album: track.album,
-      cover: cover || track.cover || '',
-      audioUrl: audioUrl || '',
-      lyric: lyric || null,
-      sourcePlatform: platform,
-      sourceUrl: track.sourceUrl || buildPlatformResourceUrl(platform, 'song', track.sourceId),
-      addedBy: addedByUid,
-    },
-  });
-
-  return {
-    created: true,
-    song,
-  };
-}
-
-type ImportedSongResult = {
-  track: MusicImportTrack;
-  song: Prisma.MusicTrackGetPayload<Record<string, never>>;
-  created: boolean;
-};
-
-type ImportMusicResult = {
-  preview: Awaited<ReturnType<typeof getMusicResourcePreview>>;
-  importedSongs: ImportedSongResult[];
-  createdCount: number;
-  skippedCount: number;
-  failed: Array<{ sourceId: string; error: string }>;
-};
-
-async function importMusicResource(options: {
-  platform: MusicPlatform;
-  type: MusicResourceType;
-  id: string;
-  selectedSongIds: string[];
-  addedByUid: string;
-}) {
-  const preview = await getMusicResourcePreview(options.platform, options.type, options.id);
-  const selectedSet = options.selectedSongIds.length ? new Set(options.selectedSongIds) : null;
-  const tracksToImport = selectedSet
-    ? preview.songs.filter((song) => selectedSet.has(song.sourceId))
-    : preview.songs;
-
-  if (!tracksToImport.length) {
-    throw new Error('未选择可导入的歌曲');
-  }
-
-  const importedSongs: ImportedSongResult[] = [];
-  const failed: Array<{ sourceId: string; error: string }> = [];
-  let createdCount = 0;
-  let skippedCount = 0;
-
-  for (const track of tracksToImport) {
-    try {
-      const result = await createOrReuseMusicTrack(track, options.platform, options.addedByUid);
-      importedSongs.push({
-        track,
-        song: result.song as Prisma.MusicTrackGetPayload<Record<string, never>>,
-        created: result.created,
-      });
-      if (result.created) {
-        createdCount += 1;
-      } else {
-        skippedCount += 1;
-      }
-    } catch (error) {
-      failed.push({
-        sourceId: track.sourceId,
-        error: error instanceof Error ? error.message : '导入失败',
-      });
-    }
-  }
-
-  const output: ImportMusicResult = {
-    preview,
-    importedSongs,
-    createdCount,
-    skippedCount,
-    failed,
-  };
-
-  return output;
-}
-
-async function upsertImportedPlaylist(options: {
-  resourceType: 'album' | 'playlist';
-  platform: MusicPlatform;
-  platformId: string;
-  platformUrl: string;
-  title: string;
-  artist: string;
-  description: string;
-  cover: string;
-  trackDocIds: string[];
-  createdByUid: string;
-}) {
-  const existing = await prisma.playlist.findFirst({
-    where: {
-      resourceType: options.resourceType,
-      platform: options.platform,
-      platformId: options.platformId,
-    },
-    orderBy: { updatedAt: 'desc' },
-  });
-
-  const trackRows = options.trackDocIds.map((trackDocId, index) => ({
-    trackDocId,
-    trackOrder: index,
-  }));
-
-  if (existing) {
-    return prisma.playlist.update({
-      where: { docId: existing.docId },
-      data: {
-        title: options.title,
-        artist: options.artist,
-        description: options.description || null,
-        cover: options.cover,
-        platformUrl: options.platformUrl,
-        createdBy: options.createdByUid,
-        tracks: {
-          deleteMany: {},
-          create: trackRows,
-        },
-      },
-      include: {
-        _count: {
-          select: { tracks: true },
-        },
-      },
-    });
-  }
-
-  return prisma.playlist.create({
-    data: {
-      title: options.title,
-      artist: options.artist,
-      description: options.description || null,
-      cover: options.cover,
-      resourceType: options.resourceType,
-      platform: options.platform,
-      platformId: options.platformId,
-      platformUrl: options.platformUrl,
-      createdBy: options.createdByUid,
-      tracks: {
-        create: trackRows,
-      },
-    },
-    include: {
-      _count: {
-        select: { tracks: true },
-      },
-    },
-  });
 }
 
 app.use(authMiddleware);
@@ -2723,44 +2375,6 @@ app.get('/api/wiki/:slug/history', async (req: AuthenticatedRequest, res) => {
   }
 });
 
-app.get('/api/wiki/:slug/revisions', async (req: AuthenticatedRequest, res) => {
-  try {
-    const page = await prisma.wikiPage.findUnique({
-      where: { slug: req.params.slug },
-      select: {
-        slug: true,
-        status: true,
-        lastEditorUid: true,
-      },
-    });
-
-    if (!page) {
-      res.status(404).json({ error: '页面未找到' });
-      return;
-    }
-
-    if (!canViewWikiPage(page, req.authUser)) {
-      res.status(404).json({ error: '页面未找到' });
-      return;
-    }
-
-    const revisions = await prisma.wikiRevision.findMany({
-      where: { pageSlug: req.params.slug },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    res.json({
-      revisions: revisions.map((revision) => ({
-        ...revision,
-        createdAt: revision.createdAt.toISOString(),
-      })),
-    });
-  } catch (error) {
-    console.error('Fetch wiki revisions error:', error);
-    res.status(500).json({ error: '获取历史记录失败' });
-  }
-});
-
 app.post('/api/wiki/:slug/submit', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
     const slug = req.params.slug;
@@ -2844,19 +2458,136 @@ app.post('/api/wiki', requireAuth, requireActiveUser, async (req: AuthenticatedR
     }
 
     const pageSlug = slug.trim().toLowerCase();
-    const existing = await prisma.wikiPage.findUnique({
+    const existing = await prisma.wikiPage.findUnique({ where: { slug: pageSlug } });
+    const nextStatus = normalizeWikiWriteStatus(status, req.authUser!);
+
+    if (existing && !isAdminRole(req.authUser!.role) && existing.lastEditorUid !== req.authUser!.uid) {
+      res.status(409).json({ error: '该 slug 已存在' });
+      return;
+    }
+
+    const page = await prisma.wikiPage.upsert({
       where: { slug: pageSlug },
+      create: {
+        slug: pageSlug,
+        title,
+        category,
+        content,
+        tags: tags || [],
+        eventDate: eventDate || null,
+        status: nextStatus,
+        reviewNote: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        lastEditorUid: req.authUser!.uid,
+        lastEditorName: req.authUser!.displayName,
+      },
+      update: {
+        title,
+        category,
+        content,
+        tags: tags || [],
+        eventDate: eventDate || null,
+        status: nextStatus,
+        reviewNote: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        lastEditorUid: req.authUser!.uid,
+        lastEditorName: req.authUser!.displayName,
+      },
     });
 
-    if (existing) {
-      if (existing.lastEditorUid !== req.authUser!.uid) {
-        res.status(409).json({ error: '该 slug 已存在' });
-        return;
-      }
+    const revision = await prisma.wikiRevision.create({
+      data: {
+        pageSlug,
+        title,
+        content,
+        slug: pageSlug,
+        category,
+        tags: tags || [],
+        eventDate: eventDate || null,
+        editorUid: req.authUser!.uid,
+        editorName: req.authUser!.displayName,
+      },
+    });
+
+    if (!page.mainBranchId) {
+      const mainBranch = await prisma.wikiBranch.create({
+        data: {
+          pageSlug,
+          editorUid: req.authUser!.uid,
+          editorName: req.authUser!.displayName,
+          status: 'merged',
+          latestRevisionId: revision.id,
+        },
+      });
+      await prisma.wikiPage.update({
+        where: { slug: pageSlug },
+        data: {
+          mainBranchId: mainBranch.id,
+          mergedAt: new Date(),
+        },
+      });
+    }
+
+    if (nextStatus === 'pending') {
+      await prisma.moderationLog.create({
+        data: {
+          targetType: 'wiki',
+          targetId: pageSlug,
+          action: 'submit',
+          operatorUid: req.authUser!.uid,
+          note: null,
+        },
+      });
+    }
+
+    res.status(201).json({ page: toWikiResponse(page) });
+  } catch (error) {
+    console.error('Create wiki page error:', error);
+    res.status(500).json({ error: '保存页面失败' });
+  }
+});
+
+app.post('/api/wiki/legacy', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const {
+      title,
+      slug,
+      category,
+      content,
+      tags,
+      eventDate,
+      status,
+    } = req.body as {
+      title?: string;
+      slug?: string;
+      category?: string;
+      content?: string;
+      tags?: string[];
+      eventDate?: string;
+      status?: ContentStatus;
+    };
+
+    if (!title || !slug || !category || !content) {
+      res.status(400).json({ error: '缺少必要字段' });
+      return;
+    }
+
+    if (category === 'music' && req.authUser?.role === 'user') {
+      res.status(403).json({ error: '只有管理员可以编辑音乐分类内容' });
+      return;
+    }
+
+    const pageSlug = slug.trim().toLowerCase();
+    const existing = await prisma.wikiPage.findUnique({ where: { slug: pageSlug } });
+
+    if (existing && !isAdminRole(req.authUser!.role) && existing.lastEditorUid !== req.authUser!.uid) {
+      res.status(409).json({ error: '该 slug 已存在' });
+      return;
     }
 
     const nextStatus = normalizeWikiWriteStatus(status, req.authUser!);
-
     const page = await prisma.wikiPage.upsert({
       where: { slug: pageSlug },
       create: {
@@ -2893,26 +2624,18 @@ app.post('/api/wiki', requireAuth, requireActiveUser, async (req: AuthenticatedR
         pageSlug,
         title,
         content,
+        slug: pageSlug,
+        category,
+        tags: tags || [],
+        eventDate: eventDate || null,
         editorUid: req.authUser!.uid,
         editorName: req.authUser!.displayName,
       },
     });
 
-    if (nextStatus === 'pending') {
-      await prisma.moderationLog.create({
-        data: {
-          targetType: 'wiki',
-          targetId: pageSlug,
-          action: 'submit',
-          operatorUid: req.authUser!.uid,
-          note: null,
-        },
-      });
-    }
-
     res.status(201).json({ page: toWikiResponse(page) });
   } catch (error) {
-    console.error('Create wiki page error:', error);
+    console.error('Create legacy wiki page error:', error);
     res.status(500).json({ error: '保存页面失败' });
   }
 });
@@ -2940,33 +2663,19 @@ app.put('/api/wiki/:slug', requireAuth, requireActiveUser, async (req: Authentic
       return;
     }
 
-    if (category === 'music' && req.authUser?.role === 'user') {
-      res.status(403).json({ error: '只有管理员可以编辑音乐分类内容' });
-      return;
-    }
-
-    const existingPage = await prisma.wikiPage.findUnique({
-      where: { slug: req.params.slug },
-      select: {
-        slug: true,
-        lastEditorUid: true,
-        status: true,
-      },
-    });
-
-    if (!existingPage) {
+    const page = await prisma.wikiPage.findUnique({ where: { slug: req.params.slug } });
+    if (!page) {
       res.status(404).json({ error: '页面未找到' });
       return;
     }
 
-    if (!isAdminRole(req.authUser!.role) && existingPage.lastEditorUid !== req.authUser!.uid) {
+    if (!isAdminRole(req.authUser!.role) && page.lastEditorUid !== req.authUser!.uid) {
       res.status(403).json({ error: '无权编辑该页面' });
       return;
     }
 
     const nextStatus = normalizeWikiWriteStatus(status, req.authUser!);
-
-    const page = await prisma.wikiPage.update({
+    const updated = await prisma.wikiPage.update({
       where: { slug: req.params.slug },
       data: {
         title,
@@ -2988,39 +2697,752 @@ app.put('/api/wiki/:slug', requireAuth, requireActiveUser, async (req: Authentic
         pageSlug: req.params.slug,
         title,
         content,
+        slug: req.params.slug,
+        category,
+        tags: tags || [],
+        eventDate: eventDate || null,
         editorUid: req.authUser!.uid,
         editorName: req.authUser!.displayName,
       },
     });
 
-    if (nextStatus === 'pending') {
-      await prisma.moderationLog.create({
-        data: {
-          targetType: 'wiki',
-          targetId: req.params.slug,
-          action: 'submit',
-          operatorUid: req.authUser!.uid,
-          note: null,
-        },
-      });
-    }
-
-    res.json({ page: toWikiResponse(page) });
+    res.json({ page: toWikiResponse(updated) });
   } catch (error) {
     console.error('Update wiki page error:', error);
     res.status(500).json({ error: '更新页面失败' });
   }
 });
 
-app.delete('/api/wiki/:slug', requireAdmin, async (req, res) => {
+app.post('/api/wiki/:slug/branches', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
-    await prisma.wikiPage.delete({
-      where: { slug: req.params.slug },
+    const pageSlug = req.params.slug;
+    const page = await prisma.wikiPage.findUnique({ where: { slug: pageSlug } });
+    if (!page || !canViewWikiPage(page, req.authUser)) {
+      res.status(404).json({ error: '页面未找到' });
+      return;
+    }
+
+    const existing = await prisma.wikiBranch.findUnique({
+      where: {
+        pageSlug_editorUid: {
+          pageSlug,
+          editorUid: req.authUser!.uid,
+        },
+      },
+      include: {
+        page: { select: { slug: true, title: true, category: true } },
+      },
     });
+    if (existing) {
+      res.json({ branch: toWikiBranchResponse(existing as WikiBranchWithPage) });
+      return;
+    }
+
+    const revision = await prisma.wikiRevision.create({
+      data: {
+        pageSlug,
+        title: page.title,
+        content: page.content,
+        slug: page.slug,
+        category: page.category,
+        tags: page.tags,
+        eventDate: page.eventDate,
+        editorUid: req.authUser!.uid,
+        editorName: req.authUser!.displayName,
+        isAutoSave: false,
+      },
+    });
+
+    const branch = await prisma.wikiBranch.create({
+      data: {
+        pageSlug,
+        editorUid: req.authUser!.uid,
+        editorName: req.authUser!.displayName,
+        status: 'draft',
+        latestRevisionId: revision.id,
+      },
+      include: {
+        page: { select: { slug: true, title: true, category: true } },
+      },
+    });
+
+    await prisma.wikiRevision.update({
+      where: { id: revision.id },
+      data: { branchId: branch.id },
+    });
+
+    res.status(201).json({ branch: toWikiBranchResponse(branch as WikiBranchWithPage) });
+  } catch (error) {
+    console.error('Create wiki branch error:', error);
+    res.status(500).json({ error: '创建分支失败' });
+  }
+});
+
+app.get('/api/wiki/:slug/branches', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const page = await prisma.wikiPage.findUnique({ where: { slug: req.params.slug } });
+    if (!page || !canViewWikiPage(page, req.authUser)) {
+      res.status(404).json({ error: '页面未找到' });
+      return;
+    }
+
+    const where = isAdminRole(req.authUser!.role)
+      ? { pageSlug: req.params.slug }
+      : { pageSlug: req.params.slug, OR: [{ editorUid: req.authUser!.uid }, { status: 'pending_review' as WikiBranchStatus }, { status: 'conflict' as WikiBranchStatus }] };
+
+    const branches = await prisma.wikiBranch.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        page: { select: { slug: true, title: true, category: true } },
+      },
+    });
+
+    res.json({ branches: branches.map((branch) => toWikiBranchResponse(branch as WikiBranchWithPage)) });
+  } catch (error) {
+    console.error('Get wiki branches error:', error);
+    res.status(500).json({ error: '获取分支失败' });
+  }
+});
+
+app.get('/api/wiki/branches/mine', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const branches = await prisma.wikiBranch.findMany({
+      where: {
+        editorUid: req.authUser!.uid,
+        status: { in: ['draft', 'pending_review', 'conflict'] },
+      },
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        page: { select: { slug: true, title: true, category: true } },
+      },
+    });
+
+    res.json({ branches: branches.map((branch) => toWikiBranchResponse(branch as WikiBranchWithPage)) });
+  } catch (error) {
+    console.error('Get my wiki branches error:', error);
+    res.status(500).json({ error: '获取分支失败' });
+  }
+});
+
+app.get('/api/wiki/branches/:branchId', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const branch = await prisma.wikiBranch.findUnique({
+      where: { id: req.params.branchId },
+      include: {
+        page: true,
+      },
+    });
+    if (!branch || !branch.page || !canViewWikiPage(branch.page, req.authUser)) {
+      res.status(404).json({ error: '分支未找到' });
+      return;
+    }
+    if (!isAdminRole(req.authUser!.role) && branch.editorUid !== req.authUser!.uid && branch.status !== 'pending_review' && branch.status !== 'conflict') {
+      res.status(403).json({ error: '无权访问该分支' });
+      return;
+    }
+
+    const latestRevision = branch.latestRevisionId
+      ? await prisma.wikiRevision.findUnique({ where: { id: branch.latestRevisionId } })
+      : null;
+
+    res.json({
+      branch: toWikiBranchResponse(branch as WikiBranchWithPage),
+      latestRevision: latestRevision
+        ? {
+            ...latestRevision,
+            tags: serializeTags(latestRevision.tags),
+            createdAt: latestRevision.createdAt.toISOString(),
+          }
+        : null,
+    });
+  } catch (error) {
+    console.error('Get wiki branch error:', error);
+    res.status(500).json({ error: '获取分支失败' });
+  }
+});
+
+app.get('/api/wiki/branches/:branchId/revisions', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const branch = await prisma.wikiBranch.findUnique({
+      where: { id: req.params.branchId },
+      include: { page: true },
+    });
+    if (!branch || !branch.page || !canViewWikiPage(branch.page, req.authUser)) {
+      res.status(404).json({ error: '分支未找到' });
+      return;
+    }
+    if (!isAdminRole(req.authUser!.role) && branch.editorUid !== req.authUser!.uid) {
+      res.status(403).json({ error: '无权查看修订历史' });
+      return;
+    }
+
+    const revisions = await prisma.wikiRevision.findMany({
+      where: { branchId: branch.id },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    res.json({
+      revisions: revisions.map((revision) => ({
+        ...revision,
+        tags: serializeTags(revision.tags),
+        createdAt: revision.createdAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    console.error('Get wiki branch revisions error:', error);
+    res.status(500).json({ error: '获取分支版本失败' });
+  }
+});
+
+app.post('/api/wiki/branches/:branchId/revisions', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const branch = await prisma.wikiBranch.findUnique({
+      where: { id: req.params.branchId },
+      include: { page: true },
+    });
+    if (!branch || !branch.page) {
+      res.status(404).json({ error: '分支未找到' });
+      return;
+    }
+    if (branch.editorUid !== req.authUser!.uid && !isAdminRole(req.authUser!.role)) {
+      res.status(403).json({ error: '无权编辑该分支' });
+      return;
+    }
+
+    const {
+      title,
+      content,
+      slug,
+      category,
+      tags,
+      eventDate,
+      isAutoSave,
+    } = req.body as {
+      title?: string;
+      content?: string;
+      slug?: string;
+      category?: string;
+      tags?: string[];
+      eventDate?: string | null;
+      isAutoSave?: boolean;
+    };
+
+    if (!title || !content || !category) {
+      res.status(400).json({ error: '缺少必要字段' });
+      return;
+    }
+
+    const revision = await prisma.wikiRevision.create({
+      data: {
+        pageSlug: branch.pageSlug,
+        branchId: branch.id,
+        title,
+        content,
+        slug: (slug || branch.pageSlug).trim().toLowerCase(),
+        category,
+        tags: Array.isArray(tags) ? tags : [],
+        eventDate: eventDate || null,
+        editorUid: req.authUser!.uid,
+        editorName: req.authUser!.displayName,
+        isAutoSave: Boolean(isAutoSave),
+      },
+    });
+
+    const hasOpenPr = await prisma.wikiPullRequest.findFirst({
+      where: { branchId: branch.id, status: 'open' },
+      select: { id: true },
+    });
+
+    const nextBranchStatus: WikiBranchStatus = hasOpenPr ? 'pending_review' : 'draft';
+    await prisma.wikiBranch.update({
+      where: { id: branch.id },
+      data: {
+        latestRevisionId: revision.id,
+        status: branch.status === 'conflict' ? 'conflict' : nextBranchStatus,
+      },
+    });
+
+    res.status(201).json({
+      revision: {
+        ...revision,
+        tags: serializeTags(revision.tags),
+        createdAt: revision.createdAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error('Create wiki branch revision error:', error);
+    res.status(500).json({ error: '保存分支版本失败' });
+  }
+});
+
+app.post('/api/wiki/branches/:branchId/pull-request', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const branch = await prisma.wikiBranch.findUnique({
+      where: { id: req.params.branchId },
+      include: { page: true },
+    });
+    if (!branch || !branch.page) {
+      res.status(404).json({ error: '分支未找到' });
+      return;
+    }
+    if (branch.editorUid !== req.authUser!.uid && !isAdminRole(req.authUser!.role)) {
+      res.status(403).json({ error: '无权提交该分支' });
+      return;
+    }
+    if (!branch.latestRevisionId) {
+      res.status(400).json({ error: '分支暂无可提交内容' });
+      return;
+    }
+
+    const existingOpen = await prisma.wikiPullRequest.findFirst({ where: { branchId: branch.id, status: 'open' } });
+    if (existingOpen) {
+      res.json({ pullRequest: toWikiPullRequestResponse(existingOpen as WikiPullRequestWithRelations) });
+      return;
+    }
+
+    const latestRevision = await prisma.wikiRevision.findUnique({ where: { id: branch.latestRevisionId } });
+    if (!latestRevision) {
+      res.status(400).json({ error: '分支最新版本不存在' });
+      return;
+    }
+
+    const currentMainRevision = await prisma.wikiRevision.findFirst({
+      where: { pageSlug: branch.pageSlug, branchId: null },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+
+    const payload = req.body as { title?: string; description?: string };
+    const pr = await prisma.wikiPullRequest.create({
+      data: {
+        branchId: branch.id,
+        pageSlug: branch.pageSlug,
+        title: payload.title?.trim() || latestRevision.title,
+        description: payload.description?.trim() || null,
+        createdByUid: req.authUser!.uid,
+        createdByName: req.authUser!.displayName,
+        status: 'open',
+        baseRevisionId: currentMainRevision?.id || null,
+      },
+    });
+
+    await prisma.wikiBranch.update({
+      where: { id: branch.id },
+      data: { status: 'pending_review' },
+    });
+
+    res.status(201).json({ pullRequest: toWikiPullRequestResponse(pr as WikiPullRequestWithRelations) });
+  } catch (error) {
+    console.error('Create wiki pull request error:', error);
+    res.status(500).json({ error: '提交 PR 失败' });
+  }
+});
+
+app.get('/api/wiki/pull-requests/list', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const status = req.query.status === 'merged' || req.query.status === 'rejected' ? req.query.status : 'open';
+    const where = isAdminRole(req.authUser!.role)
+      ? { status: status as WikiPullRequestStatus }
+      : { status: status as WikiPullRequestStatus, createdByUid: req.authUser!.uid };
+
+    const pullRequests = await prisma.wikiPullRequest.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        branch: {
+          include: {
+            page: { select: { slug: true, title: true, category: true } },
+          },
+        },
+        page: { select: { slug: true, title: true, category: true } },
+      },
+      take: 200,
+    });
+
+    res.json({ pullRequests: pullRequests.map((pr) => toWikiPullRequestResponse(pr as WikiPullRequestWithRelations)) });
+  } catch (error) {
+    console.error('List wiki pull requests error:', error);
+    res.status(500).json({ error: '获取 PR 列表失败' });
+  }
+});
+
+app.get('/api/wiki/pull-requests/:prId', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const pr = await prisma.wikiPullRequest.findUnique({
+      where: { id: req.params.prId },
+      include: {
+        branch: {
+          include: {
+            page: { select: { slug: true, title: true, category: true } },
+          },
+        },
+        page: { select: { slug: true, title: true, category: true } },
+        comments: {
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!pr) {
+      res.status(404).json({ error: 'PR 不存在' });
+      return;
+    }
+    if (!isAdminRole(req.authUser!.role) && pr.createdByUid !== req.authUser!.uid) {
+      res.status(403).json({ error: '无权查看该 PR' });
+      return;
+    }
+
+    res.json({ pullRequest: toWikiPullRequestResponse(pr as WikiPullRequestWithRelations) });
+  } catch (error) {
+    console.error('Get wiki pull request error:', error);
+    res.status(500).json({ error: '获取 PR 失败' });
+  }
+});
+
+app.get('/api/wiki/pull-requests/:prId/diff', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const pr = await prisma.wikiPullRequest.findUnique({
+      where: { id: req.params.prId },
+      include: { branch: true, page: true },
+    });
+    if (!pr) {
+      res.status(404).json({ error: 'PR 不存在' });
+      return;
+    }
+    if (!isAdminRole(req.authUser!.role) && pr.createdByUid !== req.authUser!.uid) {
+      res.status(403).json({ error: '无权查看该 PR' });
+      return;
+    }
+
+    const [branchRevision, mainRevision] = await Promise.all([
+      pr.branch.latestRevisionId ? prisma.wikiRevision.findUnique({ where: { id: pr.branch.latestRevisionId } }) : null,
+      prisma.wikiRevision.findFirst({ where: { pageSlug: pr.pageSlug, branchId: null }, orderBy: { createdAt: 'desc' } }),
+    ]);
+
+    res.json({
+      diff: {
+        base: mainRevision
+          ? {
+              title: mainRevision.title,
+              content: mainRevision.content,
+              category: mainRevision.category || pr.page.category,
+              tags: serializeTags(mainRevision.tags),
+              eventDate: mainRevision.eventDate,
+            }
+          : {
+              title: pr.page.title,
+              content: pr.page.content,
+              category: pr.page.category,
+              tags: serializeTags(pr.page.tags),
+              eventDate: pr.page.eventDate,
+            },
+        head: branchRevision
+          ? {
+              title: branchRevision.title,
+              content: branchRevision.content,
+              category: branchRevision.category || pr.page.category,
+              tags: serializeTags(branchRevision.tags),
+              eventDate: branchRevision.eventDate,
+            }
+          : {
+              title: pr.page.title,
+              content: pr.page.content,
+              category: pr.page.category,
+              tags: serializeTags(pr.page.tags),
+              eventDate: pr.page.eventDate,
+            },
+      },
+    });
+  } catch (error) {
+    console.error('Get wiki pull request diff error:', error);
+    res.status(500).json({ error: '获取 PR Diff 失败' });
+  }
+});
+
+app.post('/api/wiki/pull-requests/:prId/comments', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const pr = await prisma.wikiPullRequest.findUnique({ where: { id: req.params.prId } });
+    if (!pr) {
+      res.status(404).json({ error: 'PR 不存在' });
+      return;
+    }
+    if (!isAdminRole(req.authUser!.role) && pr.createdByUid !== req.authUser!.uid) {
+      res.status(403).json({ error: '无权评论该 PR' });
+      return;
+    }
+
+    const content = typeof req.body?.content === 'string' ? req.body.content.trim() : '';
+    if (!content) {
+      res.status(400).json({ error: '评论内容不能为空' });
+      return;
+    }
+
+    const comment = await prisma.wikiPullRequestComment.create({
+      data: {
+        prId: pr.id,
+        authorUid: req.authUser!.uid,
+        authorName: req.authUser!.displayName,
+        content,
+      },
+    });
+
+    res.status(201).json({
+      comment: {
+        ...comment,
+        createdAt: comment.createdAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error('Create wiki PR comment error:', error);
+    res.status(500).json({ error: '发表评论失败' });
+  }
+});
+
+app.post('/api/wiki/pull-requests/:prId/merge', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const pr = await prisma.wikiPullRequest.findUnique({
+      where: { id: req.params.prId },
+      include: {
+        branch: true,
+        page: true,
+      },
+    });
+    if (!pr) {
+      res.status(404).json({ error: 'PR 不存在' });
+      return;
+    }
+    if (pr.status !== 'open') {
+      res.status(400).json({ error: '该 PR 已处理' });
+      return;
+    }
+    if (!pr.branch.latestRevisionId) {
+      res.status(400).json({ error: '分支没有可合并内容' });
+      return;
+    }
+
+    const [headRevision, currentMainRevision] = await Promise.all([
+      prisma.wikiRevision.findUnique({ where: { id: pr.branch.latestRevisionId } }),
+      prisma.wikiRevision.findFirst({ where: { pageSlug: pr.pageSlug, branchId: null }, orderBy: { createdAt: 'desc' } }),
+    ]);
+
+    if (!headRevision) {
+      res.status(400).json({ error: '分支版本不存在' });
+      return;
+    }
+
+    if (pr.baseRevisionId && currentMainRevision && currentMainRevision.id !== pr.baseRevisionId) {
+      const conflictData = {
+        reason: 'base_mismatch',
+        baseRevisionId: pr.baseRevisionId,
+        currentMainRevisionId: currentMainRevision.id,
+        detectedAt: new Date().toISOString(),
+      };
+      await prisma.$transaction([
+        prisma.wikiBranch.update({ where: { id: pr.branchId }, data: { status: 'conflict' } }),
+        prisma.wikiPullRequest.update({ where: { id: pr.id }, data: { conflictData } }),
+      ]);
+      res.status(409).json({ error: '检测到冲突，请先解决冲突后再合并', conflictData });
+      return;
+    }
+
+    const mergedSnapshot = await prisma.wikiRevision.create({
+      data: {
+        pageSlug: pr.pageSlug,
+        title: headRevision.title,
+        content: headRevision.content,
+        slug: headRevision.slug || pr.pageSlug,
+        category: headRevision.category || pr.page.category,
+        tags: headRevision.tags || [],
+        eventDate: headRevision.eventDate || null,
+        editorUid: req.authUser!.uid,
+        editorName: req.authUser!.displayName,
+      },
+    });
+
+    const mergedAt = new Date();
+    await prisma.$transaction([
+      prisma.wikiPage.update({
+        where: { slug: pr.pageSlug },
+        data: {
+          title: mergedSnapshot.title,
+          content: mergedSnapshot.content,
+          category: mergedSnapshot.category || pr.page.category,
+          tags: mergedSnapshot.tags || [],
+          eventDate: mergedSnapshot.eventDate || null,
+          status: 'published',
+          reviewNote: null,
+          reviewedBy: req.authUser!.uid,
+          reviewedAt: mergedAt,
+          lastEditorUid: req.authUser!.uid,
+          lastEditorName: req.authUser!.displayName,
+          mergedAt,
+        },
+      }),
+      prisma.wikiBranch.update({
+        where: { id: pr.branchId },
+        data: {
+          status: 'merged',
+        },
+      }),
+      prisma.wikiPullRequest.update({
+        where: { id: pr.id },
+        data: {
+          status: 'merged',
+          reviewedBy: req.authUser!.uid,
+          reviewedAt: mergedAt,
+          mergedAt,
+          conflictData: null,
+        },
+      }),
+      prisma.moderationLog.create({
+        data: {
+          targetType: 'wiki',
+          targetId: pr.pageSlug,
+          action: 'approve',
+          operatorUid: req.authUser!.uid,
+          note: `Merge PR ${pr.id}`,
+        },
+      }),
+    ]);
+
+    const updatedPage = await prisma.wikiPage.findUnique({ where: { slug: pr.pageSlug } });
+    res.json({ page: updatedPage ? toWikiResponse(updatedPage) : null });
+  } catch (error) {
+    console.error('Merge wiki PR error:', error);
+    res.status(500).json({ error: '合并 PR 失败' });
+  }
+});
+
+app.post('/api/wiki/pull-requests/:prId/reject', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const pr = await prisma.wikiPullRequest.findUnique({ where: { id: req.params.prId } });
+    if (!pr) {
+      res.status(404).json({ error: 'PR 不存在' });
+      return;
+    }
+    if (pr.status !== 'open') {
+      res.status(400).json({ error: '该 PR 已处理' });
+      return;
+    }
+
+    const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
+    const reviewedAt = new Date();
+    await prisma.$transaction([
+      prisma.wikiPullRequest.update({
+        where: { id: pr.id },
+        data: {
+          status: 'rejected',
+          reviewedBy: req.authUser!.uid,
+          reviewedAt,
+        },
+      }),
+      prisma.wikiBranch.update({
+        where: { id: pr.branchId },
+        data: { status: 'rejected' },
+      }),
+      prisma.moderationLog.create({
+        data: {
+          targetType: 'wiki',
+          targetId: pr.pageSlug,
+          action: 'reject',
+          operatorUid: req.authUser!.uid,
+          note: note || `Reject PR ${pr.id}`,
+        },
+      }),
+    ]);
+
     res.json({ success: true });
   } catch (error) {
-    console.error('Delete wiki page error:', error);
-    res.status(500).json({ error: '删除百科失败' });
+    console.error('Reject wiki PR error:', error);
+    res.status(500).json({ error: '驳回 PR 失败' });
+  }
+});
+
+app.post('/api/wiki/branches/:branchId/resolve-conflict', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const branch = await prisma.wikiBranch.findUnique({ where: { id: req.params.branchId } });
+    if (!branch) {
+      res.status(404).json({ error: '分支未找到' });
+      return;
+    }
+
+    const openPr = await prisma.wikiPullRequest.findFirst({
+      where: { branchId: branch.id, status: 'open' },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!openPr) {
+      res.status(404).json({ error: '该分支没有待处理 PR' });
+      return;
+    }
+
+    const allowed = isAdminRole(req.authUser!.role) || openPr.createdByUid === req.authUser!.uid;
+    if (!allowed) {
+      res.status(403).json({ error: '无权解决该冲突' });
+      return;
+    }
+
+    const payload = req.body as {
+      title?: string;
+      content?: string;
+      category?: string;
+      tags?: string[];
+      eventDate?: string | null;
+    };
+    if (!payload.title || !payload.content || !payload.category) {
+      res.status(400).json({ error: '缺少必要字段' });
+      return;
+    }
+
+    const revision = await prisma.wikiRevision.create({
+      data: {
+        pageSlug: branch.pageSlug,
+        branchId: branch.id,
+        title: payload.title,
+        content: payload.content,
+        slug: branch.pageSlug,
+        category: payload.category,
+        tags: Array.isArray(payload.tags) ? payload.tags : [],
+        eventDate: payload.eventDate || null,
+        editorUid: req.authUser!.uid,
+        editorName: req.authUser!.displayName,
+      },
+    });
+
+    const currentMainRevision = await prisma.wikiRevision.findFirst({
+      where: { pageSlug: branch.pageSlug, branchId: null },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+
+    await prisma.$transaction([
+      prisma.wikiBranch.update({
+        where: { id: branch.id },
+        data: {
+          latestRevisionId: revision.id,
+          status: 'pending_review',
+        },
+      }),
+      prisma.wikiPullRequest.update({
+        where: { id: openPr.id },
+        data: {
+          conflictData: null,
+          baseRevisionId: currentMainRevision?.id || null,
+        },
+      }),
+    ]);
+
+    res.json({
+      revision: {
+        ...revision,
+        tags: serializeTags(revision.tags),
+        createdAt: revision.createdAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error('Resolve wiki conflict error:', error);
+    res.status(500).json({ error: '解决冲突失败' });
   }
 });
 
@@ -3057,6 +3479,9 @@ app.post('/api/wiki/:slug/rollback/:revisionId', requireAuth, requireActiveUser,
       data: {
         title: revision.title,
         content: revision.content,
+        category: revision.category || undefined,
+        tags: revision.tags || undefined,
+        eventDate: revision.eventDate || undefined,
         status: isAdminRole(req.authUser!.role) ? 'published' : 'pending',
         reviewNote: null,
         reviewedBy: null,
@@ -4336,19 +4761,8 @@ app.delete('/api/posts/:id', requireAdmin, async (req, res) => {
   }
 });
 
-app.get('/api/galleries', async (req: AuthenticatedRequest, res) => {
+app.get('/api/galleries', async (_req, res) => {
   try {
-    const where = !req.authUser
-      ? { published: true }
-      : isAdminRole(req.authUser.role)
-        ? {}
-        : {
-            OR: [
-              { published: true },
-              { authorUid: req.authUser.uid },
-            ],
-          };
-
     const galleries = await prisma.gallery.findMany({
       include: {
         images: {
@@ -4358,8 +4772,7 @@ app.get('/api/galleries', async (req: AuthenticatedRequest, res) => {
           orderBy: { sortOrder: 'asc' },
         },
       },
-      where,
-      orderBy: { updatedAt: 'desc' },
+      orderBy: { createdAt: 'desc' },
       take: 100,
     });
 
@@ -4387,18 +4800,6 @@ app.get('/api/galleries/:id', async (req, res) => {
     if (!gallery) {
       res.status(404).json({ error: '图集不存在' });
       return;
-    }
-
-    if (!gallery.published) {
-      const authReq = req as AuthenticatedRequest;
-      const canView = Boolean(
-        authReq.authUser
-        && (isAdminRole(authReq.authUser.role) || authReq.authUser.uid === gallery.authorUid),
-      );
-      if (!canView) {
-        res.status(404).json({ error: '图集不存在' });
-        return;
-      }
     }
 
     res.json({ gallery: toGalleryResponse(gallery) });
@@ -5001,563 +5402,6 @@ app.delete('/api/galleries/:id', requireAdmin, async (req, res) => {
   }
 });
 
-app.patch('/api/galleries/:id', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
-  try {
-    const gallery = await prisma.gallery.findUnique({
-      where: { id: req.params.id },
-      include: {
-        images: {
-          include: {
-            asset: true,
-          },
-        },
-      },
-    });
-
-    if (!gallery) {
-      res.status(404).json({ error: '图集不存在' });
-      return;
-    }
-
-    const canEdit = isAdminRole(req.authUser!.role) || gallery.authorUid === req.authUser!.uid;
-    if (!canEdit) {
-      res.status(403).json({ error: '无权编辑该图集' });
-      return;
-    }
-
-    const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
-    const description = typeof req.body?.description === 'string' ? req.body.description.trim() : '';
-    const tags = req.body?.tags;
-
-    const data = {
-      title: title || undefined,
-      description: description || undefined,
-      tags: Array.isArray(tags) ? normalizeTagList(tags) : undefined,
-    } satisfies Prisma.GalleryUpdateInput;
-
-    const updated = await prisma.gallery.update({
-      where: { id: gallery.id },
-      data,
-      include: {
-        images: {
-          include: {
-            asset: true,
-          },
-          orderBy: { sortOrder: 'asc' },
-        },
-      },
-    });
-
-    res.json({ gallery: toGalleryResponse(updated) });
-  } catch (error) {
-    console.error('Update gallery error:', error);
-    res.status(500).json({ error: '更新图集失败' });
-  }
-});
-
-app.patch('/api/galleries/:id/publish', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
-  try {
-    const gallery = await prisma.gallery.findUnique({
-      where: { id: req.params.id },
-      select: {
-        id: true,
-        authorUid: true,
-      },
-    });
-
-    if (!gallery) {
-      res.status(404).json({ error: '图集不存在' });
-      return;
-    }
-
-    const canEdit = isAdminRole(req.authUser!.role) || gallery.authorUid === req.authUser!.uid;
-    if (!canEdit) {
-      res.status(403).json({ error: '无权更新图集状态' });
-      return;
-    }
-
-    const published = parseBoolean(req.body?.published, false);
-    const now = new Date();
-
-    const updated = await prisma.gallery.update({
-      where: { id: gallery.id },
-      data: {
-        published,
-        publishedAt: published ? now : null,
-      },
-      include: {
-        images: {
-          include: {
-            asset: true,
-          },
-          orderBy: { sortOrder: 'asc' },
-        },
-      },
-    });
-
-    res.json({ gallery: toGalleryResponse(updated) });
-  } catch (error) {
-    console.error('Publish gallery error:', error);
-    res.status(500).json({ error: '更新图集发布状态失败' });
-  }
-});
-
-app.post('/api/galleries/:id/images', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
-  try {
-    const gallery = await prisma.gallery.findUnique({
-      where: { id: req.params.id },
-      select: {
-        id: true,
-        authorUid: true,
-      },
-    });
-
-    if (!gallery) {
-      res.status(404).json({ error: '图集不存在' });
-      return;
-    }
-
-    const canEdit = isAdminRole(req.authUser!.role) || gallery.authorUid === req.authUser!.uid;
-    if (!canEdit) {
-      res.status(403).json({ error: '无权编辑该图集' });
-      return;
-    }
-
-    const assetIds = parseAssetIdList(req.body?.assetIds);
-    if (!assetIds.length) {
-      res.status(400).json({ error: 'assetIds 不能为空' });
-      return;
-    }
-
-    const assets = await prisma.mediaAsset.findMany({
-      where: {
-        id: { in: assetIds },
-        ownerUid: req.authUser!.uid,
-        status: 'ready',
-      },
-      orderBy: { createdAt: 'asc' },
-    });
-
-    if (assets.length !== assetIds.length) {
-      res.status(400).json({ error: '存在无效或无权限的图片资源' });
-      return;
-    }
-
-    const maxSortImage = await prisma.galleryImage.findFirst({
-      where: { galleryId: gallery.id },
-      orderBy: { sortOrder: 'desc' },
-      select: { sortOrder: true },
-    });
-    const baseSortOrder = (maxSortImage?.sortOrder ?? -1) + 1;
-
-    await prisma.galleryImage.createMany({
-      data: assets.map((asset, index) => ({
-        galleryId: gallery.id,
-        assetId: asset.id,
-        url: asset.publicUrl,
-        name: asset.fileName,
-        sortOrder: baseSortOrder + index,
-      })),
-    });
-
-    const updated = await prisma.gallery.findUnique({
-      where: { id: gallery.id },
-      include: {
-        images: {
-          include: {
-            asset: true,
-          },
-          orderBy: { sortOrder: 'asc' },
-        },
-      },
-    });
-
-    if (!updated) {
-      res.status(404).json({ error: '图集不存在' });
-      return;
-    }
-
-    try {
-      const latestImageIds = updated.images
-        .filter((image) => image.sortOrder >= baseSortOrder)
-        .map((image) => image.id);
-      await enqueueGalleryImageEmbeddings(prisma, latestImageIds);
-    } catch (error) {
-      console.error('Enqueue appended gallery images embeddings error:', error);
-    }
-
-    res.status(201).json({ gallery: toGalleryResponse(updated) });
-  } catch (error) {
-    console.error('Append gallery images error:', error);
-    res.status(500).json({ error: '追加图片失败' });
-  }
-});
-
-app.delete('/api/galleries/:id/images/:imageId', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
-  try {
-    const gallery = await prisma.gallery.findUnique({
-      where: { id: req.params.id },
-      select: {
-        id: true,
-        authorUid: true,
-      },
-    });
-
-    if (!gallery) {
-      res.status(404).json({ error: '图集不存在' });
-      return;
-    }
-
-    const canEdit = isAdminRole(req.authUser!.role) || gallery.authorUid === req.authUser!.uid;
-    if (!canEdit) {
-      res.status(403).json({ error: '无权编辑该图集' });
-      return;
-    }
-
-    const image = await prisma.galleryImage.findUnique({
-      where: { id: req.params.imageId },
-      select: {
-        id: true,
-        galleryId: true,
-        assetId: true,
-        url: true,
-      },
-    });
-
-    if (!image || image.galleryId !== gallery.id) {
-      res.status(404).json({ error: '图片不存在' });
-      return;
-    }
-
-    await prisma.galleryImage.delete({
-      where: { id: image.id },
-    });
-
-    await normalizeGalleryImageSortOrder(prisma, gallery.id);
-
-    if (image.assetId) {
-      await markMediaAssetDeletedIfOrphan(image.assetId);
-    } else {
-      await safeDeleteUploadFileByUrl(image.url);
-    }
-
-    const updated = await prisma.gallery.findUnique({
-      where: { id: gallery.id },
-      include: {
-        images: {
-          include: {
-            asset: true,
-          },
-          orderBy: { sortOrder: 'asc' },
-        },
-      },
-    });
-
-    if (!updated) {
-      res.status(404).json({ error: '图集不存在' });
-      return;
-    }
-
-    res.json({ gallery: toGalleryResponse(updated) });
-  } catch (error) {
-    console.error('Delete gallery image error:', error);
-    res.status(500).json({ error: '删除图片失败' });
-  }
-});
-
-app.patch('/api/galleries/:id/images/reorder', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
-  try {
-    const gallery = await prisma.gallery.findUnique({
-      where: { id: req.params.id },
-      select: {
-        id: true,
-        authorUid: true,
-      },
-    });
-
-    if (!gallery) {
-      res.status(404).json({ error: '图集不存在' });
-      return;
-    }
-
-    const canEdit = isAdminRole(req.authUser!.role) || gallery.authorUid === req.authUser!.uid;
-    if (!canEdit) {
-      res.status(403).json({ error: '无权编辑该图集' });
-      return;
-    }
-
-    const imageIds = normalizeStringArray(req.body?.imageIds);
-    if (!imageIds.length) {
-      res.status(400).json({ error: 'imageIds 不能为空' });
-      return;
-    }
-
-    const existingImages = await prisma.galleryImage.findMany({
-      where: { galleryId: gallery.id },
-      select: { id: true },
-    });
-    if (existingImages.length !== imageIds.length) {
-      res.status(400).json({ error: '排序列表长度与图集图片数量不一致' });
-      return;
-    }
-
-    const existingIdSet = new Set(existingImages.map((image) => image.id));
-    const hasInvalidId = imageIds.some((id) => !existingIdSet.has(id));
-    if (hasInvalidId) {
-      res.status(400).json({ error: '排序列表包含无效图片 ID' });
-      return;
-    }
-
-    await prisma.$transaction(
-      imageIds.map((id, index) =>
-        prisma.galleryImage.update({
-          where: { id },
-          data: { sortOrder: index },
-        })
-      )
-    );
-
-    const updated = await prisma.gallery.findUnique({
-      where: { id: gallery.id },
-      include: {
-        images: {
-          include: {
-            asset: true,
-          },
-          orderBy: { sortOrder: 'asc' },
-        },
-      },
-    });
-
-    if (!updated) {
-      res.status(404).json({ error: '图集不存在' });
-      return;
-    }
-
-    res.json({ gallery: toGalleryResponse(updated) });
-  } catch (error) {
-    console.error('Reorder gallery images error:', error);
-    res.status(500).json({ error: '重排图片失败' });
-  }
-});
-
-app.post('/api/admin/locks', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
-  try {
-    await purgeExpiredEditLocks();
-
-    const collection = normalizeEditLockToken(req.body?.collection, {
-      maxLength: 64,
-      lowerCase: true,
-    });
-    const recordId = normalizeEditLockToken(req.body?.recordId, { maxLength: 191 });
-    const forceTakeover = parseBoolean(req.body?.forceTakeover, false);
-
-    if (!collection || !recordId) {
-      res.status(400).json({ error: 'collection 和 recordId 不能为空且格式需合法' });
-      return;
-    }
-
-    const existingRows = await prisma.$queryRaw<EditLockRecord[]>`
-      SELECT
-        id,
-        collection,
-        recordId,
-        userId,
-        username,
-        createdAt,
-        updatedAt,
-        expiresAt
-      FROM \`EditLock\`
-      WHERE collection = ${collection} AND recordId = ${recordId}
-      LIMIT 1
-    `;
-    const existing = existingRows[0] ? normalizeEditLockRecord(existingRows[0]) : null;
-
-    if (existing && !isEditLockExpired(existing.expiresAt) && existing.userId !== req.authUser!.uid && !forceTakeover) {
-      res.status(409).json({
-        error: '记录正在被其他用户编辑',
-        code: 'LOCK_CONFLICT',
-        lock: toEditLockResponse(existing),
-      });
-      return;
-    }
-
-    const expiresAt = createEditLockExpiresAt();
-    await prisma.$executeRawUnsafe(
-      `
-      INSERT INTO \`EditLock\` (id, collection, recordId, userId, username, createdAt, updatedAt, expiresAt)
-      VALUES (?, ?, ?, ?, ?, NOW(), NOW(), ?)
-      ON DUPLICATE KEY UPDATE
-        userId = VALUES(userId),
-        username = VALUES(username),
-        updatedAt = NOW(),
-        expiresAt = VALUES(expiresAt)
-      `,
-      `lock_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-      collection,
-      recordId,
-      req.authUser!.uid,
-      req.authUser!.displayName,
-      expiresAt,
-    );
-
-    const refreshedRows = await prisma.$queryRaw<EditLockRecord[]>`
-      SELECT
-        id,
-        collection,
-        recordId,
-        userId,
-        username,
-        createdAt,
-        updatedAt,
-        expiresAt
-      FROM \`EditLock\`
-      WHERE collection = ${collection} AND recordId = ${recordId}
-      LIMIT 1
-    `;
-    const lock = refreshedRows[0] ? normalizeEditLockRecord(refreshedRows[0]) : null;
-
-    if (!lock) {
-      res.status(500).json({ error: '申请编辑锁失败' });
-      return;
-    }
-
-    res.status(201).json({ lock: toEditLockResponse(lock) });
-  } catch (error) {
-    console.error('Acquire edit lock error:', error);
-    res.status(500).json({ error: '申请编辑锁失败' });
-  }
-});
-
-app.patch('/api/admin/locks/:id/renew', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
-  try {
-    await purgeExpiredEditLocks();
-
-    const rows = await prisma.$queryRaw<EditLockRecord[]>`
-      SELECT
-        id,
-        collection,
-        recordId,
-        userId,
-        username,
-        createdAt,
-        updatedAt,
-        expiresAt
-      FROM \`EditLock\`
-      WHERE id = ${req.params.id}
-      LIMIT 1
-    `;
-    const lock = rows[0] ? normalizeEditLockRecord(rows[0]) : null;
-
-    if (!lock) {
-      res.status(404).json({ error: '编辑锁不存在' });
-      return;
-    }
-
-    if (lock.userId !== req.authUser!.uid && !isAdminRole(req.authUser!.role)) {
-      res.status(403).json({ error: '无权续期该编辑锁' });
-      return;
-    }
-
-    await prisma.$executeRawUnsafe(
-      'UPDATE `EditLock` SET userId = ?, username = ?, updatedAt = NOW(), expiresAt = ? WHERE id = ?',
-      req.authUser!.uid,
-      req.authUser!.displayName,
-      createEditLockExpiresAt(),
-      lock.id,
-    );
-
-    const renewedRows = await prisma.$queryRaw<EditLockRecord[]>`
-      SELECT
-        id,
-        collection,
-        recordId,
-        userId,
-        username,
-        createdAt,
-        updatedAt,
-        expiresAt
-      FROM \`EditLock\`
-      WHERE id = ${lock.id}
-      LIMIT 1
-    `;
-    const renewed = renewedRows[0] ? normalizeEditLockRecord(renewedRows[0]) : null;
-
-    if (!renewed) {
-      res.status(404).json({ error: '编辑锁不存在' });
-      return;
-    }
-
-    res.json({ lock: toEditLockResponse(renewed) });
-  } catch (error) {
-    console.error('Renew edit lock error:', error);
-    res.status(500).json({ error: '续期编辑锁失败' });
-  }
-});
-
-app.delete('/api/admin/locks/:id', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
-  try {
-    const lockRows = await prisma.$queryRaw<EditLockRecord[]>`
-      SELECT
-        id,
-        collection,
-        recordId,
-        userId,
-        username,
-        createdAt,
-        updatedAt,
-        expiresAt
-      FROM \`EditLock\`
-      WHERE id = ${req.params.id}
-      LIMIT 1
-    `;
-    const lock = lockRows[0] ? normalizeEditLockRecord(lockRows[0]) : null;
-
-    if (!lock) {
-      res.json({ success: true });
-      return;
-    }
-
-    if (lock.userId !== req.authUser!.uid && !isAdminRole(req.authUser!.role)) {
-      res.status(403).json({ error: '无权释放该编辑锁' });
-      return;
-    }
-
-    await prisma.$executeRawUnsafe('DELETE FROM `EditLock` WHERE id = ?', lock.id);
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Release edit lock error:', error);
-    res.status(500).json({ error: '释放编辑锁失败' });
-  }
-});
-
-app.delete('/api/admin/locks/:collection/:recordId', requireAdmin, async (req: AuthenticatedRequest, res) => {
-  try {
-    const collection = normalizeEditLockToken(req.params.collection, {
-      maxLength: 64,
-      lowerCase: true,
-    });
-    const recordId = normalizeEditLockToken(req.params.recordId, { maxLength: 191 });
-
-    if (!collection || !recordId) {
-      res.status(400).json({ error: '参数格式不合法' });
-      return;
-    }
-
-    await prisma.$executeRawUnsafe(
-      'DELETE FROM `EditLock` WHERE collection = ? AND recordId = ?',
-      collection,
-      recordId,
-    );
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Force delete edit lock error:', error);
-    res.status(500).json({ error: '删除编辑锁失败' });
-  }
-});
-
 app.get('/api/music', async (req: AuthenticatedRequest, res) => {
   try {
     const songs = await prisma.musicTrack.findMany({
@@ -5579,8 +5423,10 @@ app.get('/api/music', async (req: AuthenticatedRequest, res) => {
 
     res.json({
       songs: songs.map((song) => ({
-        ...toMusicTrackResponse(song),
+        ...song,
         favoritedByMe: favoritedMusicSet.has(song.docId),
+        createdAt: song.createdAt.toISOString(),
+        updatedAt: song.updatedAt.toISOString(),
       })),
     });
   } catch (error) {
@@ -5591,7 +5437,7 @@ app.get('/api/music', async (req: AuthenticatedRequest, res) => {
 
 app.post('/api/music', requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
-    const { id, title, artist, album, cover, audioUrl, lyric, sourcePlatform, sourceUrl } = req.body as {
+    const { id, title, artist, album, cover, audioUrl, lyric } = req.body as {
       id?: string;
       title?: string;
       artist?: string;
@@ -5599,8 +5445,6 @@ app.post('/api/music', requireAdmin, async (req: AuthenticatedRequest, res) => {
       cover?: string;
       audioUrl?: string;
       lyric?: string;
-      sourcePlatform?: string;
-      sourceUrl?: string;
     };
 
     if (!id || !title || !artist || !album || !cover || !audioUrl) {
@@ -5626,130 +5470,20 @@ app.post('/api/music', requireAdmin, async (req: AuthenticatedRequest, res) => {
         cover,
         audioUrl,
         lyric: lyric || null,
-        sourcePlatform: sourcePlatform || null,
-        sourceUrl: sourceUrl || null,
         addedBy: req.authUser!.uid,
       },
     });
 
     res.status(201).json({
-      song: toMusicTrackResponse(song),
+      song: {
+        ...song,
+        createdAt: song.createdAt.toISOString(),
+        updatedAt: song.updatedAt.toISOString(),
+      },
     });
   } catch (error) {
     console.error('Add music error:', error);
     res.status(500).json({ error: '添加歌曲失败' });
-  }
-});
-
-app.post('/api/music/parse-url', requireAdmin, async (req: AuthenticatedRequest, res) => {
-  try {
-    const { url } = req.body as { url?: string };
-    if (!url || !url.trim()) {
-      res.status(400).json({ error: '音乐链接不能为空' });
-      return;
-    }
-
-    const parsed = parseMusicUrl(url);
-    if (!parsed) {
-      res.status(400).json({ error: '暂不支持该链接，请粘贴歌曲/专辑/歌单页面链接' });
-      return;
-    }
-
-    const preview = await getMusicResourcePreview(parsed.platform, parsed.type, parsed.id);
-
-    res.json({
-      resource: {
-        ...preview,
-        songs: preview.songs,
-        totalSongs: preview.songs.length,
-      },
-    });
-  } catch (error) {
-    console.error('Parse music url error:', error);
-    res.status(500).json({ error: '解析链接失败' });
-  }
-});
-
-app.post('/api/music/import', requireAdmin, async (req: AuthenticatedRequest, res) => {
-  try {
-    const { url, platform: rawPlatform, type: rawType, id: rawId, selectedSongIds } = req.body as {
-      url?: string;
-      platform?: unknown;
-      type?: unknown;
-      id?: string | number;
-      selectedSongIds?: unknown;
-    };
-
-    let platform: MusicPlatform | null = null;
-    let type: MusicResourceType | null = null;
-    let id = '';
-
-    if (url && typeof url === 'string' && url.trim()) {
-      const parsed = parseMusicUrl(url);
-      if (!parsed) {
-        res.status(400).json({ error: '暂不支持该链接，请粘贴歌曲/专辑/歌单页面链接' });
-        return;
-      }
-      platform = parsed.platform;
-      type = parsed.type;
-      id = parsed.id;
-    } else {
-      platform = parseMusicPlatform(rawPlatform);
-      type = parseMusicResourceType(rawType);
-      id = typeof rawId === 'number' ? String(rawId) : typeof rawId === 'string' ? rawId.trim() : '';
-    }
-
-    if (!platform || !type || !id) {
-      res.status(400).json({ error: '缺少导入参数' });
-      return;
-    }
-
-    const selectedIds = normalizeStringArray(selectedSongIds);
-    const result = await importMusicResource({
-      platform,
-      type,
-      id,
-      selectedSongIds: selectedIds,
-      addedByUid: req.authUser!.uid,
-    });
-
-    let importedCollection: Awaited<ReturnType<typeof upsertImportedPlaylist>> | null = null;
-    if ((type === 'album' || type === 'playlist') && result.importedSongs.length) {
-      const trackDocIds = result.importedSongs.map((item) => item.song.docId);
-      importedCollection = await upsertImportedPlaylist({
-        resourceType: type,
-        platform,
-        platformId: id,
-        platformUrl: result.preview.platformUrl,
-        title: result.preview.title,
-        artist: result.preview.artist || result.importedSongs[0].song.artist,
-        description: result.preview.description,
-        cover: result.preview.cover || result.importedSongs[0].song.cover,
-        trackDocIds,
-        createdByUid: req.authUser!.uid,
-      });
-    }
-
-    res.status(201).json({
-      platform,
-      type,
-      id,
-      summary: {
-        imported: result.createdCount,
-        skipped: result.skippedCount,
-        failed: result.failed.length,
-      },
-      songs: result.importedSongs.map((item) => ({
-        sourceId: item.track.sourceId,
-        created: item.created,
-        song: toMusicTrackResponse(item.song),
-      })),
-      failed: result.failed,
-      collection: importedCollection ? toPlaylistSummaryResponse(importedCollection) : null,
-    });
-  } catch (error) {
-    console.error('Import music error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : '导入失败' });
   }
 });
 
@@ -5761,23 +5495,75 @@ app.post('/api/music/from-netease', requireAdmin, async (req: AuthenticatedReque
       return;
     }
 
-    const result = await importMusicResource({
-      platform: 'netease',
-      type: 'song',
-      id: String(id),
-      selectedSongIds: [],
-      addedByUid: req.authUser!.uid,
+    const songId = String(id);
+    const existing = await prisma.musicTrack.findUnique({
+      where: { id: songId },
     });
 
-    const first = result.importedSongs[0];
-    if (!first) {
-      res.status(500).json({ error: '导入失败' });
+    if (existing) {
+      res.status(409).json({ error: '该歌曲已存在' });
       return;
     }
 
-    res.status(first.created ? 201 : 200).json({
-      song: toMusicTrackResponse(first.song),
-      created: first.created,
+    const url = `https://music.163.com/song?id=${songId}`;
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+    });
+
+    const $ = cheerio.load(response.data);
+    const metadata: {
+      title?: string;
+      cover?: string;
+      artist?: string;
+      album?: string;
+      lyric?: string;
+    } = {};
+
+    $('meta').each((_, el) => {
+      const property = $(el).attr('property');
+      const content = $(el).attr('content');
+      if (!content) return;
+      if (property === 'og:title') metadata.title = content;
+      if (property === 'og:image') metadata.cover = content;
+      if (property === 'og:music:artist') metadata.artist = content;
+      if (property === 'og:music:album') metadata.album = content;
+    });
+
+    try {
+      const lrcResponse = await axios.get(`https://music.163.com/api/song/media?id=${songId}`);
+      if (lrcResponse.data?.lyric) {
+        metadata.lyric = lrcResponse.data.lyric;
+      }
+    } catch (error) {
+      console.error('Fetch lyric failed:', error);
+    }
+
+    if (!metadata.title || !metadata.artist || !metadata.album || !metadata.cover) {
+      res.status(500).json({ error: '获取歌曲元数据失败' });
+      return;
+    }
+
+    const song = await prisma.musicTrack.create({
+      data: {
+        id: songId,
+        title: metadata.title,
+        artist: metadata.artist,
+        album: metadata.album,
+        cover: metadata.cover,
+        audioUrl: `https://music.163.com/song/media/outer/url?id=${songId}.mp3`,
+        lyric: metadata.lyric || null,
+        addedBy: req.authUser!.uid,
+      },
+    });
+
+    res.status(201).json({
+      song: {
+        ...song,
+        createdAt: song.createdAt.toISOString(),
+        updatedAt: song.updatedAt.toISOString(),
+      },
     });
   } catch (error) {
     console.error('Add song from netease failed:', error);
@@ -5794,387 +5580,6 @@ app.delete('/api/music/:docId', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Delete music error:', error);
     res.status(500).json({ error: '删除歌曲失败' });
-  }
-});
-
-app.get('/api/music/song/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    const song = await prisma.musicTrack.findFirst({
-      where: {
-        OR: [
-          { id },
-          { docId: id },
-        ],
-      },
-    });
-
-    if (!song) {
-      res.status(404).json({ error: '歌曲不存在' });
-      return;
-    }
-
-    res.json(toMusicTrackResponse(song));
-  } catch (error) {
-    console.error('Fetch song by id error:', error);
-    res.status(500).json({ error: '获取歌曲失败' });
-  }
-});
-
-app.get('/api/albums', async (req: AuthenticatedRequest, res) => {
-  try {
-    const includeTracks = req.query.includeTracks === 'true';
-
-    if (includeTracks) {
-      const albums = await prisma.playlist.findMany({
-        where: { resourceType: 'album' },
-        orderBy: { updatedAt: 'desc' },
-        include: {
-          tracks: {
-            orderBy: { trackOrder: 'asc' },
-            include: { track: true },
-          },
-          _count: { select: { tracks: true } },
-        },
-      });
-
-      const favoriteTrackIds = new Set<string>();
-      if (req.authUser) {
-        const allTrackDocIds = albums.flatMap((album) => album.tracks.map((entry) => entry.trackDocId));
-
-        if (allTrackDocIds.length) {
-          const favorites = await prisma.favorite.findMany({
-            where: {
-              userUid: req.authUser.uid,
-              targetType: 'music',
-              targetId: { in: allTrackDocIds },
-            },
-            select: { targetId: true },
-          });
-          favorites.forEach((item) => favoriteTrackIds.add(item.targetId));
-        }
-      }
-
-      res.json({
-        albums: albums.map((album) => ({
-          id: album.docId,
-          title: album.title,
-          artist: album.artist,
-          cover: album.cover,
-          description: album.description,
-          releaseDate: null,
-          platform: album.platform,
-          platformId: album.platformId,
-          platformUrl: album.platformUrl,
-          tracksCount: album._count.tracks,
-          createdAt: album.createdAt.toISOString(),
-          updatedAt: album.updatedAt.toISOString(),
-          tracks: album.tracks.map((entry) => ({
-            ...toMusicTrackResponse(entry.track),
-            favoritedByMe: favoriteTrackIds.has(entry.trackDocId),
-            trackOrder: entry.trackOrder,
-          })),
-        })),
-      });
-      return;
-    }
-
-    const albums = await prisma.playlist.findMany({
-      where: { resourceType: 'album' },
-      orderBy: { updatedAt: 'desc' },
-      include: {
-        _count: { select: { tracks: true } },
-      },
-    });
-
-    res.json({
-      albums: albums.map((album) => ({
-        id: album.docId,
-        title: album.title,
-        artist: album.artist,
-        cover: album.cover,
-        description: album.description,
-        releaseDate: null,
-        platform: album.platform,
-        platformId: album.platformId,
-        platformUrl: album.platformUrl,
-        tracksCount: album._count.tracks,
-        createdAt: album.createdAt.toISOString(),
-        updatedAt: album.updatedAt.toISOString(),
-      })),
-    });
-  } catch (error) {
-    console.error('Fetch albums error:', error);
-    res.status(500).json({ error: '获取专辑失败' });
-  }
-});
-
-app.get('/api/albums/:id', async (req: AuthenticatedRequest, res) => {
-  try {
-    const album = await prisma.playlist.findFirst({
-      where: {
-        docId: req.params.id,
-        resourceType: 'album',
-      },
-      include: {
-        tracks: {
-          orderBy: { trackOrder: 'asc' },
-          include: { track: true },
-        },
-      },
-    });
-
-    if (!album) {
-      res.status(404).json({ error: '专辑不存在' });
-      return;
-    }
-
-    const favoriteTrackIds = new Set<string>();
-    if (req.authUser && album.tracks.length) {
-      const favorites = await prisma.favorite.findMany({
-        where: {
-          userUid: req.authUser.uid,
-          targetType: 'music',
-          targetId: { in: album.tracks.map((entry) => entry.trackDocId) },
-        },
-        select: { targetId: true },
-      });
-      favorites.forEach((item) => favoriteTrackIds.add(item.targetId));
-    }
-
-    res.json({
-      album: {
-        id: album.docId,
-        title: album.title,
-        artist: album.artist,
-        cover: album.cover,
-        description: album.description,
-        releaseDate: null,
-        platform: album.platform,
-        platformId: album.platformId,
-        platformUrl: album.platformUrl,
-        tracks: album.tracks.map((entry) => ({
-          ...toMusicTrackResponse(entry.track),
-          favoritedByMe: favoriteTrackIds.has(entry.trackDocId),
-          trackOrder: entry.trackOrder,
-        })),
-      },
-    });
-  } catch (error) {
-    console.error('Fetch album detail error:', error);
-    res.status(500).json({ error: '获取专辑详情失败' });
-  }
-});
-
-app.get('/api/playlists', async (req, res) => {
-  try {
-    const typeQuery = req.query.type;
-    const resourceType = typeQuery === 'album' || typeQuery === 'playlist' ? typeQuery : null;
-
-    const playlists = await prisma.playlist.findMany({
-      where: resourceType ? { resourceType } : undefined,
-      orderBy: { updatedAt: 'desc' },
-      include: {
-        _count: {
-          select: { tracks: true },
-        },
-      },
-    });
-
-    res.json({
-      playlists: playlists.map((item) => toPlaylistSummaryResponse(item)),
-    });
-  } catch (error) {
-    console.error('Fetch playlists error:', error);
-    res.status(500).json({ error: '获取歌单失败' });
-  }
-});
-
-app.post('/api/playlists', requireAdmin, async (req: AuthenticatedRequest, res) => {
-  try {
-    const {
-      title,
-      artist,
-      description,
-      cover,
-      resourceType,
-      platform,
-      platformId,
-      platformUrl,
-      trackDocIds,
-    } = req.body as {
-      title?: string;
-      artist?: string;
-      description?: string;
-      cover?: string;
-      resourceType?: string;
-      platform?: string;
-      platformId?: string;
-      platformUrl?: string;
-      trackDocIds?: unknown;
-    };
-
-    if (!title || !artist || !cover || !platform || !platformId || !platformUrl) {
-      res.status(400).json({ error: '缺少歌单必要字段' });
-      return;
-    }
-    if (resourceType !== 'album' && resourceType !== 'playlist') {
-      res.status(400).json({ error: '无效的资源类型' });
-      return;
-    }
-
-    const normalizedTrackDocIds = normalizeStringArray(trackDocIds);
-    if (!normalizedTrackDocIds.length) {
-      res.status(400).json({ error: '至少选择一首歌曲' });
-      return;
-    }
-
-    const tracks = await prisma.musicTrack.findMany({
-      where: { docId: { in: normalizedTrackDocIds } },
-      select: { docId: true },
-    });
-    if (tracks.length !== normalizedTrackDocIds.length) {
-      res.status(400).json({ error: '包含无效歌曲 ID' });
-      return;
-    }
-
-    const created = await upsertImportedPlaylist({
-      resourceType,
-      platform: parseMusicPlatform(platform) || 'netease',
-      platformId,
-      platformUrl,
-      title: title.trim(),
-      artist: artist.trim(),
-      description: description?.trim() || '',
-      cover: cover.trim(),
-      trackDocIds: normalizedTrackDocIds,
-      createdByUid: req.authUser!.uid,
-    });
-
-    res.status(201).json({
-      playlist: toPlaylistSummaryResponse(created),
-    });
-  } catch (error) {
-    console.error('Create playlist error:', error);
-    res.status(500).json({ error: '创建歌单失败' });
-  }
-});
-
-app.get('/api/playlists/:docId', async (req: AuthenticatedRequest, res) => {
-  try {
-    const playlist = await prisma.playlist.findUnique({
-      where: { docId: req.params.docId },
-      include: {
-        tracks: {
-          orderBy: { trackOrder: 'asc' },
-          include: { track: true },
-        },
-        _count: {
-          select: { tracks: true },
-        },
-      },
-    });
-
-    if (!playlist) {
-      res.status(404).json({ error: '歌单不存在' });
-      return;
-    }
-
-    const favoriteTrackIds = new Set<string>();
-    if (req.authUser && playlist.tracks.length) {
-      const favorites = await prisma.favorite.findMany({
-        where: {
-          userUid: req.authUser.uid,
-          targetType: 'music',
-          targetId: { in: playlist.tracks.map((entry) => entry.trackDocId) },
-        },
-        select: { targetId: true },
-      });
-      favorites.forEach((item) => favoriteTrackIds.add(item.targetId));
-    }
-
-    res.json({
-      playlist: {
-        ...toPlaylistSummaryResponse(playlist),
-        tracks: playlist.tracks.map((entry) => ({
-          ...toMusicTrackResponse(entry.track),
-          favoritedByMe: favoriteTrackIds.has(entry.trackDocId),
-          trackOrder: entry.trackOrder,
-        })),
-      },
-    });
-  } catch (error) {
-    console.error('Fetch playlist detail error:', error);
-    res.status(500).json({ error: '获取歌单详情失败' });
-  }
-});
-
-app.patch('/api/playlists/:docId', requireAdmin, async (req: AuthenticatedRequest, res) => {
-  try {
-    const { title, artist, description, cover, platformUrl, trackDocIds } = req.body as {
-      title?: string;
-      artist?: string;
-      description?: string;
-      cover?: string;
-      platformUrl?: string;
-      trackDocIds?: unknown;
-    };
-
-    const payload: Prisma.PlaylistUpdateInput = {
-      title: typeof title === 'string' ? title.trim() : undefined,
-      artist: typeof artist === 'string' ? artist.trim() : undefined,
-      description: typeof description === 'string' ? description.trim() : undefined,
-      cover: typeof cover === 'string' ? cover.trim() : undefined,
-      platformUrl: typeof platformUrl === 'string' ? platformUrl.trim() : undefined,
-      createdBy: req.authUser!.uid,
-    };
-
-    const normalizedTrackDocIds = normalizeStringArray(trackDocIds);
-    if (normalizedTrackDocIds.length) {
-      const tracks = await prisma.musicTrack.findMany({
-        where: { docId: { in: normalizedTrackDocIds } },
-        select: { docId: true },
-      });
-      if (tracks.length !== normalizedTrackDocIds.length) {
-        res.status(400).json({ error: '包含无效歌曲 ID' });
-        return;
-      }
-
-      payload.tracks = {
-        deleteMany: {},
-        create: normalizedTrackDocIds.map((trackDocId, index) => ({
-          trackDocId,
-          trackOrder: index,
-        })),
-      };
-    }
-
-    const updated = await prisma.playlist.update({
-      where: { docId: req.params.docId },
-      data: payload,
-      include: {
-        _count: {
-          select: { tracks: true },
-        },
-      },
-    });
-
-    res.json({ playlist: toPlaylistSummaryResponse(updated) });
-  } catch (error) {
-    console.error('Update playlist error:', error);
-    res.status(500).json({ error: '更新歌单失败' });
-  }
-});
-
-app.delete('/api/playlists/:docId', requireAdmin, async (req, res) => {
-  try {
-    await prisma.playlist.delete({
-      where: { docId: req.params.docId },
-    });
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Delete playlist error:', error);
-    res.status(500).json({ error: '删除歌单失败' });
   }
 });
 
@@ -6267,6 +5672,71 @@ app.post('/api/image-maps', requireAuth, requireActiveUser, async (req, res) => 
   } catch (error) {
     console.error('Create image map error:', error);
     res.status(500).json({ error: '保存图片映射失败' });
+  }
+});
+
+app.get('/api/music/song/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const existing = await prisma.musicTrack.findUnique({
+      where: { id },
+    });
+
+    if (existing) {
+      res.json({
+        ...existing,
+        docId: existing.docId,
+      });
+      return;
+    }
+
+    const url = `https://music.163.com/song?id=${id}`;
+
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+    });
+
+    const $ = cheerio.load(response.data);
+    const metadata: {
+      id: string;
+      audioUrl: string;
+      title?: string;
+      cover?: string;
+      artist?: string;
+      album?: string;
+      lyric?: string;
+    } = {
+      id,
+      audioUrl: `https://music.163.com/song/media/outer/url?id=${id}.mp3`,
+    };
+
+    $('meta').each((_, el) => {
+      const property = $(el).attr('property');
+      const content = $(el).attr('content');
+      if (!content) return;
+
+      if (property === 'og:title') metadata.title = content;
+      if (property === 'og:image') metadata.cover = content;
+      if (property === 'og:music:artist') metadata.artist = content;
+      if (property === 'og:music:album') metadata.album = content;
+    });
+
+    try {
+      const lrcResponse = await axios.get(`https://music.163.com/api/song/media?id=${id}`);
+      if (lrcResponse.data?.lyric) {
+        metadata.lyric = lrcResponse.data.lyric;
+      }
+    } catch (error) {
+      console.error('Error fetching lyrics:', error);
+    }
+
+    res.json(metadata);
+  } catch (error) {
+    console.error('Error fetching song metadata:', error);
+    res.status(500).json({ error: 'Failed to fetch song metadata' });
   }
 });
 
@@ -6831,28 +6301,6 @@ app.get('/api/admin/:tab', requireAdmin, async (req, res) => {
       return;
     }
 
-    if (tab === 'locks') {
-      await purgeExpiredEditLocks();
-      const dataRows = await prisma.$queryRaw<EditLockRecordRaw[]>`
-        SELECT
-          id,
-          collection,
-          recordId,
-          userId,
-          username,
-          createdAt,
-          updatedAt,
-          expiresAt
-        FROM \`EditLock\`
-        ORDER BY updatedAt DESC
-        LIMIT 200
-      `;
-      const data = dataRows.map(normalizeEditLockRecord);
-
-      res.json({ data: data.map((item) => toEditLockResponse(item)) });
-      return;
-    }
-
     if (tab === 'users') {
       const data = await prisma.user.findMany({
         orderBy: { createdAt: 'desc' },
@@ -6958,32 +6406,6 @@ app.get('/api/admin/:tab/:id', requireAdmin, async (req, res) => {
         return;
       }
       res.json({ item: toGalleryResponse(item) });
-      return;
-    }
-
-    if (tab === 'locks') {
-      const rows = await prisma.$queryRaw<EditLockRecordRaw[]>`
-        SELECT
-          id,
-          collection,
-          recordId,
-          userId,
-          username,
-          createdAt,
-          updatedAt,
-          expiresAt
-        FROM \`EditLock\`
-        WHERE id = ${id}
-        LIMIT 1
-      `;
-
-      const item = rows[0] ? normalizeEditLockRecord(rows[0]) : null;
-      if (!item) {
-        res.status(404).json({ error: '记录不存在' });
-        return;
-      }
-
-      res.json({ item: toEditLockResponse(item) });
       return;
     }
 
@@ -7101,11 +6523,6 @@ app.delete('/api/admin/:tab/:id', requireAdmin, async (req: AuthenticatedRequest
           }
         }),
       );
-      res.json({ success: true });
-      return;
-    }
-    if (tab === 'locks') {
-      await prisma.$executeRawUnsafe('DELETE FROM `EditLock` WHERE id = ?', id);
       res.json({ success: true });
       return;
     }

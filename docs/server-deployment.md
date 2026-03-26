@@ -154,6 +154,25 @@ npx prisma db execute --file prisma/migrate.sql --schema prisma/schema.prisma
 npm run db:seed
 ```
 
+### 6.1 Wiki 协作模型迁移说明（branch + PR）
+
+当前 Wiki 已切换为 GitHub 风格协作模型：
+
+- 每个页面按用户创建协作分支（`WikiBranch`）
+- 编辑内容保存为分支修订（`WikiRevision.branchId` + `isAutoSave`）
+- 提交 PR 并由管理员合并/驳回（`WikiPullRequest`）
+- 冲突由分支创建者或管理员处理（`/wiki/branches/:branchId/conflict`）
+
+本次升级不要求保留旧 Wiki 历史数据；如果你的环境是从旧模型升级，可接受“旧修订历史不迁移”。
+
+重点：部署时确保执行 `prisma/migrate.sql`，让以下结构存在：
+
+- `WikiPage.mainBranchId` / `WikiPage.mergedAt`
+- `WikiBranch` 表
+- `WikiPullRequest` 表
+- `WikiPullRequestComment` 表
+- `WikiRevision` 的 `branchId/slug/category/tags/eventDate/isAutoSave`
+
 `db:seed` 会创建初始管理员账号（来自 `SEED_SUPER_ADMIN_EMAIL` / `SEED_SUPER_ADMIN_PASSWORD`）。
 
 建议在迁移后立即确认 `ImageEmbedding` 表已创建：
@@ -282,6 +301,17 @@ certbot renew --dry-run
 - 管理员账号可进入后台
 - 图集上传可写入 `uploads/`
 - 数据可写入 MariaDB
+
+### 11.3 Wiki 协作流专项验证
+
+按下面顺序做一次端到端验证：
+
+1. 普通用户进入 `/wiki/{slug}/edit`，自动创建个人分支并开始编辑。
+2. 等待 15 秒，确认自动保存生效（再次进入编辑页可看到最新内容）。
+3. 提交 PR（描述可空），在 `/wiki/pull-requests` 可见状态为“待处理”。
+4. 管理员进入 PR 详情页执行“合并”或“驳回”。
+5. 若管理员合并时提示冲突，分支创建者进入 `/wiki/branches/{branchId}/conflict` 解决后重新审核。
+6. 合并后在 `/wiki/{slug}` 直接读取主分支最新合并内容。
 
 ### 11.2 图集上传（中期重构版）专项验证
 
@@ -565,6 +595,18 @@ npm run embeddings:sync -- --limit=100
 pm2 restart huangshifu-wiki --update-env
 pm2 save
 ```
+
+如果是第一次上线 Wiki 协作流，建议追加一次人工检查：
+
+```bash
+curl http://127.0.0.1:3000/api/health
+curl http://127.0.0.1:3000/api/wiki
+```
+
+并在浏览器验证：
+
+- `/wiki/branches`
+- `/wiki/pull-requests`
 
 ### 一键部署脚本（推荐）
 

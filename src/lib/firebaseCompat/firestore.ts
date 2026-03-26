@@ -45,14 +45,6 @@ type QueryReference = {
 
 type FavoriteTargetType = 'wiki' | 'post' | 'music';
 
-type PlaylistResponse = {
-  playlist: any;
-};
-
-type PlaylistsResponse = {
-  playlists: any[];
-};
-
 type FavoriteItem = {
   id: string;
   targetType: FavoriteTargetType;
@@ -153,7 +145,6 @@ const toDocId = (item: any, root?: string) => {
   if (root === 'wiki' && item?.slug) return String(item.slug);
   if (root === 'users' && item?.uid) return String(item.uid);
   if (root === 'music' && item?.docId) return String(item.docId);
-  if (root === 'playlists' && item?.docId) return String(item.docId);
   return String(item?.id ?? item?.docId ?? item?.uid ?? item?.slug ?? crypto.randomUUID());
 };
 
@@ -275,14 +266,6 @@ const fetchCollectionItems = async (collectionRef: CollectionReference, constrai
   if (root === 'music') {
     const data = await apiGet<{ songs: any[] }>('/api/music');
     return data.songs || [];
-  }
-
-  if (root === 'playlists') {
-    const type = findWhereEq(constraints, 'resourceType');
-    const data = await apiGet<PlaylistsResponse>('/api/playlists', {
-      type: typeof type === 'string' ? type : undefined,
-    });
-    return data.playlists || [];
   }
 
   if (root === 'announcements') {
@@ -540,24 +523,6 @@ export async function getDoc(documentRef: DocumentReference): Promise<DocumentSn
       };
     }
 
-    if (root === 'playlists' && id) {
-      const data = await apiGet<PlaylistResponse>(`/api/playlists/${id}`);
-      if (!data.playlist) {
-        return {
-          id,
-          exists: () => false,
-          data: () => undefined,
-        };
-      }
-
-      const hydrated = hydrateResponseDates(data.playlist);
-      return {
-        id,
-        exists: () => true,
-        data: () => hydrated,
-      };
-    }
-
     if (root === 'galleries' && id) {
       const data = await apiGet<{ item: any }>(`/api/admin/galleries/${id}`);
       if (!data.item) {
@@ -631,7 +596,7 @@ export async function setDoc(documentRef: DocumentReference, payload: Record<str
   const data = normalizePayload(payload) as Record<string, unknown>;
 
   if (root === 'wiki' && id) {
-    await apiPost('/api/wiki', {
+    await apiPost('/api/wiki/legacy', {
       ...data,
       slug: id,
       tags: Array.isArray(data.tags) ? data.tags : [],
@@ -770,11 +735,6 @@ export async function addDoc(collectionRef: CollectionReference, payload: Record
     return createDocumentRef(['music', response.song.docId]);
   }
 
-  if (root === 'playlists') {
-    const response = await apiPost<{ playlist: any }>('/api/playlists', data);
-    return createDocumentRef(['playlists', response.playlist.docId]);
-  }
-
   if (root === 'imageMaps') {
     const response = await apiPost<{ item: any }>('/api/image-maps', data);
     return createDocumentRef(['imageMaps', response.item.id]);
@@ -803,11 +763,6 @@ export async function deleteDoc(documentRef: DocumentReference) {
 
   if (root === 'music' && id) {
     await apiDelete(`/api/music/${id}`);
-    return;
-  }
-
-  if (root === 'playlists' && id) {
-    await apiDelete(`/api/playlists/${id}`);
     return;
   }
 

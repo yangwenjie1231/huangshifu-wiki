@@ -329,57 +329,212 @@ PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
-CREATE TABLE IF NOT EXISTS `EditLock` (
-  `id` varchar(191) NOT NULL,
-  `collection` varchar(191) NOT NULL,
-  `recordId` varchar(191) NOT NULL,
-  `userId` varchar(191) NOT NULL,
-  `username` varchar(191) NOT NULL,
-  `createdAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  `updatedAt` datetime(3) NOT NULL,
-  `expiresAt` datetime(3) NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `EditLock_collection_recordId_key` (`collection`, `recordId`),
-  KEY `EditLock_userId_idx` (`userId`),
-  KEY `EditLock_expiresAt_idx` (`expiresAt`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-SET @has_gallery_published := (
+SET @has_wiki_page_main_branch_id := (
   SELECT COUNT(*)
   FROM INFORMATION_SCHEMA.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Gallery' AND COLUMN_NAME = 'published'
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiPage' AND COLUMN_NAME = 'mainBranchId'
 );
 SET @sql := IF(
-  @has_gallery_published = 0,
-  'ALTER TABLE `Gallery` ADD COLUMN `published` tinyint(1) NOT NULL DEFAULT 1',
+  @has_wiki_page_main_branch_id = 0,
+  'ALTER TABLE `WikiPage` ADD COLUMN `mainBranchId` varchar(191) DEFAULT NULL',
   'SELECT 1'
 );
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
-SET @has_gallery_published_at := (
+SET @has_wiki_page_merged_at := (
   SELECT COUNT(*)
   FROM INFORMATION_SCHEMA.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Gallery' AND COLUMN_NAME = 'publishedAt'
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiPage' AND COLUMN_NAME = 'mergedAt'
 );
 SET @sql := IF(
-  @has_gallery_published_at = 0,
-  'ALTER TABLE `Gallery` ADD COLUMN `publishedAt` datetime(3) DEFAULT NULL',
+  @has_wiki_page_merged_at = 0,
+  'ALTER TABLE `WikiPage` ADD COLUMN `mergedAt` datetime(3) DEFAULT NULL',
   'SELECT 1'
 );
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
-SET @has_gallery_published_updated_idx := (
+SET @has_wiki_page_main_branch_idx := (
   SELECT COUNT(*)
   FROM INFORMATION_SCHEMA.STATISTICS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Gallery' AND INDEX_NAME = 'Gallery_published_updatedAt_idx'
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiPage' AND INDEX_NAME = 'WikiPage_mainBranchId_idx'
 );
 SET @sql := IF(
-  @has_gallery_published_updated_idx = 0,
-  'CREATE INDEX `Gallery_published_updatedAt_idx` ON `Gallery` (`published`,`updatedAt`)',
+  @has_wiki_page_main_branch_idx = 0,
+  'CREATE INDEX `WikiPage_mainBranchId_idx` ON `WikiPage` (`mainBranchId`)',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_revision_branch_id := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiRevision' AND COLUMN_NAME = 'branchId'
+);
+SET @sql := IF(
+  @has_wiki_revision_branch_id = 0,
+  'ALTER TABLE `WikiRevision` ADD COLUMN `branchId` varchar(191) DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_revision_slug := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiRevision' AND COLUMN_NAME = 'slug'
+);
+SET @sql := IF(
+  @has_wiki_revision_slug = 0,
+  'ALTER TABLE `WikiRevision` ADD COLUMN `slug` varchar(191) DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_revision_category := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiRevision' AND COLUMN_NAME = 'category'
+);
+SET @sql := IF(
+  @has_wiki_revision_category = 0,
+  'ALTER TABLE `WikiRevision` ADD COLUMN `category` varchar(191) DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_revision_tags := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiRevision' AND COLUMN_NAME = 'tags'
+);
+SET @sql := IF(
+  @has_wiki_revision_tags = 0,
+  'ALTER TABLE `WikiRevision` ADD COLUMN `tags` json DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_revision_event_date := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiRevision' AND COLUMN_NAME = 'eventDate'
+);
+SET @sql := IF(
+  @has_wiki_revision_event_date = 0,
+  'ALTER TABLE `WikiRevision` ADD COLUMN `eventDate` varchar(191) DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_revision_is_auto_save := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiRevision' AND COLUMN_NAME = 'isAutoSave'
+);
+SET @sql := IF(
+  @has_wiki_revision_is_auto_save = 0,
+  'ALTER TABLE `WikiRevision` ADD COLUMN `isAutoSave` tinyint(1) NOT NULL DEFAULT 0',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_revision_branch_idx := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiRevision' AND INDEX_NAME = 'WikiRevision_branchId_createdAt_idx'
+);
+SET @sql := IF(
+  @has_wiki_revision_branch_idx = 0,
+  'CREATE INDEX `WikiRevision_branchId_createdAt_idx` ON `WikiRevision` (`branchId`, `createdAt`)',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+CREATE TABLE IF NOT EXISTS `WikiBranch` (
+  `id` varchar(191) NOT NULL,
+  `pageSlug` varchar(191) NOT NULL,
+  `editorUid` varchar(191) NOT NULL,
+  `editorName` varchar(191) NOT NULL,
+  `status` enum('draft','pending_review','merged','rejected','conflict') NOT NULL DEFAULT 'draft',
+  `latestRevisionId` varchar(191) DEFAULT NULL,
+  `createdAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` datetime(3) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `WikiBranch_pageSlug_editorUid_key` (`pageSlug`,`editorUid`),
+  KEY `WikiBranch_pageSlug_status_idx` (`pageSlug`,`status`),
+  KEY `WikiBranch_editorUid_idx` (`editorUid`),
+  CONSTRAINT `WikiBranch_pageSlug_fkey` FOREIGN KEY (`pageSlug`) REFERENCES `WikiPage` (`slug`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `WikiBranch_editorUid_fkey` FOREIGN KEY (`editorUid`) REFERENCES `User` (`uid`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `WikiPullRequest` (
+  `id` varchar(191) NOT NULL,
+  `branchId` varchar(191) NOT NULL,
+  `pageSlug` varchar(191) NOT NULL,
+  `title` varchar(191) NOT NULL,
+  `description` text DEFAULT NULL,
+  `status` enum('open','merged','rejected') NOT NULL DEFAULT 'open',
+  `createdByUid` varchar(191) NOT NULL,
+  `createdByName` varchar(191) NOT NULL,
+  `reviewedBy` varchar(191) DEFAULT NULL,
+  `reviewedAt` datetime(3) DEFAULT NULL,
+  `mergedAt` datetime(3) DEFAULT NULL,
+  `baseRevisionId` varchar(191) DEFAULT NULL,
+  `conflictData` json DEFAULT NULL,
+  `createdAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` datetime(3) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `WikiPullRequest_branchId_key` (`branchId`),
+  KEY `WikiPullRequest_status_createdAt_idx` (`status`,`createdAt`),
+  KEY `WikiPullRequest_pageSlug_status_idx` (`pageSlug`,`status`),
+  KEY `WikiPullRequest_createdByUid_createdAt_idx` (`createdByUid`,`createdAt`),
+  CONSTRAINT `WikiPullRequest_branchId_fkey` FOREIGN KEY (`branchId`) REFERENCES `WikiBranch` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `WikiPullRequest_pageSlug_fkey` FOREIGN KEY (`pageSlug`) REFERENCES `WikiPage` (`slug`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `WikiPullRequest_createdByUid_fkey` FOREIGN KEY (`createdByUid`) REFERENCES `User` (`uid`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `WikiPullRequest_reviewedBy_fkey` FOREIGN KEY (`reviewedBy`) REFERENCES `User` (`uid`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `WikiPullRequestComment` (
+  `id` varchar(191) NOT NULL,
+  `prId` varchar(191) NOT NULL,
+  `authorUid` varchar(191) NOT NULL,
+  `authorName` varchar(191) NOT NULL,
+  `content` text NOT NULL,
+  `createdAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  KEY `WikiPullRequestComment_prId_createdAt_idx` (`prId`,`createdAt`),
+  KEY `WikiPullRequestComment_authorUid_createdAt_idx` (`authorUid`,`createdAt`),
+  CONSTRAINT `WikiPullRequestComment_prId_fkey` FOREIGN KEY (`prId`) REFERENCES `WikiPullRequest` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `WikiPullRequestComment_authorUid_fkey` FOREIGN KEY (`authorUid`) REFERENCES `User` (`uid`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+SET @has_wiki_revision_branch_fk := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiRevision' AND CONSTRAINT_NAME = 'WikiRevision_branchId_fkey'
+);
+SET @sql := IF(
+  @has_wiki_revision_branch_fk = 0,
+  'ALTER TABLE `WikiRevision` ADD CONSTRAINT `WikiRevision_branchId_fkey` FOREIGN KEY (`branchId`) REFERENCES `WikiBranch` (`id`) ON DELETE SET NULL ON UPDATE CASCADE',
   'SELECT 1'
 );
 PREPARE stmt FROM @sql;
@@ -604,89 +759,6 @@ SET @has_post_hot_score_index := (
 SET @sql := IF(
   @has_post_hot_score_index = 0,
   'CREATE INDEX `Post_hotScore_updatedAt_idx` ON `Post` (`hotScore`, `updatedAt`)',
-  'SELECT 1'
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @has_music_source_platform := (
-  SELECT COUNT(*)
-  FROM INFORMATION_SCHEMA.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'MusicTrack' AND COLUMN_NAME = 'sourcePlatform'
-);
-SET @sql := IF(
-  @has_music_source_platform = 0,
-  'ALTER TABLE `MusicTrack` ADD COLUMN `sourcePlatform` varchar(191) DEFAULT NULL',
-  'SELECT 1'
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @has_music_source_url := (
-  SELECT COUNT(*)
-  FROM INFORMATION_SCHEMA.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'MusicTrack' AND COLUMN_NAME = 'sourceUrl'
-);
-SET @sql := IF(
-  @has_music_source_url = 0,
-  'ALTER TABLE `MusicTrack` ADD COLUMN `sourceUrl` text DEFAULT NULL',
-  'SELECT 1'
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @has_playlist_table := (
-  SELECT COUNT(*)
-  FROM INFORMATION_SCHEMA.TABLES
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Playlist'
-);
-SET @sql := IF(
-  @has_playlist_table = 0,
-  "CREATE TABLE IF NOT EXISTS `Playlist` (
-    `docId` varchar(191) NOT NULL,
-    `title` varchar(191) NOT NULL,
-    `artist` varchar(191) NOT NULL,
-    `description` text DEFAULT NULL,
-    `cover` text NOT NULL,
-    `resourceType` varchar(191) NOT NULL DEFAULT 'playlist',
-    `platform` varchar(191) NOT NULL,
-    `platformId` varchar(191) NOT NULL,
-    `platformUrl` text NOT NULL,
-    `createdBy` varchar(191) DEFAULT NULL,
-    `createdAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    `updatedAt` datetime(3) NOT NULL,
-    PRIMARY KEY (`docId`),
-    KEY `Playlist_createdAt_idx` (`createdAt`),
-    KEY `Playlist_platform_platformId_idx` (`platform`,`platformId`),
-    KEY `Playlist_resourceType_updatedAt_idx` (`resourceType`,`updatedAt`)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-  'SELECT 1'
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @has_playlist_track_table := (
-  SELECT COUNT(*)
-  FROM INFORMATION_SCHEMA.TABLES
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'PlaylistTrack'
-);
-SET @sql := IF(
-  @has_playlist_track_table = 0,
-  "CREATE TABLE IF NOT EXISTS `PlaylistTrack` (
-    `playlistDocId` varchar(191) NOT NULL,
-    `trackDocId` varchar(191) NOT NULL,
-    `trackOrder` int NOT NULL DEFAULT 0,
-    `addedAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    PRIMARY KEY (`playlistDocId`,`trackDocId`),
-    KEY `PlaylistTrack_playlistDocId_trackOrder_idx` (`playlistDocId`,`trackOrder`),
-    KEY `PlaylistTrack_trackDocId_idx` (`trackDocId`),
-    CONSTRAINT `PlaylistTrack_playlistDocId_fkey` FOREIGN KEY (`playlistDocId`) REFERENCES `Playlist` (`docId`) ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT `PlaylistTrack_trackDocId_fkey` FOREIGN KEY (`trackDocId`) REFERENCES `MusicTrack` (`docId`) ON DELETE CASCADE ON UPDATE CASCADE
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
   'SELECT 1'
 );
 PREPARE stmt FROM @sql;
