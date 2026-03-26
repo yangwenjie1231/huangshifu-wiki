@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS `WikiPage` (
   `category` varchar(191) NOT NULL,
   `content` longtext NOT NULL,
   `tags` json DEFAULT NULL,
+  `relations` json DEFAULT NULL,
   `eventDate` varchar(191) DEFAULT NULL,
   `status` enum('draft','pending','published','rejected') NOT NULL DEFAULT 'published',
   `reviewNote` text DEFAULT NULL,
@@ -86,6 +87,8 @@ CREATE TABLE IF NOT EXISTS `WikiPage` (
   `favoritesCount` int NOT NULL DEFAULT 0,
   `lastEditorUid` varchar(191) NOT NULL,
   `lastEditorName` varchar(191) NOT NULL,
+  `mainBranchId` varchar(191) DEFAULT NULL,
+  `mergedAt` datetime(3) DEFAULT NULL,
   `createdAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   `updatedAt` datetime(3) NOT NULL,
   PRIMARY KEY (`id`),
@@ -93,6 +96,7 @@ CREATE TABLE IF NOT EXISTS `WikiPage` (
   KEY `WikiPage_category_updatedAt_idx` (`category`,`updatedAt`),
   KEY `WikiPage_status_updatedAt_idx` (`status`,`updatedAt`),
   KEY `WikiPage_eventDate_idx` (`eventDate`),
+  KEY `WikiPage_mainBranchId_idx` (`mainBranchId`),
   CONSTRAINT `WikiPage_lastEditorUid_fkey` FOREIGN KEY (`lastEditorUid`) REFERENCES `User` (`uid`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -152,15 +156,81 @@ CREATE TABLE IF NOT EXISTS `UserBanLog` (
 CREATE TABLE IF NOT EXISTS `WikiRevision` (
   `id` varchar(191) NOT NULL,
   `pageSlug` varchar(191) NOT NULL,
+  `branchId` varchar(191) DEFAULT NULL,
   `title` varchar(191) NOT NULL,
   `content` longtext NOT NULL,
+  `slug` varchar(191) DEFAULT NULL,
+  `category` varchar(191) DEFAULT NULL,
+  `tags` json DEFAULT NULL,
+  `relations` json DEFAULT NULL,
+  `eventDate` varchar(191) DEFAULT NULL,
   `editorUid` varchar(191) NOT NULL,
   `editorName` varchar(191) NOT NULL,
+  `isAutoSave` tinyint(1) NOT NULL DEFAULT 0,
   `createdAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   PRIMARY KEY (`id`),
   KEY `WikiRevision_pageSlug_createdAt_idx` (`pageSlug`,`createdAt`),
+  KEY `WikiRevision_branchId_createdAt_idx` (`branchId`,`createdAt`),
   CONSTRAINT `WikiRevision_editorUid_fkey` FOREIGN KEY (`editorUid`) REFERENCES `User` (`uid`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `WikiRevision_pageSlug_fkey` FOREIGN KEY (`pageSlug`) REFERENCES `WikiPage` (`slug`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `WikiBranch` (
+  `id` varchar(191) NOT NULL,
+  `pageSlug` varchar(191) NOT NULL,
+  `editorUid` varchar(191) NOT NULL,
+  `editorName` varchar(191) NOT NULL,
+  `status` enum('draft','pending_review','merged','rejected','conflict') NOT NULL DEFAULT 'draft',
+  `latestRevisionId` varchar(191) DEFAULT NULL,
+  `createdAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` datetime(3) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `WikiBranch_pageSlug_editorUid_key` (`pageSlug`,`editorUid`),
+  KEY `WikiBranch_pageSlug_status_idx` (`pageSlug`,`status`),
+  KEY `WikiBranch_editorUid_idx` (`editorUid`),
+  CONSTRAINT `WikiBranch_pageSlug_fkey` FOREIGN KEY (`pageSlug`) REFERENCES `WikiPage` (`slug`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `WikiBranch_editorUid_fkey` FOREIGN KEY (`editorUid`) REFERENCES `User` (`uid`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `WikiPullRequest` (
+  `id` varchar(191) NOT NULL,
+  `branchId` varchar(191) NOT NULL,
+  `pageSlug` varchar(191) NOT NULL,
+  `title` varchar(191) NOT NULL,
+  `description` text DEFAULT NULL,
+  `status` enum('open','merged','rejected') NOT NULL DEFAULT 'open',
+  `createdByUid` varchar(191) NOT NULL,
+  `createdByName` varchar(191) NOT NULL,
+  `reviewedBy` varchar(191) DEFAULT NULL,
+  `reviewedAt` datetime(3) DEFAULT NULL,
+  `mergedAt` datetime(3) DEFAULT NULL,
+  `baseRevisionId` varchar(191) DEFAULT NULL,
+  `conflictData` json DEFAULT NULL,
+  `createdAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` datetime(3) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `WikiPullRequest_branchId_key` (`branchId`),
+  KEY `WikiPullRequest_status_createdAt_idx` (`status`,`createdAt`),
+  KEY `WikiPullRequest_pageSlug_status_idx` (`pageSlug`,`status`),
+  KEY `WikiPullRequest_createdByUid_createdAt_idx` (`createdByUid`,`createdAt`),
+  CONSTRAINT `WikiPullRequest_branchId_fkey` FOREIGN KEY (`branchId`) REFERENCES `WikiBranch` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `WikiPullRequest_pageSlug_fkey` FOREIGN KEY (`pageSlug`) REFERENCES `WikiPage` (`slug`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `WikiPullRequest_createdByUid_fkey` FOREIGN KEY (`createdByUid`) REFERENCES `User` (`uid`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `WikiPullRequest_reviewedBy_fkey` FOREIGN KEY (`reviewedBy`) REFERENCES `User` (`uid`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `WikiPullRequestComment` (
+  `id` varchar(191) NOT NULL,
+  `prId` varchar(191) NOT NULL,
+  `authorUid` varchar(191) NOT NULL,
+  `authorName` varchar(191) NOT NULL,
+  `content` text NOT NULL,
+  `createdAt` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  KEY `WikiPullRequestComment_prId_createdAt_idx` (`prId`,`createdAt`),
+  KEY `WikiPullRequestComment_authorUid_createdAt_idx` (`authorUid`,`createdAt`),
+  CONSTRAINT `WikiPullRequestComment_prId_fkey` FOREIGN KEY (`prId`) REFERENCES `WikiPullRequest` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `WikiPullRequestComment_authorUid_fkey` FOREIGN KEY (`authorUid`) REFERENCES `User` (`uid`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `Announcement` (
@@ -505,6 +575,188 @@ SET @has_post_hot_score := (
 SET @sql := IF(
   @has_post_hot_score = 0,
   'ALTER TABLE `Post` ADD COLUMN `hotScore` double NOT NULL DEFAULT 0',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_page_relations := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiPage' AND COLUMN_NAME = 'relations'
+);
+SET @sql := IF(
+  @has_wiki_page_relations = 0,
+  'ALTER TABLE `WikiPage` ADD COLUMN `relations` json DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_page_main_branch_id := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiPage' AND COLUMN_NAME = 'mainBranchId'
+);
+SET @sql := IF(
+  @has_wiki_page_main_branch_id = 0,
+  'ALTER TABLE `WikiPage` ADD COLUMN `mainBranchId` varchar(191) DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_page_merged_at := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiPage' AND COLUMN_NAME = 'mergedAt'
+);
+SET @sql := IF(
+  @has_wiki_page_merged_at = 0,
+  'ALTER TABLE `WikiPage` ADD COLUMN `mergedAt` datetime(3) DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_page_main_branch_idx := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiPage' AND INDEX_NAME = 'WikiPage_mainBranchId_idx'
+);
+SET @sql := IF(
+  @has_wiki_page_main_branch_idx = 0,
+  'CREATE INDEX `WikiPage_mainBranchId_idx` ON `WikiPage` (`mainBranchId`)',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_revision_branch_id := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiRevision' AND COLUMN_NAME = 'branchId'
+);
+SET @sql := IF(
+  @has_wiki_revision_branch_id = 0,
+  'ALTER TABLE `WikiRevision` ADD COLUMN `branchId` varchar(191) DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_revision_slug := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiRevision' AND COLUMN_NAME = 'slug'
+);
+SET @sql := IF(
+  @has_wiki_revision_slug = 0,
+  'ALTER TABLE `WikiRevision` ADD COLUMN `slug` varchar(191) DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_revision_category := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiRevision' AND COLUMN_NAME = 'category'
+);
+SET @sql := IF(
+  @has_wiki_revision_category = 0,
+  'ALTER TABLE `WikiRevision` ADD COLUMN `category` varchar(191) DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_revision_tags := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiRevision' AND COLUMN_NAME = 'tags'
+);
+SET @sql := IF(
+  @has_wiki_revision_tags = 0,
+  'ALTER TABLE `WikiRevision` ADD COLUMN `tags` json DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_revision_relations := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiRevision' AND COLUMN_NAME = 'relations'
+);
+SET @sql := IF(
+  @has_wiki_revision_relations = 0,
+  'ALTER TABLE `WikiRevision` ADD COLUMN `relations` json DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_revision_event_date := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiRevision' AND COLUMN_NAME = 'eventDate'
+);
+SET @sql := IF(
+  @has_wiki_revision_event_date = 0,
+  'ALTER TABLE `WikiRevision` ADD COLUMN `eventDate` varchar(191) DEFAULT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_revision_is_auto_save := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiRevision' AND COLUMN_NAME = 'isAutoSave'
+);
+SET @sql := IF(
+  @has_wiki_revision_is_auto_save = 0,
+  'ALTER TABLE `WikiRevision` ADD COLUMN `isAutoSave` tinyint(1) NOT NULL DEFAULT 0',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_revision_branch_idx := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiRevision' AND INDEX_NAME = 'WikiRevision_branchId_createdAt_idx'
+);
+SET @sql := IF(
+  @has_wiki_revision_branch_idx = 0,
+  'CREATE INDEX `WikiRevision_branchId_createdAt_idx` ON `WikiRevision` (`branchId`,`createdAt`)',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_wiki_revision_branch_fk := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WikiRevision' AND CONSTRAINT_NAME = 'WikiRevision_branchId_fkey'
+);
+SET @sql := IF(
+  @has_wiki_revision_branch_fk = 0,
+  'ALTER TABLE `WikiRevision` ADD CONSTRAINT `WikiRevision_branchId_fkey` FOREIGN KEY (`branchId`) REFERENCES `WikiBranch` (`id`) ON DELETE SET NULL ON UPDATE CASCADE',
   'SELECT 1'
 );
 PREPARE stmt FROM @sql;

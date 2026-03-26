@@ -113,6 +113,7 @@ IMAGE_EMBEDDING_MODEL="Xenova/clip-vit-base-patch32"
 IMAGE_EMBEDDING_VECTOR_SIZE="512"
 IMAGE_EMBEDDING_BATCH_SIZE="100"
 IMAGE_SEARCH_RESULT_LIMIT="24"
+MUSIC_PLAY_URL_CACHE_TTL_SECONDS="600"
 EOF
 ```
 
@@ -127,6 +128,7 @@ EOF
 - `UPLOAD_SESSION_TTL_MINUTES` 控制图集上传会话有效期（分钟，默认 45）。
 - `QDRANT_URL` 指向本机 Qdrant 时建议保持 `http://127.0.0.1:6333`。
 - `IMAGE_EMBEDDING_MODEL` 当前实现默认 `Xenova/clip-vit-base-patch32`（CPU 友好）。
+- `MUSIC_PLAY_URL_CACHE_TTL_SECONDS` 控制音乐实时播放链接缓存时长（秒，默认 600，最小 60）。
 
 ---
 
@@ -169,6 +171,40 @@ npx prisma db execute --file /tmp/check_image_embedding.sql --schema prisma/sche
 ```
 
 若返回 `cnt=0`，可直接单独执行建表 SQL（见 `prisma/migrate.sql` 中 `CREATE TABLE IF NOT EXISTS ImageEmbedding` 段）后再重启服务。
+
+### 6.1 音乐模块升级说明（无旧数据迁移）
+
+当前音乐模块已切换到新架构，核心点：
+
+- `MusicTrack` 支持多平台来源字段（网易云/QQ/酷狗/酷我/百度）。
+- 播放链接改为运行时解析并缓存：`GET /api/music/:docId/play-url`。
+- 专辑拆分为独立 `Album` 一等模型。
+- 封面与关系独立建模：`SongCover`、`AlbumCover`、`SongAlbumRelation`、`SongInstrumentalRelation`。
+
+本次发布策略为“直切”，明确不做旧数据迁移。执行最新 `prisma/migrate.sql` 即可。
+
+建议迁移后快速检查关键表：
+
+```bash
+cat > /tmp/check_music_tables.sql <<'EOF'
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = DATABASE()
+  AND table_name IN (
+    'MusicTrack',
+    'Album',
+    'SongCover',
+    'AlbumCover',
+    'SongAlbumRelation',
+    'SongInstrumentalRelation'
+  )
+ORDER BY table_name;
+EOF
+
+npx prisma db execute --file /tmp/check_music_tables.sql --schema prisma/schema.prisma
+```
+
+返回应包含以上 6 张表；如缺失，请重新执行一次 `prisma/migrate.sql` 并查看输出报错。
 
 ---
 
@@ -364,6 +400,45 @@ curl -X POST http://127.0.0.1:3000/api/mp/posts \
 ```bash
 pm2 restart huangshifu-wiki --update-env
 ```
+
+### 11.3 音乐模块专项验证（新架构）
+
+建议至少执行一次以下后端自测（管理员登录态）：
+
+```bash
+# 0) 管理员登录并保存 cookie
+curl -X POST http://127.0.0.1:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -c cookie.txt -b cookie.txt \
+  -d '{"email":"admin@example.com","password":"请替换为管理员密码"}'
+
+# 1) 解析音乐链接
+curl -X POST http://127.0.0.1:3000/api/music/parse-url \
+  -H "Content-Type: application/json" \
+  -c cookie.txt -b cookie.txt \
+  -d '{"url":"https://music.163.com/#/song?id=29764545"}'
+
+# 2) 通过链接导入音乐（支持 selectedSongIds）
+curl -X POST http://127.0.0.1:3000/api/music/import \
+  -H "Content-Type: application/json" \
+  -c cookie.txt -b cookie.txt \
+  -d '{"url":"https://music.163.com/#/song?id=29764545","selectedSongIds":["29764545"]}'
+
+# 3) 拉取歌曲播放链接（触发运行时解析 + 缓存）
+curl "http://127.0.0.1:3000/api/music/<docId>/play-url" \
+  -c cookie.txt -b cookie.txt
+
+# 4) 查看专辑列表
+curl "http://127.0.0.1:3000/api/albums" \
+  -c cookie.txt -b cookie.txt
+```
+
+验证点：
+
+- `parse-url` 可识别平台、资源类型和资源 ID。
+- `import` 后 `/api/music` 可看到新增曲目。
+- 重复调用 `play-url` 延迟明显降低（缓存生效）。
+- `/api/albums` 可正常返回专辑分页数据和关联歌曲。
 
 ---
 
