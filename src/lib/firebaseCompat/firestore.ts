@@ -596,7 +596,7 @@ export async function setDoc(documentRef: DocumentReference, payload: Record<str
   const data = normalizePayload(payload) as Record<string, unknown>;
 
   if (root === 'wiki' && id) {
-    await apiPost('/api/wiki/legacy', {
+    await apiPost('/api/wiki', {
       ...data,
       slug: id,
       tags: Array.isArray(data.tags) ? data.tags : [],

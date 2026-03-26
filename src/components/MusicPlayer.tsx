@@ -23,10 +23,7 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
     const fetchSong = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`/api/music/song/${encodeURIComponent(songId)}`);
-        if (!response.ok) {
-          throw new Error(`Request failed: ${response.status}`);
-        }
+        const response = await fetch(`/api/music/song/${songId}`);
         const data = await response.json();
         setSong(data);
       } catch (e) {
