@@ -1918,9 +1918,9 @@ async function refreshPostHotScore(postId: string) {
   if (!post) return 0;
 
   const viewCountRow = await prisma.$queryRaw<Array<{ viewCount: number }>>`
-    SELECT \`viewCount\` AS viewCount
-    FROM \`Post\`
-    WHERE \`id\` = ${postId}
+    SELECT "viewCount" AS "viewCount"
+    FROM "Post"
+    WHERE "id" = ${postId}
     LIMIT 1
   `;
   const viewCount = Number(viewCountRow[0]?.viewCount || 0);
@@ -1933,7 +1933,7 @@ async function refreshPostHotScore(postId: string) {
     updatedAt: post.updatedAt,
   });
 
-  await prisma.$executeRaw`UPDATE \`Post\` SET \`hotScore\` = ${hotScore} WHERE \`id\` = ${postId}`;
+  await prisma.$executeRaw`UPDATE "Post" SET "hotScore" = ${hotScore} WHERE "id" = ${postId}`;
   return hotScore;
 }
 
@@ -3593,7 +3593,7 @@ app.get('/api/wiki/:slug', async (req: AuthenticatedRequest, res) => {
       return;
     }
 
-    await prisma.$executeRaw`UPDATE \`WikiPage\` SET \`viewCount\` = \`viewCount\` + 1 WHERE \`slug\` = ${req.params.slug}`;
+    await prisma.$executeRaw`UPDATE "WikiPage" SET "viewCount" = "viewCount" + 1 WHERE "slug" = ${req.params.slug}`;
     const freshPage = await prisma.wikiPage.findUnique({
       where: { slug: req.params.slug },
     });
@@ -5098,7 +5098,7 @@ app.get('/api/posts/:id', async (req: AuthenticatedRequest, res) => {
       return;
     }
 
-    await prisma.$executeRaw`UPDATE \`Post\` SET \`viewCount\` = \`viewCount\` + 1 WHERE \`id\` = ${req.params.id}`;
+    await prisma.$executeRaw`UPDATE "Post" SET "viewCount" = "viewCount" + 1 WHERE "id" = ${req.params.id}`;
     const freshPost = await prisma.post.findUnique({
       where: { id: req.params.id },
     });

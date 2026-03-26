@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -122,10 +122,10 @@ model User {
   wechatUnionId String?
   role          UserRole       @default(user)
   status        UserStatus     @default(active)
-  banReason     String?        @db.Text
+  banReason     String?
   bannedAt      DateTime?
   level         Int            @default(1)
-  bio           String         @db.Text
+  bio           String
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   posts         Post[]         @relation("UserPosts")
@@ -168,11 +168,11 @@ model Post {
   id            String        @id @default(cuid())
   title         String
   section       String
-  content       String        @db.LongText
+  content       String
   tags          Json?
   authorUid     String
   status        ContentStatus @default(published)
-  reviewNote    String?       @db.Text
+  reviewNote    String?
   reviewedBy    String?
   reviewedAt    DateTime?
   hotScore      Float         @default(0)
@@ -198,7 +198,7 @@ model PostComment {
   authorUid  String
   authorName String
   authorPhoto String?
-  content    String   @db.Text
+  content    String
   parentId   String?
   createdAt  DateTime @default(now())
   post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
@@ -213,12 +213,12 @@ model WikiPage {
   slug          String         @unique
   title         String
   category      String
-  content       String         @db.LongText
+  content       String
   tags          Json?
   relations     Json?
   eventDate     String?
   status        ContentStatus  @default(published)
-  reviewNote    String?        @db.Text
+  reviewNote    String?
   reviewedBy    String?
   reviewedAt    DateTime?
   viewCount     Int            @default(0)
@@ -271,7 +271,7 @@ model ModerationLog {
   targetId   String
   action     ModerationAction
   operatorUid String
-  note       String?              @db.Text
+  note       String?
   createdAt  DateTime             @default(now())
   operator   User                 @relation("ModerationOperator", fields: [operatorUid], references: [uid], onDelete: Cascade)
 
@@ -284,7 +284,7 @@ model UserBanLog {
   targetUid  String
   action     UserBanAction
   operatorUid String
-  note       String?       @db.Text
+  note       String?
   createdAt  DateTime      @default(now())
   target     User          @relation("UserBanActionTarget", fields: [targetUid], references: [uid], onDelete: Cascade)
   operator   User          @relation("UserBanActionBy", fields: [operatorUid], references: [uid], onDelete: Cascade)
@@ -298,7 +298,7 @@ model WikiRevision {
   pageSlug   String
   branchId   String?
   title      String
-  content    String   @db.LongText
+  content    String
   slug       String?
   category   String?
   tags       Json?
@@ -340,7 +340,7 @@ model WikiPullRequest {
   branchId       String
   pageSlug       String
   title          String
-  description    String?               @db.Text
+  description    String?
   status         WikiPullRequestStatus @default(open)
   createdByUid   String
   createdByName  String
@@ -368,7 +368,7 @@ model WikiPullRequestComment {
   prId       String
   authorUid  String
   authorName String
-  content    String          @db.Text
+  content    String
   createdAt  DateTime        @default(now())
   pr         WikiPullRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
   author     User            @relation("WikiPRCommentAuthor", fields: [authorUid], references: [uid], onDelete: Cascade)
@@ -379,7 +379,7 @@ model WikiPullRequestComment {
 
 model Announcement {
   id        String   @id @default(cuid())
-  content   String   @db.Text
+  content   String
   link      String?
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -391,7 +391,7 @@ model Announcement {
 model Gallery {
   id         String         @id @default(cuid())
   title      String
-  description String        @db.Text
+  description String
   authorUid  String
   authorName String
   tags       Json?
@@ -423,7 +423,7 @@ model MediaAsset {
   ownerUid   String
   sessionId  String?
   storageKey String          @unique
-  publicUrl  String          @db.Text
+  publicUrl  String
   fileName   String
   mimeType   String
   sizeBytes  Int
@@ -444,7 +444,7 @@ model GalleryImage {
   id        String   @id @default(cuid())
   galleryId String
   assetId   String?
-  url       String   @db.Text
+  url       String
   name      String
   sortOrder Int      @default(0)
   gallery   Gallery  @relation(fields: [galleryId], references: [id], onDelete: Cascade)
@@ -461,7 +461,7 @@ model ImageEmbedding {
   modelName      String          @default("Xenova/clip-vit-base-patch32")
   vectorSize     Int             @default(512)
   status         EmbeddingStatus @default(pending)
-  lastError      String?         @db.Text
+  lastError      String?
   embeddedAt     DateTime?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -478,9 +478,9 @@ model Album {
   sourceId           String
   title              String
   artist             String
-  cover              String              @db.Text
-  description        String?             @db.Text
-  platformUrl        String?             @db.Text
+  cover              String
+  description        String?
+  platformUrl        String?
   tracks             Json?
   defaultCoverSource String?
   createdAt          DateTime            @default(now())
@@ -500,9 +500,9 @@ model MusicTrack {
   title     String
   artist    String
   album     String   @default("")
-  cover     String   @default("") @db.Text
-  audioUrl  String   @default("") @db.Text
-  lyric     String?  @db.LongText
+  cover     String   @default("")
+  audioUrl  String   @default("")
+  lyric     String?
   primaryPlatform    MusicPlatform   @default(netease)
   enabledPlatform    MusicPlatform?
   neteaseId          String?
@@ -537,7 +537,7 @@ model SongCover {
   songDocId  String
   assetId    String?
   storageKey String    @unique
-  publicUrl  String    @db.Text
+  publicUrl  String
   isDefault  Boolean   @default(false)
   sortOrder  Int       @default(0)
   createdAt  DateTime  @default(now())
@@ -554,7 +554,7 @@ model AlbumCover {
   albumDocId String
   assetId    String?
   storageKey String    @unique
-  publicUrl  String    @db.Text
+  publicUrl  String
   isDefault  Boolean   @default(false)
   sortOrder  Int       @default(0)
   createdAt  DateTime  @default(now())
@@ -598,10 +598,10 @@ model SongInstrumentalRelation {
 model ImageMap {
   id         String   @id
   md5        String   @unique
-  localUrl   String   @db.Text
-  weiboUrl   String?  @db.Text
-  smmsUrl    String?  @db.Text
-  superbedUrl String? @db.Text
+  localUrl   String
+  weiboUrl   String?
+  smmsUrl    String?
+  superbedUrl String?
   createdAt  DateTime @default(now())
 }
 
