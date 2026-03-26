@@ -55,25 +55,8 @@ npm -v
 ---
 
 ## 2. 数据库初始化（MariaDB）
-
+curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
 建议使用独立数据库用户，不要让应用直接使用 `root`。
-# 1. 更新包索引
-sudo apt update
-
-# 2. 安装 MariaDB 服务器和客户端
-sudo apt install -y mariadb-server mariadb-client
-
-# 3. 验证安装
-mariadb --version
-# 或
-mysql --version
-
-# 4. 启动并启用开机自启
-sudo systemctl start mariadb
-sudo systemctl enable mariadb
-
-# 5. 查看运行状态
-sudo systemctl status mariadb
 
 ```bash
 # 进入 MariaDB
@@ -130,7 +113,6 @@ IMAGE_EMBEDDING_MODEL="Xenova/clip-vit-base-patch32"
 IMAGE_EMBEDDING_VECTOR_SIZE="512"
 IMAGE_EMBEDDING_BATCH_SIZE="100"
 IMAGE_SEARCH_RESULT_LIMIT="24"
-MUSIC_PLAY_URL_CACHE_TTL_SECONDS="600"
 EOF
 ```
 
@@ -145,7 +127,6 @@ EOF
 - `UPLOAD_SESSION_TTL_MINUTES` 控制图集上传会话有效期（分钟，默认 45）。
 - `QDRANT_URL` 指向本机 Qdrant 时建议保持 `http://127.0.0.1:6333`。
 - `IMAGE_EMBEDDING_MODEL` 当前实现默认 `Xenova/clip-vit-base-patch32`（CPU 友好）。
-- `MUSIC_PLAY_URL_CACHE_TTL_SECONDS` 控制音乐实时播放链接缓存时长（秒，默认 600，最小 60）。
 
 ---
 
@@ -173,32 +154,6 @@ npx prisma db execute --file prisma/migrate.sql --schema prisma/schema.prisma
 npm run db:seed
 ```
 
-### 6.1 Wiki 协作模型迁移说明（branch + PR）
-
-当前 Wiki 已切换为 GitHub 风格协作模型：
-
-- 每个页面按用户创建协作分支（`WikiBranch`）
-- 编辑内容保存为分支修订（`WikiRevision.branchId` + `isAutoSave`）
-- 提交 PR 并由管理员合并/驳回（`WikiPullRequest`）
-- 冲突由分支创建者或管理员处理（`/wiki/branches/:branchId/conflict`）
-
-本次升级不要求保留旧 Wiki 历史数据；如果你的环境是从旧模型升级，可接受“旧修订历史不迁移”。
-
-重点：部署时确保执行 `prisma/migrate.sql`，让以下结构存在：
-
-- `WikiPage.mainBranchId` / `WikiPage.mergedAt`
-- `WikiPage.relations`（知识图谱轻量关联）
-- `WikiBranch` 表
-- `WikiPullRequest` 表
-- `WikiPullRequestComment` 表
-- `WikiRevision` 的 `branchId/slug/category/tags/relations/eventDate/isAutoSave`
-
-Wiki 关联能力说明：
-
-- 关联关系存储在 `WikiPage.relations` 与 `WikiRevision.relations`（JSON）。
-- 反向关系由服务端按 `bidirectional=true` 自动推断，无需写入第二条反向记录。
-- 前端图谱视图默认展示“当前页面为中心的 2 层关系网络”。
-
 `db:seed` 会创建初始管理员账号（来自 `SEED_SUPER_ADMIN_EMAIL` / `SEED_SUPER_ADMIN_PASSWORD`）。
 
 建议在迁移后立即确认 `ImageEmbedding` 表已创建：
@@ -214,40 +169,6 @@ npx prisma db execute --file /tmp/check_image_embedding.sql --schema prisma/sche
 ```
 
 若返回 `cnt=0`，可直接单独执行建表 SQL（见 `prisma/migrate.sql` 中 `CREATE TABLE IF NOT EXISTS ImageEmbedding` 段）后再重启服务。
-
-### 6.2 音乐模型升级说明（多平台 + 专辑一等模型）
-
-当前音乐模块已切换到新的数据结构，重点包括：
-
-- `MusicTrack` 支持多平台来源字段（网易云/QQ/酷狗/酷我/百度）
-- 播放链接改为运行时解析并缓存（`/api/music/:docId/play-url`）
-- 专辑从歌曲字段中拆分为独立 `Album` 模型
-- 歌曲封面、专辑封面、歌曲-专辑关系、伴奏关系改为独立关系表
-
-本仓库当前策略是“直切丢弃旧数据”，不做旧音乐结构的数据迁移。部署时只需确保最新 `prisma/migrate.sql` 已执行成功。
-
-建议执行后快速确认核心表存在：
-
-```bash
-cat > /tmp/check_music_tables.sql <<'EOF'
-SELECT table_name
-FROM information_schema.tables
-WHERE table_schema = DATABASE()
-  AND table_name IN (
-    'MusicTrack',
-    'Album',
-    'SongCover',
-    'AlbumCover',
-    'SongAlbumRelation',
-    'SongInstrumentalRelation'
-  )
-ORDER BY table_name;
-EOF
-
-npx prisma db execute --file /tmp/check_music_tables.sql --schema prisma/schema.prisma
-```
-
-返回应包含上述 6 张表；若缺失，重新执行一次 `prisma/migrate.sql` 并检查输出报错。
 
 ---
 
@@ -362,17 +283,6 @@ certbot renew --dry-run
 - 图集上传可写入 `uploads/`
 - 数据可写入 MariaDB
 
-### 11.3 Wiki 协作流专项验证
-
-按下面顺序做一次端到端验证：
-
-1. 普通用户进入 `/wiki/{slug}/edit`，自动创建个人分支并开始编辑。
-2. 等待 15 秒，确认自动保存生效（再次进入编辑页可看到最新内容）。
-3. 提交 PR（描述可空），在 `/wiki/pull-requests` 可见状态为“待处理”。
-4. 管理员进入 PR 详情页执行“合并”或“驳回”。
-5. 若管理员合并时提示冲突，分支创建者进入 `/wiki/branches/{branchId}/conflict` 解决后重新审核。
-6. 合并后在 `/wiki/{slug}` 直接读取主分支最新合并内容。
-
 ### 11.2 图集上传（中期重构版）专项验证
 
 当前图集上传链路：
@@ -454,39 +364,6 @@ curl -X POST http://127.0.0.1:3000/api/mp/posts \
 ```bash
 pm2 restart huangshifu-wiki --update-env
 ```
-
-### 11.4 音乐模块专项验证（新架构）
-
-建议至少做一次以下 API 自测（管理员态）：
-
-```bash
-# 1) URL 解析
-curl -X POST http://127.0.0.1:3000/api/music/parse-url \
-  -H "Content-Type: application/json" \
-  -b cookie.txt -c cookie.txt \
-  -d '{"url":"https://music.163.com/#/song?id=29764545"}'
-
-# 2) 从解析结果导入
-curl -X POST http://127.0.0.1:3000/api/music/import \
-  -H "Content-Type: application/json" \
-  -b cookie.txt -c cookie.txt \
-  -d '{"resource":"song","platform":"netease","id":"29764545"}'
-
-# 3) 拉取歌曲播放链接（命中运行时缓存）
-curl "http://127.0.0.1:3000/api/music/<docId>/play-url" \
-  -b cookie.txt -c cookie.txt
-
-# 4) 查看专辑列表
-curl "http://127.0.0.1:3000/api/albums?page=1&pageSize=20" \
-  -b cookie.txt -c cookie.txt
-```
-
-验证点：
-
-- `parse-url` 能识别平台、资源类型和资源 ID
-- `import` 后 `/api/music` 可看到新增曲目
-- 首次 `play-url` 解析成功，重复请求延迟明显下降（缓存生效）
-- `/api/albums` 可正常返回专辑分页结构
 
 ---
 
@@ -689,18 +566,6 @@ pm2 restart huangshifu-wiki --update-env
 pm2 save
 ```
 
-如果是第一次上线 Wiki 协作流，建议追加一次人工检查：
-
-```bash
-curl http://127.0.0.1:3000/api/health
-curl http://127.0.0.1:3000/api/wiki
-```
-
-并在浏览器验证：
-
-- `/wiki/branches`
-- `/wiki/pull-requests`
-
 ### 一键部署脚本（推荐）
 
 项目已提供脚本：`scripts/deploy.sh`
@@ -755,63 +620,3 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 ```
 
 建议配合 `crontab` 做每日自动备份。
-
----
-
-## 16. GitHub 自动化 CI（新增）
-
-为避免“本地可运行、线上构建失败”，仓库新增 GitHub Actions 工作流：
-
-- 文件：`.github/workflows/ci.yml`
-- 触发条件：
-  - `push` 到 `main`
-  - `pull_request` 到 `main`
-  - 手动触发 `workflow_dispatch`
-
-### 16.1 CI 执行步骤
-
-CI 默认在 `ubuntu-latest` + Node 20 下执行：
-
-```bash
-npm ci
-npm run lint
-npm run test:coverage
-npm run build
-```
-
-并上传 `coverage/` 目录为构建产物（artifact）。
-
-### 16.2 建议的分支保护
-
-建议在 GitHub 仓库设置 branch protection：
-
-1. 保护分支：`main`
-2. Required status checks：勾选 `Lint Test Build`
-3. 禁止未通过 CI 的提交直接合并
-
-### 16.3 部署前联动检查
-
-在服务器执行 `./scripts/deploy.sh` 之前，建议确认：
-
-- PR 对应的 CI 已通过（lint / test / build）
-- 变更已合并到 `main`
-- 若涉及数据库结构，`prisma/migrate.sql` 已同步更新
-
-这样可以把常见部署失败提前暴露在 PR 阶段，降低线上风险。
-
-### 16.4 当前测试基线
-
-当前已接入 Vitest 并提供基础单测，覆盖以下核心模块：
-
-- `src/server/music/musicUrlParser.ts`
-- `src/lib/apiClient.ts`
-- `src/lib/auth.ts`
-
-CI 使用 `npm run test:coverage` 执行覆盖率校验，当前阈值为：
-
-- `lines >= 12`
-- `functions >= 30`
-- `branches >= 40`
-- `statements >= 12`
-
-> 说明：这是第一阶段“能拦住明显回归”的保守阈值，建议后续随着测试增量逐步上调。

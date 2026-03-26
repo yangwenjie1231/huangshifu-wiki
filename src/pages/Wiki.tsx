@@ -1,232 +1,74 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Link, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Routes, Route, Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
+import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, orderBy, addDoc, limit, db } from '../firebase';
+import { useAuth } from '../context/AuthContext';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { format } from 'date-fns';
-import MarkdownIt from 'markdown-it';
-import MdEditor from 'react-markdown-editor-lite';
+import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar } from 'lucide-react';
 import { clsx } from 'clsx';
-import { ArrowLeft, Book, Calendar, Edit3, GitBranch, GitPullRequest, Plus, Save, X } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { apiGet, apiPost } from '../lib/apiClient';
-import RelationGraph, { type RelationGraphData, type WikiRelationType } from '../components/wiki/RelationGraph';
+import { format } from 'date-fns';
+import { motion, AnimatePresence } from 'motion/react';
+import { summarizeWikiContent, generateWikiIntro } from '../services/aiService';
+import { uploadImageToCDNs, getImageUrl } from '../services/imageService';
+import { apiDelete, apiPost } from '../lib/apiClient';
+import MdEditor from 'react-markdown-editor-lite';
+import MarkdownIt from 'markdown-it';
 import 'react-markdown-editor-lite/lib/index.css';
 
-const mdParser = new MarkdownIt({ html: true, linkify: true, typographer: true });
+const mdParser = new MarkdownIt({
+  html: true,
+  linkify: true,
+  typographer: true
+});
 
-type ContentStatus = 'draft' | 'pending' | 'published' | 'rejected';
-type BranchStatus = 'draft' | 'pending_review' | 'merged' | 'rejected' | 'conflict';
-type PrStatus = 'open' | 'merged' | 'rejected';
-
-type WikiRelation = {
-  type: WikiRelationType;
-  targetSlug: string;
-  label?: string;
-  bidirectional: boolean;
-  typeLabel?: string;
-  targetTitle?: string;
-  targetCategory?: string;
-  inferred?: boolean;
-  sourceSlug?: string;
-  sourceTitle?: string;
-};
-
-type WikiPage = {
-  id: string;
-  slug: string;
-  title: string;
-  category: string;
-  content: string;
-  tags: string[];
-  relations?: WikiRelation[];
-  eventDate?: string | null;
-  status: ContentStatus;
-  updatedAt: string;
-  createdAt: string;
-  lastEditorUid: string;
-  lastEditorName: string;
-};
-
-type WikiBranch = {
-  id: string;
-  pageSlug: string;
-  editorUid: string;
-  editorName: string;
-  status: BranchStatus;
-  latestRevisionId: string | null;
-  createdAt: string;
-  updatedAt: string;
-  page?: {
-    slug: string;
-    title: string;
-    category: string;
-  } | null;
-};
-
-type WikiRevision = {
-  id: string;
-  pageSlug: string;
-  branchId?: string | null;
-  title: string;
-  content: string;
-  slug?: string | null;
-  category?: string | null;
-  tags?: string[];
-  relations?: WikiRelation[];
-  eventDate?: string | null;
-  editorUid: string;
-  editorName: string;
-  isAutoSave?: boolean;
-  createdAt: string;
-};
-
-type WikiPageDetailResponse = {
-  page: WikiPage;
-  backlinks?: WikiPage[];
-  relations?: WikiRelation[];
-  relationGraph?: RelationGraphData;
-};
-
-const RELATION_TYPE_OPTIONS: Array<{ value: WikiRelationType; label: string }> = [
-  { value: 'related_person', label: '相关人物' },
-  { value: 'work_relation', label: '作品关联' },
-  { value: 'timeline_relation', label: '时间线关联' },
-  { value: 'custom', label: '自定义关系' },
-];
-
-type WikiPullRequest = {
-  id: string;
-  branchId: string;
-  pageSlug: string;
-  title: string;
-  description?: string | null;
-  status: PrStatus;
-  createdByUid: string;
-  createdByName: string;
-  reviewedBy?: string | null;
-  reviewedAt?: string | null;
-  mergedAt?: string | null;
-  conflictData?: unknown;
-  createdAt: string;
-  updatedAt: string;
-  branch?: WikiBranch | null;
-  page?: {
-    slug: string;
-    title: string;
-    category: string;
-  } | null;
-  comments?: {
-    id: string;
-    authorUid: string;
-    authorName: string;
-    content: string;
-    createdAt: string;
-  }[];
-};
-
-type WikiDiffSnapshot = {
-  title: string;
-  content: string;
-  category: string;
-  tags: string[];
-  relations?: WikiRelation[];
-  eventDate?: string | null;
-};
-
-const toDate = (value?: string | null) => {
+const toDateValue = (value: string | null | undefined) => {
   if (!value) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-const fmt = (value?: string | null, pattern = 'yyyy-MM-dd HH:mm') => {
-  const parsed = toDate(value);
-  return parsed ? format(parsed, pattern) : 'N/A';
+const formatDate = (value: string | null | undefined, pattern: string) => {
+  const parsed = toDateValue(value);
+  return parsed ? format(parsed, pattern) : '刚刚';
 };
 
-const categoryName = (category: string) => {
-  if (category === 'biography') return '人物介绍';
-  if (category === 'music') return '音乐作品';
-  if (category === 'album') return '专辑一览';
-  if (category === 'timeline') return '时间轴';
-  if (category === 'event') return '活动记录';
-  return category;
+type ContentStatus = 'draft' | 'pending' | 'published' | 'rejected';
+
+type WikiItem = {
+  id: string;
+  slug: string;
+  title: string;
+  category: string;
+  content: string;
+  tags?: string[];
+  eventDate?: string | null;
+  status?: ContentStatus;
+  reviewNote?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  favoritesCount?: number;
+  favoritedByMe?: boolean;
+  lastEditorUid: string;
+  lastEditorName: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
-const statusLabel = (status: ContentStatus) => {
+const getStatusText = (status?: ContentStatus) => {
+  if (status === 'pending') return '待审核';
+  if (status === 'rejected') return '已驳回';
   if (status === 'draft') return '草稿';
-  if (status === 'pending') return '待审';
-  if (status === 'rejected') return '驳回';
   return '已发布';
 };
 
-const branchStatusLabel = (status: BranchStatus) => {
-  if (status === 'draft') return '草稿';
-  if (status === 'pending_review') return '待审核';
-  if (status === 'merged') return '已合并';
-  if (status === 'rejected') return '已驳回';
-  return '冲突';
-};
-
-const prStatusLabel = (status: PrStatus) => {
-  if (status === 'open') return '待处理';
-  if (status === 'merged') return '已合并';
-  return '已驳回';
-};
-
-const relationTypeLabel = (value: WikiRelationType) => {
-  const found = RELATION_TYPE_OPTIONS.find((item) => item.value === value);
-  return found?.label || '自定义关系';
-};
-
-const normalizeRelationItems = (value: unknown, sourceSlug?: string) => {
-  if (!Array.isArray(value)) return [] as WikiRelation[];
-
-  const seen = new Set<string>();
-  const safeSourceSlug = String(sourceSlug || '').trim().toLowerCase();
-  const output: WikiRelation[] = [];
-
-  value.forEach((item) => {
-    if (!item || typeof item !== 'object') return;
-    const relation = item as Partial<WikiRelation> & Record<string, unknown>;
-    const type = relation.type;
-    if (type !== 'related_person' && type !== 'work_relation' && type !== 'timeline_relation' && type !== 'custom') {
-      return;
-    }
-
-    const targetSlug = typeof relation.targetSlug === 'string' ? relation.targetSlug.trim().toLowerCase() : '';
-    if (!targetSlug) return;
-    if (safeSourceSlug && targetSlug === safeSourceSlug) return;
-
-    const label = typeof relation.label === 'string' ? relation.label.trim() : '';
-    const bidirectional = relation.bidirectional !== false;
-
-    const key = `${type}|${targetSlug}|${label.toLowerCase()}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-
-    output.push({
-      type,
-      targetSlug,
-      label: label || undefined,
-      bidirectional,
-    });
-  });
-
-  return output;
-};
-
-const relationOptionLabel = (pages: WikiPage[], slug: string) => {
-  const page = pages.find((item) => item.slug === slug);
-  if (!page) return slug;
-  return `${page.title} (${page.slug})`;
-};
-
+// --- Wiki Internal Linking Component ---
 const WikiMarkdown = ({ content }: { content: string }) => {
-  const processedContent = content.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_m, p1, p2) => {
-    const display = String(p1).trim();
-    const slug = p2 ? String(p2).trim() : String(p1).trim();
+  // Pre-process internal links [[display|slug]] or [[slug]] to standard markdown links
+  // This is safer than overriding the 'p' component which can break with HTML
+  const processedContent = content.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (match, p1, p2) => {
+    const display = p1.trim();
+    const slug = p2 ? p2.trim() : p1.trim();
     return `[${display}](/wiki/${slug})`;
   });
 
@@ -235,20 +77,43 @@ const WikiMarkdown = ({ content }: { content: string }) => {
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[rehypeRaw]}
       components={{
+        // Use Link from react-router-dom for internal links
         a: ({ href, children, ...props }) => {
           if (href?.startsWith('/wiki/')) {
             return (
-              <Link to={href} className="text-brand-olive font-bold hover:underline" {...props}>
+              <Link 
+                to={href} 
+                className="text-brand-olive font-bold hover:underline decoration-brand-olive/30 underline-offset-4"
+                {...props}
+              >
                 {children}
               </Link>
             );
           }
           return (
-            <a href={href} target="_blank" rel="noopener noreferrer" className="text-brand-olive hover:underline" {...props}>
+            <a 
+              href={href} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-brand-olive hover:underline"
+              {...props}
+            >
               {children}
             </a>
           );
         },
+        // Support tables with Tailwind
+        table: ({ children }) => (
+          <div className="overflow-x-auto my-8">
+            <table className="w-full border-collapse border border-gray-200 rounded-xl overflow-hidden">
+              {children}
+            </table>
+          </div>
+        ),
+        thead: ({ children }) => <thead className="bg-brand-cream/50 text-brand-olive">{children}</thead>,
+        th: ({ children }) => <th className="border border-gray-200 px-4 py-3 text-left font-bold">{children}</th>,
+        td: ({ children }) => <td className="border border-gray-200 px-4 py-3">{children}</td>,
+        tr: ({ children }) => <tr className="hover:bg-gray-50 transition-colors">{children}</tr>
       }}
     >
       {processedContent}
@@ -256,1218 +121,851 @@ const WikiMarkdown = ({ content }: { content: string }) => {
   );
 };
 
+// --- Wiki List Component ---
 const WikiList = () => {
   const [searchParams] = useSearchParams();
   const category = searchParams.get('category') || 'all';
-  const [pages, setPages] = useState<WikiPage[]>([]);
+  const [pages, setPages] = useState<WikiItem[]>([]);
   const [loading, setLoading] = useState(true);
   const { user, isBanned } = useAuth();
 
   useEffect(() => {
-    let active = true;
-    const run = async () => {
+    const fetchPages = async () => {
       setLoading(true);
       try {
-        const data = await apiGet<{ pages: WikiPage[] }>('/api/wiki', { category });
-        if (active) setPages(data.pages || []);
-      } catch (error) {
-        console.error('Fetch wiki list failed:', error);
-        if (active) setPages([]);
-      } finally {
-        if (active) setLoading(false);
+        const wikiRef = collection(db, 'wiki');
+        let q = query(wikiRef, orderBy('updatedAt', 'desc'));
+        if (category !== 'all') {
+          q = query(wikiRef, where('category', '==', category), orderBy('updatedAt', 'desc'));
+        }
+        const snapshot = await getDocs(q);
+        setPages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WikiItem)));
+      } catch (e) {
+        console.error("Error fetching wiki pages:", e);
       }
+      setLoading(false);
     };
-    run();
-    return () => {
-      active = false;
-    };
+    fetchPages();
   }, [category]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-12">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
         <div>
-          <h1 className="text-4xl font-serif font-bold text-brand-olive">百科全书</h1>
-          <p className="text-gray-500">GitHub 风格协作：分支 + PR + 冲突处理</p>
+          <h1 className="text-5xl font-serif font-bold text-brand-olive mb-2">百科全书</h1>
+          <p className="text-gray-500 italic">诗扶百科 · 记录每一个动人瞬间</p>
         </div>
-        <div className="flex items-center gap-2">
-          {user && !isBanned ? (
-            <>
-              <Link to="/wiki/branches" className="px-4 py-2 rounded-full bg-white border border-gray-200 text-gray-700 hover:border-brand-olive">
-                我的分支
-              </Link>
-              <Link to="/wiki/pull-requests" className="px-4 py-2 rounded-full bg-white border border-gray-200 text-gray-700 hover:border-brand-olive">
-                PR 列表
-              </Link>
-              <Link to="/wiki/new" className="px-4 py-2 rounded-full bg-brand-olive text-white hover:bg-brand-olive/90">
-                新建页面
-              </Link>
-            </>
-          ) : null}
+        <div className="flex items-center gap-4">
+          <Link to="/wiki/timeline" className="px-6 py-3 bg-brand-cream text-brand-olive rounded-full font-medium hover:bg-brand-olive hover:text-white transition-all flex items-center gap-2 shadow-sm">
+            <Calendar size={18} /> 时间轴视图
+          </Link>
+          {user && !isBanned && (
+            <Link to="/wiki/new" className="px-6 py-3 bg-brand-olive text-white rounded-full font-medium hover:bg-brand-olive/90 transition-all flex items-center gap-2 shadow-md">
+              <Plus size={18} /> 创建页面
+            </Link>
+          )}
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-8">
+      <div className="flex flex-wrap gap-2 mb-12">
         {['all', 'biography', 'music', 'album', 'timeline', 'event'].map((cat) => (
           <Link
             key={cat}
             to={`/wiki?category=${cat}`}
             className={clsx(
-              'px-4 py-2 rounded-full border text-sm',
-              cat === category ? 'bg-brand-olive text-white border-brand-olive' : 'bg-white text-gray-600 border-gray-200',
+              "px-6 py-2 rounded-full text-sm font-medium transition-all border capitalize",
+              category === cat 
+                ? "bg-brand-olive text-white border-brand-olive" 
+                : "bg-white text-gray-500 border-gray-200 hover:border-brand-olive hover:text-brand-olive"
             )}
           >
-            {cat === 'all' ? '全部' : categoryName(cat)}
+            {cat === 'all' ? '全部' : 
+             cat === 'biography' ? '人物介绍' :
+             cat === 'music' ? '音乐作品' :
+             cat === 'album' ? '专辑一览' :
+             cat === 'timeline' ? '时间轴' :
+             cat === 'event' ? '活动记录' : cat}
           </Link>
         ))}
       </div>
 
       {loading ? (
-        <div className="text-gray-500">加载中...</div>
-      ) : pages.length ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <div key={i} className="h-48 bg-white rounded-[32px] animate-pulse border border-gray-100"></div>
+          ))}
+        </div>
+      ) : pages.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {pages.map((page) => (
-            <Link key={page.id} to={`/wiki/${page.slug}`} className="bg-white border border-gray-100 rounded-3xl p-6 hover:border-brand-olive/30">
-              <div className="text-xs text-gray-500 mb-2">{categoryName(page.category)}</div>
-              <h3 className="font-serif text-2xl font-bold text-gray-900 mb-3">{page.title}</h3>
-              <p className="text-sm text-gray-500 line-clamp-3">{(page.content || '').replace(/[#*`]/g, '').slice(0, 120)}</p>
-              <div className="mt-4 text-xs text-gray-400">更新于 {fmt(page.updatedAt)}</div>
+            <Link 
+              key={page.id} 
+              to={`/wiki/${page.slug}`}
+              className="bg-white p-8 rounded-[32px] border border-gray-100 hover:border-brand-olive/20 hover:shadow-xl transition-all group"
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <span className="px-2 py-1 bg-brand-cream text-brand-olive text-[10px] font-bold uppercase tracking-wider rounded">
+                  {page.category === 'biography' ? '人物介绍' :
+                   page.category === 'music' ? '音乐作品' :
+                   page.category === 'album' ? '专辑一览' :
+                   page.category === 'timeline' ? '时间轴' :
+                   page.category === 'event' ? '活动记录' : page.category}
+                </span>
+              </div>
+              <h3 className="text-2xl font-serif font-bold mb-4 group-hover:text-brand-olive transition-colors">{page.title}</h3>
+              <p className="text-gray-400 text-sm line-clamp-2 mb-6 italic leading-relaxed">
+                {page.content.replace(/[#*`]/g, '').substring(0, 100)}...
+              </p>
+              <div className="flex items-center justify-between text-gray-400 text-xs">
+                <span className="flex items-center gap-1"><Clock size={12} /> {formatDate(page.updatedAt, 'yyyy-MM-dd')}</span>
+                <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
+              </div>
             </Link>
           ))}
         </div>
       ) : (
-        <div className="bg-white border border-gray-100 rounded-3xl p-10 text-center text-gray-400">暂无数据</div>
+        <div className="bg-white p-20 rounded-[40px] border border-gray-100 text-center">
+          <Book size={48} className="mx-auto text-gray-200 mb-6" />
+          <p className="text-gray-400 italic">暂无相关百科页面</p>
+        </div>
       )}
     </div>
   );
 };
 
+// --- Wiki Page Component ---
 const WikiPageView = () => {
   const { slug } = useParams();
-  const navigate = useNavigate();
-  const { user, isBanned } = useAuth();
-  const [page, setPage] = useState<WikiPage | null>(null);
-  const [relations, setRelations] = useState<WikiRelation[]>([]);
-  const [relationGraph, setRelationGraph] = useState<RelationGraphData>({ nodes: [], edges: [] });
+  const [page, setPage] = useState<WikiItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const { user, isAdmin, isBanned } = useAuth();
+  const [summary, setSummary] = useState<string | null>(null);
+  const [summarizing, setSummarizing] = useState(false);
+  const [backlinks, setBacklinks] = useState<WikiItem[]>([]);
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [favoriting, setFavoriting] = useState(false);
 
   useEffect(() => {
-    let active = true;
-    const run = async () => {
-      if (!slug) return;
+    const fetchPage = async () => {
       setLoading(true);
       try {
-        const data = await apiGet<WikiPageDetailResponse>(`/api/wiki/${slug}`);
-        if (!active) return;
-        setPage(data.page || null);
-        setRelations(Array.isArray(data.relations) ? data.relations : []);
-        setRelationGraph(data.relationGraph || { nodes: [], edges: [] });
-      } catch (error) {
-        console.error('Fetch wiki page failed:', error);
-        if (!active) return;
-        setPage(null);
-        setRelations([]);
-        setRelationGraph({ nodes: [], edges: [] });
-      } finally {
-        if (active) setLoading(false);
+        const docRef = doc(db, 'wiki', slug!);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setPage(docSnap.data() as WikiItem);
+          
+          // Fetch Backlinks
+          const wikiRef = collection(db, 'wiki');
+          const q = query(wikiRef, limit(100)); // Simplified: fetch all and filter client-side for [[slug]]
+          const snapshot = await getDocs(q);
+          const links = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() } as WikiItem))
+            .filter(p => p.slug !== slug && p.content.includes(`[[${slug}]]`));
+          setBacklinks(links);
+        }
+      } catch (e) {
+        console.error("Error fetching page:", e);
       }
+      setLoading(false);
     };
-    run();
-    return () => {
-      active = false;
-    };
+    fetchPage();
   }, [slug]);
 
-  if (loading) {
-    return <div className="max-w-4xl mx-auto px-4 py-16 text-gray-500">加载中...</div>;
-  }
-  if (!page) {
-    return <div className="max-w-4xl mx-auto px-4 py-16 text-gray-500">页面不存在</div>;
-  }
+  if (loading) return <div className="max-w-4xl mx-auto px-4 py-20 text-center italic text-gray-400">加载中...</div>;
+  if (!page) return <div className="max-w-4xl mx-auto px-4 py-20 text-center italic text-gray-400">页面未找到</div>;
+
+  const isOwner = Boolean(user && page?.lastEditorUid === user.uid);
+  const canSubmitReview = Boolean(!isBanned && isOwner && page && (page.status === 'draft' || page.status === 'rejected'));
+
+  const handleToggleFavorite = async () => {
+    if (!slug || !user || favoriting) return;
+    setFavoriting(true);
+    try {
+      if (page.favoritedByMe) {
+        await apiDelete(`/api/favorites/wiki/${slug}`);
+        setPage((prev) => prev ? {
+          ...prev,
+          favoritedByMe: false,
+          favoritesCount: Math.max(0, Number(prev.favoritesCount || 0) - 1),
+        } : prev);
+      } else {
+        await apiPost('/api/favorites', { targetType: 'wiki', targetId: slug });
+        setPage((prev) => prev ? {
+          ...prev,
+          favoritedByMe: true,
+          favoritesCount: Number(prev.favoritesCount || 0) + 1,
+        } : prev);
+      }
+    } catch (error) {
+      console.error('Toggle wiki favorite failed:', error);
+      alert('收藏操作失败，请稍后重试');
+    } finally {
+      setFavoriting(false);
+    }
+  };
+
+  const handleSubmitReview = async () => {
+    if (!slug || !canSubmitReview || submittingReview) return;
+    setSubmittingReview(true);
+    try {
+      const data = await apiPost<{ page: WikiItem }>(`/api/wiki/${slug}/submit`);
+      setPage((prev) => prev ? { ...prev, ...data.page } : prev);
+      alert('已提交审核，请等待管理员处理');
+    } catch (error) {
+      console.error('Submit wiki review failed:', error);
+      alert('提交审核失败，请稍后重试');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-12">
-      <Link to="/wiki" className="inline-flex items-center gap-2 text-gray-500 hover:text-brand-olive mb-6">
-        <ArrowLeft size={16} /> 返回列表
+      <Link to="/wiki" className="inline-flex items-center gap-2 text-gray-400 hover:text-brand-olive mb-8 transition-colors">
+        <ArrowLeft size={18} /> 返回百科列表
       </Link>
-      <article className="bg-white border border-gray-100 rounded-3xl p-8 sm:p-12">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <div>
-            <h1 className="font-serif text-4xl font-bold text-brand-olive">{page.title}</h1>
-            <p className="text-sm text-gray-500 mt-2">
-              {categoryName(page.category)} · {statusLabel(page.status)} · 更新于 {fmt(page.updatedAt)}
-            </p>
+
+      <article className="bg-white rounded-[40px] p-8 sm:p-16 border border-gray-100 shadow-sm">
+        <header className="mb-12 border-b border-gray-100 pb-12">
+          <div className="flex items-center gap-3 mb-6">
+            <span className="px-3 py-1 bg-brand-cream text-brand-olive text-xs font-bold uppercase tracking-widest rounded-full">
+              {page.category === 'biography' ? '人物介绍' :
+               page.category === 'music' ? '音乐作品' :
+               page.category === 'album' ? '专辑一览' :
+               page.category === 'timeline' ? '时间轴' :
+               page.category === 'event' ? '活动记录' : page.category}
+            </span>
+            <span className="text-gray-300">/</span>
+            <span className="text-gray-400 text-sm flex items-center gap-1"><Clock size={14} /> 最后更新: {formatDate(page.updatedAt, 'yyyy-MM-dd HH:mm')}</span>
           </div>
-          <div className="flex items-center gap-2">
-            {user && !isBanned ? (
-              <>
-                <Link
-                  to={`/wiki/${page.slug}/edit`}
-                  className="px-4 py-2 rounded-full bg-brand-olive text-white hover:bg-brand-olive/90 inline-flex items-center gap-2"
-                >
-                  <Edit3 size={16} /> 编辑分支
-                </Link>
-                <Link
-                  to={`/wiki/${page.slug}/history`}
-                  className="px-4 py-2 rounded-full border border-gray-200 text-gray-700 hover:border-brand-olive"
-                >
-                  历史
-                </Link>
-              </>
+          <div className="flex justify-between items-start gap-4">
+            <h1 className="text-5xl sm:text-6xl font-serif font-bold text-brand-olive leading-tight">{page.title}</h1>
+            <div className="flex gap-2">
+              <button
+                onClick={handleToggleFavorite}
+                disabled={!user || favoriting}
+                className={clsx(
+                  'p-3 rounded-full transition-all flex items-center gap-2',
+                  page.favoritedByMe ? 'bg-brand-olive text-white' : 'bg-brand-cream text-brand-olive hover:bg-brand-olive hover:text-white',
+                  (!user || favoriting) && 'opacity-50 cursor-not-allowed',
+                )}
+                title={page.favoritedByMe ? '取消收藏' : '收藏页面'}
+              >
+                <Save size={20} />
+              </button>
+              <button 
+                onClick={async () => {
+                  setSummarizing(true);
+                  const s = await summarizeWikiContent(page.content);
+                  setSummary(s);
+                  setSummarizing(false);
+                }}
+                disabled={summarizing}
+                className="p-3 bg-brand-cream text-brand-olive rounded-full hover:bg-brand-olive hover:text-white transition-all flex items-center gap-2"
+                title="AI 摘要"
+              >
+                <Sparkles size={20} />
+                {summarizing && <span className="text-xs">生成中...</span>}
+              </button>
+              {isOwner && (
+                <div className="flex gap-2">
+                  {(page.category !== 'music' || isAdmin) && (
+                    <>
+                      <Link to={`/wiki/${slug}/history`} className="p-3 bg-brand-cream text-brand-olive rounded-full hover:bg-brand-olive hover:text-white transition-all" title="历史版本">
+                        <History size={20} />
+                      </Link>
+                      <Link to={`/wiki/${slug}/edit`} className="p-3 bg-brand-cream text-brand-olive rounded-full hover:bg-brand-olive hover:text-white transition-all">
+                        <Edit3 size={20} />
+                      </Link>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <span className={clsx(
+              'px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider',
+              page.status === 'published'
+                ? 'bg-green-100 text-green-700'
+                : page.status === 'pending'
+                  ? 'bg-amber-100 text-amber-700'
+                  : page.status === 'rejected'
+                    ? 'bg-red-100 text-red-700'
+                    : 'bg-gray-100 text-gray-600',
+            )}>
+              {getStatusText(page.status)}
+            </span>
+            <span className="text-xs text-gray-500">收藏 {page.favoritesCount || 0}</span>
+            {canSubmitReview && (
+              <button
+                onClick={handleSubmitReview}
+                disabled={submittingReview}
+                className="px-4 py-1.5 rounded-full bg-amber-100 text-amber-800 text-xs font-bold hover:bg-amber-200 disabled:opacity-50"
+              >
+                {submittingReview ? '提交中...' : '提交审核'}
+              </button>
+            )}
+            {page.status === 'rejected' && page.reviewNote ? (
+              <span className="text-xs text-red-500">驳回原因：{page.reviewNote}</span>
             ) : null}
           </div>
+        </header>
+
+        {summary && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            className="mb-12 p-8 bg-brand-olive/5 border border-brand-olive/10 rounded-3xl relative overflow-hidden"
+          >
+            <div className="absolute top-0 left-0 w-1 h-full bg-brand-olive"></div>
+            <h4 className="text-sm font-bold text-brand-olive uppercase tracking-widest mb-3 flex items-center gap-2">
+              <Sparkles size={14} /> AI 摘要
+            </h4>
+            <p className="text-gray-600 italic leading-relaxed">{summary}</p>
+            <button onClick={() => setSummary(null)} className="absolute top-4 right-4 text-gray-400 hover:text-brand-olive">
+              <X size={16} />
+            </button>
+          </motion.div>
+        )}
+
+        <div className="prose prose-lg prose-stone max-w-none font-body leading-relaxed text-gray-700">
+          <WikiMarkdown content={page.content} />
         </div>
-        <div className="prose prose-stone max-w-none">
-          <WikiMarkdown content={page.content || ''} />
-        </div>
+
+        {backlinks.length > 0 && (
+          <div className="mt-20 pt-12 border-t border-gray-100">
+            <h4 className="text-sm font-bold text-brand-olive uppercase tracking-widest mb-6 flex items-center gap-2">
+              <ChevronRight size={14} /> 引用本页的内容
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {backlinks.map(link => (
+                <Link 
+                  key={link.id} 
+                  to={`/wiki/${link.slug}`}
+                  className="p-4 bg-brand-cream/30 border border-brand-cream rounded-2xl hover:bg-brand-cream transition-all group"
+                >
+                  <p className="font-bold text-brand-olive group-hover:underline underline-offset-4">{link.title}</p>
+                  <p className="text-xs text-gray-400 mt-1 truncate">{link.slug}</p>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <footer className="mt-20 pt-12 border-t border-gray-100 flex flex-wrap gap-4 items-center justify-between">
+          <div className="flex items-center gap-2 text-gray-400 text-sm italic">
+            <Tag size={14} />
+            {page.tags?.map((tag: string) => (
+              <span key={tag} className="hover:text-brand-olive cursor-pointer px-2 py-0.5 bg-brand-cream/30 rounded-full text-[10px] font-bold uppercase tracking-wider">#{tag}</span>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 text-gray-400 text-sm">
+            <UserIcon size={14} /> 编辑者: <span className="font-bold text-brand-olive">{page.lastEditorName || '匿名用户'}</span> <span className="text-[10px] opacity-50">({page.lastEditorUid?.substring(0, 8)})</span>
+          </div>
+        </footer>
       </article>
-
-      {relations.length ? (
-        <section className="mt-8 bg-white border border-gray-100 rounded-3xl p-6 sm:p-8">
-          <h2 className="font-serif text-2xl font-bold text-brand-olive mb-5">关联页面</h2>
-          {RELATION_TYPE_OPTIONS.map((option) => {
-            const grouped = relations.filter((item) => item.type === option.value);
-            if (!grouped.length) return null;
-
-            return (
-              <div key={option.value} className="mb-5 last:mb-0">
-                <h3 className="text-sm font-bold text-gray-700 mb-3">{option.label}</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {grouped.map((item) => (
-                    <Link
-                      key={`${item.type}-${item.targetSlug}-${item.label || 'none'}-${item.sourceSlug || 'direct'}`}
-                      to={`/wiki/${item.targetSlug}`}
-                      className="rounded-2xl border border-brand-cream bg-brand-cream/25 px-4 py-3 hover:bg-brand-cream/50"
-                    >
-                      <div className="font-bold text-brand-olive">
-                        {item.targetTitle || item.targetSlug}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {item.label || relationTypeLabel(item.type)}
-                        {item.inferred ? ' · 反向推断' : ''}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </section>
-      ) : null}
-
-      {relationGraph.nodes.length ? (
-        <section className="mt-8 bg-white border border-gray-100 rounded-3xl p-6 sm:p-8">
-          <h2 className="font-serif text-2xl font-bold text-brand-olive mb-5">关系图谱（2层）</h2>
-          <RelationGraph
-            graph={relationGraph}
-            currentSlug={page.slug}
-            onNodeClick={(nextSlug) => {
-              if (nextSlug && nextSlug !== page.slug) {
-                navigate(`/wiki/${nextSlug}`);
-              }
-            }}
-          />
-        </section>
-      ) : null}
     </div>
   );
 };
 
+// --- Wiki Editor Component ---
 const WikiEditor = () => {
   const { slug } = useParams();
   const isNew = !slug || slug === 'new';
   const navigate = useNavigate();
-  const { user, profile, isBanned } = useAuth();
-
-  const [allPages, setAllPages] = useState<WikiPage[]>([]);
-  const [pageSlug, setPageSlug] = useState<string>(slug || '');
-  const [branch, setBranch] = useState<WikiBranch | null>(null);
+  const { user, profile, isAdmin, isBanned } = useAuth();
+  
   const [formData, setFormData] = useState({
     title: '',
+    slug: '',
     category: 'biography',
     content: '',
     tags: '',
-    relations: [] as WikiRelation[],
-    eventDate: '',
+    eventDate: ''
   });
-  const [saving, setSaving] = useState(false);
-  const [autoSaving, setAutoSaving] = useState(false);
-  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
-  const [prDescription, setPrDescription] = useState('');
-  const [submittingPr, setSubmittingPr] = useState(false);
-  const [pendingRelationType, setPendingRelationType] = useState<WikiRelationType>('related_person');
-  const [pendingRelationTargetSlug, setPendingRelationTargetSlug] = useState('');
-  const [pendingRelationLabel, setPendingRelationLabel] = useState('');
-  const [pendingRelationBidirectional, setPendingRelationBidirectional] = useState(true);
-
-  const normalizedTags = useMemo(
-    () => formData.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
-    [formData.tags],
-  );
-
-  const availableRelationTargets = useMemo(() => {
-    const normalizedCurrentSlug = (pageSlug || slug || '').trim().toLowerCase();
-    return allPages.filter((item) => item.slug !== normalizedCurrentSlug);
-  }, [allPages, pageSlug, slug]);
-
-  const groupedRelations = useMemo(() => {
-    return RELATION_TYPE_OPTIONS.map((option) => ({
-      ...option,
-      items: formData.relations.filter((item) => item.type === option.value),
-    })).filter((item) => item.items.length > 0);
-  }, [formData.relations]);
-
-  const addRelation = () => {
-    const targetSlug = pendingRelationTargetSlug.trim().toLowerCase();
-    if (!targetSlug) return;
-
-    const label = pendingRelationLabel.trim();
-    const exists = formData.relations.some(
-      (item) => item.type === pendingRelationType
-        && item.targetSlug === targetSlug
-        && (item.label || '').trim().toLowerCase() === label.toLowerCase(),
-    );
-    if (exists) return;
-
-    setFormData((prev) => ({
-      ...prev,
-      relations: [
-        ...prev.relations,
-        {
-          type: pendingRelationType,
-          targetSlug,
-          label: label || undefined,
-          bidirectional: pendingRelationBidirectional,
-        },
-      ],
-    }));
-    setPendingRelationTargetSlug('');
-    setPendingRelationLabel('');
-  };
-
-  const removeRelation = (index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      relations: prev.relations.filter((_, idx) => idx !== index),
-    }));
-  };
+  const [savingMode, setSavingMode] = useState<'draft' | 'pending' | null>(null);
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
-    let active = true;
-    const loadPages = async () => {
-      try {
-        const data = await apiGet<{ pages: WikiPage[] }>('/api/wiki', { category: 'all' });
-        if (!active) return;
-        setAllPages(data.pages || []);
-      } catch (error) {
-        console.error('Fetch wiki pages for relation editor failed:', error);
-        if (active) setAllPages([]);
-      }
-    };
-
-    loadPages();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const ensureBranch = async (targetSlug: string) => {
-    const result = await apiPost<{ branch: WikiBranch }>(`/api/wiki/${targetSlug}/branches`);
-    setBranch(result.branch);
-    return result.branch;
-  };
-
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      if (!user || isBanned) return;
-
-      if (isNew) {
-        setFormData({ title: '', category: 'biography', content: '', tags: '', relations: [], eventDate: '' });
-        return;
-      }
-
-      try {
-        const pageData = await apiGet<{ page: WikiPage }>(`/api/wiki/${slug}`);
-        if (!pageData.page || !active) return;
-        setPageSlug(pageData.page.slug);
-        setFormData({
-          title: pageData.page.title,
-          category: pageData.page.category,
-          content: pageData.page.content,
-          tags: (pageData.page.tags || []).join(', '),
-          relations: normalizeRelationItems(pageData.page.relations, pageData.page.slug),
-          eventDate: pageData.page.eventDate || '',
-        });
-
-        const b = await ensureBranch(pageData.page.slug);
-        const detail = await apiGet<{ latestRevision: WikiRevision | null }>(`/api/wiki/branches/${b.id}`);
-        if (detail.latestRevision && active) {
+    if (!isNew) {
+      const fetchPage = async () => {
+        const docRef = doc(db, 'wiki', slug!);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
           setFormData({
-            title: detail.latestRevision.title,
-            category: detail.latestRevision.category || pageData.page.category,
-            content: detail.latestRevision.content,
-            tags: (detail.latestRevision.tags || []).join(', '),
-            relations: normalizeRelationItems(detail.latestRevision.relations, pageData.page.slug),
-            eventDate: detail.latestRevision.eventDate || '',
+            title: data.title,
+            slug: data.slug,
+            category: data.category,
+            content: data.content,
+            tags: data.tags?.join(', ') || '',
+            eventDate: data.eventDate || ''
           });
         }
-      } catch (error) {
-        console.error('Load wiki editor failed:', error);
-      }
-    };
+      };
+      fetchPage();
+    }
+  }, [slug, isNew]);
 
-    load();
-    return () => {
-      active = false;
-    };
-  }, [isNew, slug, user, isBanned]);
+  const handleSubmit = async (status: 'draft' | 'pending') => {
+    if (!user) return;
+    if (isBanned) {
+      alert('账号已被封禁，无法编辑百科');
+      return;
+    }
+    
+    if (formData.category === 'music' && !isAdmin) {
+      alert("只有管理员可以修改音乐分类的内容");
+      return;
+    }
 
-  const saveRevision = async (isAutoSave: boolean) => {
-    if (!user || isBanned) return;
-    if (!formData.title.trim() || !formData.content.trim()) return;
-
-    const targetSlug = (isNew ? (pageSlug || formData.title) : pageSlug || slug || formData.title)
-      .trim()
+    const pageSlug = (isNew ? (formData.slug || formData.title) : slug || formData.slug)
+      ?.trim()
       .toLowerCase()
       .replace(/[\\/]/g, '-')
       .replace(/\s+/g, '-');
 
-    if (!targetSlug) return;
+    if (!pageSlug) {
+      alert("请先填写标题以生成页面标识");
+      return;
+    }
+    
+    setSavingMode(status);
 
-    if (isAutoSave) {
-      setAutoSaving(true);
-    } else {
-      setSaving(true);
+    const pageData: any = {
+      title: formData.title,
+      slug: pageSlug,
+      category: formData.category,
+      content: formData.content,
+      tags: formData.tags.split(',').map(t => t.trim()).filter(t => t),
+      eventDate: formData.eventDate,
+      status,
+      lastEditorUid: user.uid,
+      lastEditorName: profile?.displayName || user.displayName || '匿名用户',
+      updatedAt: serverTimestamp(),
+    };
+
+    if (isNew) {
+      pageData.createdAt = serverTimestamp();
     }
 
     try {
+      const docRef = doc(db, 'wiki', pageSlug!);
       if (isNew) {
-        const pageRes = await apiPost<{ page: WikiPage }>('/api/wiki', {
-          slug: targetSlug,
-          title: formData.title,
-          category: formData.category,
-          content: formData.content,
-          tags: normalizedTags,
-          relations: formData.relations,
-          eventDate: formData.eventDate || null,
-          status: 'draft',
-        });
-        setPageSlug(pageRes.page.slug);
+        const existingSnap = await getDoc(docRef);
+        if (existingSnap.exists()) {
+          await updateDoc(docRef, pageData);
+        } else {
+          await setDoc(docRef, pageData);
+        }
+      } else {
+        await updateDoc(docRef, pageData);
       }
 
-      const ensured = branch || (await ensureBranch(targetSlug));
-      await apiPost(`/api/wiki/branches/${ensured.id}/revisions`, {
+      // Save Revision
+      const revisionsRef = collection(db, 'wiki', pageSlug!, 'revisions');
+      await addDoc(revisionsRef, {
+        id: crypto.randomUUID(),
+        pageSlug,
         title: formData.title,
         content: formData.content,
-        slug: targetSlug,
-        category: formData.category,
-        tags: normalizedTags,
-        relations: formData.relations,
-        eventDate: formData.eventDate || null,
-        isAutoSave,
+        editorUid: user.uid,
+        editorName: profile?.displayName || user.displayName || '匿名用户',
+        createdAt: serverTimestamp()
       });
-      setLastSavedAt(new Date().toISOString());
-      if (isNew) {
-        navigate(`/wiki/${targetSlug}/edit`, { replace: true });
-      }
-    } catch (error) {
-      console.error('Save wiki revision failed:', error);
-      if (!isAutoSave) {
-        alert('保存失败，请稍后重试');
-      }
-    } finally {
-      if (isAutoSave) {
-        setAutoSaving(false);
-      } else {
-        setSaving(false);
-      }
+
+      navigate(`/wiki/${pageSlug}`);
+    } catch (e) {
+      console.error("Error saving wiki page:", e);
+      alert("保存失败，请检查网络或权限");
     }
+    setSavingMode(null);
   };
-
-  useEffect(() => {
-    if (!user || isBanned) return;
-    const timer = window.setInterval(() => {
-      void saveRevision(true);
-    }, 15000);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  });
-
-  const submitPr = async () => {
-    if (!branch || submittingPr) return;
-    setSubmittingPr(true);
-    try {
-      await saveRevision(false);
-      const latestBranch = branch || (await ensureBranch(pageSlug || slug || ''));
-      const data = await apiPost<{ pullRequest: WikiPullRequest }>(`/api/wiki/branches/${latestBranch.id}/pull-request`, {
-        title: formData.title,
-        description: prDescription.trim() || null,
-      });
-      alert(`PR 已提交: ${data.pullRequest.id}`);
-      navigate(`/wiki/pull-requests/${data.pullRequest.id}`);
-    } catch (error) {
-      console.error('Submit wiki PR failed:', error);
-      alert('提交 PR 失败，请稍后重试');
-    } finally {
-      setSubmittingPr(false);
-    }
-  };
-
-  if (!user) {
-    return <div className="max-w-4xl mx-auto px-4 py-16 text-gray-500">请先登录后编辑百科</div>;
-  }
-  if (isBanned) {
-    return <div className="max-w-4xl mx-auto px-4 py-16 text-red-500">账号已封禁，无法编辑百科</div>;
-  }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-12">
-      <div className="bg-white border border-gray-100 rounded-3xl p-6 sm:p-10">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <h1 className="font-serif text-3xl font-bold text-brand-olive">{isNew ? '新建百科页面' : `编辑分支 · ${pageSlug}`}</h1>
-          <div className="text-xs text-gray-500">
-            {autoSaving ? '自动保存中...' : lastSavedAt ? `最近保存: ${fmt(lastSavedAt)}` : '尚未保存'}
-          </div>
+    <div className="max-w-5xl mx-auto px-4 py-12">
+      <div className="bg-white rounded-[40px] p-8 sm:p-16 border border-gray-100 shadow-sm">
+        <div className="flex justify-between items-center mb-12">
+          <h1 className="text-4xl font-serif font-bold text-brand-olive">{isNew ? '创建新百科' : '编辑百科'}</h1>
+          <button onClick={() => navigate(-1)} className="p-2 text-gray-400 hover:text-red-500">
+            <X size={24} />
+          </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          <input
-            value={formData.title}
-            onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
-            placeholder="标题"
-            className="px-4 py-3 rounded-2xl bg-brand-cream border-none"
-          />
-          <select
-            value={formData.category}
-            onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))}
-            className="px-4 py-3 rounded-2xl bg-brand-cream border-none"
-          >
-            <option value="biography">人物介绍</option>
-            <option value="music">音乐作品</option>
-            <option value="album">专辑一览</option>
-            <option value="timeline">时间轴</option>
-            <option value="event">活动记录</option>
-          </select>
-          <input
-            type="date"
-            value={formData.eventDate}
-            onChange={(e) => setFormData((prev) => ({ ...prev, eventDate: e.target.value }))}
-            className="px-4 py-3 rounded-2xl bg-brand-cream border-none"
-          />
-        </div>
-
-        {isNew ? (
-          <input
-            value={pageSlug}
-            onChange={(e) => setPageSlug(e.target.value)}
-            placeholder="页面标识 slug（可留空自动由标题生成）"
-            className="w-full px-4 py-3 rounded-2xl bg-brand-cream border-none mb-4"
-          />
-        ) : null}
-
-        <input
-          value={formData.tags}
-          onChange={(e) => setFormData((prev) => ({ ...prev, tags: e.target.value }))}
-          placeholder="标签，逗号分隔"
-          className="w-full px-4 py-3 rounded-2xl bg-brand-cream border-none mb-4"
-        />
-
-        <div className="bg-brand-cream/40 border border-brand-cream rounded-2xl p-4 mb-4">
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div className="text-sm font-bold text-brand-olive">页面关系（支持反向推断）</div>
-            <div className="text-xs text-gray-500">以当前页面为中心建立语义关系</div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSubmit('pending');
+          }}
+          className="space-y-8"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">标题</label>
+              <input 
+                type="text" 
+                required
+                value={formData.title}
+                onChange={e => setFormData({...formData, title: e.target.value})}
+                placeholder="例如：黄诗扶"
+                className="w-full px-6 py-4 bg-brand-cream rounded-2xl border-none focus:ring-2 focus:ring-brand-olive/20 font-serif text-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">分类</label>
+              <select 
+                value={formData.category}
+                onChange={e => setFormData({...formData, category: e.target.value})}
+                className="w-full px-6 py-4 bg-brand-cream rounded-2xl border-none focus:ring-2 focus:ring-brand-olive/20 font-serif text-xl appearance-none"
+              >
+                <option value="biography">人物介绍</option>
+                <option value="music">音乐作品</option>
+                <option value="album">专辑一览</option>
+                <option value="timeline">时间线</option>
+                <option value="event">活动记录</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">事件日期 (可选)</label>
+              <input 
+                type="date" 
+                value={formData.eventDate}
+                onChange={e => setFormData({...formData, eventDate: e.target.value})}
+                className="w-full px-6 py-4 bg-brand-cream rounded-2xl border-none focus:ring-2 focus:ring-brand-olive/20 font-serif text-xl"
+              />
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 mb-3">
-            <select
-              value={pendingRelationType}
-              onChange={(e) => setPendingRelationType(e.target.value as WikiRelationType)}
-              className="px-3 py-2 rounded-xl border border-gray-200 bg-white"
-            >
-              {RELATION_TYPE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">内容 (Markdown)</label>
+              <button 
+                type="button"
+                onClick={async () => {
+                  if (!formData.title) return alert("请先输入标题");
+                  setGenerating(true);
+                  const intro = await generateWikiIntro(formData.title);
+                  if (intro) setFormData({ ...formData, content: intro + "\n\n" + formData.content });
+                  setGenerating(false);
+                }}
+                disabled={generating}
+                className="text-xs font-bold text-brand-olive flex items-center gap-1 hover:underline disabled:opacity-50"
+              >
+                <Sparkles size={12} /> {generating ? '生成中...' : 'AI 辅助写开头'}
+              </button>
+            </div>
+            <div className="border border-gray-100 rounded-[32px] overflow-hidden">
+              <MdEditor 
+                style={{ height: '500px' }} 
+                renderHTML={(text) => {
+                  const processed = text.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (match, p1, p2) => {
+                    const display = p1.trim();
+                    const slug = p2 ? p2.trim() : p1.trim();
+                    return `[${display}](/wiki/${slug})`;
+                  });
+                  return mdParser.render(processed);
+                }} 
+                value={formData.content}
+                onChange={({ text }) => setFormData({...formData, content: text})}
+                onImageUpload={async (file) => {
+                  const imageId = await uploadImageToCDNs(file);
+                  const urls = await getImageUrl(imageId);
+                  return urls[0] || '';
+                }}
+                placeholder="在这里输入百科内容，支持 Markdown 语法..."
+                config={{
+                  view: {
+                    menu: true,
+                    md: true,
+                    html: false
+                  },
+                  canView: {
+                    menu: true,
+                    md: true,
+                    html: true,
+                    fullScreen: true,
+                    hideMenu: false
+                  }
+                }}
+              />
+            </div>
+          </div>
 
-            <select
-              value={pendingRelationTargetSlug}
-              onChange={(e) => setPendingRelationTargetSlug(e.target.value)}
-              className="px-3 py-2 rounded-xl border border-gray-200 bg-white"
-            >
-              <option value="">选择关联页面</option>
-          {availableRelationTargets.map((item) => (
-                <option key={item.slug} value={item.slug}>{relationOptionLabel(allPages, item.slug)}</option>
-              ))}
-            </select>
-
-            <input
-              value={pendingRelationLabel}
-              onChange={(e) => setPendingRelationLabel(e.target.value)}
-              placeholder="关系说明（可选）"
-              className="px-3 py-2 rounded-xl border border-gray-200 bg-white"
+          <div className="space-y-2">
+            <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">标签 (逗号分隔)</label>
+            <input 
+              type="text" 
+              value={formData.tags}
+              onChange={e => setFormData({...formData, tags: e.target.value})}
+              placeholder="例如：古风, 原创, 歌手"
+              className="w-full px-6 py-4 bg-brand-cream rounded-2xl border-none focus:ring-2 focus:ring-brand-olive/20"
             />
+          </div>
 
+          <div className="pt-8 flex flex-wrap justify-end gap-3">
             <button
               type="button"
-              onClick={addRelation}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-olive px-3 py-2 text-white hover:bg-brand-olive/90"
+              onClick={() => handleSubmit('draft')}
+              disabled={Boolean(savingMode)}
+              className="px-8 py-4 bg-gray-100 text-gray-700 rounded-full font-bold hover:bg-gray-200 transition-all flex items-center gap-2 disabled:opacity-50"
             >
-              <Plus size={14} /> 添加关系
+              <Save size={18} /> {savingMode === 'draft' ? '保存中...' : '保存草稿'}
+            </button>
+            <button 
+              type="submit"
+              disabled={Boolean(savingMode)}
+              className="px-12 py-4 bg-brand-olive text-white rounded-full font-bold hover:bg-brand-olive/90 hover:scale-105 active:scale-95 transition-all shadow-lg flex items-center gap-2 disabled:opacity-50"
+            >
+              <Sparkles size={18} /> {savingMode === 'pending' ? '提交中...' : '提交审核'}
             </button>
           </div>
-
-          <label className="inline-flex items-center gap-2 text-sm text-gray-600 mb-3">
-            <input
-              type="checkbox"
-              checked={pendingRelationBidirectional}
-              onChange={(e) => setPendingRelationBidirectional(e.target.checked)}
-              className="rounded border-gray-300"
-            />
-            自动推断反向关系
-          </label>
-
-          {groupedRelations.length ? (
-            <div className="space-y-3">
-              {groupedRelations.map((group) => (
-                <div key={group.value}>
-                  <div className="text-xs font-bold text-gray-600 mb-2">{group.label}</div>
-                  <div className="flex flex-wrap gap-2">
-                    {group.items.map((relation) => {
-                      const relationIndex = formData.relations.findIndex(
-                        (item) => item.type === relation.type
-                          && item.targetSlug === relation.targetSlug
-                          && (item.label || '') === (relation.label || ''),
-                      );
-
-                      return (
-                        <span
-                          key={`${relation.type}-${relation.targetSlug}-${relation.label || 'none'}`}
-                          className="inline-flex items-center gap-1 rounded-full bg-white border border-gray-200 px-3 py-1 text-xs text-gray-700"
-                        >
-                          {relationOptionLabel(allPages, relation.targetSlug)}
-                          <em className="not-italic text-gray-400">· {relation.label || relationTypeLabel(relation.type)}</em>
-                          {relation.bidirectional ? <em className="not-italic text-brand-olive/70">· 双向</em> : null}
-                          <button
-                            type="button"
-                            onClick={() => removeRelation(relationIndex)}
-                            className="ml-1 text-gray-400 hover:text-red-500"
-                          >
-                            <X size={12} />
-                          </button>
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-sm text-gray-500">暂未添加关系。</div>
-          )}
-        </div>
-
-        <div className="border border-gray-100 rounded-3xl overflow-hidden mb-4">
-          <MdEditor
-            style={{ height: '460px' }}
-            renderHTML={(text) => mdParser.render(text)}
-            value={formData.content}
-            onChange={({ text }) => setFormData((prev) => ({ ...prev, content: text }))}
-          />
-        </div>
-
-        <div className="bg-brand-cream/40 border border-brand-cream rounded-2xl p-4 mb-4">
-          <div className="text-sm font-bold text-brand-olive mb-2">提交 PR（描述可选）</div>
-          <textarea
-            value={prDescription}
-            onChange={(e) => setPrDescription(e.target.value)}
-            placeholder="这次修改的说明（可选）"
-            className="w-full min-h-[88px] px-3 py-2 rounded-xl border border-gray-200"
-          />
-        </div>
-
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <button
-            onClick={() => void saveRevision(false)}
-            disabled={saving}
-            className="px-4 py-2 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 inline-flex items-center gap-2 disabled:opacity-50"
-          >
-            <Save size={16} /> {saving ? '保存中...' : '保存分支'}
-          </button>
-          <button
-            onClick={() => void submitPr()}
-            disabled={submittingPr}
-            className="px-4 py-2 rounded-full bg-brand-olive text-white hover:bg-brand-olive/90 inline-flex items-center gap-2 disabled:opacity-50"
-          >
-            <GitPullRequest size={16} /> {submittingPr ? '提交中...' : '提交 PR'}
-          </button>
-        </div>
-
-        <div className="mt-4 text-xs text-gray-500">自动保存间隔：15 秒</div>
+        </form>
       </div>
     </div>
   );
 };
 
+// --- Wiki History Component ---
 const WikiHistory = () => {
+  const { isBanned } = useAuth();
   const { slug } = useParams();
-  const [revisions, setRevisions] = useState<WikiRevision[]>([]);
+  const [revisions, setRevisions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedRevision, setSelectedRevision] = useState<any>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    let active = true;
-    const run = async () => {
-      if (!slug) return;
-      setLoading(true);
+    const fetchHistory = async () => {
       try {
-        const data = await apiGet<{ revisions: WikiRevision[] }>(`/api/wiki/${slug}/history`);
-        if (active) setRevisions(data.revisions || []);
-      } catch (error) {
-        console.error('Fetch wiki history failed:', error);
-        if (active) setRevisions([]);
-      } finally {
-        if (active) setLoading(false);
+        const revisionsRef = collection(db, 'wiki', slug!, 'revisions');
+        const q = query(revisionsRef, orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(q);
+        setRevisions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (e) {
+        console.error("Error fetching history:", e);
       }
+      setLoading(false);
     };
-    run();
-    return () => {
-      active = false;
-    };
+    fetchHistory();
   }, [slug]);
+
+  const handleRollback = async (revision: any) => {
+    if (!window.confirm(`确定要回滚到 ${formatDate(revision.createdAt, 'yyyy-MM-dd HH:mm')} 的版本吗？`)) return;
+    if (isBanned) {
+      alert('账号已被封禁，无法回滚');
+      return;
+    }
+    
+    try {
+      await apiPost(`/api/wiki/${slug}/rollback/${revision.id}`);
+      navigate(`/wiki/${slug}`);
+    } catch (e) {
+      console.error("Rollback error:", e);
+      alert("回滚失败");
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-12">
-      <Link to={`/wiki/${slug}`} className="inline-flex items-center gap-2 text-gray-500 hover:text-brand-olive mb-6">
-        <ArrowLeft size={16} /> 返回页面
+      <Link to={`/wiki/${slug}`} className="inline-flex items-center gap-2 text-gray-400 hover:text-brand-olive mb-8 transition-colors">
+        <ArrowLeft size={18} /> 返回页面
       </Link>
-      <div className="bg-white border border-gray-100 rounded-3xl p-6">
-        <h2 className="font-serif text-2xl font-bold text-brand-olive mb-4">历史版本</h2>
-        {loading ? <div className="text-gray-500">加载中...</div> : null}
-        {!loading && revisions.length === 0 ? <div className="text-gray-500">暂无历史记录</div> : null}
-        <div className="space-y-3">
-          {revisions.map((revision) => (
-            <div key={revision.id} className="p-4 rounded-2xl bg-brand-cream/30 border border-brand-cream">
-              <div className="text-sm font-bold text-gray-800">{revision.title}</div>
-              <div className="text-xs text-gray-500 mt-1">
-                {fmt(revision.createdAt)} · {revision.editorName}
-                {revision.isAutoSave ? ' · 自动保存' : ''}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
 
-const WikiBranches = () => {
-  const [branches, setBranches] = useState<WikiBranch[]>([]);
-  const [loading, setLoading] = useState(true);
+      <div className="bg-white rounded-[40px] p-8 sm:p-12 border border-gray-100 shadow-sm">
+        <h2 className="text-3xl font-serif font-bold text-brand-olive mb-8 flex items-center gap-3">
+          <History size={28} /> 历史版本: {slug}
+        </h2>
 
-  useEffect(() => {
-    let active = true;
-    const run = async () => {
-      setLoading(true);
-      try {
-        const data = await apiGet<{ branches: WikiBranch[] }>('/api/wiki/branches/mine');
-        if (active) setBranches(data.branches || []);
-      } catch (error) {
-        console.error('Fetch wiki branches failed:', error);
-        if (active) setBranches([]);
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-    run();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  return (
-    <div className="max-w-5xl mx-auto px-4 py-12">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="font-serif text-3xl font-bold text-brand-olive inline-flex items-center gap-2">
-          <GitBranch size={24} /> 我的分支
-        </h1>
-        <Link to="/wiki" className="text-sm text-gray-600 hover:text-brand-olive">返回百科</Link>
-      </div>
-      {loading ? <div className="text-gray-500">加载中...</div> : null}
-      {!loading && branches.length === 0 ? <div className="text-gray-500">暂无分支</div> : null}
-      <div className="space-y-3">
-        {branches.map((branch) => (
-          <div key={branch.id} className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="font-bold text-gray-800">{branch.page?.title || branch.pageSlug}</div>
-              <div className="text-xs text-gray-500">
-                {branch.pageSlug} · {branchStatusLabel(branch.status)} · 更新于 {fmt(branch.updatedAt)}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link to={`/wiki/${branch.pageSlug}/edit`} className="px-3 py-1.5 rounded-full bg-brand-olive text-white text-sm">
-                继续编辑
-              </Link>
-              {branch.status === 'conflict' ? (
-                <Link to={`/wiki/branches/${branch.id}/conflict`} className="px-3 py-1.5 rounded-full bg-amber-100 text-amber-700 text-sm">
-                  解决冲突
-                </Link>
-              ) : null}
-            </div>
+        {loading ? (
+          <div className="space-y-4">
+            {[1, 2, 3].map(i => <div key={i} className="h-20 bg-gray-50 rounded-2xl animate-pulse"></div>)}
           </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const WikiPullRequests = () => {
-  const { isAdmin } = useAuth();
-  const [status, setStatus] = useState<PrStatus>('open');
-  const [pullRequests, setPullRequests] = useState<WikiPullRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let active = true;
-    const run = async () => {
-      setLoading(true);
-      try {
-        const data = await apiGet<{ pullRequests: WikiPullRequest[] }>('/api/wiki/pull-requests/list', { status });
-        if (active) setPullRequests(data.pullRequests || []);
-      } catch (error) {
-        console.error('Fetch wiki pull requests failed:', error);
-        if (active) setPullRequests([]);
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-    run();
-    return () => {
-      active = false;
-    };
-  }, [status]);
-
-  return (
-    <div className="max-w-5xl mx-auto px-4 py-12">
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <h1 className="font-serif text-3xl font-bold text-brand-olive inline-flex items-center gap-2">
-          <GitPullRequest size={24} /> {isAdmin ? 'Wiki PR 审核' : '我的 Wiki PR'}
-        </h1>
-        <div className="flex gap-2">
-          {(['open', 'merged', 'rejected'] as PrStatus[]).map((item) => (
-            <button
-              key={item}
-              onClick={() => setStatus(item)}
-              className={clsx(
-                'px-3 py-1.5 rounded-full text-sm border',
-                status === item ? 'bg-brand-olive text-white border-brand-olive' : 'bg-white text-gray-600 border-gray-200',
-              )}
-            >
-              {prStatusLabel(item)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {loading ? <div className="text-gray-500">加载中...</div> : null}
-      {!loading && pullRequests.length === 0 ? <div className="text-gray-500">暂无 PR</div> : null}
-      <div className="space-y-3">
-        {pullRequests.map((pr) => (
-          <Link key={pr.id} to={`/wiki/pull-requests/${pr.id}`} className="block bg-white border border-gray-100 rounded-2xl p-4 hover:border-brand-olive/30">
-            <div className="font-bold text-gray-800">{pr.title}</div>
-            <div className="text-xs text-gray-500 mt-1">
-              {pr.page?.title || pr.pageSlug} · {prStatusLabel(pr.status)} · {pr.createdByName} · {fmt(pr.createdAt)}
-            </div>
-            {pr.description ? <div className="text-sm text-gray-600 mt-2 line-clamp-2">{pr.description}</div> : null}
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const WikiPullRequestDetail = () => {
-  const { prId } = useParams();
-  const { user, isAdmin } = useAuth();
-  const [pr, setPr] = useState<WikiPullRequest | null>(null);
-  const [diff, setDiff] = useState<{
-    base: WikiDiffSnapshot;
-    head: WikiDiffSnapshot;
-  } | null>(null);
-  const [comment, setComment] = useState('');
-  const [loading, setLoading] = useState(true);
-
-  const canReview = Boolean(isAdmin && pr?.status === 'open');
-
-  const load = async () => {
-    if (!prId) return;
-    setLoading(true);
-    try {
-      const [prData, diffData] = await Promise.all([
-        apiGet<{ pullRequest: WikiPullRequest }>(`/api/wiki/pull-requests/${prId}`),
-        apiGet<{ diff: any }>(`/api/wiki/pull-requests/${prId}/diff`),
-      ]);
-      setPr(prData.pullRequest || null);
-      setDiff(diffData.diff || null);
-    } catch (error) {
-      console.error('Load wiki PR detail failed:', error);
-      setPr(null);
-      setDiff(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void load();
-  }, [prId]);
-
-  const postComment = async () => {
-    if (!pr || !comment.trim()) return;
-    try {
-      await apiPost(`/api/wiki/pull-requests/${pr.id}/comments`, { content: comment.trim() });
-      setComment('');
-      await load();
-    } catch (error) {
-      console.error('Post wiki PR comment failed:', error);
-      alert('评论失败');
-    }
-  };
-
-  const mergePr = async () => {
-    if (!pr) return;
-    try {
-      await apiPost(`/api/wiki/pull-requests/${pr.id}/merge`);
-      await load();
-    } catch (error: any) {
-      const message = error?.message || '合并失败';
-      alert(message);
-      await load();
-    }
-  };
-
-  const rejectPr = async () => {
-    if (!pr) return;
-    const note = window.prompt('驳回原因（可选）', '') || '';
-    try {
-      await apiPost(`/api/wiki/pull-requests/${pr.id}/reject`, { note });
-      await load();
-    } catch (error) {
-      console.error('Reject wiki PR failed:', error);
-      alert('驳回失败');
-    }
-  };
-
-  if (loading) {
-    return <div className="max-w-6xl mx-auto px-4 py-12 text-gray-500">加载中...</div>;
-  }
-  if (!pr) {
-    return <div className="max-w-6xl mx-auto px-4 py-12 text-gray-500">PR 不存在</div>;
-  }
-
-  return (
-    <div className="max-w-6xl mx-auto px-4 py-12">
-      <div className="mb-6">
-        <Link to="/wiki/pull-requests" className="inline-flex items-center gap-2 text-gray-500 hover:text-brand-olive">
-          <ArrowLeft size={16} /> 返回 PR 列表
-        </Link>
-      </div>
-
-      <div className="bg-white border border-gray-100 rounded-3xl p-6 mb-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="font-serif text-3xl font-bold text-brand-olive">{pr.title}</h1>
-            <div className="text-sm text-gray-500 mt-2">
-              页面: {pr.page?.title || pr.pageSlug} · 状态: {prStatusLabel(pr.status)} · 提交者: {pr.createdByName}
-            </div>
-            {pr.description ? <p className="text-sm text-gray-700 mt-3">{pr.description}</p> : null}
-            {pr.conflictData ? (
-              <div className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">
-                检测到冲突，需先由提交者或管理员解决冲突后再合并。
-                {pr.branch ? (
-                  <Link to={`/wiki/branches/${pr.branch.id}/conflict`} className="ml-2 underline">
-                    前往冲突解决
-                  </Link>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-          {canReview ? (
-            <div className="flex gap-2">
-              <button onClick={() => void rejectPr()} className="px-4 py-2 rounded-full bg-red-50 text-red-600 hover:bg-red-100">
-                驳回
-              </button>
-              <button onClick={() => void mergePr()} className="px-4 py-2 rounded-full bg-green-50 text-green-700 hover:bg-green-100">
-                合并
-              </button>
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white border border-gray-100 rounded-3xl p-6">
-          <h2 className="font-bold text-gray-800 mb-3">主分支版本</h2>
-          {diff ? (
-            <>
-              <div className="text-sm text-gray-500 mb-2">{diff.base.title} · {categoryName(diff.base.category)}</div>
-              <div className="prose prose-stone max-w-none text-sm">
-                <WikiMarkdown content={diff.base.content || ''} />
-              </div>
-              {(diff.base.relations || []).length ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {(diff.base.relations || []).map((item) => (
-                    <span key={`base-${item.type}-${item.targetSlug}-${item.label || 'none'}`} className="text-[11px] px-2 py-1 rounded-full bg-brand-cream/50 text-gray-600">
-                      {relationTypeLabel(item.type)}: {item.targetSlug}
-                    </span>
-                  ))}
+        ) : revisions.length > 0 ? (
+          <div className="space-y-4">
+            {revisions.map((rev, i) => (
+              <div key={rev.id} className="p-6 bg-brand-cream/30 border border-brand-cream rounded-3xl flex items-center justify-between group hover:bg-brand-cream transition-all">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-brand-olive/10 flex items-center justify-center text-brand-olive font-bold">
+                    {revisions.length - i}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-700">{formatDate(rev.createdAt, 'yyyy-MM-dd HH:mm:ss')}</p>
+                    <p className="text-xs text-gray-400">编辑者: {rev.editorName} ({rev.editorUid.substring(0, 6)})</p>
+                  </div>
                 </div>
-              ) : null}
-            </>
-          ) : null}
-        </div>
-        <div className="bg-white border border-gray-100 rounded-3xl p-6">
-          <h2 className="font-bold text-gray-800 mb-3">分支版本</h2>
-          {diff ? (
-            <>
-              <div className="text-sm text-gray-500 mb-2">{diff.head.title} · {categoryName(diff.head.category)}</div>
-              <div className="prose prose-stone max-w-none text-sm">
-                <WikiMarkdown content={diff.head.content || ''} />
-              </div>
-              {(diff.head.relations || []).length ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {(diff.head.relations || []).map((item) => (
-                    <span key={`head-${item.type}-${item.targetSlug}-${item.label || 'none'}`} className="text-[11px] px-2 py-1 rounded-full bg-brand-cream/50 text-gray-600">
-                      {relationTypeLabel(item.type)}: {item.targetSlug}
-                    </span>
-                  ))}
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => setSelectedRevision(rev)}
+                    className="px-4 py-2 bg-white text-brand-olive text-xs font-bold rounded-full border border-brand-olive/20 hover:bg-brand-olive hover:text-white transition-all opacity-0 group-hover:opacity-100"
+                  >
+                    预览内容
+                  </button>
+                  <button 
+                    onClick={() => handleRollback(rev)}
+                    className="px-4 py-2 bg-white text-brand-olive text-xs font-bold rounded-full border border-brand-olive/20 hover:bg-brand-olive hover:text-white transition-all opacity-0 group-hover:opacity-100"
+                  >
+                    回滚到此版本
+                  </button>
                 </div>
-              ) : null}
-            </>
-          ) : null}
-        </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-center text-gray-400 italic py-12">暂无历史记录</p>
+        )}
       </div>
 
-      <div className="bg-white border border-gray-100 rounded-3xl p-6">
-        <h2 className="font-bold text-gray-800 mb-3">讨论</h2>
-        <div className="space-y-3 mb-4">
-          {(pr.comments || []).map((item) => (
-            <div key={item.id} className="p-3 rounded-xl bg-brand-cream/30 border border-brand-cream">
-              <div className="text-xs text-gray-500">{item.authorName} · {fmt(item.createdAt)}</div>
-              <div className="text-sm text-gray-800 mt-1 whitespace-pre-wrap">{item.content}</div>
-            </div>
-          ))}
-          {(pr.comments || []).length === 0 ? <div className="text-gray-500 text-sm">暂无评论</div> : null}
-        </div>
-        {user ? (
-          <div className="flex gap-2">
-            <input
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="写下评论..."
-              className="flex-1 px-3 py-2 rounded-xl border border-gray-200"
-            />
-            <button onClick={() => void postComment()} className="px-4 py-2 rounded-xl bg-brand-olive text-white">
-              发送
-            </button>
+      <AnimatePresence>
+        {selectedRevision && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-[40px] w-full max-w-4xl max-h-[80vh] overflow-hidden flex flex-col shadow-2xl"
+            >
+              <div className="p-8 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                  <h3 className="text-2xl font-serif font-bold text-brand-olive">版本预览</h3>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {formatDate(selectedRevision.createdAt, 'yyyy-MM-dd HH:mm:ss')} · 编辑者: {selectedRevision.editorName}
+                  </p>
+                </div>
+                <button onClick={() => setSelectedRevision(null)} className="p-2 text-gray-400 hover:text-red-500">
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="p-8 sm:p-12 overflow-y-auto flex-grow prose prose-stone max-w-none">
+                <h1 className="text-4xl font-serif font-bold text-brand-olive mb-8">{selectedRevision.title}</h1>
+                <WikiMarkdown content={selectedRevision.content} />
+              </div>
+              <div className="p-8 border-t border-gray-100 flex justify-end gap-4">
+                <button 
+                  onClick={() => setSelectedRevision(null)}
+                  className="px-8 py-3 text-gray-500 font-bold hover:text-brand-olive"
+                >
+                  关闭
+                </button>
+                <button 
+                  onClick={() => {
+                    handleRollback(selectedRevision);
+                    setSelectedRevision(null);
+                  }}
+                  className="px-8 py-3 bg-brand-olive text-white rounded-full font-bold hover:bg-brand-olive/90 transition-all shadow-lg"
+                >
+                  回滚到此版本
+                </button>
+              </div>
+            </motion.div>
           </div>
-        ) : null}
-      </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
 
-const WikiConflictResolver = () => {
-  const { branchId } = useParams();
-  const navigate = useNavigate();
-  const { user, isAdmin } = useAuth();
-
-  const [branch, setBranch] = useState<WikiBranch | null>(null);
-  const [latest, setLatest] = useState<WikiRevision | null>(null);
-  const [formData, setFormData] = useState({
-    title: '',
-    category: 'biography',
-    content: '',
-    tags: '',
-    relations: [] as WikiRelation[],
-    eventDate: '',
-  });
-  const [saving, setSaving] = useState(false);
-
-  const canResolve = Boolean(user && branch && (isAdmin || branch.editorUid === user.uid));
-
-  useEffect(() => {
-    let active = true;
-    const run = async () => {
-      if (!branchId) return;
-      try {
-        const data = await apiGet<{ branch: WikiBranch; latestRevision: WikiRevision | null }>(`/api/wiki/branches/${branchId}`);
-        if (!active) return;
-        setBranch(data.branch);
-        setLatest(data.latestRevision);
-        if (data.latestRevision) {
-          setFormData({
-            title: data.latestRevision.title,
-            category: data.latestRevision.category || 'biography',
-            content: data.latestRevision.content,
-            tags: (data.latestRevision.tags || []).join(', '),
-            relations: normalizeRelationItems(data.latestRevision.relations, data.branch.pageSlug),
-            eventDate: data.latestRevision.eventDate || '',
-          });
-        }
-      } catch (error) {
-        console.error('Load conflict resolver failed:', error);
-      }
-    };
-    run();
-    return () => {
-      active = false;
-    };
-  }, [branchId]);
-
-  const resolveConflict = async () => {
-    if (!branch || !canResolve) return;
-    setSaving(true);
-    try {
-      await apiPost(`/api/wiki/branches/${branch.id}/resolve-conflict`, {
-        title: formData.title,
-        content: formData.content,
-        category: formData.category,
-        tags: formData.tags.split(',').map((item) => item.trim()).filter(Boolean),
-        relations: formData.relations,
-        eventDate: formData.eventDate || null,
-      });
-      alert('冲突已解决，PR 已更新为可审核状态');
-      navigate('/wiki/pull-requests');
-    } catch (error) {
-      console.error('Resolve wiki conflict failed:', error);
-      alert('解决冲突失败');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="max-w-6xl mx-auto px-4 py-12">
-      <div className="mb-6">
-        <Link to="/wiki/branches" className="inline-flex items-center gap-2 text-gray-500 hover:text-brand-olive">
-          <ArrowLeft size={16} /> 返回分支列表
-        </Link>
-      </div>
-
-      {!branch ? <div className="text-gray-500">加载中...</div> : null}
-      {branch ? (
-        <div className="bg-white border border-gray-100 rounded-3xl p-6">
-          <h1 className="font-serif text-3xl font-bold text-brand-olive mb-2">解决冲突</h1>
-          <p className="text-sm text-gray-500 mb-4">
-            分支: {branch.page?.title || branch.pageSlug} · 当前状态: {branchStatusLabel(branch.status)}
-          </p>
-          {!canResolve ? <p className="text-red-500 text-sm mb-4">仅分支创建者或管理员可以解决冲突。</p> : null}
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <input
-              value={formData.title}
-              onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
-              className="px-4 py-3 rounded-2xl bg-brand-cream border-none"
-              placeholder="标题"
-            />
-            <select
-              value={formData.category}
-              onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))}
-              className="px-4 py-3 rounded-2xl bg-brand-cream border-none"
-            >
-              <option value="biography">人物介绍</option>
-              <option value="music">音乐作品</option>
-              <option value="album">专辑一览</option>
-              <option value="timeline">时间轴</option>
-              <option value="event">活动记录</option>
-            </select>
-            <input
-              type="date"
-              value={formData.eventDate}
-              onChange={(e) => setFormData((prev) => ({ ...prev, eventDate: e.target.value }))}
-              className="px-4 py-3 rounded-2xl bg-brand-cream border-none"
-            />
-          </div>
-
-          <input
-            value={formData.tags}
-            onChange={(e) => setFormData((prev) => ({ ...prev, tags: e.target.value }))}
-            placeholder="标签，逗号分隔"
-            className="w-full px-4 py-3 rounded-2xl bg-brand-cream border-none mb-4"
-          />
-
-          <div className="border border-gray-100 rounded-3xl overflow-hidden mb-4">
-            <MdEditor
-              style={{ height: '460px' }}
-              renderHTML={(text) => mdParser.render(text)}
-              value={formData.content}
-              onChange={({ text }) => setFormData((prev) => ({ ...prev, content: text }))}
-            />
-          </div>
-
-          <div className="flex justify-end">
-            <button
-              onClick={() => void resolveConflict()}
-              disabled={!canResolve || saving}
-              className="px-4 py-2 rounded-full bg-brand-olive text-white hover:bg-brand-olive/90 disabled:opacity-50"
-            >
-              {saving ? '提交中...' : '提交冲突解决结果'}
-            </button>
-          </div>
-
-          {latest ? (
-            <div className="mt-4 text-xs text-gray-500">当前分支版本：{fmt(latest.createdAt)} by {latest.editorName}</div>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
-};
-
+// --- Wiki Timeline Component ---
 const WikiTimeline = () => {
-  const [events, setEvents] = useState<WikiPage[]>([]);
+  const [events, setEvents] = useState<WikiItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let active = true;
-    const run = async () => {
-      setLoading(true);
+    const fetchEvents = async () => {
       try {
-        const data = await apiGet<{ events: WikiPage[] }>('/api/wiki/timeline');
-        if (active) setEvents(data.events || []);
-      } catch (error) {
-        console.error('Fetch wiki timeline failed:', error);
-        if (active) setEvents([]);
-      } finally {
-        if (active) setLoading(false);
+        const wikiRef = collection(db, 'wiki');
+        // Fetch pages that have an eventDate
+        const q = query(wikiRef, orderBy('eventDate', 'asc'));
+        const snapshot = await getDocs(q);
+        const allEvents = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() } as WikiItem))
+          .filter((p) => p.eventDate); // Ensure they have a date
+        setEvents(allEvents);
+      } catch (e) {
+        console.error("Error fetching timeline events:", e);
       }
+      setLoading(false);
     };
-    run();
-    return () => {
-      active = false;
-    };
+    fetchEvents();
   }, []);
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-12">
-      <Link to="/wiki" className="inline-flex items-center gap-2 text-gray-500 hover:text-brand-olive mb-6">
-        <ArrowLeft size={16} /> 返回百科
+      <Link to="/wiki" className="inline-flex items-center gap-2 text-gray-400 hover:text-brand-olive mb-8 transition-colors">
+        <ArrowLeft size={18} /> 返回百科列表
       </Link>
-      <h1 className="font-serif text-4xl font-bold text-brand-olive mb-6 inline-flex items-center gap-2">
-        <Calendar size={28} /> 时间轴
-      </h1>
-      {loading ? <div className="text-gray-500">加载中...</div> : null}
-      {!loading && events.length === 0 ? <div className="text-gray-500">暂无时间轴数据</div> : null}
-      <div className="space-y-4">
-        {events.map((item) => (
-          <Link key={item.id} to={`/wiki/${item.slug}`} className="block bg-white border border-gray-100 rounded-2xl p-4 hover:border-brand-olive/30">
-            <div className="text-xs text-gray-500">{item.eventDate || '未设日期'} · {categoryName(item.category)}</div>
-            <div className="font-bold text-gray-800 mt-1">{item.title}</div>
-          </Link>
-        ))}
-      </div>
+
+      <header className="mb-16 text-center">
+        <h1 className="text-5xl font-serif font-bold text-brand-olive mb-4">艺术历程时间轴</h1>
+        <p className="text-gray-500 italic">记录黄诗扶音乐生涯的每一个重要节点</p>
+      </header>
+
+      {loading ? (
+        <div className="space-y-12">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="flex gap-8 animate-pulse">
+              <div className="w-32 h-8 bg-gray-100 rounded-full"></div>
+              <div className="flex-grow h-32 bg-gray-50 rounded-[32px]"></div>
+            </div>
+          ))}
+        </div>
+      ) : events.length > 0 ? (
+        <div className="relative border-l-2 border-brand-olive/20 ml-4 md:ml-32 pl-8 md:pl-12 space-y-16 pb-20">
+          {events.map((event, idx) => (
+            <motion.div 
+              key={event.id}
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="relative"
+            >
+              {/* Date Indicator */}
+              <div className="absolute -left-[41px] md:-left-[141px] top-0 flex items-center gap-4">
+                <div className="hidden md:block w-24 text-right">
+                  <span className="text-sm font-bold text-brand-olive bg-brand-cream px-3 py-1 rounded-full whitespace-nowrap">
+                    {event.eventDate}
+                  </span>
+                </div>
+                <div className="w-4 h-4 rounded-full bg-brand-olive border-4 border-white shadow-sm z-10"></div>
+              </div>
+
+              {/* Content Card */}
+              <Link to={`/wiki/${event.slug}`} className="block group">
+                <div className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-xl hover:border-brand-olive/20 transition-all">
+                  <div className="md:hidden mb-4">
+                    <span className="text-xs font-bold text-brand-olive bg-brand-cream px-2 py-1 rounded-full">
+                      {event.eventDate}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="px-2 py-1 bg-brand-cream text-brand-olive text-[10px] font-bold uppercase tracking-wider rounded">
+                      {event.category === 'biography' ? '人物介绍' :
+                       event.category === 'music' ? '音乐作品' :
+                       event.category === 'album' ? '专辑一览' :
+                       event.category === 'timeline' ? '时间轴' :
+                       event.category === 'event' ? '活动记录' : event.category}
+                    </span>
+                  </div>
+                  <h3 className="text-2xl font-serif font-bold text-gray-800 group-hover:text-brand-olive transition-colors mb-4">
+                    {event.title}
+                  </h3>
+                  <p className="text-gray-500 text-sm italic line-clamp-2 leading-relaxed">
+                    {event.content.replace(/[#*`]/g, '').substring(0, 150)}...
+                  </p>
+                  <div className="mt-6 flex items-center gap-2 text-brand-olive text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                    查看详情 <ChevronRight size={14} />
+                  </div>
+                </div>
+              </Link>
+            </motion.div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-20 bg-white rounded-[40px] border border-gray-100">
+          <Calendar size={48} className="mx-auto text-gray-200 mb-6" />
+          <p className="text-gray-400 italic">暂无时间轴数据，请在编辑页面设置“事件日期”</p>
+        </div>
+      )}
     </div>
   );
 };
@@ -1478,10 +976,6 @@ const Wiki = () => {
       <Route path="/" element={<WikiList />} />
       <Route path="/new" element={<WikiEditor />} />
       <Route path="/timeline" element={<WikiTimeline />} />
-      <Route path="/branches" element={<WikiBranches />} />
-      <Route path="/branches/:branchId/conflict" element={<WikiConflictResolver />} />
-      <Route path="/pull-requests" element={<WikiPullRequests />} />
-      <Route path="/pull-requests/:prId" element={<WikiPullRequestDetail />} />
       <Route path="/:slug" element={<WikiPageView />} />
       <Route path="/:slug/edit" element={<WikiEditor />} />
       <Route path="/:slug/history" element={<WikiHistory />} />

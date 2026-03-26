@@ -79,39 +79,6 @@ enum EmbeddingStatus {
   failed
 }
 
-enum MusicPlatform {
-  netease
-  tencent
-  kugou
-  baidu
-  kuwo
-}
-
-enum DisplayAlbumMode {
-  none
-  linked
-  manual
-}
-
-enum MusicCollectionType {
-  album
-  playlist
-}
-
-enum WikiBranchStatus {
-  draft
-  pending_review
-  merged
-  rejected
-  conflict
-}
-
-enum WikiPullRequestStatus {
-  open
-  merged
-  rejected
-}
-
 model User {
   uid           String         @id @default(cuid())
   email         String         @unique
@@ -132,10 +99,6 @@ model User {
   comments      PostComment[]  @relation("UserComments")
   wikiEdits     WikiPage[]     @relation("WikiLastEditor")
   revisions     WikiRevision[] @relation("WikiRevisionEditor")
-  wikiBranches  WikiBranch[]   @relation("WikiBranchEditor")
-  wikiPullRequests WikiPullRequest[] @relation("WikiPullRequestCreator")
-  wikiReviewedPullRequests WikiPullRequest[] @relation("WikiPullRequestReviewer")
-  wikiPullRequestComments WikiPullRequestComment[] @relation("WikiPRCommentAuthor")
   galleries     Gallery[]      @relation("UserGalleries")
   musicAdded    MusicTrack[]   @relation("MusicAddedBy")
   postLikes     PostLike[]
@@ -215,7 +178,6 @@ model WikiPage {
   category      String
   content       String         @db.LongText
   tags          Json?
-  relations     Json?
   eventDate     String?
   status        ContentStatus  @default(published)
   reviewNote    String?        @db.Text
@@ -225,19 +187,14 @@ model WikiPage {
   favoritesCount Int           @default(0)
   lastEditorUid String
   lastEditorName String
-  mainBranchId  String?
-  mergedAt      DateTime?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   lastEditor    User           @relation("WikiLastEditor", fields: [lastEditorUid], references: [uid], onDelete: Cascade)
   revisions     WikiRevision[]
-  branches      WikiBranch[]
-  pullRequests  WikiPullRequest[]
 
   @@index([category, updatedAt])
   @@index([status, updatedAt])
   @@index([eventDate])
-  @@index([mainBranchId])
 }
 
 model PostLike {
@@ -296,85 +253,15 @@ model UserBanLog {
 model WikiRevision {
   id         String   @id @default(cuid())
   pageSlug   String
-  branchId   String?
   title      String
   content    String   @db.LongText
-  slug       String?
-  category   String?
-  tags       Json?
-  relations  Json?
-  eventDate  String?
   editorUid  String
   editorName String
-  isAutoSave Boolean  @default(false)
   createdAt  DateTime @default(now())
   page       WikiPage @relation(fields: [pageSlug], references: [slug], onDelete: Cascade)
   editor     User     @relation("WikiRevisionEditor", fields: [editorUid], references: [uid], onDelete: Cascade)
-  branch     WikiBranch? @relation("WikiBranchRevisions", fields: [branchId], references: [id], onDelete: SetNull)
 
   @@index([pageSlug, createdAt])
-  @@index([branchId, createdAt])
-}
-
-model WikiBranch {
-  id               String           @id @default(cuid())
-  pageSlug         String
-  editorUid        String
-  editorName       String
-  status           WikiBranchStatus @default(draft)
-  latestRevisionId String?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  page             WikiPage         @relation(fields: [pageSlug], references: [slug], onDelete: Cascade)
-  editor           User             @relation("WikiBranchEditor", fields: [editorUid], references: [uid], onDelete: Cascade)
-  revisions        WikiRevision[]   @relation("WikiBranchRevisions")
-  pullRequests     WikiPullRequest[]
-
-  @@unique([pageSlug, editorUid])
-  @@index([pageSlug, status])
-  @@index([editorUid])
-}
-
-model WikiPullRequest {
-  id             String                @id @default(cuid())
-  branchId       String
-  pageSlug       String
-  title          String
-  description    String?               @db.Text
-  status         WikiPullRequestStatus @default(open)
-  createdByUid   String
-  createdByName  String
-  reviewedBy     String?
-  reviewedAt     DateTime?
-  mergedAt       DateTime?
-  baseRevisionId String?
-  conflictData   Json?
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
-  branch         WikiBranch            @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  page           WikiPage              @relation(fields: [pageSlug], references: [slug], onDelete: Cascade)
-  creator        User                  @relation("WikiPullRequestCreator", fields: [createdByUid], references: [uid], onDelete: Cascade)
-  reviewer       User?                 @relation("WikiPullRequestReviewer", fields: [reviewedBy], references: [uid], onDelete: SetNull)
-  comments       WikiPullRequestComment[]
-
-  @@unique([branchId])
-  @@index([status, createdAt])
-  @@index([pageSlug, status])
-  @@index([createdByUid, createdAt])
-}
-
-model WikiPullRequestComment {
-  id         String          @id @default(cuid())
-  prId       String
-  authorUid  String
-  authorName String
-  content    String          @db.Text
-  createdAt  DateTime        @default(now())
-  pr         WikiPullRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
-  author     User            @relation("WikiPRCommentAuthor", fields: [authorUid], references: [uid], onDelete: Cascade)
-
-  @@index([prId, createdAt])
-  @@index([authorUid, createdAt])
 }
 
 model Announcement {
@@ -433,8 +320,6 @@ model MediaAsset {
   owner      User            @relation(fields: [ownerUid], references: [uid], onDelete: Cascade)
   session    UploadSession?  @relation(fields: [sessionId], references: [id], onDelete: SetNull)
   galleryImages GalleryImage[] @relation("GalleryImageAsset")
-  songCovers SongCover[]     @relation("SongCoverAsset")
-  albumCovers AlbumCover[]   @relation("AlbumCoverAsset")
 
   @@index([ownerUid, createdAt])
   @@index([sessionId])
@@ -470,129 +355,21 @@ model ImageEmbedding {
   @@index([status, updatedAt])
 }
 
-model Album {
-  docId              String              @id @default(cuid())
-  id                 String              @unique
-  resourceType       MusicCollectionType @default(album)
-  platform           MusicPlatform
-  sourceId           String
-  title              String
-  artist             String
-  cover              String              @db.Text
-  description        String?             @db.Text
-  platformUrl        String?             @db.Text
-  tracks             Json?
-  defaultCoverSource String?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  covers             AlbumCover[]
-  songRelations      SongAlbumRelation[]
-
-  @@unique([platform, sourceId, resourceType])
-  @@index([title])
-  @@index([artist])
-  @@index([createdAt])
-}
-
 model MusicTrack {
   docId     String   @id @default(cuid())
   id        String   @unique
   title     String
   artist    String
-  album     String   @default("")
-  cover     String   @default("") @db.Text
-  audioUrl  String   @default("") @db.Text
+  album     String
+  cover     String   @db.Text
+  audioUrl  String   @db.Text
   lyric     String?  @db.LongText
-  primaryPlatform    MusicPlatform   @default(netease)
-  enabledPlatform    MusicPlatform?
-  neteaseId          String?
-  tencentId          String?
-  kugouId            String?
-  baiduId            String?
-  kuwoId             String?
-  displayAlbumMode   DisplayAlbumMode @default(linked)
-  manualAlbumName    String?
-  defaultCoverSource String?
   addedBy   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   adder     User?    @relation("MusicAddedBy", fields: [addedBy], references: [uid], onDelete: SetNull)
-  covers    SongCover[]
-  albumRelations SongAlbumRelation[]
-  instrumentalLinks   SongInstrumentalRelation[] @relation("SongInstrumentalSource")
-  instrumentalForLinks SongInstrumentalRelation[] @relation("SongInstrumentalTarget")
 
-  @@index([primaryPlatform])
-  @@index([enabledPlatform])
-  @@index([neteaseId])
-  @@index([tencentId])
-  @@index([kugouId])
-  @@index([baiduId])
-  @@index([kuwoId])
   @@index([createdAt])
-}
-
-model SongCover {
-  id         String    @id @default(cuid())
-  songDocId  String
-  assetId    String?
-  storageKey String    @unique
-  publicUrl  String    @db.Text
-  isDefault  Boolean   @default(false)
-  sortOrder  Int       @default(0)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  song       MusicTrack @relation(fields: [songDocId], references: [docId], onDelete: Cascade)
-  asset      MediaAsset? @relation("SongCoverAsset", fields: [assetId], references: [id], onDelete: SetNull)
-
-  @@index([songDocId, sortOrder])
-  @@index([assetId])
-}
-
-model AlbumCover {
-  id         String    @id @default(cuid())
-  albumDocId String
-  assetId    String?
-  storageKey String    @unique
-  publicUrl  String    @db.Text
-  isDefault  Boolean   @default(false)
-  sortOrder  Int       @default(0)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  album      Album     @relation(fields: [albumDocId], references: [docId], onDelete: Cascade)
-  asset      MediaAsset? @relation("AlbumCoverAsset", fields: [assetId], references: [id], onDelete: SetNull)
-
-  @@index([albumDocId, sortOrder])
-  @@index([assetId])
-}
-
-model SongAlbumRelation {
-  id         String    @id @default(cuid())
-  songDocId  String
-  albumDocId String
-  discNumber Int       @default(1)
-  trackOrder Int       @default(0)
-  isDisplay  Boolean   @default(false)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  song       MusicTrack @relation(fields: [songDocId], references: [docId], onDelete: Cascade)
-  album      Album      @relation(fields: [albumDocId], references: [docId], onDelete: Cascade)
-
-  @@unique([songDocId, albumDocId])
-  @@index([albumDocId, discNumber, trackOrder])
-  @@index([songDocId])
-}
-
-model SongInstrumentalRelation {
-  id              String    @id @default(cuid())
-  songDocId       String
-  targetSongDocId String
-  createdAt       DateTime  @default(now())
-  song            MusicTrack @relation("SongInstrumentalSource", fields: [songDocId], references: [docId], onDelete: Cascade)
-  targetSong      MusicTrack @relation("SongInstrumentalTarget", fields: [targetSongDocId], references: [docId], onDelete: Cascade)
-
-  @@unique([songDocId, targetSongDocId])
-  @@index([targetSongDocId])
 }
 
 model ImageMap {
