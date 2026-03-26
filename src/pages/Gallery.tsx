@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { collection, query, orderBy, onSnapshot, db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Image as ImageIcon, Plus, Folder, X, Upload, Clock, User as UserIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { SmartImage } from '../components/SmartImage';
-import { apiGet, apiPost } from '../lib/apiClient';
+import { apiPost } from '../lib/apiClient';
 
 const toDateValue = (value: string | null | undefined) => {
   if (!value) return null;
@@ -50,38 +51,19 @@ type GalleryCreateResponse = {
   };
 };
 
-type GalleryItem = {
-  id: string;
-  title: string;
-  tags?: string[];
-  createdAt?: string;
-  authorUid?: string;
-  published?: boolean;
-  publishedAt?: string | null;
-  images: Array<{ url: string }>;
-};
-
 const GalleryList = () => {
-  const [galleries, setGalleries] = useState<GalleryItem[]>([]);
+  const [galleries, setGalleries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { user, isBanned } = useAuth();
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
-  const fetchGalleries = async () => {
-    setLoading(true);
-    try {
-      const data = await apiGet<{ galleries: GalleryItem[] }>('/api/galleries');
-      setGalleries(data.galleries || []);
-    } catch (error) {
-      console.error('Fetch galleries error:', error);
-      setGalleries([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchGalleries();
+    const q = query(collection(db, 'galleries'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setGalleries(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
 
   return (
@@ -150,17 +132,14 @@ const GalleryList = () => {
       {/* Upload Modal */}
       <AnimatePresence>
         {isUploadModalOpen && (
-          <UploadModal
-            onClose={() => setIsUploadModalOpen(false)}
-            onUploaded={fetchGalleries}
-          />
+          <UploadModal onClose={() => setIsUploadModalOpen(false)} />
         )}
       </AnimatePresence>
     </div>
   );
 };
 
-const UploadModal = ({ onClose, onUploaded }: { onClose: () => void; onUploaded: () => Promise<void> }) => {
+const UploadModal = ({ onClose }: { onClose: () => void }) => {
   const { user, isBanned } = useAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -288,7 +267,6 @@ const UploadModal = ({ onClose, onUploaded }: { onClose: () => void; onUploaded:
         });
       }
 
-      await onUploaded();
       handleClose();
     } catch (e) {
       console.error("Error uploading gallery:", e);
