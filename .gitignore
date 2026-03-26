@@ -6,3 +6,10 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# local temporary deployment artifacts
+tmp_*.py
+tmp_*.ps1
+pm2_status.txt
+server_check.txt
+nul
