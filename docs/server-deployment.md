@@ -705,3 +705,20 @@ npm run build
 - 若涉及数据库结构，`prisma/migrate.sql` 已同步更新
 
 这样可以把常见部署失败提前暴露在 PR 阶段，降低线上风险。
+
+### 16.4 当前测试基线
+
+当前已接入 Vitest 并提供基础单测，覆盖以下核心模块：
+
+- `src/server/music/musicUrlParser.ts`
+- `src/lib/apiClient.ts`
+- `src/lib/auth.ts`
+
+CI 使用 `npm run test:coverage` 执行覆盖率校验，当前阈值为：
+
+- `lines >= 12`
+- `functions >= 30`
+- `branches >= 40`
+- `statements >= 12`
+
+> 说明：这是第一阶段“能拦住明显回归”的保守阈值，建议后续随着测试增量逐步上调。

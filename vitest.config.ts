@@ -9,6 +9,12 @@ export default defineConfig({
       reporter: ['text', 'html'],
       reportsDirectory: 'coverage',
       include: ['src/**/*.ts'],
+      thresholds: {
+        lines: 12,
+        functions: 30,
+        branches: 40,
+        statements: 12,
+      },
     },
   },
 });
