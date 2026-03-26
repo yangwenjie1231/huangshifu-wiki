@@ -8,10 +8,9 @@ interface Song {
   album: string;
   cover: string;
   audioUrl: string;
+  playUrl?: string;
   lyric?: string | null;
 }
-
-type RepeatMode = 'none' | 'one' | 'all';
 
 interface MusicContextType {
   currentSong: Song | null;
@@ -25,14 +24,6 @@ interface MusicContextType {
   playSongAtIndex: (index: number) => void;
   playNext: () => void;
   playPrevious: () => void;
-  volume: number;
-  setVolume: (value: number) => void;
-  shuffle: boolean;
-  setShuffle: (value: boolean) => void;
-  repeatMode: RepeatMode;
-  setRepeatMode: (value: RepeatMode) => void;
-  history: Song[];
-  markSongFinished: () => void;
 }
 
 const MusicContext = createContext<MusicContextType | undefined>(undefined);
@@ -42,21 +33,6 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [playlist, setPlaylistState] = useState<Song[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
-  const [volume, setVolume] = useState(0.9);
-  const [shuffle, setShuffle] = useState(false);
-  const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
-  const [history, setHistory] = useState<Song[]>([]);
-
-  const addToHistory = useCallback((song: Song | null) => {
-    if (!song) {
-      return;
-    }
-    setHistory((prev) => {
-      const key = song.docId || song.id;
-      const merged = [song, ...prev.filter((item) => (item.docId || item.id) !== key)];
-      return merged.slice(0, 50);
-    });
-  }, []);
 
   const setPlaylist = useCallback((songs: Song[]) => {
     setPlaylistState(songs);
@@ -98,13 +74,12 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
     }
 
     setCurrentSongState(song);
-    addToHistory(song);
 
     const index = playlist.findIndex(
       (item) => (item.docId && song.docId ? item.docId === song.docId : item.id === song.id),
     );
     setCurrentIndex(index);
-  }, [addToHistory, playlist]);
+  }, [playlist]);
 
   const playSongAtIndex = useCallback((index: number) => {
     if (!playlist.length) return;
@@ -115,9 +90,8 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
 
     setCurrentIndex(normalizedIndex);
     setCurrentSongState(song);
-    addToHistory(song);
     setIsPlaying(true);
-  }, [addToHistory, playlist]);
+  }, [playlist]);
 
   const playAlbumTracks = useCallback((_albumId: string, _albumTitle: string, songs: Song[], startIndex = 0) => {
     if (!songs.length) {
@@ -133,82 +107,26 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
 
     setCurrentIndex(normalizedIndex);
     setCurrentSongState(song);
-    addToHistory(song);
     setIsPlaying(true);
-  }, [addToHistory]);
+  }, []);
 
   const playNext = useCallback(() => {
     if (!playlist.length) return;
-
-    if (shuffle && playlist.length > 1) {
-      const candidates = playlist.map((_, index) => index).filter((index) => index !== currentIndex);
-      if (candidates.length > 0) {
-        const randomIndex = candidates[Math.floor(Math.random() * candidates.length)];
-        playSongAtIndex(randomIndex);
-        return;
-      }
-    }
-
     if (currentIndex < 0) {
       playSongAtIndex(0);
       return;
     }
     playSongAtIndex(currentIndex + 1);
-  }, [currentIndex, playSongAtIndex, playlist, shuffle]);
+  }, [currentIndex, playSongAtIndex, playlist.length]);
 
   const playPrevious = useCallback(() => {
     if (!playlist.length) return;
-
-    if (shuffle && playlist.length > 1) {
-      const candidates = playlist.map((_, index) => index).filter((index) => index !== currentIndex);
-      if (candidates.length > 0) {
-        const randomIndex = candidates[Math.floor(Math.random() * candidates.length)];
-        playSongAtIndex(randomIndex);
-        return;
-      }
-    }
-
     if (currentIndex < 0) {
       playSongAtIndex(playlist.length - 1);
       return;
     }
     playSongAtIndex(currentIndex - 1);
-  }, [currentIndex, playSongAtIndex, playlist, shuffle]);
-
-  const markSongFinished = useCallback(() => {
-    if (!playlist.length) {
-      return;
-    }
-
-    if (repeatMode === 'one') {
-      if (currentIndex >= 0) {
-        playSongAtIndex(currentIndex);
-      } else {
-        playSongAtIndex(0);
-      }
-      return;
-    }
-
-    if (shuffle && playlist.length > 1) {
-      const candidates = playlist.map((_, index) => index).filter((index) => index !== currentIndex);
-      if (candidates.length > 0) {
-        const randomIndex = candidates[Math.floor(Math.random() * candidates.length)];
-        playSongAtIndex(randomIndex);
-        return;
-      }
-    }
-
-    if (currentIndex >= playlist.length - 1) {
-      if (repeatMode === 'all') {
-        playSongAtIndex(0);
-      } else {
-        setIsPlaying(false);
-      }
-      return;
-    }
-
-    playSongAtIndex(currentIndex + 1);
-  }, [currentIndex, playSongAtIndex, playlist, repeatMode, shuffle]);
+  }, [currentIndex, playSongAtIndex, playlist.length]);
 
   const value = useMemo(
     () => ({
@@ -223,14 +141,6 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
       playSongAtIndex,
       playNext,
       playPrevious,
-      volume,
-      setVolume,
-      shuffle,
-      setShuffle,
-      repeatMode,
-      setRepeatMode,
-      history,
-      markSongFinished,
     }),
     [
       currentSong,
@@ -243,11 +153,6 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
       playSongAtIndex,
       playNext,
       playPrevious,
-      volume,
-      shuffle,
-      repeatMode,
-      history,
-      markSongFinished,
     ],
   );
 

@@ -1,72 +1,65 @@
-import React, { useRef, useEffect, useMemo, useState } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Volume2, Disc, X, Shuffle, Repeat, Repeat1, History, ChevronUp, ChevronDown } from 'lucide-react';
+import React, { useRef, useEffect, useState } from 'react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, Disc, X, Music as MusicIcon, ChevronUp, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useMusic } from '../context/MusicContext';
 import { clsx } from 'clsx';
 
-type LrcLine = {
-  time: number;
-  text: string;
-};
-
-const parseLrc = (raw?: string | null): LrcLine[] => {
-  if (!raw) return [];
-  const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/g;
-  const output: LrcLine[] = [];
-  const lines = raw.split(/\r?\n/);
-
-  lines.forEach((line) => {
-    const tags = [...line.matchAll(timeRegex)];
-    if (!tags.length) return;
-    const text = line.replace(timeRegex, '').trim();
-
-    tags.forEach((match) => {
-      const min = Number(match[1]);
-      const sec = Number(match[2]);
-      const ms = Number(match[3].padEnd(3, '0'));
-      output.push({
-        time: min * 60 + sec + ms / 1000,
-        text,
-      });
-    });
-  });
-
-  return output.sort((a, b) => a.time - b.time);
-};
-
 export const GlobalMusicPlayer = () => {
-  const {
-    currentSong,
-    setCurrentSong,
-    isPlaying,
-    setIsPlaying,
-    playNext,
-    playPrevious,
-    volume,
-    setVolume,
-    shuffle,
-    setShuffle,
-    repeatMode,
-    setRepeatMode,
-    history,
-    markSongFinished,
-  } = useMusic();
+  const { currentSong, setCurrentSong, isPlaying, setIsPlaying, playNext, playPrevious } = useMusic();
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
+  const [resolvedPlayUrl, setResolvedPlayUrl] = useState('');
+  const [resolvingPlayUrl, setResolvingPlayUrl] = useState(false);
+  const [playUrlError, setPlayUrlError] = useState('');
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  const lyrics = useMemo(() => parseLrc(currentSong?.lyric), [currentSong?.lyric]);
-  const currentLyricIndex = useMemo(() => {
-    if (!lyrics.length) return -1;
-    for (let i = lyrics.length - 1; i >= 0; i -= 1) {
-      if (currentTime >= lyrics[i].time) {
-        return i;
+  useEffect(() => {
+    const resolvePlayUrl = async () => {
+      if (!currentSong) {
+        setResolvedPlayUrl('');
+        setResolvingPlayUrl(false);
+        setPlayUrlError('');
+        return;
       }
-    }
-    return -1;
-  }, [currentTime, lyrics]);
+
+      const fallback = currentSong.audioUrl || '';
+      if (!currentSong.docId) {
+        setResolvedPlayUrl(currentSong.playUrl || fallback);
+        setResolvingPlayUrl(false);
+        setPlayUrlError('');
+        return;
+      }
+
+      setResolvingPlayUrl(true);
+      setPlayUrlError('');
+
+      try {
+        const response = await fetch(`/api/music/${encodeURIComponent(currentSong.docId)}/play-url`);
+        if (!response.ok) {
+          throw new Error(`play-url request failed: ${response.status}`);
+        }
+        const data = await response.json() as { playUrl?: string };
+        const nextUrl = typeof data.playUrl === 'string' && data.playUrl.trim()
+          ? data.playUrl.trim()
+          : (currentSong.playUrl || fallback);
+        setResolvedPlayUrl(nextUrl);
+      } catch (error) {
+        console.error('Resolve play url failed:', error);
+        setResolvedPlayUrl(currentSong.playUrl || fallback);
+        setPlayUrlError('播放地址获取失败，已使用备用链接');
+      } finally {
+        setResolvingPlayUrl(false);
+      }
+    };
+
+    resolvePlayUrl();
+  }, [currentSong]);
+
+  useEffect(() => {
+    setCurrentTime(0);
+    setDuration(0);
+  }, [resolvedPlayUrl]);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -105,15 +98,8 @@ export const GlobalMusicPlayer = () => {
   const onLoadedMetadata = () => {
     if (audioRef.current) {
       setDuration(audioRef.current.duration);
-      audioRef.current.volume = volume;
     }
   };
-
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = Math.max(0, Math.min(1, volume));
-    }
-  }, [volume]);
 
   const formatTime = (time: number) => {
     const mins = Math.floor(time / 60);
@@ -127,23 +113,6 @@ export const GlobalMusicPlayer = () => {
       audioRef.current.currentTime = time;
       setCurrentTime(time);
     }
-  };
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const next = parseFloat(e.target.value);
-    setVolume(Number.isFinite(next) ? next : 1);
-  };
-
-  const cycleRepeatMode = () => {
-    if (repeatMode === 'none') {
-      setRepeatMode('all');
-      return;
-    }
-    if (repeatMode === 'all') {
-      setRepeatMode('one');
-      return;
-    }
-    setRepeatMode('none');
   };
 
   if (!currentSong) return null;
@@ -257,8 +226,13 @@ export const GlobalMusicPlayer = () => {
                     max={duration || 0}
                     value={currentTime}
                     onChange={handleProgressChange}
+                    disabled={!duration || resolvingPlayUrl}
                     className="w-full h-1.5 bg-gray-100 rounded-full appearance-none cursor-pointer accent-brand-primary mb-6"
                   />
+
+                  {playUrlError ? (
+                    <p className="text-xs text-amber-600 mt-2">{playUrlError}</p>
+                  ) : null}
 
                   <div className="flex items-center justify-center md:justify-start gap-8">
                     <button onClick={handlePlayPrevious} className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
@@ -274,95 +248,6 @@ export const GlobalMusicPlayer = () => {
                       <SkipForward size={28} />
                     </button>
                   </div>
-
-                  <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <Volume2 size={16} className="text-gray-500" />
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.01"
-                          value={volume}
-                          onChange={handleVolumeChange}
-                          className="w-full h-1.5 bg-gray-100 rounded-full appearance-none cursor-pointer accent-brand-primary"
-                        />
-                        <span className="text-xs text-gray-500 w-10 text-right">{Math.round(volume * 100)}%</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setShuffle(!shuffle)}
-                          className={clsx(
-                            'px-3 py-1.5 rounded-full text-xs font-bold border transition-colors',
-                            shuffle ? 'bg-brand-olive text-white border-brand-olive' : 'bg-white text-gray-500 border-gray-200 hover:border-brand-olive/40',
-                          )}
-                        >
-                          <span className="inline-flex items-center gap-1">
-                            <Shuffle size={14} /> 随机
-                          </span>
-                        </button>
-                        <button
-                          onClick={cycleRepeatMode}
-                          className={clsx(
-                            'px-3 py-1.5 rounded-full text-xs font-bold border transition-colors',
-                            repeatMode === 'none'
-                              ? 'bg-white text-gray-500 border-gray-200 hover:border-brand-olive/40'
-                              : 'bg-brand-olive text-white border-brand-olive',
-                          )}
-                        >
-                          <span className="inline-flex items-center gap-1">
-                            {repeatMode === 'one' ? <Repeat1 size={14} /> : <Repeat size={14} />}
-                            {repeatMode === 'none' ? '不循环' : repeatMode === 'all' ? '列表循环' : '单曲循环'}
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="bg-brand-cream/30 rounded-2xl p-3 h-44 overflow-y-auto">
-                      {lyrics.length ? (
-                        <div className="space-y-1">
-                          {lyrics.map((line, index) => (
-                            <p
-                              key={`${line.time}-${index}`}
-                              className={clsx(
-                                'text-xs leading-5 transition-colors',
-                                index === currentLyricIndex ? 'text-brand-olive font-bold' : 'text-gray-500',
-                              )}
-                            >
-                              {line.text || '...'}
-                            </p>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="h-full flex items-center justify-center text-xs text-gray-400">暂无歌词</div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-5">
-                    <button
-                      onClick={() => setShowHistory((prev) => !prev)}
-                      className="text-xs font-bold text-gray-600 hover:text-brand-olive inline-flex items-center gap-1"
-                    >
-                      <History size={14} /> 播放历史 ({history.length})
-                    </button>
-                    {showHistory && (
-                      <div className="mt-3 max-h-32 overflow-y-auto border border-gray-100 rounded-2xl">
-                        {history.length ? history.map((song) => (
-                          <button
-                            key={song.docId || song.id}
-                            onClick={() => setCurrentSong(song)}
-                            className="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 border-b border-gray-50 last:border-b-0"
-                          >
-                            {song.title} - {song.artist}
-                          </button>
-                        )) : (
-                          <p className="px-3 py-2 text-xs text-gray-400">暂无播放记录</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
             </motion.div>
@@ -372,10 +257,10 @@ export const GlobalMusicPlayer = () => {
 
       <audio 
         ref={audioRef}
-        src={currentSong.audioUrl}
+        src={resolvedPlayUrl || currentSong.playUrl || currentSong.audioUrl}
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={onLoadedMetadata}
-        onEnded={markSongFinished}
+        onEnded={playNext}
       />
     </motion.div>
   );
