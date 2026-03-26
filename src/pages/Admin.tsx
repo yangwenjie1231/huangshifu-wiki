@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { collection, query, getDocs, doc, deleteDoc, updateDoc, orderBy, limit, setDoc, addDoc, serverTimestamp, db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Shield, Book, MessageSquare, Image as ImageIcon, Users, Trash2, CheckCircle, XCircle, AlertTriangle, ChevronRight, Layers, Plus, Save, Edit2, Megaphone, Music as MusicIcon } from 'lucide-react';
@@ -211,14 +210,6 @@ const Admin = () => {
             <h1 className="text-4xl font-serif font-bold text-gray-900">管理后台</h1>
             <p className="text-gray-500 italic">内容管理与社区维护</p>
           </div>
-        </div>
-        <div className="mt-4">
-          <Link
-            to="/wiki/pull-requests"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-primary text-gray-900 font-bold hover:opacity-90"
-          >
-            <CheckCircle size={16} /> Wiki PR 审核
-          </Link>
         </div>
       </header>
 
