@@ -605,91 +605,6 @@ USE_PM2=0 ./scripts/deploy.sh
 
 ---
 
-## 16. 中期重构版（v4）上线记录
-
-### 16.1 本次范围
-
-- Wiki / Gallery / Admin 页面前端数据访问已统一走 REST API。
-- 音乐全局播放器增强：歌词同步、音量控制、随机播放、循环模式、播放历史。
-- Wiki 接口补充兼容路由：`GET /api/wiki/:slug/revisions`（与 `history` 同内容）。
-- Wiki 管理删除能力补齐：`DELETE /api/wiki/:slug`（管理员）。
-
-### 16.2 部署命令（无旧数据迁移）
-
-```bash
-cd /root/huangshifu-wiki
-chmod +x scripts/deploy.sh
-SKIP_SEED=1 ./scripts/deploy.sh
-
-# 验证
-curl http://127.0.0.1:3000/api/health
-pm2 status
-```
-
-### 16.3 接口验证清单
-
-```bash
-# Wiki 列表 / 详情 / 历史
-curl "http://127.0.0.1:3000/api/wiki?category=all"
-curl "http://127.0.0.1:3000/api/wiki/<slug>"
-curl "http://127.0.0.1:3000/api/wiki/<slug>/history"
-curl "http://127.0.0.1:3000/api/wiki/<slug>/revisions"
-
-# 管理能力（需管理员 cookie）
-curl "http://127.0.0.1:3000/api/admin/wiki" -b cookie.txt -c cookie.txt
-curl -X DELETE "http://127.0.0.1:3000/api/wiki/<slug>" -b cookie.txt -c cookie.txt
-curl "http://127.0.0.1:3000/api/admin/galleries" -b cookie.txt -c cookie.txt
-curl "http://127.0.0.1:3000/api/admin/users" -b cookie.txt -c cookie.txt
-```
-
-### 16.4 前端回归验证点
-
-1. Wiki 页面：列表、详情、编辑、历史、回滚、收藏、提交审核均可用。
-2. Gallery 页面：图集列表正常，上传后可立即看到新图集。
-3. Admin 页面：审核队列、公告/版块管理、用户封禁与角色管理、内容删除可用。
-4. 音乐播放器：
-   - 歌词自动高亮；
-   - 音量可调；
-   - 随机模式可切换；
-   - 循环模式可在不循环/列表循环/单曲循环间切换；
-   - 历史列表可回播。
-
-### 16.5 v4.1 继续迁移（Music 页面）
-
-- `src/pages/Music.tsx` 已完成从 `../firebase` 直连迁移为 REST：
-  - 列表读取：`GET /api/music`
-  - 收藏切换：`POST /api/favorites`、`DELETE /api/favorites/music/:id`
-  - 删除歌曲：`DELETE /api/music/:docId`
-  - 专辑入口：`GET /api/albums`（页面内展示并跳转 `/albums/:id`）
-  - 网易云快捷添加：`POST /api/music/from-netease`
-- 批量删除、单曲删除、播放列表联动（`setPlaylist` / `playSongAtIndex`）均已保持。
-- 本地验证结果：
-  - `npm run lint` 通过；
-  - `npm run build` 通过（仅保留 Vite 大包体积 warning，不阻断部署）。
-
-### 16.6 v4.1 部署执行与排障记录
-
-- 已使用上传脚本 `tmp_remote_sync_deploy.py` 进行自动上传 + 执行 `SKIP_SEED=1 ./scripts/deploy.sh`。
-- 首轮失败原因：远端缺少 `src/server/music/metingService.ts`，PM2 日志报 `ERR_MODULE_NOT_FOUND`。
-- 已修复脚本上传清单，确保同时上传：
-  - `src/server/music/musicUrlParser.ts`
-  - `src/server/music/metingService.ts`
-- 脚本补充了目录自动创建与上传重试机制（规避偶发 SFTP size mismatch）。
-- 若远端再次出现 SSH banner 超时（`Error reading SSH protocol banner`），可在服务器重启后重试：
-
-```bash
-cd /root/huangshifu-wiki
-chmod +x scripts/deploy.sh
-SKIP_SEED=1 ./scripts/deploy.sh
-
-# 验证
-pm2 status
-pm2 logs huangshifu-wiki --lines 120 --nostream
-curl http://127.0.0.1:3000/api/health
-```
-
----
-
 ## 15. 备份建议
 
 数据库备份：
@@ -708,219 +623,43 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 
 ---
 
-## 17. 音乐导入功能（v5）
+## 16. GitHub 自动化 CI（新增）
 
-### 17.1 功能概述
+为避免“本地可运行、线上构建失败”，仓库新增 GitHub Actions 工作流：
 
-支持从 5 个音乐平台导入歌曲、专辑、歌单：
+- 文件：`.github/workflows/ci.yml`
+- 触发条件：
+  - `push` 到 `main`
+  - `pull_request` 到 `main`
+  - 手动触发 `workflow_dispatch`
 
-- 网易云音乐（netease）
-- QQ 音乐（tencent）
-- 酷狗音乐（kugou）
-- 百度音乐（baidu）
-- 酷我音乐（kuwo）
+### 16.1 CI 执行步骤
 
-**仅管理员可用**。用户粘贴链接后，系统自动解析并展示资源预览，支持选择性导入。
-
-### 17.2 数据库变更
-
-本次更新新增 2 张表、扩展 `MusicTrack` 2 个字段：
-
-- `Playlist`：存储专辑/歌单元数据（标题、封面、平台来源等）
-- `PlaylistTrack`：存储专辑/歌单与歌曲的多对多关系
-- `MusicTrack.sourcePlatform`：歌曲来源平台（如 `netease`）
-- `MusicTrack.sourceUrl`：歌曲原始页面链接
-
-迁移已包含在 `prisma/migrate.sql`，执行部署时会自动创建。
-
-### 17.3 核心 API
-
-| 方法 | 路径 | 说明 | 权限 |
-|------|------|------|------|
-| `POST` | `/api/music/parse-url` | 解析音乐链接，返回预览 | 管理员 |
-| `POST` | `/api/music/import` | 导入歌曲/专辑/歌单 | 管理员 |
-| `GET` | `/api/albums` | 获取专辑列表 | 公开 |
-| `GET` | `/api/albums/:id` | 获取专辑详情（含歌曲） | 公开 |
-| `GET` | `/api/playlists` | 获取歌单列表 | 公开 |
-| `POST` | `/api/playlists` | 创建歌单 | 管理员 |
-| `PATCH` | `/api/playlists/:docId` | 更新歌单 | 管理员 |
-| `DELETE` | `/api/playlists/:docId` | 删除歌单 | 管理员 |
-
-### 17.4 导入 API 用法示例
+CI 默认在 `ubuntu-latest` + Node 20 下执行：
 
 ```bash
-# 1) 解析链接（支持歌曲/专辑/歌单）
-curl -X POST http://127.0.0.1:3000/api/music/parse-url \
-  -H "Content-Type: application/json" \
-  -b cookie.txt -c cookie.txt \
-  -d '{"url":"https://music.163.com/#/album?id=123456"}'
-
-# 返回预览：{ resource: { title, artist, cover, platform, type, songs: [...] } }
-
-# 2) 导入全部歌曲
-curl -X POST http://127.0.0.1:3000/api/music/import \
-  -H "Content-Type: application/json" \
-  -b cookie.txt -c cookie.txt \
-  -d '{"url":"https://music.163.com/#/album?id=123456"}'
-
-# 3) 选择性导入（只导入指定歌曲）
-curl -X POST http://127.0.0.1:3000/api/music/import \
-  -H "Content-Type: application/json" \
-  -b cookie.txt -c cookie.txt \
-  -d '{"url":"https://music.163.com/#/playlist?id=123456","selectedSongIds":["song_id_1","song_id_2"]}'
-
-# 返回：{ summary: { imported, skipped, failed }, songs: [...], collection: {...} }
+npm ci
+npm run lint
+npm run test:coverage
+npm run build
 ```
 
-### 17.5 平台 URL 示例
+并上传 `coverage/` 目录为构建产物（artifact）。
 
-```
-# 网易云音乐
-https://music.163.com/#/song?id=123456
-https://music.163.com/#/album?id=123456
-https://music.163.com/#/playlist?id=123456
+### 16.2 建议的分支保护
 
-# QQ 音乐
-https://y.qq.com/n/ryqq/playlist/123456
-https://y.qq.com/n/ryqq/album/123456
+建议在 GitHub 仓库设置 branch protection：
 
-# 酷狗音乐
-https://www.kugou.com/yy/single/123456.html
+1. 保护分支：`main`
+2. Required status checks：勾选 `Lint Test Build`
+3. 禁止未通过 CI 的提交直接合并
 
-# 百度音乐
-https://music.baidu.com/song/123456
+### 16.3 部署前联动检查
 
-# 酷我音乐
-https://www.kuwo.cn/play_detail/123456
-```
+在服务器执行 `./scripts/deploy.sh` 之前，建议确认：
 
-### 17.6 部署验证清单
+- PR 对应的 CI 已通过（lint / test / build）
+- 变更已合并到 `main`
+- 若涉及数据库结构，`prisma/migrate.sql` 已同步更新
 
-```bash
-# 健康检查
-curl http://127.0.0.1:3000/api/health
-
-# 专辑列表（无需登录）
-curl "http://127.0.0.1:3000/api/albums"
-
-# 专辑详情（含歌曲）
-curl "http://127.0.0.1:3000/api/albums/<album_doc_id>?includeTracks=true"
-
-# 歌单列表
-curl "http://127.0.0.1:3000/api/playlists"
-```
-
----
-
-## 18. P0 增量（v6）上线记录：编辑锁 + 图集发布流
-
-### 18.1 本次范围
-
-- 新增 **编辑锁 API**（记录级并发编辑保护）：
-  - `POST /api/admin/locks` 申请/接管锁
-  - `PATCH /api/admin/locks/:id/renew` 锁续期
-  - `DELETE /api/admin/locks/:id` 释放锁
-  - `DELETE /api/admin/locks/:collection/:recordId` 管理员强制解锁
-  - 管理后台 `Admin` 新增 `编辑锁` tab（通过 `/api/admin/locks` 数据源展示）
-- 新增 **图集发布流与存量编辑 API**：
-  - `PATCH /api/galleries/:id` 更新图集基础信息
-  - `PATCH /api/galleries/:id/publish` 发布/取消发布
-  - `POST /api/galleries/:id/images` 为已有图集追加图片（使用 `assetIds`）
-  - `DELETE /api/galleries/:id/images/:imageId` 删除图集图片
-  - `PATCH /api/galleries/:id/images/reorder` 批量重排
-- 调整图集前台可见性：
-  - `GET /api/galleries`：游客仅看 `published=true`
-  - `GET /api/galleries/:id`：未发布图集仅作者/管理员可见
-
-### 18.2 数据库变更
-
-本次变更已写入 `prisma/schema.prisma` 和 `prisma/migrate.sql`：
-
-- 新增表：`EditLock`
-  - 唯一键：`(collection, recordId)`
-  - 索引：`userId`, `expiresAt`
-- 扩展表：`Gallery`
-  - 新增字段：`published`（默认 true）、`publishedAt`
-  - 新增索引：`(published, updatedAt)`
-
-### 18.3 新增环境变量
-
-```env
-EDIT_LOCK_TTL_MINUTES="20"
-```
-
-- 可选项，默认值 `20`
-- 控制编辑锁过期时间（分钟）
-
-### 18.4 部署命令（无旧数据迁移）
-
-```bash
-cd /root/huangshifu-wiki
-chmod +x scripts/deploy.sh
-SKIP_SEED=1 ./scripts/deploy.sh
-
-# 验证
-curl http://127.0.0.1:3000/api/health
-pm2 status
-```
-
-> 如果是全新数据库首次部署，且还没有管理员账号，可仅首次改为 `SKIP_SEED=0` 初始化管理员；后续继续使用 `SKIP_SEED=1`。
-
-### 18.5 接口验证（编辑锁）
-
-```bash
-# 0) 登录管理员并保存 cookie
-curl -X POST http://127.0.0.1:3000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -c cookie.txt -b cookie.txt \
-  -d '{"email":"admin@example.com","password":"请替换为管理员密码"}'
-
-# 1) 申请锁
-curl -X POST http://127.0.0.1:3000/api/admin/locks \
-  -H "Content-Type: application/json" \
-  -b cookie.txt -c cookie.txt \
-  -d '{"collection":"galleries","recordId":"demo-gallery-id"}'
-
-# 2) 查看锁列表（管理后台数据源）
-curl "http://127.0.0.1:3000/api/admin/locks" -b cookie.txt -c cookie.txt
-
-# 3) 续期锁（将 <lock_id> 替换为上一步返回值）
-curl -X PATCH "http://127.0.0.1:3000/api/admin/locks/<lock_id>/renew" \
-  -H "Content-Type: application/json" \
-  -b cookie.txt -c cookie.txt
-
-# 4) 释放锁
-curl -X DELETE "http://127.0.0.1:3000/api/admin/locks/<lock_id>" -b cookie.txt -c cookie.txt
-```
-
-### 18.6 接口验证（图集发布流）
-
-```bash
-# 前置：先按既有上传会话流程创建图集，得到 <gallery_id>
-
-# 1) 更新图集基础信息
-curl -X PATCH "http://127.0.0.1:3000/api/galleries/<gallery_id>" \
-  -H "Content-Type: application/json" \
-  -b cookie.txt -c cookie.txt \
-  -d '{"title":"部署验证图集-已编辑","description":"更新描述","tags":["deploy","edit"]}'
-
-# 2) 设置为草稿（未发布）
-curl -X PATCH "http://127.0.0.1:3000/api/galleries/<gallery_id>/publish" \
-  -H "Content-Type: application/json" \
-  -b cookie.txt -c cookie.txt \
-  -d '{"published":false}'
-
-# 3) 游客访问应不可见（404）
-curl -i "http://127.0.0.1:3000/api/galleries/<gallery_id>"
-
-# 4) 重新发布
-curl -X PATCH "http://127.0.0.1:3000/api/galleries/<gallery_id>/publish" \
-  -H "Content-Type: application/json" \
-  -b cookie.txt -c cookie.txt \
-  -d '{"published":true}'
-```
-
-### 18.7 本地回归结果
-
-- `npm run lint` 通过
-- `npm run build` 通过（仅保留 Vite chunk size warning，不阻断部署）
+这样可以把常见部署失败提前暴露在 PR 阶段，降低线上风险。
