@@ -3748,6 +3748,8 @@ app.post('/api/wiki/:slug/submit', requireAuth, requireActiveUser, async (req: A
 
 app.post('/api/wiki', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
+    const hasTagsInPayload = Object.prototype.hasOwnProperty.call(req.body, 'tags');
+    const hasRelationsInPayload = Object.prototype.hasOwnProperty.call(req.body, 'relations');
     const {
       title,
       slug,
@@ -3781,7 +3783,12 @@ app.post('/api/wiki', requireAuth, requireActiveUser, async (req: AuthenticatedR
     const pageSlug = slug.trim().toLowerCase();
     const existing = await prisma.wikiPage.findUnique({ where: { slug: pageSlug } });
     const nextStatus = normalizeWikiWriteStatus(status, req.authUser!);
-    const normalizedRelations = await normalizeWikiRelationListForWrite(relations, pageSlug);
+    const normalizedRelations = hasRelationsInPayload
+      ? await normalizeWikiRelationListForWrite(relations, pageSlug)
+      : serializeRelations(existing?.relations, pageSlug);
+    const normalizedTags = hasTagsInPayload
+      ? (Array.isArray(tags) ? tags : [])
+      : serializeTags(existing?.tags);
 
     if (existing && !isAdminRole(req.authUser!.role) && existing.lastEditorUid !== req.authUser!.uid) {
       res.status(409).json({ error: '该 slug 已存在' });
@@ -3795,7 +3802,7 @@ app.post('/api/wiki', requireAuth, requireActiveUser, async (req: AuthenticatedR
         title,
         category,
         content,
-        tags: tags || [],
+        tags: normalizedTags,
         relations: normalizedRelations,
         eventDate: eventDate || null,
         status: nextStatus,
@@ -3809,7 +3816,7 @@ app.post('/api/wiki', requireAuth, requireActiveUser, async (req: AuthenticatedR
         title,
         category,
         content,
-        tags: tags || [],
+        tags: normalizedTags,
         relations: normalizedRelations,
         eventDate: eventDate || null,
         status: nextStatus,
@@ -3828,7 +3835,7 @@ app.post('/api/wiki', requireAuth, requireActiveUser, async (req: AuthenticatedR
         content,
         slug: pageSlug,
         category,
-        tags: tags || [],
+        tags: normalizedTags,
         relations: normalizedRelations,
         eventDate: eventDate || null,
         editorUid: req.authUser!.uid,
@@ -3876,6 +3883,8 @@ app.post('/api/wiki', requireAuth, requireActiveUser, async (req: AuthenticatedR
 
 app.post('/api/wiki/legacy', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
+    const hasTagsInPayload = Object.prototype.hasOwnProperty.call(req.body, 'tags');
+    const hasRelationsInPayload = Object.prototype.hasOwnProperty.call(req.body, 'relations');
     const {
       title,
       slug,
@@ -3915,7 +3924,12 @@ app.post('/api/wiki/legacy', requireAuth, requireActiveUser, async (req: Authent
     }
 
     const nextStatus = normalizeWikiWriteStatus(status, req.authUser!);
-    const normalizedRelations = await normalizeWikiRelationListForWrite(relations, pageSlug);
+    const normalizedRelations = hasRelationsInPayload
+      ? await normalizeWikiRelationListForWrite(relations, pageSlug)
+      : serializeRelations(existing?.relations, pageSlug);
+    const normalizedTags = hasTagsInPayload
+      ? (Array.isArray(tags) ? tags : [])
+      : serializeTags(existing?.tags);
     const page = await prisma.wikiPage.upsert({
       where: { slug: pageSlug },
       create: {
@@ -3923,7 +3937,7 @@ app.post('/api/wiki/legacy', requireAuth, requireActiveUser, async (req: Authent
         title,
         category,
         content,
-        tags: tags || [],
+        tags: normalizedTags,
         relations: normalizedRelations,
         eventDate: eventDate || null,
         status: nextStatus,
@@ -3937,7 +3951,7 @@ app.post('/api/wiki/legacy', requireAuth, requireActiveUser, async (req: Authent
         title,
         category,
         content,
-        tags: tags || [],
+        tags: normalizedTags,
         relations: normalizedRelations,
         eventDate: eventDate || null,
         status: nextStatus,
@@ -3956,7 +3970,7 @@ app.post('/api/wiki/legacy', requireAuth, requireActiveUser, async (req: Authent
         content,
         slug: pageSlug,
         category,
-        tags: tags || [],
+        tags: normalizedTags,
         relations: normalizedRelations,
         eventDate: eventDate || null,
         editorUid: req.authUser!.uid,
@@ -3973,6 +3987,8 @@ app.post('/api/wiki/legacy', requireAuth, requireActiveUser, async (req: Authent
 
 app.put('/api/wiki/:slug', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
+    const hasTagsInPayload = Object.prototype.hasOwnProperty.call(req.body, 'tags');
+    const hasRelationsInPayload = Object.prototype.hasOwnProperty.call(req.body, 'relations');
     const {
       title,
       category,
@@ -4008,14 +4024,17 @@ app.put('/api/wiki/:slug', requireAuth, requireActiveUser, async (req: Authentic
     }
 
     const nextStatus = normalizeWikiWriteStatus(status, req.authUser!);
-    const normalizedRelations = await normalizeWikiRelationListForWrite(relations, req.params.slug);
+    const normalizedRelations = hasRelationsInPayload
+      ? await normalizeWikiRelationListForWrite(relations, req.params.slug)
+      : serializeRelations(page.relations, page.slug);
+    const normalizedTags = hasTagsInPayload ? (Array.isArray(tags) ? tags : []) : serializeTags(page.tags);
     const updated = await prisma.wikiPage.update({
       where: { slug: req.params.slug },
       data: {
         title,
         category,
         content,
-        tags: tags || [],
+        tags: normalizedTags,
         relations: normalizedRelations,
         eventDate: eventDate || null,
         status: nextStatus,
@@ -4034,7 +4053,7 @@ app.put('/api/wiki/:slug', requireAuth, requireActiveUser, async (req: Authentic
         content,
         slug: req.params.slug,
         category,
-        tags: tags || [],
+        tags: normalizedTags,
         relations: normalizedRelations,
         eventDate: eventDate || null,
         editorUid: req.authUser!.uid,
@@ -4250,6 +4269,9 @@ app.post('/api/wiki/branches/:branchId/revisions', requireAuth, requireActiveUse
       return;
     }
 
+    const hasTagsInPayload = Object.prototype.hasOwnProperty.call(req.body, 'tags');
+    const hasRelationsInPayload = Object.prototype.hasOwnProperty.call(req.body, 'relations');
+
     const {
       title,
       content,
@@ -4275,7 +4297,18 @@ app.post('/api/wiki/branches/:branchId/revisions', requireAuth, requireActiveUse
       return;
     }
 
-    const normalizedRelations = await normalizeWikiRelationListForWrite(relations, branch.pageSlug);
+    const baseRevision = branch.latestRevisionId
+      ? await prisma.wikiRevision.findUnique({
+          where: { id: branch.latestRevisionId },
+          select: { tags: true, relations: true },
+        })
+      : null;
+    const normalizedRelations = hasRelationsInPayload
+      ? await normalizeWikiRelationListForWrite(relations, branch.pageSlug)
+      : serializeRelations(baseRevision?.relations ?? branch.page.relations, branch.pageSlug);
+    const normalizedTags = hasTagsInPayload
+      ? (Array.isArray(tags) ? tags : [])
+      : serializeTags(baseRevision?.tags ?? branch.page.tags);
 
     const revision = await prisma.wikiRevision.create({
       data: {
@@ -4285,7 +4318,7 @@ app.post('/api/wiki/branches/:branchId/revisions', requireAuth, requireActiveUse
         content,
         slug: (slug || branch.pageSlug).trim().toLowerCase(),
         category,
-        tags: Array.isArray(tags) ? tags : [],
+        tags: normalizedTags,
         relations: normalizedRelations,
         eventDate: eventDate || null,
         editorUid: req.authUser!.uid,
@@ -4747,7 +4780,22 @@ app.post('/api/wiki/branches/:branchId/resolve-conflict', requireAuth, requireAc
       return;
     }
 
-    const normalizedRelations = await normalizeWikiRelationListForWrite(payload.relations, branch.pageSlug);
+    const hasTagsInPayload = Object.prototype.hasOwnProperty.call(req.body, 'tags');
+    const hasRelationsInPayload = Object.prototype.hasOwnProperty.call(req.body, 'relations');
+
+    const baseRevision = branch.latestRevisionId
+      ? await prisma.wikiRevision.findUnique({
+          where: { id: branch.latestRevisionId },
+          select: { tags: true, relations: true },
+        })
+      : null;
+
+    const normalizedRelations = hasRelationsInPayload
+      ? await normalizeWikiRelationListForWrite(payload.relations, branch.pageSlug)
+      : serializeRelations(baseRevision?.relations, branch.pageSlug);
+    const normalizedTags = hasTagsInPayload
+      ? (Array.isArray(payload.tags) ? payload.tags : [])
+      : serializeTags(baseRevision?.tags);
 
     const revision = await prisma.wikiRevision.create({
       data: {
@@ -4757,7 +4805,7 @@ app.post('/api/wiki/branches/:branchId/resolve-conflict', requireAuth, requireAc
         content: payload.content,
         slug: branch.pageSlug,
         category: payload.category,
-        tags: Array.isArray(payload.tags) ? payload.tags : [],
+        tags: normalizedTags,
         relations: normalizedRelations,
         eventDate: payload.eventDate || null,
         editorUid: req.authUser!.uid,
