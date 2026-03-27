@@ -15,5 +15,6 @@ export default defineConfig({
   },
   server: {
     hmr: process.env.DISABLE_HMR !== 'true',
+    host: '0.0.0.0',
   },
 });
