@@ -3423,10 +3423,12 @@ app.get('/api/notifications', requireAuth, async (req: AuthenticatedRequest, res
     const page = Math.max(Number(req.query.page) || 1, 1);
     const skip = (page - 1) * limit;
     const unreadOnly = req.query.unread === 'true';
+    const typeFilter = typeof req.query.type === 'string' && req.query.type ? req.query.type : null;
 
-    const where = {
+    const where: Record<string, unknown> = {
       userUid,
       ...(unreadOnly ? { isRead: false } : {}),
+      ...(typeFilter ? { type: typeFilter } : {}),
     };
 
     const [notifications, total, unreadCount] = await Promise.all([
