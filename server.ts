@@ -2566,6 +2566,55 @@ function toGalleryResponse(gallery: {
   };
 }
 
+function toMusicResponse(track: {
+  docId: string;
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  cover: string;
+  audioUrl: string;
+  lyric?: string | null;
+  primaryPlatform: string;
+  enabledPlatform?: string | null;
+  neteaseId?: string | null;
+  tencentId?: string | null;
+  kugouId?: string | null;
+  baiduId?: string | null;
+  kuwoId?: string | null;
+  displayAlbumMode: string;
+  manualAlbumName?: string | null;
+  defaultCoverSource?: string | null;
+  addedBy?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    docId: track.docId,
+    id: track.id,
+    title: track.title,
+    artist: track.artist,
+    album: track.album,
+    cover: track.cover || track.defaultCoverSource || '',
+    audioUrl: track.audioUrl,
+    lyric: track.lyric || null,
+    primaryPlatform: track.primaryPlatform,
+    enabledPlatform: track.enabledPlatform || null,
+    platforms: {
+      netease: track.neteaseId,
+      tencent: track.tencentId,
+      kugou: track.kugouId,
+      baidu: track.baiduId,
+      kuwo: track.kuwoId,
+    },
+    displayAlbumMode: track.displayAlbumMode,
+    manualAlbumName: track.manualAlbumName || null,
+    addedBy: track.addedBy || null,
+    createdAt: track.createdAt.toISOString(),
+    updatedAt: track.updatedAt.toISOString(),
+  };
+}
+
 function toEditLockResponse(lock: {
   id: string;
   collection: string;
@@ -10221,6 +10270,8 @@ app.get('/api/search', async (req: AuthenticatedRequest, res) => {
     const wantsWiki = type === 'all' || type === 'wiki';
     const wantsPosts = type === 'all' || type === 'posts';
     const wantsGalleries = type === 'all' || type === 'galleries';
+    const wantsMusic = type === 'all' || type === 'music';
+    const wantsAlbums = type === 'all' || type === 'albums';
 
     if (q) {
       increaseSearchKeywordCount(q);
@@ -10317,12 +10368,51 @@ app.get('/api/search', async (req: AuthenticatedRequest, res) => {
         })
       : Promise.resolve([]);
 
-    const [wiki, posts, galleries] = await Promise.all([wikiPromise, postsPromise, galleriesPromise]);
+    const musicPromise = wantsMusic
+      ? prisma.musicTrack.findMany({
+          where: {
+            ...(q
+              ? {
+                  OR: [
+                    { title: { contains: q } },
+                    { artist: { contains: q } },
+                    { album: { contains: q } },
+                    { lyric: { contains: q } },
+                  ],
+                }
+              : {}),
+          },
+          orderBy: { updatedAt: 'desc' },
+          take: 100,
+        })
+      : Promise.resolve([]);
+
+    const albumsPromise = wantsAlbums
+      ? prisma.album.findMany({
+          where: {
+            ...(q
+              ? {
+                  OR: [
+                    { title: { contains: q } },
+                    { artist: { contains: q } },
+                    { description: { contains: q } },
+                  ],
+                }
+              : {}),
+          },
+          orderBy: { updatedAt: 'desc' },
+          take: 100,
+        })
+      : Promise.resolve([]);
+
+    const [wiki, posts, galleries, music, albums] = await Promise.all([wikiPromise, postsPromise, galleriesPromise, musicPromise, albumsPromise]);
 
     res.json({
       wiki: wiki.map(toWikiResponse),
       posts: posts.map(toPostResponse),
       galleries: galleries.map(toGalleryResponse),
+      music: music.map(toMusicResponse),
+      albums: albums.map(toAlbumResponse),
     });
   } catch (error) {
     console.error('Search error:', error);
@@ -10679,7 +10769,7 @@ app.get('/api/search/suggest', async (req: AuthenticatedRequest, res) => {
 
     const normalized = normalizeKeyword(q);
 
-    const [keywordMatches, wikiMatches, postMatches] = await Promise.all([
+    const [keywordMatches, wikiMatches, postMatches, musicMatches, albumMatches] = await Promise.all([
       prisma.searchKeyword.findMany({
         where: { keyword: { contains: normalized } },
         orderBy: { count: 'desc' },
@@ -10709,9 +10799,31 @@ app.get('/api/search/suggest', async (req: AuthenticatedRequest, res) => {
         take: 3,
         select: { id: true, title: true, section: true },
       }),
+      prisma.musicTrack.findMany({
+        where: {
+          OR: [
+            { title: { contains: q } },
+            { artist: { contains: q } },
+          ],
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 3,
+        select: { docId: true, title: true, artist: true },
+      }),
+      prisma.album.findMany({
+        where: {
+          OR: [
+            { title: { contains: q } },
+            { artist: { contains: q } },
+          ],
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 3,
+        select: { docId: true, title: true, artist: true },
+      }),
     ]);
 
-    const suggestions: Array<{ type: 'keyword' | 'wiki' | 'post'; text: string; subtext?: string; id?: string }> = [];
+    const suggestions: Array<{ type: 'keyword' | 'wiki' | 'post' | 'music' | 'album'; text: string; subtext?: string; id?: string }> = [];
 
     keywordMatches.forEach((k) => {
       suggestions.push({ type: 'keyword', text: k.keyword, subtext: `${k.count} 次搜索` });
@@ -10723,6 +10835,14 @@ app.get('/api/search/suggest', async (req: AuthenticatedRequest, res) => {
 
     postMatches.forEach((p) => {
       suggestions.push({ type: 'post', text: p.title, subtext: p.section, id: p.id });
+    });
+
+    musicMatches.forEach((m) => {
+      suggestions.push({ type: 'music', text: m.title, subtext: m.artist, id: m.docId });
+    });
+
+    albumMatches.forEach((a) => {
+      suggestions.push({ type: 'album', text: a.title, subtext: a.artist, id: a.docId });
     });
 
     res.json({ suggestions });
