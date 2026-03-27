@@ -344,6 +344,39 @@ npm run db:seed
 - 提示方式统一为顶部 Toast（不再弹浏览器 `alert`）
 - 入口由 `src/components/Toast.tsx` 提供，并在 `src/main.tsx` 全局挂载
 
+### 6.6 编辑锁与图集发布流说明（v2.9+）
+
+本次发布补齐后台协作与图集生命周期能力，且你已确认当前为"无旧数据迁移"场景，可直接按当前流程部署。
+
+**数据库变更（已包含在 `db:deploy` 中）：**
+
+| 表名 | 变更类型 | 说明 |
+|------|---------|------|
+| `Gallery` | 新增列 | `published` Boolean，默认 `false` |
+| `Gallery` | 新增列 | `publishedAt` DateTime，可空 |
+| `Gallery` | 新增索引 | `published + updatedAt` 复合索引 |
+| `EditLock` | 新建表 | 记录级编辑锁（collection + recordId 唯一） |
+
+**后端 API 变更：**
+
+| 端点 | 方法 | 功能 | 权限 |
+|------|------|------|------|
+| `/api/galleries/:id` | PATCH | 更新图集标题/描述/标签 | 作者或管理员 |
+| `/api/galleries/:id/publish` | PATCH | 发布/取消发布图集 | 作者或管理员 |
+| `/api/galleries/:id/images` | POST | 追加图片（基于 UploadSession + assetIds） | 作者或管理员 |
+| `/api/galleries/:id/images/:imageId` | DELETE | 删除单张图片（至少保留一张） | 作者或管理员 |
+| `/api/galleries/:id/images/reorder` | PATCH | 批量重排图片 | 作者或管理员 |
+| `/api/admin/locks` | POST | 申请编辑锁（支持续期、管理员强制接管） | 登录用户 |
+| `/api/admin/locks/:id/renew` | PATCH | 编辑锁续期 | 锁持有者或管理员 |
+| `/api/admin/locks` | GET | 编辑锁列表 | 管理员 |
+| `/api/admin/locks/:id` | DELETE | 释放编辑锁 | 锁持有者或管理员 |
+| `/api/admin/locks/:collection/:recordId` | DELETE | 强制释放指定记录锁 | 管理员 |
+
+**图集访问策略更新：**
+
+- `GET /api/galleries`：游客仅返回已发布图集；作者可见自己的草稿；管理员可见全部。
+- `GET /api/galleries/:id`：未发布图集仅作者和管理员可见。
+
 ---
 
 ## 7. 构建并启动服务
@@ -636,6 +669,68 @@ curl http://127.0.0.1:3000/api/music/<platformSongId>
 - 粘贴内容为完整站内 URL（含域名）
 - 链接可在新标签页直接打开对应内容
 - 在移动端和桌面端都可触发复制逻辑
+
+### 11.5 编辑锁与图集发布流验证（v2.9+）
+
+#### 11.5.1 图集发布流验证
+
+```bash
+# 1) 获取图集列表（游客只会看到已发布图集）
+curl http://127.0.0.1:3000/api/galleries
+
+# 2) 切换发布状态（需登录，作者或管理员）
+curl -X PATCH http://127.0.0.1:3000/api/galleries/<galleryId>/publish \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"published":true}'
+
+# 3) 更新图集基础信息
+curl -X PATCH http://127.0.0.1:3000/api/galleries/<galleryId> \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"title":"新标题","description":"新描述","tags":["Live","2026"]}'
+
+# 4) 图片重排（imageIds 需来自图集详情返回）
+curl -X PATCH http://127.0.0.1:3000/api/galleries/<galleryId>/images/reorder \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"imageIds":["<imageId1>","<imageId2>","<imageId3>"]}'
+```
+
+验证点：
+
+- 游客访问未发布图集详情返回 `403`。
+- 作者与管理员可访问未发布图集并可执行编辑/发布操作。
+- 删除图片时，图集至少保留 1 张图片。
+
+#### 11.5.2 编辑锁验证
+
+```bash
+# 1) 申请编辑锁
+curl -X POST http://127.0.0.1:3000/api/admin/locks \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"collection":"galleries","recordId":"<galleryId>","ttlMinutes":15}'
+
+# 2) 续期编辑锁
+curl -X PATCH http://127.0.0.1:3000/api/admin/locks/<lockId>/renew \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"ttlMinutes":30}'
+
+# 3) 管理员查看锁列表
+curl http://127.0.0.1:3000/api/admin/locks -b cookie.txt -c cookie.txt
+
+# 4) 管理员强制释放指定记录锁
+curl -X DELETE http://127.0.0.1:3000/api/admin/locks/galleries/<galleryId> \
+  -b cookie.txt -c cookie.txt
+```
+
+验证点：
+
+- 同一记录重复申请锁时，非持有者返回 `409` 并包含锁信息。
+- 管理员在 `force=true` 时可以接管非本人锁。
+- 过期锁会被自动清理，不会长期阻塞编辑。
 
 ---
 

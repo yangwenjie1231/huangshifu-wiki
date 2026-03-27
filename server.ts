@@ -847,6 +847,33 @@ function parseAssetIdList(value: unknown) {
   return [...deduped];
 }
 
+const EDIT_LOCK_COLLECTION_ALLOWLIST = new Set([
+  'songs',
+  'albums',
+  'galleries',
+  'activities',
+  'wiki',
+  'posts',
+]);
+
+function normalizeEditLockCollection(value: unknown) {
+  if (typeof value !== 'string') return '';
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return '';
+  if (EDIT_LOCK_COLLECTION_ALLOWLIST.has(normalized)) return normalized;
+  return '';
+}
+
+function normalizeEditLockRecordId(value: unknown) {
+  if (typeof value !== 'string') return '';
+  const normalized = value.trim();
+  if (!normalized) return '';
+  if (normalized.length > 191) {
+    return normalized.slice(0, 191);
+  }
+  return normalized;
+}
+
 function createUploadSessionExpiresAt() {
   return new Date(Date.now() + UPLOAD_SESSION_TTL_MINUTES * 60 * 1000);
 }
@@ -2014,6 +2041,19 @@ function canViewPost(post: { status: ContentStatus; authorUid: string }, authUse
   return post.authorUid === authUser.uid;
 }
 
+function canViewGallery(gallery: { published: boolean; authorUid: string }, authUser?: ApiUser) {
+  if (gallery.published) return true;
+  if (!authUser) return false;
+  if (isAdminRole(authUser.role)) return true;
+  return gallery.authorUid === authUser.uid;
+}
+
+function canManageGallery(gallery: { authorUid: string }, authUser?: ApiUser) {
+  if (!authUser) return false;
+  if (isAdminRole(authUser.role)) return true;
+  return gallery.authorUid === authUser.uid;
+}
+
 function buildWikiVisibilityWhere(authUser?: ApiUser) {
   if (!authUser) {
     return { status: 'published' as ContentStatus };
@@ -2482,6 +2522,8 @@ function toGalleryResponse(gallery: {
   authorUid: string;
   authorName: string;
   tags: unknown;
+  published: boolean;
+  publishedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   images: {
@@ -2507,17 +2549,36 @@ function toGalleryResponse(gallery: {
     authorUid: gallery.authorUid,
     authorName: gallery.authorName,
     tags: serializeTags(gallery.tags),
+    published: gallery.published,
+    publishedAt: gallery.publishedAt ? gallery.publishedAt.toISOString() : null,
     createdAt: gallery.createdAt.toISOString(),
     updatedAt: gallery.updatedAt.toISOString(),
     images: gallery.images
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map((image) => ({
+        id: image.id,
         assetId: image.assetId || image.asset?.id || null,
         url: image.asset?.publicUrl || image.url,
         name: image.asset?.fileName || image.name,
         mimeType: image.asset?.mimeType || null,
         sizeBytes: image.asset?.sizeBytes || null,
       })),
+  };
+}
+
+function toEditLockResponse(lock: {
+  id: string;
+  collection: string;
+  recordId: string;
+  userId: string;
+  username: string;
+  createdAt: Date;
+  expiresAt: Date;
+}) {
+  return {
+    ...lock,
+    createdAt: lock.createdAt.toISOString(),
+    expiresAt: lock.expiresAt.toISOString(),
   };
 }
 
@@ -6451,9 +6512,21 @@ app.delete('/api/posts/:id', requireAdmin, async (req, res) => {
   }
 });
 
-app.get('/api/galleries', async (_req, res) => {
+app.get('/api/galleries', async (req: AuthenticatedRequest, res) => {
   try {
+    const visibilityWhere = req.authUser
+      ? (isAdminRole(req.authUser.role)
+          ? {}
+          : {
+              OR: [
+                { published: true },
+                { authorUid: req.authUser.uid },
+              ],
+            })
+      : { published: true };
+
     const galleries = await prisma.gallery.findMany({
+      where: visibilityWhere,
       include: {
         images: {
           include: {
@@ -6473,7 +6546,7 @@ app.get('/api/galleries', async (_req, res) => {
   }
 });
 
-app.get('/api/galleries/:id', async (req, res) => {
+app.get('/api/galleries/:id', async (req: AuthenticatedRequest, res) => {
   try {
     const gallery = await prisma.gallery.findUnique({
       where: { id: req.params.id },
@@ -6489,6 +6562,11 @@ app.get('/api/galleries/:id', async (req, res) => {
 
     if (!gallery) {
       res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    if (!canViewGallery(gallery, req.authUser)) {
+      res.status(403).json({ error: '该图集尚未发布' });
       return;
     }
 
@@ -7044,6 +7122,605 @@ app.post('/api/galleries', requireAuth, requireActiveUser, async (req: Authentic
   } catch (error) {
     console.error('Create gallery error:', error);
     res.status(500).json({ error: '创建图集失败' });
+  }
+});
+
+app.patch('/api/galleries/:id', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const gallery = await prisma.gallery.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        authorUid: true,
+      },
+    });
+
+    if (!gallery) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    if (!canManageGallery(gallery, req.authUser)) {
+      res.status(403).json({ error: '无权限编辑该图集' });
+      return;
+    }
+
+    const title = typeof req.body?.title === 'string' ? req.body.title.trim() : undefined;
+    const description = typeof req.body?.description === 'string' ? req.body.description.trim() : undefined;
+    const tags = req.body?.tags !== undefined ? normalizeTagList(req.body.tags) : undefined;
+
+    const data: {
+      title?: string;
+      description?: string;
+      tags?: string[];
+    } = {};
+
+    if (title !== undefined && title.length > 0) {
+      data.title = title;
+    }
+    if (description !== undefined) {
+      data.description = description || '无描述';
+    }
+    if (tags !== undefined) {
+      data.tags = tags;
+    }
+
+    if (!Object.keys(data).length) {
+      res.status(400).json({ error: '没有可更新的字段' });
+      return;
+    }
+
+    const updated = await prisma.gallery.update({
+      where: { id: req.params.id },
+      data,
+      include: {
+        images: {
+          include: {
+            asset: true,
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    res.json({ gallery: toGalleryResponse(updated) });
+  } catch (error) {
+    console.error('Update gallery error:', error);
+    res.status(500).json({ error: '更新图集失败' });
+  }
+});
+
+app.patch('/api/galleries/:id/publish', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const gallery = await prisma.gallery.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        authorUid: true,
+        published: true,
+      },
+    });
+
+    if (!gallery) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    if (!canManageGallery(gallery, req.authUser)) {
+      res.status(403).json({ error: '无权限修改图集发布状态' });
+      return;
+    }
+
+    const nextPublished = parseBoolean(req.body?.published, !gallery.published);
+    const updated = await prisma.gallery.update({
+      where: { id: req.params.id },
+      data: {
+        published: nextPublished,
+        publishedAt: nextPublished ? new Date() : null,
+      },
+      include: {
+        images: {
+          include: {
+            asset: true,
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    res.json({ gallery: toGalleryResponse(updated) });
+  } catch (error) {
+    console.error('Update gallery publish status error:', error);
+    res.status(500).json({ error: '修改图集发布状态失败' });
+  }
+});
+
+app.post('/api/galleries/:id/images', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const gallery = await prisma.gallery.findUnique({
+      where: { id: req.params.id },
+      include: {
+        images: {
+          select: {
+            id: true,
+            sortOrder: true,
+          },
+        },
+      },
+    });
+
+    if (!gallery) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    if (!canManageGallery(gallery, req.authUser)) {
+      res.status(403).json({ error: '无权限编辑该图集' });
+      return;
+    }
+
+    const assetIds = parseAssetIdList(req.body?.assetIds);
+    if (!assetIds.length) {
+      res.status(400).json({ error: '请提供至少一个图片资源' });
+      return;
+    }
+
+    const uploadSessionId = typeof req.body?.uploadSessionId === 'string' ? req.body.uploadSessionId.trim() : '';
+    if (uploadSessionId) {
+      const session = await prisma.uploadSession.findUnique({
+        where: { id: uploadSessionId },
+        select: {
+          id: true,
+          ownerUid: true,
+          status: true,
+          expiresAt: true,
+        },
+      });
+      if (!session || session.ownerUid !== req.authUser!.uid) {
+        res.status(400).json({ error: '上传会话不存在' });
+        return;
+      }
+      if (session.status === 'expired' || isUploadSessionExpired(session.expiresAt)) {
+        if (session.status !== 'expired') {
+          await prisma.uploadSession.update({
+            where: { id: session.id },
+            data: { status: 'expired' },
+          });
+        }
+        res.status(410).json({ error: '上传会话已过期，请重新上传' });
+        return;
+      }
+      if (session.status !== 'finalized') {
+        res.status(400).json({ error: '请先完成上传会话' });
+        return;
+      }
+    }
+
+    const assets = await prisma.mediaAsset.findMany({
+      where: {
+        id: { in: assetIds },
+        ownerUid: req.authUser!.uid,
+        status: 'ready',
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (assets.length !== assetIds.length) {
+      res.status(400).json({ error: '包含无效或无权限的图片资源' });
+      return;
+    }
+
+    const assetMap = new Map(assets.map((asset) => [asset.id, asset]));
+    const orderedAssets = assetIds
+      .map((id) => assetMap.get(id))
+      .filter((asset): asset is typeof assets[number] => Boolean(asset));
+    const baseSortOrder = gallery.images.length
+      ? Math.max(...gallery.images.map((item) => item.sortOrder)) + 1
+      : 0;
+
+    await prisma.gallery.update({
+      where: { id: gallery.id },
+      data: {
+        images: {
+          create: orderedAssets.map((asset, index) => ({
+            assetId: asset.id,
+            url: asset.publicUrl,
+            name: asset.fileName || `image-${baseSortOrder + index + 1}`,
+            sortOrder: baseSortOrder + index,
+          })),
+        },
+      },
+    });
+
+    const updated = await prisma.gallery.findUnique({
+      where: { id: gallery.id },
+      include: {
+        images: {
+          include: {
+            asset: true,
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    if (updated) {
+      try {
+        await enqueueGalleryImageEmbeddings(
+          prisma,
+          updated.images.map((image) => image.id),
+        );
+      } catch (error) {
+        console.error('Enqueue gallery image embeddings error:', error);
+      }
+
+      res.json({ gallery: toGalleryResponse(updated) });
+      return;
+    }
+
+    res.status(404).json({ error: '图集不存在' });
+  } catch (error) {
+    console.error('Append gallery images error:', error);
+    res.status(500).json({ error: '追加图集图片失败' });
+  }
+});
+
+app.delete('/api/galleries/:id/images/:imageId', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const gallery = await prisma.gallery.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        authorUid: true,
+      },
+    });
+
+    if (!gallery) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    if (!canManageGallery(gallery, req.authUser)) {
+      res.status(403).json({ error: '无权限编辑该图集' });
+      return;
+    }
+
+    const image = await prisma.galleryImage.findUnique({
+      where: { id: req.params.imageId },
+      select: {
+        id: true,
+        galleryId: true,
+        assetId: true,
+        url: true,
+      },
+    });
+
+    if (!image || image.galleryId !== gallery.id) {
+      res.status(404).json({ error: '图片不存在' });
+      return;
+    }
+
+    const imageCount = await prisma.galleryImage.count({ where: { galleryId: gallery.id } });
+    if (imageCount <= 1) {
+      res.status(400).json({ error: '图集至少需要保留一张图片' });
+      return;
+    }
+
+    await prisma.galleryImage.delete({ where: { id: image.id } });
+
+    if (image.assetId) {
+      const linked = await prisma.galleryImage.count({ where: { assetId: image.assetId } });
+      if (linked === 0) {
+        const asset = await prisma.mediaAsset.findUnique({ where: { id: image.assetId } });
+        if (asset) {
+          await safeDeleteUploadFileByStorageKey(asset.storageKey);
+          await prisma.mediaAsset.update({
+            where: { id: asset.id },
+            data: { status: 'deleted' },
+          });
+        }
+      }
+    } else {
+      await safeDeleteUploadFileByUrl(image.url);
+    }
+
+    const remaining = await prisma.galleryImage.findMany({
+      where: { galleryId: gallery.id },
+      orderBy: { sortOrder: 'asc' },
+      select: { id: true },
+    });
+
+    await Promise.all(
+      remaining.map((item, index) =>
+        prisma.galleryImage.update({
+          where: { id: item.id },
+          data: { sortOrder: index },
+        }),
+      ),
+    );
+
+    const updated = await prisma.gallery.findUnique({
+      where: { id: gallery.id },
+      include: {
+        images: {
+          include: {
+            asset: true,
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    if (!updated) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    res.json({ gallery: toGalleryResponse(updated) });
+  } catch (error) {
+    console.error('Delete gallery image error:', error);
+    res.status(500).json({ error: '删除图集图片失败' });
+  }
+});
+
+app.patch('/api/galleries/:id/images/reorder', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const gallery = await prisma.gallery.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        authorUid: true,
+      },
+    });
+
+    if (!gallery) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    if (!canManageGallery(gallery, req.authUser)) {
+      res.status(403).json({ error: '无权限编辑该图集' });
+      return;
+    }
+
+    const imageIdsRaw = Array.isArray(req.body?.imageIds) ? req.body.imageIds : [];
+    const imageIds = imageIdsRaw
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (!imageIds.length) {
+      res.status(400).json({ error: '请提供图片排序列表' });
+      return;
+    }
+
+    const existing = await prisma.galleryImage.findMany({
+      where: { galleryId: gallery.id },
+      select: { id: true },
+    });
+    const existingIds = existing.map((item) => item.id);
+    if (existingIds.length !== imageIds.length) {
+      res.status(400).json({ error: '排序列表与当前图片数量不一致' });
+      return;
+    }
+    const existingSet = new Set(existingIds);
+    if (imageIds.some((id) => !existingSet.has(id))) {
+      res.status(400).json({ error: '排序列表包含无效图片' });
+      return;
+    }
+
+    await prisma.$transaction(
+      imageIds.map((imageId, index) =>
+        prisma.galleryImage.update({
+          where: { id: imageId },
+          data: { sortOrder: index },
+        }),
+      ),
+    );
+
+    const updated = await prisma.gallery.findUnique({
+      where: { id: gallery.id },
+      include: {
+        images: {
+          include: {
+            asset: true,
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    if (!updated) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    res.json({ gallery: toGalleryResponse(updated) });
+  } catch (error) {
+    console.error('Reorder gallery images error:', error);
+    res.status(500).json({ error: '重排图集图片失败' });
+  }
+});
+
+app.post('/api/admin/locks', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    await prisma.editLock.deleteMany({
+      where: {
+        expiresAt: {
+          lt: new Date(),
+        },
+      },
+    });
+
+    const collection = normalizeEditLockCollection(req.body?.collection);
+    const recordId = normalizeEditLockRecordId(req.body?.recordId);
+    if (!collection || !recordId) {
+      res.status(400).json({ error: '缺少有效的锁定目标' });
+      return;
+    }
+
+    const ttlMinutes = parseInteger(req.body?.ttlMinutes, 15, { min: 3, max: 120 });
+    const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
+    const force = parseBoolean(req.body?.force, false);
+
+    const existing = await prisma.editLock.findUnique({
+      where: {
+        collection_recordId: {
+          collection,
+          recordId,
+        },
+      },
+    });
+
+    if (existing && existing.userId !== req.authUser!.uid) {
+      const isExpired = existing.expiresAt.getTime() <= Date.now();
+      if (!isExpired && !(force && isAdminRole(req.authUser!.role))) {
+        res.status(409).json({
+          error: '该记录正在被其他用户编辑',
+          lock: toEditLockResponse(existing),
+        });
+        return;
+      }
+
+      const takenOver = await prisma.editLock.update({
+        where: { id: existing.id },
+        data: {
+          userId: req.authUser!.uid,
+          username: req.authUser!.displayName,
+          expiresAt,
+        },
+      });
+
+      res.json({ lock: toEditLockResponse(takenOver), acquired: true, takeover: true });
+      return;
+    }
+
+    if (existing && existing.userId === req.authUser!.uid) {
+      const renewed = await prisma.editLock.update({
+        where: { id: existing.id },
+        data: {
+          username: req.authUser!.displayName,
+          expiresAt,
+        },
+      });
+      res.json({ lock: toEditLockResponse(renewed), acquired: true, renewed: true });
+      return;
+    }
+
+    const created = await prisma.editLock.create({
+      data: {
+        collection,
+        recordId,
+        userId: req.authUser!.uid,
+        username: req.authUser!.displayName,
+        expiresAt,
+      },
+    });
+
+    res.status(201).json({ lock: toEditLockResponse(created), acquired: true });
+  } catch (error) {
+    console.error('Acquire edit lock error:', error);
+    res.status(500).json({ error: '申请编辑锁失败' });
+  }
+});
+
+app.patch('/api/admin/locks/:id/renew', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const lock = await prisma.editLock.findUnique({ where: { id: req.params.id } });
+    if (!lock) {
+      res.status(404).json({ error: '编辑锁不存在' });
+      return;
+    }
+
+    const canManage = lock.userId === req.authUser!.uid || isAdminRole(req.authUser!.role);
+    if (!canManage) {
+      res.status(403).json({ error: '无权限续期该编辑锁' });
+      return;
+    }
+
+    const ttlMinutes = parseInteger(req.body?.ttlMinutes, 15, { min: 3, max: 120 });
+    const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
+    const renewed = await prisma.editLock.update({
+      where: { id: lock.id },
+      data: {
+        expiresAt,
+        username: lock.userId === req.authUser!.uid ? req.authUser!.displayName : lock.username,
+      },
+    });
+
+    res.json({ lock: toEditLockResponse(renewed), renewed: true });
+  } catch (error) {
+    console.error('Renew edit lock error:', error);
+    res.status(500).json({ error: '续期编辑锁失败' });
+  }
+});
+
+app.get('/api/admin/locks', requireAdmin, async (_req, res) => {
+  try {
+    await prisma.editLock.deleteMany({
+      where: {
+        expiresAt: {
+          lt: new Date(),
+        },
+      },
+    });
+
+    const locks = await prisma.editLock.findMany({
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: 200,
+    });
+
+    res.json({ locks: locks.map(toEditLockResponse) });
+  } catch (error) {
+    console.error('Fetch edit locks error:', error);
+    res.status(500).json({ error: '获取编辑锁列表失败' });
+  }
+});
+
+app.delete('/api/admin/locks/:id', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const lock = await prisma.editLock.findUnique({ where: { id: req.params.id } });
+    if (!lock) {
+      res.json({ success: true });
+      return;
+    }
+
+    const canManage = lock.userId === req.authUser!.uid || isAdminRole(req.authUser!.role);
+    if (!canManage) {
+      res.status(403).json({ error: '无权限释放该编辑锁' });
+      return;
+    }
+
+    await prisma.editLock.delete({ where: { id: lock.id } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Release edit lock error:', error);
+    res.status(500).json({ error: '释放编辑锁失败' });
+  }
+});
+
+app.delete('/api/admin/locks/:collection/:recordId', requireAdmin, async (req, res) => {
+  try {
+    const collection = normalizeEditLockCollection(req.params.collection);
+    const recordId = normalizeEditLockRecordId(req.params.recordId);
+    if (!collection || !recordId) {
+      res.status(400).json({ error: '缺少有效的锁定目标' });
+      return;
+    }
+
+    await prisma.editLock.deleteMany({
+      where: {
+        collection,
+        recordId,
+      },
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Force release edit lock error:', error);
+    res.status(500).json({ error: '强制释放编辑锁失败' });
   }
 });
 
@@ -10289,6 +10966,23 @@ app.get('/api/admin/:tab', requireAdmin, async (req, res) => {
       return;
     }
 
+    if (tab === 'locks') {
+      await prisma.editLock.deleteMany({
+        where: {
+          expiresAt: {
+            lt: new Date(),
+          },
+        },
+      });
+
+      const data = await prisma.editLock.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+      });
+      res.json({ data: data.map(toEditLockResponse) });
+      return;
+    }
+
     res.status(400).json({ error: '未知数据类型' });
   } catch (error) {
     console.error('Fetch admin data error:', error);
@@ -10403,6 +11097,16 @@ app.get('/api/admin/:tab/:id', requireAdmin, async (req, res) => {
       return;
     }
 
+    if (tab === 'locks') {
+      const item = await prisma.editLock.findUnique({ where: { id } });
+      if (!item) {
+        res.status(404).json({ error: '记录不存在' });
+        return;
+      }
+      res.json({ item: toEditLockResponse(item) });
+      return;
+    }
+
     res.status(400).json({ error: '未知数据类型' });
   } catch (error) {
     console.error('Fetch admin item error:', error);
@@ -10480,6 +11184,12 @@ app.delete('/api/admin/:tab/:id', requireAdmin, async (req: AuthenticatedRequest
     }
     if (tab === 'music') {
       await prisma.musicTrack.delete({ where: { docId: id } });
+      res.json({ success: true });
+      return;
+    }
+
+    if (tab === 'locks') {
+      await prisma.editLock.delete({ where: { id } });
       res.json({ success: true });
       return;
     }
