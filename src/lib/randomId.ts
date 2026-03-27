@@ -5,7 +5,11 @@ const fallbackRandom = () => {
 export const randomId = () => {
   const cryptoApi = globalThis.crypto;
 
-  if (cryptoApi?.randomUUID) {
+  if (
+    cryptoApi?.randomUUID
+    && typeof cryptoApi.randomUUID === 'function'
+    && cryptoApi.randomUUID !== randomId
+  ) {
     return cryptoApi.randomUUID();
   }
 
