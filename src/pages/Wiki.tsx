@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar, Link2, GitBranch } from 'lucide-react';
+import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar, Link2, GitBranch, Network } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
@@ -19,6 +19,7 @@ import MdEditor from 'react-markdown-editor-lite';
 import MarkdownIt from 'markdown-it';
 import 'react-markdown-editor-lite/lib/index.css';
 import WikiLinkPreview from '../components/WikiLinkPreview';
+import RelationGraph, { RelationGraphData, WikiRelationType as GraphRelationType } from '../components/wiki/RelationGraph';
 
 const mdParser = new MarkdownIt({
   html: true,
@@ -37,7 +38,7 @@ const formatDate = (value: string | null | undefined, pattern: string) => {
   return parsed ? format(parsed, pattern) : '刚刚';
 };
 
-type WikiRelationType = 'related' | 'see_also' | 'part_of' | 'inspired_by' | 'collaboration';
+type WikiRelationType = 'related_person' | 'work_relation' | 'timeline_relation' | 'custom';
 
 type WikiRelationRecord = {
   type: WikiRelationType;
@@ -56,11 +57,10 @@ type WikiRelationResolved = WikiRelationRecord & {
 };
 
 const RELATION_TYPE_LABELS: Record<WikiRelationType, string> = {
-  related: '相关页面',
-  see_also: '参见',
-  part_of: '所属专辑',
-  inspired_by: '灵感来源',
-  collaboration: '合作',
+  related_person: '相关人物',
+  work_relation: '作品关联',
+  timeline_relation: '时间线关联',
+  custom: '自定义关系',
 };
 
 const splitTagsInput = (value: string) =>
@@ -399,6 +399,7 @@ const WikiList = () => {
 // --- Wiki Page Component ---
 const WikiPageView = () => {
   const { slug } = useParams();
+  const navigate = useNavigate();
   const [page, setPage] = useState<WikiItem | null>(null);
   const [loading, setLoading] = useState(true);
   const { user, isAdmin, isBanned } = useAuth();
@@ -408,25 +409,22 @@ const WikiPageView = () => {
   const [backlinks, setBacklinks] = useState<WikiItem[]>([]);
   const [submittingReview, setSubmittingReview] = useState(false);
   const [favoriting, setFavoriting] = useState(false);
+  const [relationGraph, setRelationGraph] = useState<RelationGraphData | null>(null);
+  const [showGraph, setShowGraph] = useState(false);
 
   useEffect(() => {
     const fetchPage = async () => {
       setLoading(true);
       try {
-        const docRef = doc(db, 'wiki', slug!);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setPage(docSnap.data() as WikiItem);
-          
-          // Fetch Backlinks
-          const wikiRef = collection(db, 'wiki');
-          const q = query(wikiRef, limit(100)); // Simplified: fetch all and filter client-side for [[slug]]
-          const snapshot = await getDocs(q);
-          const links = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() } as WikiItem))
-            .filter(p => p.slug !== slug && p.content.includes(`[[${slug}]]`));
-          setBacklinks(links);
-        }
+        const data = await apiGet<{
+          page: WikiItem;
+          backlinks: WikiItem[];
+          relations: WikiRelationResolved[];
+          relationGraph: RelationGraphData;
+        }>(`/api/wiki/${slug}`);
+        setPage(data.page);
+        setBacklinks(data.backlinks || []);
+        setRelationGraph(data.relationGraph || null);
       } catch (e) {
         console.error("Error fetching page:", e);
       }
@@ -534,6 +532,16 @@ const WikiPageView = () => {
                 aria-label="复制百科内链"
               >
                 <Link2 size={20} />
+              </button>
+              <button
+                onClick={() => setShowGraph(!showGraph)}
+                className={clsx(
+                  'p-3 rounded-full transition-all flex items-center gap-2',
+                  showGraph ? 'bg-brand-olive text-white' : 'bg-brand-cream text-brand-olive hover:bg-brand-olive hover:text-white',
+                )}
+                title="知识图谱"
+              >
+                <Network size={20} />
               </button>
               <button 
                 onClick={async () => {
@@ -644,7 +652,23 @@ const WikiPageView = () => {
           </div>
         )}
 
-        {page.relations && page.relations.length > 0 && (
+        {showGraph && relationGraph && (
+          <div className="mt-16">
+            <div className="flex items-center justify-between mb-6">
+              <h4 className="text-sm font-bold text-brand-olive uppercase tracking-widest flex items-center gap-2">
+                <Network size={14} /> 知识图谱
+              </h4>
+              <span className="text-xs text-gray-400">点击节点可跳转页面</span>
+            </div>
+            <RelationGraph
+              graph={relationGraph}
+              currentSlug={slug || ''}
+              onNodeClick={(nodeSlug) => navigate(`/wiki/${nodeSlug}`)}
+            />
+          </div>
+        )}
+
+        {page.relations && page.relations.length > 0 && !showGraph && (
           <div className="mt-20 pt-12 border-t border-gray-100">
             <h4 className="text-sm font-bold text-brand-olive uppercase tracking-widest mb-6 flex items-center gap-2">
               <Book size={14} /> 相关页面
@@ -1404,7 +1428,7 @@ const WikiEditor = () => {
   const { show } = useToast();
 
   const [newRelation, setNewRelation] = useState<WikiRelationRecord>({
-    type: 'related',
+    type: 'related_person',
     targetSlug: '',
     label: '',
     bidirectional: false,
@@ -1642,7 +1666,7 @@ const WikiEditor = () => {
                     ...formData,
                     relations: [...formData.relations, { ...newRelation, targetSlug: newRelation.targetSlug.trim() }],
                   });
-                  setNewRelation({ type: 'related', targetSlug: '', label: '', bidirectional: false });
+                  setNewRelation({ type: 'related_person', targetSlug: '', label: '', bidirectional: false });
                 }}
                 className="px-4 py-2 bg-brand-primary/10 text-brand-primary rounded-xl text-xs font-bold hover:bg-brand-primary/20 transition-all"
               >
@@ -1686,11 +1710,10 @@ const WikiEditor = () => {
                 onChange={e => setNewRelation({ ...newRelation, type: e.target.value as WikiRelationType })}
                 className="px-4 py-2 bg-white rounded-xl border border-gray-200 text-sm"
               >
-                <option value="related">相关页面</option>
-                <option value="see_also">参见</option>
-                <option value="part_of">所属专辑</option>
-                <option value="inspired_by">灵感来源</option>
-                <option value="collaboration">合作</option>
+                <option value="related_person">相关人物</option>
+                <option value="work_relation">作品关联</option>
+                <option value="timeline_relation">时间线关联</option>
+                <option value="custom">自定义关系</option>
               </select>
               <input
                 type="text"
