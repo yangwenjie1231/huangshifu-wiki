@@ -2744,6 +2744,60 @@ app.patch('/api/users/me', requireAuth, requireActiveUser, async (req: Authentic
   }
 });
 
+app.post('/api/users/me/avatar', requireAuth, requireActiveUser, upload.single('file'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: '请选择图片文件' });
+      return;
+    }
+
+    let mimeType = '';
+    try {
+      const validated = await validateUploadedImage(file);
+      mimeType = validated.mimeType;
+    } catch (error) {
+      await safeDeleteUploadFileByStorageKey(file.filename);
+      res.status(400).json({ error: error instanceof Error ? error.message : '非法图片文件' });
+      return;
+    }
+
+    const asset = await prisma.mediaAsset.create({
+      data: {
+        ownerUid: req.authUser!.uid,
+        storageKey: file.filename,
+        publicUrl: buildUploadPublicUrl(file.filename),
+        fileName: file.originalname,
+        mimeType,
+        sizeBytes: file.size,
+        status: 'ready',
+      },
+    });
+
+    const user = await prisma.user.update({
+      where: { uid: req.authUser!.uid },
+      data: { photoURL: asset.publicUrl },
+    });
+
+    res.status(201).json({
+      photoURL: user.photoURL,
+      asset: {
+        assetId: asset.id,
+        storageKey: asset.storageKey,
+        mimeType: asset.mimeType,
+        sizeBytes: asset.sizeBytes,
+        url: asset.publicUrl,
+      },
+    });
+  } catch (error) {
+    if (req.file?.filename) {
+      await safeDeleteUploadFileByStorageKey(req.file.filename);
+    }
+    console.error('Avatar upload error:', error);
+    res.status(500).json({ error: '上传头像失败' });
+  }
+});
+
 app.get('/api/sections', async (_req, res) => {
   try {
     const sections = await prisma.section.findMany({

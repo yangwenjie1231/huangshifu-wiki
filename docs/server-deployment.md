@@ -510,6 +510,59 @@ curl -X POST http://127.0.0.1:3000/api/search/by-image \
   -F "minScore=0.2"
 ```
 
+### 11.3 头像上传功能验证（v2.7+）
+
+本次发布新增用户头像上传功能，支持图片裁剪。
+
+**API 变更：**
+
+| 端点 | 方法 | 功能 | 权限 |
+|------|------|------|------|
+| `/api/users/me/avatar` | POST | 上传并设置头像 | 登录用户 |
+
+**请求格式：**
+
+- `Content-Type: multipart/form-data`
+- 表单字段：`file`（图片文件）
+
+**响应格式：**
+
+```json
+{
+  "photoURL": "/uploads/xxx.jpg",
+  "asset": {
+    "assetId": "xxx",
+    "storageKey": "xxx",
+    "mimeType": "image/jpeg",
+    "sizeBytes": 12345,
+    "url": "/uploads/xxx.jpg"
+  }
+}
+```
+
+**验证命令：**
+
+```bash
+# 先登录
+curl -X POST http://127.0.0.1:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -c cookie.txt -b cookie.txt \
+  -d '{"email":"admin@example.com","password":"请替换为管理员密码"}'
+
+# 上传头像
+curl -X POST http://127.0.0.1:3000/api/users/me/avatar \
+  -b cookie.txt -c cookie.txt \
+  -F "file=@/root/test-avatar.jpg"
+```
+
+**验证点：**
+
+- 仅支持 JPG、PNG、WEBP、GIF、BMP 格式
+- 文件大小限制：20MB
+- 非图片文件返回 `400`
+- 上传成功后 `User.photoURL` 更新为新头像 URL
+- 头像存储为 `MediaAsset`，可通过媒体库统一管理
+
 ---
 
 ## 12. 常见问题排查
