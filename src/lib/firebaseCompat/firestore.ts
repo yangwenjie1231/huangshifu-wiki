@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../apiClient';
+import { randomId } from '../randomId';
 
 type PathNode = string;
 
@@ -145,7 +146,7 @@ const toDocId = (item: any, root?: string) => {
   if (root === 'wiki' && item?.slug) return String(item.slug);
   if (root === 'users' && item?.uid) return String(item.uid);
   if (root === 'music' && item?.docId) return String(item.docId);
-  return String(item?.id ?? item?.docId ?? item?.uid ?? item?.slug ?? crypto.randomUUID());
+  return String(item?.id ?? item?.docId ?? item?.uid ?? item?.slug ?? randomId());
 };
 
 const toSnapshotDoc = (item: any, root?: string): SnapshotDocument => {
@@ -695,7 +696,7 @@ export async function addDoc(collectionRef: CollectionReference, payload: Record
 
   if (root === 'posts' && id && sub === 'likes') {
     const response = await apiPost<{ liked: boolean; likesCount: number }>(`/api/posts/${id}/like`);
-    return createDocumentRef(['posts', id, 'likes', response.liked ? `${id}-${Date.now()}` : crypto.randomUUID()]);
+    return createDocumentRef(['posts', id, 'likes', response.liked ? `${id}-${Date.now()}` : randomId()]);
   }
 
   if (root === 'users' && id === 'me' && sub === 'favorites') {
