@@ -2,10 +2,12 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, query, orderBy, onSnapshot, db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { Image as ImageIcon, Plus, Folder, X, Upload, Clock, User as UserIcon } from 'lucide-react';
+import { Image as ImageIcon, Plus, Folder, X, Upload, Clock, User as UserIcon, Link2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { SmartImage } from '../components/SmartImage';
+import { useToast } from '../components/Toast';
+import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { apiPost } from '../lib/apiClient';
 
 const toDateValue = (value: string | null | undefined) => {
@@ -56,6 +58,7 @@ const GalleryList = () => {
   const [loading, setLoading] = useState(true);
   const { user, isBanned } = useAuth();
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const { show } = useToast();
 
   useEffect(() => {
     const q = query(collection(db, 'galleries'), orderBy('createdAt', 'desc'));
@@ -65,6 +68,17 @@ const GalleryList = () => {
     });
     return () => unsubscribe();
   }, []);
+
+  const handleCopyGalleryLink = async (event: React.MouseEvent<HTMLButtonElement>, galleryId: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const copied = await copyToClipboard(toAbsoluteInternalUrl(`/gallery/${galleryId}`));
+    if (copied) {
+      show('图集内链已复制');
+      return;
+    }
+    show('复制链接失败，请稍后重试', { variant: 'error' });
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-12">
@@ -92,34 +106,43 @@ const GalleryList = () => {
       ) : galleries.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {galleries.map((gallery) => (
-            <Link
-              to={`/gallery/${gallery.id}`}
-              key={gallery.id} 
-              className="bg-white rounded-[32px] border border-gray-100 overflow-hidden hover:shadow-xl transition-all group"
-            >
-              <div className="relative h-48 overflow-hidden">
-                <SmartImage 
-                  src={gallery.images[0]?.url} 
-                  alt={gallery.title} 
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                />
-                <div className="absolute top-4 right-4 px-3 py-1 bg-black/50 backdrop-blur-md text-white text-[10px] font-bold rounded-full">
-                  {gallery.images.length} 张
+            <div key={gallery.id} className="relative group">
+              <Link
+                to={`/gallery/${gallery.id}`}
+                className="block bg-white rounded-[32px] border border-gray-100 overflow-hidden hover:shadow-xl transition-all"
+              >
+                <div className="relative h-48 overflow-hidden">
+                  <SmartImage 
+                    src={gallery.images[0]?.url} 
+                    alt={gallery.title} 
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                  />
+                  <div className="absolute top-4 right-4 px-3 py-1 bg-black/50 backdrop-blur-md text-white text-[10px] font-bold rounded-full">
+                    {gallery.images.length} 张
+                  </div>
                 </div>
-              </div>
-              <div className="p-6">
-                <h3 className="text-xl font-serif font-bold mb-2 group-hover:text-brand-olive transition-colors">{gallery.title}</h3>
-                <div className="flex flex-wrap gap-1 mb-4">
-                  {gallery.tags?.map((tag: string) => (
-                    <span key={tag} className="text-[10px] text-brand-olive bg-brand-cream px-2 py-0.5 rounded">#{tag}</span>
-                  ))}
+                <div className="p-6">
+                  <h3 className="text-xl font-serif font-bold mb-2 group-hover:text-brand-olive transition-colors">{gallery.title}</h3>
+                  <div className="flex flex-wrap gap-1 mb-4">
+                    {gallery.tags?.map((tag: string) => (
+                      <span key={tag} className="text-[10px] text-brand-olive bg-brand-cream px-2 py-0.5 rounded">#{tag}</span>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between text-gray-400 text-xs">
+                    <span className="flex items-center gap-1"><Clock size={12} /> {toDateValue(gallery.createdAt) ? format(toDateValue(gallery.createdAt)!, 'yyyy-MM-dd') : '刚刚'}</span>
+                    <span className="flex items-center gap-1"><UserIcon size={12} /> {gallery.authorUid?.substring(0, 6)}</span>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between text-gray-400 text-xs">
-                  <span className="flex items-center gap-1"><Clock size={12} /> {toDateValue(gallery.createdAt) ? format(toDateValue(gallery.createdAt)!, 'yyyy-MM-dd') : '刚刚'}</span>
-                  <span className="flex items-center gap-1"><UserIcon size={12} /> {gallery.authorUid?.substring(0, 6)}</span>
-                </div>
-              </div>
-            </Link>
+              </Link>
+              <button
+                onClick={(event) => handleCopyGalleryLink(event, gallery.id)}
+                className="absolute bottom-4 right-4 p-2 rounded-full border border-white/70 bg-white/85 text-gray-500 shadow-sm opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:text-brand-olive transition-all"
+                title="复制内链"
+                aria-label="复制图集内链"
+              >
+                <Link2 size={14} />
+              </button>
+            </div>
           ))}
         </div>
       ) : (

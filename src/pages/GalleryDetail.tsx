@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Clock, User as UserIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Clock, User as UserIcon, ChevronLeft, ChevronRight, Link2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { SmartImage } from '../components/SmartImage';
 import { apiGet } from '../lib/apiClient';
+import { useToast } from '../components/Toast';
+import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 
 type GalleryImage = {
   url: string;
@@ -33,6 +35,7 @@ const GalleryDetail = () => {
   const [gallery, setGallery] = useState<GalleryItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
+  const { show } = useToast();
 
   useEffect(() => {
     const fetchGallery = async () => {
@@ -63,6 +66,16 @@ const GalleryDetail = () => {
   const handleNext = () => {
     if (!images.length) return;
     setActiveIndex((prev) => (prev + 1) % images.length);
+  };
+
+  const handleCopyLink = async () => {
+    if (!gallery?.id) return;
+    const copied = await copyToClipboard(toAbsoluteInternalUrl(`/gallery/${gallery.id}`));
+    if (copied) {
+      show('图集内链已复制');
+      return;
+    }
+    show('复制链接失败，请稍后重试', { variant: 'error' });
   };
 
   if (loading) {
@@ -123,9 +136,19 @@ const GalleryDetail = () => {
               <h1 className="text-3xl sm:text-4xl font-serif font-bold text-gray-900 mb-2">{gallery.title}</h1>
               <p className="text-gray-500 leading-relaxed">{gallery.description || '暂无描述'}</p>
             </div>
-            <span className="px-3 py-1 bg-black/5 text-gray-600 text-xs rounded-full font-bold">
-              {activeIndex + 1} / {images.length}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 bg-black/5 text-gray-600 text-xs rounded-full font-bold">
+                {activeIndex + 1} / {images.length}
+              </span>
+              <button
+                onClick={handleCopyLink}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-gray-200 text-gray-600 text-xs font-bold hover:text-brand-olive hover:border-brand-olive/40 transition-colors"
+                title="复制内链"
+                aria-label="复制图集内链"
+              >
+                <Link2 size={12} /> 复制内链
+              </button>
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-2 mb-4">

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Routes, Route, Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ReactMarkdown from 'react-markdown';
-import { MessageSquare, Heart, ThumbsDown, Share2, Plus, Clock, User as UserIcon, ArrowLeft, Save, X, Send, Edit3, Pin } from 'lucide-react';
+import { MessageSquare, Heart, ThumbsDown, Share2, Plus, Clock, User as UserIcon, ArrowLeft, Save, X, Send, Edit3, Pin, Link2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import MdEditor from 'react-markdown-editor-lite';
@@ -10,6 +10,8 @@ import MarkdownIt from 'markdown-it';
 import 'react-markdown-editor-lite/lib/index.css';
 import { uploadImageToCDNs, getImageUrl } from '../services/imageService';
 import { apiDelete, apiGet, apiPost, apiPut } from '../lib/apiClient';
+import { useToast } from '../components/Toast';
+import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 
 type ContentStatus = 'draft' | 'pending' | 'published' | 'rejected';
 
@@ -87,6 +89,7 @@ const PostList = () => {
   const [pinning, setPinning] = useState<string | null>(null);
   const { user, profile, isBanned } = useAuth();
   const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
+  const { show } = useToast();
 
   useEffect(() => {
     const fetchSections = async () => {
@@ -136,6 +139,17 @@ const PostList = () => {
     } finally {
       setPinning(null);
     }
+  };
+
+  const handleCopyPostLink = async (event: React.MouseEvent<HTMLButtonElement>, postId: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const copied = await copyToClipboard(toAbsoluteInternalUrl(`/forum/${postId}`));
+    if (copied) {
+      show('帖子内链已复制');
+      return;
+    }
+    show('复制链接失败，请稍后重试', { variant: 'error' });
   };
 
   return (
@@ -259,6 +273,17 @@ const PostList = () => {
                   </div>
                 </div>
               </Link>
+              <button
+                onClick={(event) => handleCopyPostLink(event, post.id)}
+                className={clsx(
+                  'absolute top-4 p-2 rounded-full border border-gray-100 bg-white/90 text-gray-400 hover:text-brand-primary hover:border-brand-primary/30 transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100',
+                  isAdmin ? 'right-24' : 'right-4',
+                )}
+                title="复制内链"
+                aria-label="复制帖子内链"
+              >
+                <Link2 size={16} />
+              </button>
               {isAdmin && (
                 <button
                   onClick={() => handleTogglePin(post.id, !!post.isPinned)}
@@ -302,6 +327,7 @@ const PostDetail = () => {
   const [pinning, setPinning] = useState(false);
   const { user, profile, isBanned } = useAuth();
   const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
+  const { show } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -470,27 +496,12 @@ const PostDetail = () => {
 
   const handleShare = async () => {
     if (!postId) return;
-    const url = `${window.location.origin}/forum/${postId}`;
-
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(url);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = url;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.focus();
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-      }
-      alert('链接已复制，可直接分享给好友');
-    } catch (error) {
-      console.error('Share copy failed:', error);
-      alert('复制链接失败，请手动复制地址栏链接');
+    const copied = await copyToClipboard(toAbsoluteInternalUrl(`/forum/${postId}`));
+    if (copied) {
+      show('链接已复制，可直接分享给好友');
+      return;
     }
+    show('复制链接失败，请手动复制地址栏链接', { variant: 'error' });
   };
 
   return (

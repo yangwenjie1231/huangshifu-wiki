@@ -3,12 +3,14 @@ import { collection, query, getDocs, doc, deleteDoc, where, orderBy, db, auth } 
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useMusic } from '../context/MusicContext';
-import { Music as MusicIcon, Search, Plus, Play, Pause, Disc, List, Trash2, Heart, ExternalLink, Sparkles, ChevronRight, Volume2, Headphones, X, MessageSquare, Clock } from 'lucide-react';
+import { Music as MusicIcon, Search, Plus, Play, Pause, Disc, List, Trash2, Heart, ExternalLink, Sparkles, ChevronRight, Volume2, Headphones, X, MessageSquare, Clock, Link2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'motion/react';
 import { MusicPlayer } from '../components/MusicPlayer';
 import { MusicImportModal } from '../components/MusicImportModal';
+import { useToast } from '../components/Toast';
 import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
+import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { format } from 'date-fns';
 
 enum OperationType {
@@ -128,6 +130,7 @@ const Music = () => {
   const [loadingPosts, setLoadingPosts] = useState(false);
   const { user, isAdmin, isBanned } = useAuth();
   const { currentSong, setCurrentSong, setIsPlaying, setPlaylist, playSongAtIndex } = useMusic();
+  const { show } = useToast();
 
   const fetchSongs = async () => {
     setLoading(true);
@@ -242,6 +245,16 @@ const Music = () => {
     }
     setCurrentSong(song);
     setIsPlaying(true);
+  };
+
+  const handleCopySongLink = async (event: React.MouseEvent<HTMLButtonElement>, song: SongItem) => {
+    event.stopPropagation();
+    const copied = await copyToClipboard(toAbsoluteInternalUrl(`/music/${song.docId}`));
+    if (copied) {
+      show('歌曲内链已复制');
+      return;
+    }
+    show('复制链接失败，请稍后重试', { variant: 'error' });
   };
 
   const handleDeleteSong = async (songId: string) => {
@@ -533,10 +546,19 @@ const Music = () => {
                     )}
                   </div>
                   <div className="flex-grow">
-                    <h4 className="font-bold text-gray-900 group-hover:text-brand-primary transition-colors">{song.title}</h4>
+                    <h4 className="font-bold text-gray-900 group-hover:text-brand-primary transition-colors">
+                      <Link
+                        to={`/music/${song.docId}`}
+                        onClick={(event) => event.stopPropagation()}
+                        className="hover:underline underline-offset-4"
+                        title="查看歌曲详情"
+                      >
+                        {song.title}
+                      </Link>
+                    </h4>
                     <p className="text-xs text-gray-400">{song.artist} — {song.album}</p>
                   </div>
-                  <div className="flex items-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-4 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                     {isAdmin && !isBatchMode && (
                       <button 
                         onClick={(e) => {
@@ -574,6 +596,13 @@ const Music = () => {
                         >
                           <ExternalLink size={18} />
                         </a>
+                        <button
+                          onClick={(event) => handleCopySongLink(event, song)}
+                          className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
+                          title="复制内链"
+                        >
+                          <Link2 size={18} />
+                        </button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
