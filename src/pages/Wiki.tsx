@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar, Link2 } from 'lucide-react';
+import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar, Link2, GitBranch } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
@@ -13,7 +13,8 @@ import { summarizeWikiContent, generateWikiIntro } from '../services/aiService';
 import { uploadImageToCDNs, getImageUrl } from '../services/imageService';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
-import { apiDelete, apiPost } from '../lib/apiClient';
+import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
+import { randomId } from '../lib/randomId';
 import MdEditor from 'react-markdown-editor-lite';
 import MarkdownIt from 'markdown-it';
 import 'react-markdown-editor-lite/lib/index.css';
@@ -34,6 +35,12 @@ const formatDate = (value: string | null | undefined, pattern: string) => {
   const parsed = toDateValue(value);
   return parsed ? format(parsed, pattern) : '刚刚';
 };
+
+const splitTagsInput = (value: string) =>
+  value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
 
 type ContentStatus = 'draft' | 'pending' | 'published' | 'rejected';
 
@@ -57,11 +64,114 @@ type WikiItem = {
   updatedAt: string;
 };
 
+type WikiBranchStatus = 'draft' | 'pending_review' | 'merged' | 'rejected' | 'conflict';
+type WikiPullRequestStatus = 'open' | 'merged' | 'rejected';
+
+type WikiBranchItem = {
+  id: string;
+  pageSlug: string;
+  editorUid: string;
+  editorName: string;
+  status: WikiBranchStatus;
+  latestRevisionId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  page: {
+    slug: string;
+    title: string;
+    category: string;
+  } | null;
+};
+
+type WikiRevisionItem = {
+  id: string;
+  pageSlug: string;
+  branchId?: string | null;
+  title: string;
+  content: string;
+  slug?: string | null;
+  category?: string | null;
+  tags?: string[];
+  relations?: unknown[];
+  eventDate?: string | null;
+  editorUid: string;
+  editorName: string;
+  isAutoSave: boolean;
+  createdAt: string;
+};
+
+type WikiPullRequestComment = {
+  id: string;
+  prId: string;
+  authorUid: string;
+  authorName: string;
+  content: string;
+  createdAt: string;
+};
+
+type WikiPullRequestItem = {
+  id: string;
+  branchId: string;
+  pageSlug: string;
+  title: string;
+  description: string | null;
+  status: WikiPullRequestStatus;
+  createdByUid: string;
+  createdByName: string;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  mergedAt: string | null;
+  baseRevisionId: string | null;
+  conflictData: unknown;
+  createdAt: string;
+  updatedAt: string;
+  branch: WikiBranchItem | null;
+  page: {
+    slug: string;
+    title: string;
+    category: string;
+  } | null;
+  comments: WikiPullRequestComment[];
+};
+
+type WikiPrDiffResponse = {
+  diff: {
+    base: {
+      title: string;
+      content: string;
+      category: string;
+      tags: string[];
+      eventDate: string | null;
+    };
+    head: {
+      title: string;
+      content: string;
+      category: string;
+      tags: string[];
+      eventDate: string | null;
+    };
+  };
+};
+
 const getStatusText = (status?: ContentStatus) => {
   if (status === 'pending') return '待审核';
   if (status === 'rejected') return '已驳回';
   if (status === 'draft') return '草稿';
   return '已发布';
+};
+
+const getBranchStatusText = (status: WikiBranchStatus) => {
+  if (status === 'pending_review') return '待审核';
+  if (status === 'merged') return '已合并';
+  if (status === 'rejected') return '已驳回';
+  if (status === 'conflict') return '冲突待处理';
+  return '草稿';
+};
+
+const getPrStatusText = (status: WikiPullRequestStatus) => {
+  if (status === 'merged') return '已合并';
+  if (status === 'rejected') return '已驳回';
+  return '进行中';
 };
 
 // --- Wiki Internal Linking Component ---
@@ -409,6 +519,15 @@ const WikiPageView = () => {
                 <Sparkles size={20} />
                 {summarizing && <span className="text-xs">生成中...</span>}
               </button>
+              {user && !isBanned && (
+                <Link
+                  to={`/wiki/${slug}/branches`}
+                  className="p-3 bg-brand-cream text-brand-olive rounded-full hover:bg-brand-olive hover:text-white transition-all"
+                  title="协作分支"
+                >
+                  <GitBranch size={20} />
+                </Link>
+              )}
               {isOwner && (
                 <div className="flex gap-2">
                   {(page.category !== 'music' || isAdmin) && (
@@ -512,6 +631,700 @@ const WikiPageView = () => {
 };
 
 // --- Wiki Editor Component ---
+const WikiBranchWorkspace = () => {
+  const { slug } = useParams();
+  const navigate = useNavigate();
+  const { user, isAdmin, isBanned } = useAuth();
+
+  const [page, setPage] = useState<WikiItem | null>(null);
+  const [branch, setBranch] = useState<WikiBranchItem | null>(null);
+  const [revisions, setRevisions] = useState<WikiRevisionItem[]>([]);
+  const [openPr, setOpenPr] = useState<WikiPullRequestItem | null>(null);
+
+  const [loading, setLoading] = useState(true);
+  const [creatingBranch, setCreatingBranch] = useState(false);
+  const [savingRevision, setSavingRevision] = useState(false);
+  const [creatingPr, setCreatingPr] = useState(false);
+  const [resolvingConflict, setResolvingConflict] = useState(false);
+
+  const [title, setTitle] = useState('');
+  const [category, setCategory] = useState('biography');
+  const [eventDate, setEventDate] = useState('');
+  const [tags, setTags] = useState('');
+  const [content, setContent] = useState('');
+  const [prTitle, setPrTitle] = useState('');
+  const [prDescription, setPrDescription] = useState('');
+
+  const hydrateFromRevision = (revision: WikiRevisionItem | null, fallbackPage: WikiItem | null) => {
+    if (revision) {
+      setTitle(revision.title || '');
+      setCategory(revision.category || fallbackPage?.category || 'biography');
+      setEventDate(revision.eventDate || '');
+      setTags((revision.tags || []).join(', '));
+      setContent(revision.content || '');
+      return;
+    }
+    if (fallbackPage) {
+      setTitle(fallbackPage.title || '');
+      setCategory(fallbackPage.category || 'biography');
+      setEventDate(fallbackPage.eventDate || '');
+      setTags((fallbackPage.tags || []).join(', '));
+      setContent(fallbackPage.content || '');
+    }
+  };
+
+  const fetchWorkspace = async () => {
+    if (!slug || !user) return;
+    setLoading(true);
+    try {
+      const pageData = await apiGet<{ page: WikiItem }>(`/api/wiki/${slug}`);
+      const currentPage = pageData.page;
+      setPage(currentPage);
+
+      const branchList = await apiGet<{ branches: WikiBranchItem[] }>(`/api/wiki/${slug}/branches`);
+      const mine = (branchList.branches || []).find((item) => item.editorUid === user.uid) || null;
+      setBranch(mine);
+
+      if (!mine) {
+        setOpenPr(null);
+        setRevisions([]);
+        hydrateFromRevision(null, currentPage);
+        setPrTitle(currentPage.title || '');
+        setPrDescription('');
+        return;
+      }
+
+      const [branchDetail, revisionsData, prsOpen] = await Promise.all([
+        apiGet<{ branch: WikiBranchItem; latestRevision: WikiRevisionItem | null }>(`/api/wiki/branches/${mine.id}`),
+        apiGet<{ revisions: WikiRevisionItem[] }>(`/api/wiki/branches/${mine.id}/revisions`),
+        apiGet<{ pullRequests: WikiPullRequestItem[] }>('/api/wiki/pull-requests/list', { status: 'open' }),
+      ]);
+
+      setBranch(branchDetail.branch);
+      setRevisions(revisionsData.revisions || []);
+      hydrateFromRevision(branchDetail.latestRevision, currentPage);
+
+      const currentOpenPr = (prsOpen.pullRequests || []).find((item) => item.branchId === mine.id) || null;
+      setOpenPr(currentOpenPr);
+      setPrTitle(currentOpenPr?.title || currentPage.title || '');
+      setPrDescription(currentOpenPr?.description || '');
+    } catch (error) {
+      console.error('Fetch wiki branch workspace error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWorkspace();
+  }, [slug, user?.uid]);
+
+  const handleCreateBranch = async () => {
+    if (!slug || !user || isBanned || creatingBranch) return;
+    try {
+      setCreatingBranch(true);
+      await apiPost<{ branch: WikiBranchItem }>(`/api/wiki/${slug}/branches`);
+      await fetchWorkspace();
+    } catch (error) {
+      console.error('Create branch error:', error);
+      alert('创建分支失败，请稍后重试');
+    } finally {
+      setCreatingBranch(false);
+    }
+  };
+
+  const handleSaveRevision = async () => {
+    if (!branch || isBanned || savingRevision) return;
+    if (!title.trim() || !content.trim() || !category.trim()) {
+      alert('请先填写标题、分类和内容');
+      return;
+    }
+    try {
+      setSavingRevision(true);
+      await apiPost(`/api/wiki/branches/${branch.id}/revisions`, {
+        title: title.trim(),
+        content,
+        category,
+        eventDate: eventDate || null,
+        tags: splitTagsInput(tags),
+      });
+      await fetchWorkspace();
+    } catch (error) {
+      console.error('Save branch revision error:', error);
+      alert('保存分支失败，请稍后重试');
+    } finally {
+      setSavingRevision(false);
+    }
+  };
+
+  const handleCreatePr = async () => {
+    if (!branch || creatingPr || openPr || isBanned) return;
+    if (!prTitle.trim()) {
+      alert('请填写 PR 标题');
+      return;
+    }
+    try {
+      setCreatingPr(true);
+      await apiPost(`/api/wiki/branches/${branch.id}/pull-request`, {
+        title: prTitle.trim(),
+        description: prDescription.trim() || null,
+      });
+      await fetchWorkspace();
+    } catch (error) {
+      console.error('Create wiki PR error:', error);
+      alert('提交 PR 失败，请稍后重试');
+    } finally {
+      setCreatingPr(false);
+    }
+  };
+
+  const handleResolveConflict = async () => {
+    if (!branch || branch.status !== 'conflict' || resolvingConflict || isBanned) return;
+    if (!title.trim() || !content.trim() || !category.trim()) {
+      alert('请先填写标题、分类和内容');
+      return;
+    }
+    try {
+      setResolvingConflict(true);
+      await apiPost(`/api/wiki/branches/${branch.id}/resolve-conflict`, {
+        title: title.trim(),
+        content,
+        category,
+        eventDate: eventDate || null,
+        tags: splitTagsInput(tags),
+      });
+      await fetchWorkspace();
+    } catch (error) {
+      console.error('Resolve wiki conflict error:', error);
+      alert('解决冲突失败，请稍后重试');
+    } finally {
+      setResolvingConflict(false);
+    }
+  };
+
+  if (!user) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-20 text-center">
+        <p className="text-gray-400 italic">请先登录后再使用协作分支。</p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return <div className="max-w-4xl mx-auto px-4 py-20 text-center italic text-gray-400">加载分支中...</div>;
+  }
+
+  if (!page) {
+    return <div className="max-w-4xl mx-auto px-4 py-20 text-center italic text-gray-400">页面不存在或不可访问</div>;
+  }
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 py-12 space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link to={`/wiki/${slug}`} className="inline-flex items-center gap-2 text-gray-400 hover:text-brand-olive transition-colors">
+          <ArrowLeft size={18} /> 返回百科页面
+        </Link>
+        <div className="flex gap-2">
+          <Link
+            to={`/wiki/${slug}/prs`}
+            className="px-4 py-2 rounded-full border border-gray-200 text-xs font-bold text-gray-600 hover:border-brand-olive/40 hover:text-brand-olive"
+          >
+            查看 PR 列表
+          </Link>
+          {isAdmin && (
+            <button
+              onClick={fetchWorkspace}
+              className="px-4 py-2 rounded-full border border-gray-200 text-xs font-bold text-gray-600 hover:border-brand-olive/40 hover:text-brand-olive"
+            >
+              刷新
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8">
+        <h1 className="text-3xl font-serif font-bold text-brand-olive mb-2">协作分支：{page.title}</h1>
+        <p className="text-gray-500 text-sm">在这里编辑你的分支版本，提交 PR 后由管理员审核合并。</p>
+
+        {branch ? (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span
+              className={clsx(
+                'px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider',
+                branch.status === 'pending_review'
+                  ? 'bg-amber-100 text-amber-700'
+                  : branch.status === 'conflict'
+                    ? 'bg-red-100 text-red-700'
+                    : branch.status === 'merged'
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-gray-100 text-gray-600',
+              )}
+            >
+              {getBranchStatusText(branch.status)}
+            </span>
+            <span className="text-xs text-gray-500">分支人：{branch.editorName}</span>
+            <span className="text-xs text-gray-400">最近更新：{formatDate(branch.updatedAt, 'yyyy-MM-dd HH:mm')}</span>
+          </div>
+        ) : (
+          <div className="mt-5">
+            <button
+              onClick={handleCreateBranch}
+              disabled={creatingBranch || isBanned}
+              className="px-5 py-2 rounded-full bg-brand-olive text-white text-sm font-bold disabled:opacity-50"
+            >
+              {creatingBranch ? '创建中...' : '创建我的分支'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {branch && (
+        <>
+          <div className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">标题</label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  className="w-full mt-1 px-4 py-3 rounded-xl bg-brand-cream border-none focus:ring-2 focus:ring-brand-olive/20"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">分类</label>
+                <select
+                  value={category}
+                  onChange={(event) => setCategory(event.target.value)}
+                  className="w-full mt-1 px-4 py-3 rounded-xl bg-brand-cream border-none focus:ring-2 focus:ring-brand-olive/20"
+                >
+                  <option value="biography">人物介绍</option>
+                  <option value="music">音乐作品</option>
+                  <option value="album">专辑一览</option>
+                  <option value="timeline">时间轴</option>
+                  <option value="event">活动记录</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">事件日期</label>
+                <input
+                  type="date"
+                  value={eventDate}
+                  onChange={(event) => setEventDate(event.target.value)}
+                  className="w-full mt-1 px-4 py-3 rounded-xl bg-brand-cream border-none focus:ring-2 focus:ring-brand-olive/20"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">标签 (逗号分隔)</label>
+                <input
+                  type="text"
+                  value={tags}
+                  onChange={(event) => setTags(event.target.value)}
+                  className="w-full mt-1 px-4 py-3 rounded-xl bg-brand-cream border-none focus:ring-2 focus:ring-brand-olive/20"
+                  placeholder="古风, 现场, 2026"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">内容</label>
+              <textarea
+                value={content}
+                onChange={(event) => setContent(event.target.value)}
+                rows={18}
+                className="w-full mt-1 px-4 py-3 rounded-2xl bg-brand-cream border-none focus:ring-2 focus:ring-brand-olive/20 font-mono text-sm"
+              />
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-3">
+              <button
+                onClick={handleSaveRevision}
+                disabled={savingRevision || isBanned}
+                className="px-6 py-2 rounded-full bg-brand-primary text-gray-900 text-sm font-bold disabled:opacity-50"
+              >
+                {savingRevision ? '保存中...' : '保存分支版本'}
+              </button>
+              {branch.status === 'conflict' && (
+                <button
+                  onClick={handleResolveConflict}
+                  disabled={resolvingConflict || isBanned}
+                  className="px-6 py-2 rounded-full bg-red-100 text-red-700 text-sm font-bold disabled:opacity-50"
+                >
+                  {resolvingConflict ? '处理中...' : '解决冲突并重开 PR'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 space-y-4">
+            <h2 className="text-xl font-serif font-bold text-gray-800">提交 Pull Request</h2>
+
+            {openPr ? (
+              <div className="p-4 rounded-2xl border border-brand-primary/20 bg-brand-primary/5">
+                <p className="text-sm text-gray-700 mb-2">当前已有一个进行中的 PR。</p>
+                <Link to={`/wiki/${slug}/prs/${openPr.id}`} className="text-sm font-bold text-brand-olive hover:underline">
+                  查看 PR：{openPr.title}
+                </Link>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">PR 标题</label>
+                  <input
+                    type="text"
+                    value={prTitle}
+                    onChange={(event) => setPrTitle(event.target.value)}
+                    className="w-full mt-1 px-4 py-3 rounded-xl bg-brand-cream border-none focus:ring-2 focus:ring-brand-olive/20"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">说明（可选）</label>
+                  <textarea
+                    value={prDescription}
+                    onChange={(event) => setPrDescription(event.target.value)}
+                    rows={4}
+                    className="w-full mt-1 px-4 py-3 rounded-xl bg-brand-cream border-none focus:ring-2 focus:ring-brand-olive/20"
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleCreatePr}
+                    disabled={creatingPr || isBanned}
+                    className="px-6 py-2 rounded-full bg-brand-olive text-white text-sm font-bold disabled:opacity-50"
+                  >
+                    {creatingPr ? '提交中...' : '创建 PR'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8">
+            <h2 className="text-xl font-serif font-bold text-gray-800 mb-4">分支修订历史</h2>
+            {revisions.length ? (
+              <div className="space-y-3">
+                {revisions.map((revision, index) => (
+                  <div key={revision.id} className="p-4 rounded-2xl bg-brand-cream/30 border border-brand-cream">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-bold text-gray-700 line-clamp-1">{revision.title}</p>
+                      <span className="text-[11px] text-gray-500">#{revisions.length - index}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {revision.editorName} · {formatDate(revision.createdAt, 'yyyy-MM-dd HH:mm:ss')}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-2 line-clamp-2">{(revision.content || '').slice(0, 160) || '无内容摘要'}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-400 italic">暂无修订历史</p>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+const WikiPullRequestList = () => {
+  const { slug } = useParams();
+  const { user, isAdmin } = useAuth();
+  const [status, setStatus] = useState<WikiPullRequestStatus>('open');
+  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<WikiPullRequestItem[]>([]);
+
+  const fetchList = async () => {
+    setLoading(true);
+    try {
+      const data = await apiGet<{ pullRequests: WikiPullRequestItem[] }>('/api/wiki/pull-requests/list', { status });
+      const list = data.pullRequests || [];
+      setItems(slug ? list.filter((item) => item.pageSlug === slug) : list);
+    } catch (error) {
+      console.error('Fetch wiki PR list error:', error);
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchList();
+  }, [status, slug]);
+
+  if (!user) {
+    return <div className="max-w-4xl mx-auto px-4 py-20 text-center text-gray-400 italic">请先登录查看 PR 列表。</div>;
+  }
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 py-12 space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link to={slug ? `/wiki/${slug}/branches` : '/wiki'} className="inline-flex items-center gap-2 text-gray-400 hover:text-brand-olive transition-colors">
+          <ArrowLeft size={18} /> 返回
+        </Link>
+        <div className="flex gap-2">
+          {(['open', 'merged', 'rejected'] as const).map((item) => (
+            <button
+              key={item}
+              onClick={() => setStatus(item)}
+              className={clsx(
+                'px-4 py-2 rounded-full text-xs font-bold',
+                status === item ? 'bg-brand-primary text-gray-900' : 'bg-gray-100 text-gray-500 hover:bg-gray-200',
+              )}
+            >
+              {getPrStatusText(item)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8">
+        <h1 className="text-2xl font-serif font-bold text-brand-olive mb-4">PR 列表 {isAdmin ? '(管理员视角)' : '(我的 PR)'}</h1>
+        {loading ? (
+          <p className="text-gray-400 italic">加载中...</p>
+        ) : items.length ? (
+          <div className="space-y-3">
+            {items.map((item) => (
+              <Link key={item.id} to={`/wiki/${item.pageSlug}/prs/${item.id}`} className="block p-4 rounded-2xl border border-gray-100 hover:border-brand-olive/30 hover:bg-brand-cream/20 transition-all">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
+                  <p className="font-bold text-gray-800">{item.title}</p>
+                  <span
+                    className={clsx(
+                      'px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider',
+                      item.status === 'open'
+                        ? 'bg-amber-100 text-amber-700'
+                        : item.status === 'merged'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700',
+                    )}
+                  >
+                    {getPrStatusText(item.status)}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500">页面：{item.page?.title || item.pageSlug} · 发起人：{item.createdByName}</p>
+                <p className="text-xs text-gray-400 mt-1">{formatDate(item.createdAt, 'yyyy-MM-dd HH:mm:ss')}</p>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-400 italic">当前筛选下暂无 PR</p>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const WikiPullRequestDetail = () => {
+  const { slug, prId } = useParams();
+  const { user, isAdmin } = useAuth();
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [pullRequest, setPullRequest] = useState<WikiPullRequestItem | null>(null);
+  const [diff, setDiff] = useState<WikiPrDiffResponse['diff'] | null>(null);
+  const [comment, setComment] = useState('');
+
+  const fetchDetail = async () => {
+    if (!prId) return;
+    setLoading(true);
+    try {
+      const [detailData, diffData] = await Promise.all([
+        apiGet<{ pullRequest: WikiPullRequestItem }>(`/api/wiki/pull-requests/${prId}`),
+        apiGet<WikiPrDiffResponse>(`/api/wiki/pull-requests/${prId}/diff`),
+      ]);
+      setPullRequest(detailData.pullRequest);
+      setDiff(diffData.diff);
+    } catch (error) {
+      console.error('Fetch wiki PR detail error:', error);
+      setPullRequest(null);
+      setDiff(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDetail();
+  }, [prId]);
+
+  const handleComment = async () => {
+    if (!prId || !comment.trim() || saving) return;
+    try {
+      setSaving(true);
+      await apiPost(`/api/wiki/pull-requests/${prId}/comments`, { content: comment.trim() });
+      setComment('');
+      await fetchDetail();
+    } catch (error) {
+      console.error('Create wiki PR comment error:', error);
+      alert('评论失败，请稍后重试');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAdminAction = async (action: 'merge' | 'reject') => {
+    if (!prId || !pullRequest || saving) return;
+    if (action === 'merge' && !window.confirm('确认合并该 PR 吗？')) return;
+
+    let note = '';
+    if (action === 'reject') {
+      note = window.prompt('请填写驳回说明（可选）', '请根据评审意见调整后重提') || '';
+    }
+
+    try {
+      setSaving(true);
+      await apiPost(`/api/wiki/pull-requests/${prId}/${action}`, note ? { note } : {});
+      await fetchDetail();
+    } catch (error) {
+      console.error(`${action} wiki PR error:`, error);
+      alert(action === 'merge' ? '合并失败，请稍后重试' : '驳回失败，请稍后重试');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!user) {
+    return <div className="max-w-4xl mx-auto px-4 py-20 text-center text-gray-400 italic">请先登录查看 PR 详情。</div>;
+  }
+
+  if (loading) {
+    return <div className="max-w-4xl mx-auto px-4 py-20 text-center text-gray-400 italic">加载 PR 详情中...</div>;
+  }
+
+  if (!pullRequest || (slug && pullRequest.pageSlug !== slug)) {
+    return <div className="max-w-4xl mx-auto px-4 py-20 text-center text-gray-400 italic">PR 不存在或无权限查看</div>;
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-12 space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link to={`/wiki/${pullRequest.pageSlug}/prs`} className="inline-flex items-center gap-2 text-gray-400 hover:text-brand-olive transition-colors">
+          <ArrowLeft size={18} /> 返回 PR 列表
+        </Link>
+        <Link to={`/wiki/${pullRequest.pageSlug}`} className="text-xs text-brand-olive hover:underline">
+          查看页面：{pullRequest.page?.title || pullRequest.pageSlug}
+        </Link>
+      </div>
+
+      <div className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+          <div>
+            <h1 className="text-2xl font-serif font-bold text-gray-900">{pullRequest.title}</h1>
+            <p className="text-xs text-gray-500 mt-1">
+              发起人：{pullRequest.createdByName} · {formatDate(pullRequest.createdAt, 'yyyy-MM-dd HH:mm:ss')}
+            </p>
+          </div>
+          <span
+            className={clsx(
+              'px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider',
+              pullRequest.status === 'open'
+                ? 'bg-amber-100 text-amber-700'
+                : pullRequest.status === 'merged'
+                  ? 'bg-green-100 text-green-700'
+                  : 'bg-red-100 text-red-700',
+            )}
+          >
+            {getPrStatusText(pullRequest.status)}
+          </span>
+        </div>
+
+        {pullRequest.description ? <p className="text-sm text-gray-600 mb-5">{pullRequest.description}</p> : null}
+
+        {isAdmin && pullRequest.status === 'open' && (
+          <div className="flex flex-wrap gap-2 mb-5">
+            <button
+              onClick={() => handleAdminAction('reject')}
+              disabled={saving}
+              className="px-4 py-2 rounded-full bg-red-50 text-red-700 text-xs font-bold disabled:opacity-50"
+            >
+              驳回
+            </button>
+            <button
+              onClick={() => handleAdminAction('merge')}
+              disabled={saving}
+              className="px-4 py-2 rounded-full bg-green-50 text-green-700 text-xs font-bold disabled:opacity-50"
+            >
+              合并
+            </button>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="border border-gray-100 rounded-2xl p-4 bg-gray-50/50">
+            <h3 className="text-sm font-bold text-gray-700 mb-3">Base（主分支）</h3>
+            {diff ? (
+              <>
+                <p className="text-sm font-bold text-gray-800 mb-2">{diff.base.title}</p>
+                <pre className="whitespace-pre-wrap text-xs text-gray-600 leading-relaxed max-h-[420px] overflow-auto">
+                  {diff.base.content}
+                </pre>
+              </>
+            ) : (
+              <p className="text-xs text-gray-400">暂无 diff 数据</p>
+            )}
+          </div>
+          <div className="border border-gray-100 rounded-2xl p-4 bg-brand-cream/20">
+            <h3 className="text-sm font-bold text-gray-700 mb-3">Head（分支版本）</h3>
+            {diff ? (
+              <>
+                <p className="text-sm font-bold text-gray-800 mb-2">{diff.head.title}</p>
+                <pre className="whitespace-pre-wrap text-xs text-gray-600 leading-relaxed max-h-[420px] overflow-auto">
+                  {diff.head.content}
+                </pre>
+              </>
+            ) : (
+              <p className="text-xs text-gray-400">暂无 diff 数据</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 space-y-4">
+        <h2 className="text-xl font-serif font-bold text-gray-800">讨论</h2>
+
+        {pullRequest.comments?.length ? (
+          <div className="space-y-3">
+            {pullRequest.comments.map((item) => (
+              <div key={item.id} className="p-4 rounded-2xl border border-gray-100 bg-gray-50/50">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <p className="text-sm font-bold text-gray-700">{item.authorName}</p>
+                  <span className="text-[11px] text-gray-400">{formatDate(item.createdAt, 'yyyy-MM-dd HH:mm:ss')}</span>
+                </div>
+                <p className="text-sm text-gray-600 whitespace-pre-wrap">{item.content}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-400 italic text-sm">暂无评论</p>
+        )}
+
+        {pullRequest.status === 'open' && (
+          <div className="space-y-2">
+            <textarea
+              value={comment}
+              onChange={(event) => setComment(event.target.value)}
+              rows={3}
+              className="w-full px-4 py-3 rounded-xl bg-brand-cream border-none focus:ring-2 focus:ring-brand-olive/20"
+              placeholder="写下你的评审意见..."
+            />
+            <div className="flex justify-end">
+              <button
+                onClick={handleComment}
+                disabled={saving || !comment.trim()}
+                className="px-5 py-2 rounded-full bg-brand-primary text-gray-900 text-xs font-bold disabled:opacity-50"
+              >
+                发表评论
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const WikiEditor = () => {
   const { slug } = useParams();
   const isNew = !slug || slug === 'new';
@@ -608,7 +1421,7 @@ const WikiEditor = () => {
       // Save Revision
       const revisionsRef = collection(db, 'wiki', pageSlug!, 'revisions');
       await addDoc(revisionsRef, {
-        id: crypto.randomUUID(),
+        id: randomId(),
         pageSlug,
         title: formData.title,
         content: formData.content,
@@ -1019,6 +1832,9 @@ const Wiki = () => {
       <Route path="/new" element={<WikiEditor />} />
       <Route path="/timeline" element={<WikiTimeline />} />
       <Route path="/:slug" element={<WikiPageView />} />
+      <Route path="/:slug/branches" element={<WikiBranchWorkspace />} />
+      <Route path="/:slug/prs" element={<WikiPullRequestList />} />
+      <Route path="/:slug/prs/:prId" element={<WikiPullRequestDetail />} />
       <Route path="/:slug/edit" element={<WikiEditor />} />
       <Route path="/:slug/history" element={<WikiHistory />} />
     </Routes>

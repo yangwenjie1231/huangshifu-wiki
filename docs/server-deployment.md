@@ -377,6 +377,47 @@ npm run db:seed
 - `GET /api/galleries`：游客仅返回已发布图集；作者可见自己的草稿；管理员可见全部。
 - `GET /api/galleries/:id`：未发布图集仅作者和管理员可见。
 
+### 6.7 Wiki 分支协作与 PR 审核说明（v3.0+）
+
+本次发布补齐 Wiki 的多人协作工作流，支持"分支编辑 -> 提交 PR -> 管理员审核合并/驳回 -> 冲突修复"。
+
+**数据库变更（已包含在 `db:deploy` 中）：**
+
+- `WikiBranch`
+- `WikiPullRequest`
+- `WikiPullRequestComment`
+- `WikiRevision.branchId`（用于分支修订链）
+- `WikiPage.mainBranchId`、`WikiPage.mergedAt`
+
+无旧数据迁移场景下，直接执行 `npm run db:deploy` 即可。
+
+**后端 API（协作主链路）：**
+
+| 端点 | 方法 | 功能 | 权限 |
+|------|------|------|------|
+| `/api/wiki/:slug/branches` | POST | 创建当前用户分支 | 登录用户 |
+| `/api/wiki/:slug/branches` | GET | 查看页面分支列表 | 登录用户 |
+| `/api/wiki/branches/mine` | GET | 查看我的分支 | 登录用户 |
+| `/api/wiki/branches/:branchId` | GET | 查看分支详情 + latestRevision | 登录用户 |
+| `/api/wiki/branches/:branchId/revisions` | GET | 查看分支修订历史 | 登录用户 |
+| `/api/wiki/branches/:branchId/revisions` | POST | 保存分支修订 | 分支作者/管理员 |
+| `/api/wiki/branches/:branchId/pull-request` | POST | 提交 PR | 分支作者/管理员 |
+| `/api/wiki/pull-requests/list` | GET | PR 列表（管理员看全部，普通用户看自己） | 登录用户 |
+| `/api/wiki/pull-requests/:prId` | GET | PR 详情（含评论） | 登录用户 |
+| `/api/wiki/pull-requests/:prId/diff` | GET | PR Diff（base/head） | 登录用户 |
+| `/api/wiki/pull-requests/:prId/comments` | POST | PR 评论 | 登录用户 |
+| `/api/wiki/pull-requests/:prId/merge` | POST | 合并 PR | 管理员 |
+| `/api/wiki/pull-requests/:prId/reject` | POST | 驳回 PR | 管理员 |
+| `/api/wiki/branches/:branchId/resolve-conflict` | POST | 解决冲突并重开分支流转 | 分支作者/管理员 |
+
+**前端路由（v3.0+）：**
+
+| 路由 | 页面 | 用途 |
+|------|------|------|
+| `/wiki/:slug/branches` | 分支工作台 | 创建分支、保存修订、发起 PR |
+| `/wiki/:slug/prs` | PR 列表 | 按状态查看 PR |
+| `/wiki/:slug/prs/:prId` | PR 详情 | 查看 diff、评论、管理员审核 |
+
 ---
 
 ## 7. 构建并启动服务
@@ -731,6 +772,53 @@ curl -X DELETE http://127.0.0.1:3000/api/admin/locks/galleries/<galleryId> \
 - 同一记录重复申请锁时，非持有者返回 `409` 并包含锁信息。
 - 管理员在 `force=true` 时可以接管非本人锁。
 - 过期锁会被自动清理，不会长期阻塞编辑。
+
+### 11.6 Wiki 分支协作与 PR 验证（v3.0+）
+
+#### 11.6.1 分支创建与修订保存
+
+```bash
+# 1) 创建页面分支
+curl -X POST http://127.0.0.1:3000/api/wiki/<slug>/branches \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt
+
+# 2) 查询我的分支
+curl http://127.0.0.1:3000/api/wiki/branches/mine -b cookie.txt -c cookie.txt
+
+# 3) 保存分支修订
+curl -X POST http://127.0.0.1:3000/api/wiki/branches/<branchId>/revisions \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"title":"标题","category":"biography","content":"更新内容","tags":["tag1"]}'
+```
+
+#### 11.6.2 PR 提交、评审与合并
+
+```bash
+# 1) 提交 PR
+curl -X POST http://127.0.0.1:3000/api/wiki/branches/<branchId>/pull-request \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"title":"更新 XXX","description":"补充内容"}'
+
+# 2) 查看 PR 列表
+curl "http://127.0.0.1:3000/api/wiki/pull-requests/list?status=open" -b cookie.txt -c cookie.txt
+
+# 3) 查看 PR diff
+curl http://127.0.0.1:3000/api/wiki/pull-requests/<prId>/diff -b cookie.txt -c cookie.txt
+
+# 4) 管理员合并 PR
+curl -X POST http://127.0.0.1:3000/api/wiki/pull-requests/<prId>/merge \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt
+```
+
+验证点：
+
+- 普通用户只能查看/操作自己的分支与 PR（管理员例外）。
+- PR 合并后，`WikiPage` 正文与状态更新为最新分支内容，分支状态变为 `merged`。
+- base revision 失配时返回 `409`，分支状态进入 `conflict`，可通过 `resolve-conflict` 恢复流程。
 
 ---
 
