@@ -487,6 +487,7 @@ npm run db:seed
 
 | 端点 | 方法 | 功能 | 权限 |
 |------|------|------|------|
+| `PATCH /api/music/:docId` | PATCH | 编辑歌曲信息 | 管理员 |
 | `GET /api/music/:docId/covers` | GET | 获取歌曲封面列表 | 公开 |
 | `POST /api/music/:docId/covers` | POST | 上传歌曲封面 | 管理员 |
 | `DELETE /api/music/:docId/covers/:coverId` | DELETE | 删除歌曲封面 | 管理员 |
@@ -511,6 +512,7 @@ npm run db:seed
 | 组件 | 位置 | 功能 |
 |------|------|------|
 | `SongCoverManager` | `src/components/SongCoverManager.tsx` | 歌曲封面管理弹窗 |
+| `SongEditModal` | `src/components/SongEditModal.tsx` | 歌曲编辑弹窗 |
 | `AlbumEditModal` | `src/components/AlbumEditModal.tsx` | 专辑创建/编辑弹窗 |
 | `AlbumCoverManager` | `src/components/AlbumCoverManager.tsx` | 专辑封面管理弹窗 |
 | `EmbeddingsTab` | `src/pages/Admin/EmbeddingsTab.tsx` | 向量管理面板 |
@@ -519,7 +521,7 @@ npm run db:seed
 
 | 页面 | 集成位置 | 功能 |
 |------|---------|------|
-| `MusicDetail.tsx` | 歌曲详情页底部「管理功能」区 | 歌曲封面管理按钮 |
+| `MusicDetail.tsx` | 歌曲详情页底部「管理功能」区 | 编辑歌曲、歌曲封面管理按钮 |
 | `Music.tsx` | 专辑 Tab 头部 | 创建专辑按钮 |
 | `AlbumDetail.tsx` | 专辑详情页底部「管理功能」区 | 专辑封面管理按钮 |
 | `Admin.tsx` | 新增「向量管理」Tab | 向量状态与批量操作 |
@@ -1278,7 +1280,22 @@ curl -X DELETE http://127.0.0.1:3000/api/music/<songDocId>/covers/<coverId> \
 - 不可删除已是默认的封面
 - 删除封面后，歌曲主封面不变
 
-#### 11.16.2 专辑 CRUD 验证
+#### 11.16.2 歌曲编辑验证
+
+```bash
+# 编辑歌曲信息
+curl -X PATCH http://127.0.0.1:3000/api/music/<songDocId> \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"title":"新标题","artist":"新艺术家","album":"新专辑","lyric":"歌词内容"}'
+```
+
+**验证点：**
+- 歌曲详情页底部显示「编辑歌曲」按钮（仅管理员可见）
+- 可编辑歌曲标题、艺术家、专辑、歌词
+- 保存后页面自动刷新显示新内容
+
+#### 11.16.3 专辑 CRUD 验证
 
 ```bash
 # 创建专辑
@@ -1304,7 +1321,7 @@ curl -X DELETE http://127.0.0.1:3000/api/albums/<albumDocId> \
 - 可编辑专辑标题、艺术家、描述、原始链接
 - 删除专辑后，专辑从列表消失
 
-#### 11.16.3 专辑封面管理验证
+#### 11.16.4 专辑封面管理验证
 
 ```bash
 # 获取专辑封面列表
@@ -1326,7 +1343,7 @@ curl -X POST http://127.0.0.1:3000/api/albums/<albumDocId>/sync-covers-to-songs 
 - 可上传多张封面并设默认
 - 「同步到歌曲」按钮可将封面批量更新到专辑内所有歌曲
 
-#### 11.16.4 向量 Embeddings 管理面板验证
+#### 11.16.5 向量 Embeddings 管理面板验证
 
 ```bash
 # 获取向量状态

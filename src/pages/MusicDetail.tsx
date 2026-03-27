@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { useMusic } from '../context/MusicContext';
 import { useToast } from '../components/Toast';
 import { SongCoverManager } from '../components/SongCoverManager';
+import { SongEditModal } from '../components/SongEditModal';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 
 type SongItem = {
@@ -70,6 +71,7 @@ const MusicDetail = () => {
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [favoriting, setFavoriting] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const { user, isAdmin } = useAuth();
   const { setCurrentSong, setIsPlaying, setPlaylist } = useMusic();
   const { show } = useToast();
@@ -282,12 +284,33 @@ const MusicDetail = () => {
       {isAdmin && song?.docId && (
         <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
           <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">管理功能</h2>
-          <SongCoverManager
-            songDocId={song.docId}
-            currentCover={song.cover}
-            onCoverUpdated={(newCoverUrl) => setSong((prev) => prev ? { ...prev, cover: newCoverUrl } : prev)}
-          />
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => setIsEditModalOpen(true)}
+              className="px-4 py-2 rounded-full border border-gray-200 text-sm text-gray-600 hover:text-brand-primary hover:border-brand-primary/40 transition-colors"
+            >
+              编辑歌曲
+            </button>
+            <SongCoverManager
+              songDocId={song.docId}
+              currentCover={song.cover}
+              onCoverUpdated={(newCoverUrl) => setSong((prev) => prev ? { ...prev, cover: newCoverUrl } : prev)}
+            />
+          </div>
         </section>
+      )}
+
+      {isAdmin && song && (
+        <SongEditModal
+          open={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          onSuccess={() => {
+            if (songId) {
+              apiGet<SongDetailResponse>(`/api/music/${songId}`).then((res) => setSong(res.song));
+            }
+          }}
+          song={song}
+        />
       )}
     </div>
   );
