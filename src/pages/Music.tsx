@@ -142,6 +142,7 @@ const Music = () => {
   const [albums, setAlbums] = useState<AlbumItem[]>([]);
   const [loadingAlbums, setLoadingAlbums] = useState(false);
   const [activeTab, setActiveTab] = useState<'music' | 'albums'>('music');
+  const [selectedPlatform, setSelectedPlatform] = useState<'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo'>('netease');
   const { user, isAdmin, isBanned } = useAuth();
   const { currentSong, setCurrentSong, setIsPlaying, setPlaylist, playSongAtIndex } = useMusic();
   const { show } = useToast();
@@ -209,7 +210,7 @@ const Music = () => {
   const handleAddSong = async () => {
     if (!searchId) return;
     if (isBanned) {
-      alert('账号已被封禁，无法执行此操作');
+      show('账号已被封禁，无法执行此操作', { variant: 'error' });
       return;
     }
     
@@ -241,7 +242,7 @@ const Music = () => {
         }
 
         try {
-          await apiPost<{ song: any }>('/api/music/from-netease', { id });
+          await apiPost<{ song: any }>(`/api/music/from-${selectedPlatform}`, { id });
           addedCount++;
         } catch (error) {
           console.error(`Failed to add metadata for ID: ${id}`, error);
@@ -253,7 +254,7 @@ const Music = () => {
       }
     }
 
-    alert(`添加完成！成功: ${addedCount}, 跳过/失败: ${skippedCount}`);
+    show(`添加完成！成功: ${addedCount}, 跳过/失败: ${skippedCount}`);
     setSearchId('');
     setIsAdding(false);
     fetchSongs();
@@ -305,13 +306,13 @@ const Music = () => {
       setConfirmModal({ show: false, type: 'single' });
     } catch (e) {
       console.error("Delete error:", e);
-      alert("删除失败，请检查权限");
+      show("删除失败，请检查权限", { variant: 'error' });
     }
   };
 
   const handleToggleFavorite = async (song: SongItem) => {
     if (!user || !song.docId) {
-      alert('请先登录后收藏');
+      show('请先登录后收藏', { variant: 'error' });
       return;
     }
 
@@ -330,7 +331,7 @@ const Music = () => {
       }
     } catch (error) {
       console.error('Toggle music favorite error:', error);
-      alert('收藏操作失败，请稍后重试');
+      show('收藏操作失败，请稍后重试', { variant: 'error' });
     } finally {
       setFavoriting(null);
     }
@@ -365,7 +366,7 @@ const Music = () => {
     }
     
     if (failCount > 0) {
-      alert(`批量删除完成。成功: ${successCount}, 失败: ${failCount}`);
+      show(`批量删除完成。成功: ${successCount}, 失败: ${failCount}`, { variant: failCount > 0 ? 'error' : 'success' });
     }
 
     setSelectedSongs(new Set());
@@ -393,7 +394,7 @@ const Music = () => {
             <button 
               onClick={() => {
                 if (isBanned) {
-                  alert('账号已被封禁，无法执行此操作');
+                  show('账号已被封禁，无法执行此操作', { variant: 'error' });
                   return;
                 }
                 setIsBatchMode(!isBatchMode);
@@ -410,7 +411,7 @@ const Music = () => {
             <button
               onClick={() => {
                 if (isBanned) {
-                  alert('账号已被封禁，无法执行此操作');
+                  show('账号已被封禁，无法执行此操作', { variant: 'error' });
                   return;
                 }
                 setIsImportModalOpen(true);
@@ -423,7 +424,7 @@ const Music = () => {
             <button 
               onClick={() => {
                 if (isBanned) {
-                  alert('账号已被封禁，无法执行此操作');
+                  show('账号已被封禁，无法执行此操作', { variant: 'error' });
                   return;
                 }
                 setIsAdding(!isAdding);
@@ -446,13 +447,27 @@ const Music = () => {
             className="mb-12 p-8 bg-brand-cream/30 rounded-[40px] border border-brand-primary/10"
           >
             <h3 className="text-xl font-serif font-bold text-gray-900 mb-6 flex items-center gap-2">
-              <Sparkles size={20} className="text-brand-primary" /> 输入网易云音乐 ID 或链接 (支持批量，用空格或逗号分隔)
+              <Sparkles size={20} className="text-brand-primary" /> 输入音乐 ID 或链接 (支持批量，用空格或逗号分隔)
             </h3>
             <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-4">
+                <label className="text-sm font-bold text-gray-600">选择平台：</label>
+                <select
+                  value={selectedPlatform}
+                  onChange={e => setSelectedPlatform(e.target.value as typeof selectedPlatform)}
+                  className="px-4 py-2 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-primary/20 shadow-sm"
+                >
+                  <option value="netease">网易云音乐</option>
+                  <option value="tencent">QQ音乐</option>
+                  <option value="kugou">酷狗音乐</option>
+                  <option value="baidu">百度音乐</option>
+                  <option value="kuwo">酷我音乐</option>
+                </select>
+              </div>
               <textarea 
                 value={searchId}
                 onChange={e => setSearchId(e.target.value)}
-                placeholder="例如: 1335942780, 1335942781 或链接列表"
+                placeholder={`输入 ${selectedPlatform === 'netease' ? '网易云' : selectedPlatform === 'tencent' ? 'QQ音乐' : selectedPlatform === 'kugou' ? '酷狗' : selectedPlatform === 'baidu' ? '百度' : '酷我'} 音乐 ID 或链接列表`}
                 className="w-full px-6 py-4 bg-white rounded-3xl border-none focus:ring-2 focus:ring-brand-primary/20 shadow-sm min-h-[120px]"
               />
               <div className="flex justify-end">

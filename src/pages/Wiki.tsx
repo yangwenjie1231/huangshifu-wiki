@@ -37,6 +37,32 @@ const formatDate = (value: string | null | undefined, pattern: string) => {
   return parsed ? format(parsed, pattern) : '刚刚';
 };
 
+type WikiRelationType = 'related' | 'see_also' | 'part_of' | 'inspired_by' | 'collaboration';
+
+type WikiRelationRecord = {
+  type: WikiRelationType;
+  targetSlug: string;
+  label?: string;
+  bidirectional: boolean;
+};
+
+type WikiRelationResolved = WikiRelationRecord & {
+  typeLabel: string;
+  targetTitle: string;
+  targetCategory: string;
+  inferred: boolean;
+  sourceSlug: string;
+  sourceTitle: string;
+};
+
+const RELATION_TYPE_LABELS: Record<WikiRelationType, string> = {
+  related: '相关页面',
+  see_also: '参见',
+  part_of: '所属专辑',
+  inspired_by: '灵感来源',
+  collaboration: '合作',
+};
+
 const splitTagsInput = (value: string) =>
   value
     .split(',')
@@ -61,6 +87,7 @@ type WikiItem = {
   favoritedByMe?: boolean;
   lastEditorUid: string;
   lastEditorName: string;
+  relations?: WikiRelationRecord[];
   createdAt: string;
   updatedAt: string;
 };
@@ -445,7 +472,7 @@ const WikiPageView = () => {
       }
     } catch (error) {
       console.error('Toggle wiki favorite failed:', error);
-      alert('收藏操作失败，请稍后重试');
+      show('收藏操作失败，请稍后重试', { variant: 'error' });
     } finally {
       setFavoriting(false);
     }
@@ -457,10 +484,10 @@ const WikiPageView = () => {
     try {
       const data = await apiPost<{ page: WikiItem }>(`/api/wiki/${slug}/submit`);
       setPage((prev) => prev ? { ...prev, ...data.page } : prev);
-      alert('已提交审核，请等待管理员处理');
+      show('已提交审核，请等待管理员处理');
     } catch (error) {
       console.error('Submit wiki review failed:', error);
-      alert('提交审核失败，请稍后重试');
+      show('提交审核失败，请稍后重试', { variant: 'error' });
     } finally {
       setSubmittingReview(false);
     }
@@ -617,6 +644,33 @@ const WikiPageView = () => {
           </div>
         )}
 
+        {page.relations && page.relations.length > 0 && (
+          <div className="mt-20 pt-12 border-t border-gray-100">
+            <h4 className="text-sm font-bold text-brand-olive uppercase tracking-widest mb-6 flex items-center gap-2">
+              <Book size={14} /> 相关页面
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {page.relations.map((relation: WikiRelationRecord, index: number) => (
+                <Link 
+                  key={`${relation.targetSlug}-${index}`}
+                  to={`/wiki/${relation.targetSlug}`}
+                  className="p-4 bg-brand-primary/5 border border-brand-primary/10 rounded-2xl hover:bg-brand-primary/10 transition-all group"
+                >
+                  <p className="text-xs text-brand-primary font-bold uppercase tracking-wider mb-1">
+                    {RELATION_TYPE_LABELS[relation.type] || relation.type}
+                  </p>
+                  <p className="font-bold text-brand-olive group-hover:underline underline-offset-4">
+                    {relation.label || relation.targetSlug}
+                  </p>
+                  {relation.bidirectional && (
+                    <span className="inline-block mt-1 text-[10px] text-gray-400">↔ 双向关联</span>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
         <footer className="mt-20 pt-12 border-t border-gray-100 flex flex-wrap gap-4 items-center justify-between">
           <div className="flex items-center gap-2 text-gray-400 text-sm italic">
             <Tag size={14} />
@@ -649,6 +703,7 @@ const WikiBranchWorkspace = () => {
   const [savingRevision, setSavingRevision] = useState(false);
   const [creatingPr, setCreatingPr] = useState(false);
   const [resolvingConflict, setResolvingConflict] = useState(false);
+  const { show } = useToast();
 
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('biography');
@@ -730,7 +785,7 @@ const WikiBranchWorkspace = () => {
       await fetchWorkspace();
     } catch (error) {
       console.error('Create branch error:', error);
-      alert('创建分支失败，请稍后重试');
+      show('创建分支失败，请稍后重试', { variant: 'error' });
     } finally {
       setCreatingBranch(false);
     }
@@ -739,7 +794,7 @@ const WikiBranchWorkspace = () => {
   const handleSaveRevision = async () => {
     if (!branch || isBanned || savingRevision) return;
     if (!title.trim() || !content.trim() || !category.trim()) {
-      alert('请先填写标题、分类和内容');
+      show('请先填写标题、分类和内容', { variant: 'error' });
       return;
     }
     try {
@@ -754,7 +809,7 @@ const WikiBranchWorkspace = () => {
       await fetchWorkspace();
     } catch (error) {
       console.error('Save branch revision error:', error);
-      alert('保存分支失败，请稍后重试');
+      show('保存分支失败，请稍后重试', { variant: 'error' });
     } finally {
       setSavingRevision(false);
     }
@@ -763,7 +818,7 @@ const WikiBranchWorkspace = () => {
   const handleCreatePr = async () => {
     if (!branch || creatingPr || openPr || isBanned) return;
     if (!prTitle.trim()) {
-      alert('请填写 PR 标题');
+      show('请填写 PR 标题', { variant: 'error' });
       return;
     }
     try {
@@ -775,7 +830,7 @@ const WikiBranchWorkspace = () => {
       await fetchWorkspace();
     } catch (error) {
       console.error('Create wiki PR error:', error);
-      alert('提交 PR 失败，请稍后重试');
+      show('提交 PR 失败，请稍后重试', { variant: 'error' });
     } finally {
       setCreatingPr(false);
     }
@@ -784,7 +839,7 @@ const WikiBranchWorkspace = () => {
   const handleResolveConflict = async () => {
     if (!branch || branch.status !== 'conflict' || resolvingConflict || isBanned) return;
     if (!title.trim() || !content.trim() || !category.trim()) {
-      alert('请先填写标题、分类和内容');
+      show('请先填写标题、分类和内容', { variant: 'error' });
       return;
     }
     try {
@@ -799,7 +854,7 @@ const WikiBranchWorkspace = () => {
       await fetchWorkspace();
     } catch (error) {
       console.error('Resolve wiki conflict error:', error);
-      alert('解决冲突失败，请稍后重试');
+      show('解决冲突失败，请稍后重试', { variant: 'error' });
     } finally {
       setResolvingConflict(false);
     }
@@ -1128,6 +1183,7 @@ const WikiPullRequestDetail = () => {
   const [pullRequest, setPullRequest] = useState<WikiPullRequestItem | null>(null);
   const [diff, setDiff] = useState<WikiPrDiffResponse['diff'] | null>(null);
   const [comment, setComment] = useState('');
+  const { show } = useToast();
 
   const fetchDetail = async () => {
     if (!prId) return;
@@ -1161,7 +1217,7 @@ const WikiPullRequestDetail = () => {
       await fetchDetail();
     } catch (error) {
       console.error('Create wiki PR comment error:', error);
-      alert('评论失败，请稍后重试');
+      show('评论失败，请稍后重试', { variant: 'error' });
     } finally {
       setSaving(false);
     }
@@ -1182,7 +1238,7 @@ const WikiPullRequestDetail = () => {
       await fetchDetail();
     } catch (error) {
       console.error(`${action} wiki PR error:`, error);
-      alert(action === 'merge' ? '合并失败，请稍后重试' : '驳回失败，请稍后重试');
+      show(action === 'merge' ? '合并失败，请稍后重试' : '驳回失败，请稍后重试', { variant: 'error' });
     } finally {
       setSaving(false);
     }
@@ -1340,10 +1396,19 @@ const WikiEditor = () => {
     category: 'biography',
     content: '',
     tags: '',
-    eventDate: ''
+    eventDate: '',
+    relations: [] as WikiRelationRecord[],
   });
   const [savingMode, setSavingMode] = useState<'draft' | 'pending' | null>(null);
   const [generating, setGenerating] = useState(false);
+  const { show } = useToast();
+
+  const [newRelation, setNewRelation] = useState<WikiRelationRecord>({
+    type: 'related',
+    targetSlug: '',
+    label: '',
+    bidirectional: false,
+  });
 
   useEffect(() => {
     if (!isNew) {
@@ -1358,7 +1423,8 @@ const WikiEditor = () => {
             category: data.category,
             content: data.content,
             tags: data.tags?.join(', ') || '',
-            eventDate: data.eventDate || ''
+            eventDate: data.eventDate || '',
+            relations: (data.relations as WikiRelationRecord[]) || [],
           });
         }
       };
@@ -1369,12 +1435,12 @@ const WikiEditor = () => {
   const handleSubmit = async (status: 'draft' | 'pending') => {
     if (!user) return;
     if (isBanned) {
-      alert('账号已被封禁，无法编辑百科');
+      show('账号已被封禁，无法编辑百科', { variant: 'error' });
       return;
     }
     
     if (formData.category === 'music' && !isAdmin) {
-      alert("只有管理员可以修改音乐分类的内容");
+      show("只有管理员可以修改音乐分类的内容", { variant: 'error' });
       return;
     }
 
@@ -1385,7 +1451,7 @@ const WikiEditor = () => {
       .replace(/\s+/g, '-');
 
     if (!pageSlug) {
-      alert("请先填写标题以生成页面标识");
+      show("请先填写标题以生成页面标识", { variant: 'error' });
       return;
     }
     
@@ -1398,6 +1464,7 @@ const WikiEditor = () => {
       content: formData.content,
       tags: formData.tags.split(',').map(t => t.trim()).filter(t => t),
       eventDate: formData.eventDate,
+      relations: formData.relations,
       status,
       lastEditorUid: user.uid,
       lastEditorName: profile?.displayName || user.displayName || '匿名用户',
@@ -1436,7 +1503,7 @@ const WikiEditor = () => {
       navigate(`/wiki/${pageSlug}`);
     } catch (e) {
       console.error("Error saving wiki page:", e);
-      alert("保存失败，请检查网络或权限");
+      show("保存失败，请检查网络或权限", { variant: 'error' });
     }
     setSavingMode(null);
   };
@@ -1501,7 +1568,7 @@ const WikiEditor = () => {
               <button 
                 type="button"
                 onClick={async () => {
-                  if (!formData.title) return alert("请先输入标题");
+                  if (!formData.title) return show("请先输入标题", { variant: 'error' });
                   setGenerating(true);
                   const intro = await generateWikiIntro(formData.title);
                   if (intro) setFormData({ ...formData, content: intro + "\n\n" + formData.content });
@@ -1561,6 +1628,96 @@ const WikiEditor = () => {
             />
           </div>
 
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">相关页面</label>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!newRelation.targetSlug.trim()) {
+                    show('请输入目标页面标识', { variant: 'error' });
+                    return;
+                  }
+                  setFormData({
+                    ...formData,
+                    relations: [...formData.relations, { ...newRelation, targetSlug: newRelation.targetSlug.trim() }],
+                  });
+                  setNewRelation({ type: 'related', targetSlug: '', label: '', bidirectional: false });
+                }}
+                className="px-4 py-2 bg-brand-primary/10 text-brand-primary rounded-xl text-xs font-bold hover:bg-brand-primary/20 transition-all"
+              >
+                + 添加关联
+              </button>
+            </div>
+            
+            {formData.relations.length > 0 && (
+              <div className="space-y-2">
+                {formData.relations.map((relation, index) => (
+                  <div key={index} className="flex items-center gap-3 p-3 bg-brand-cream/50 rounded-xl">
+                    <span className="text-xs text-brand-primary font-bold min-w-[80px]">
+                      {RELATION_TYPE_LABELS[relation.type]}
+                    </span>
+                    <span className="flex-1 text-sm truncate">
+                      {relation.label || relation.targetSlug}
+                    </span>
+                    {relation.bidirectional && (
+                      <span className="text-[10px] text-gray-400">↔ 双向</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData({
+                          ...formData,
+                          relations: formData.relations.filter((_, i) => i !== index),
+                        });
+                      }}
+                      className="text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-3 p-4 bg-brand-cream/30 rounded-2xl border border-brand-cream">
+              <select
+                value={newRelation.type}
+                onChange={e => setNewRelation({ ...newRelation, type: e.target.value as WikiRelationType })}
+                className="px-4 py-2 bg-white rounded-xl border border-gray-200 text-sm"
+              >
+                <option value="related">相关页面</option>
+                <option value="see_also">参见</option>
+                <option value="part_of">所属专辑</option>
+                <option value="inspired_by">灵感来源</option>
+                <option value="collaboration">合作</option>
+              </select>
+              <input
+                type="text"
+                value={newRelation.targetSlug}
+                onChange={e => setNewRelation({ ...newRelation, targetSlug: e.target.value })}
+                placeholder="目标页面标识 (slug)"
+                className="flex-1 px-4 py-2 bg-white rounded-xl border border-gray-200 text-sm"
+              />
+              <input
+                type="text"
+                value={newRelation.label || ''}
+                onChange={e => setNewRelation({ ...newRelation, label: e.target.value })}
+                placeholder="显示名称 (可选)"
+                className="flex-1 px-4 py-2 bg-white rounded-xl border border-gray-200 text-sm"
+              />
+              <label className="flex items-center gap-2 text-xs text-gray-500 whitespace-nowrap">
+                <input
+                  type="checkbox"
+                  checked={newRelation.bidirectional}
+                  onChange={e => setNewRelation({ ...newRelation, bidirectional: e.target.checked })}
+                  className="rounded"
+                />
+                双向关联
+              </label>
+            </div>
+          </div>
+
           <div className="pt-8 flex flex-wrap justify-end gap-3">
             <button
               type="button"
@@ -1592,6 +1749,7 @@ const WikiHistory = () => {
   const [loading, setLoading] = useState(true);
   const [selectedRevision, setSelectedRevision] = useState<any>(null);
   const navigate = useNavigate();
+  const { show } = useToast();
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -1611,7 +1769,7 @@ const WikiHistory = () => {
   const handleRollback = async (revision: any) => {
     if (!window.confirm(`确定要回滚到 ${formatDate(revision.createdAt, 'yyyy-MM-dd HH:mm')} 的版本吗？`)) return;
     if (isBanned) {
-      alert('账号已被封禁，无法回滚');
+      show('账号已被封禁，无法回滚', { variant: 'error' });
       return;
     }
     
@@ -1620,7 +1778,7 @@ const WikiHistory = () => {
       navigate(`/wiki/${slug}`);
     } catch (e) {
       console.error("Rollback error:", e);
-      alert("回滚失败");
+      show("回滚失败", { variant: 'error' });
     }
   };
 

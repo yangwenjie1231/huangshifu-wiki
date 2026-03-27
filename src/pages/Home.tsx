@@ -106,6 +106,38 @@ const Home = () => {
         </div>
       </section>
 
+      {/* Hot Posts Preview */}
+      {feed?.hotPosts && feed.hotPosts.length > 0 && (
+        <section className="mb-24">
+          <div className="flex justify-between items-end mb-8">
+            <h2 className="text-3xl font-serif font-bold text-gray-900 flex items-center gap-2">
+              🔥 热门帖子
+            </h2>
+            <Link to="/forum?sort=hot" className="text-brand-primary font-bold text-sm hover:underline">查看更多</Link>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {feed.hotPosts.slice(0, 3).map((post) => (
+              <Link 
+                key={post.id} 
+                to={`/forum/${post.id}`}
+                className="block bg-gradient-to-br from-brand-primary/5 to-brand-primary/10 p-6 rounded-3xl border border-brand-primary/10 hover:border-brand-primary/30 transition-all cursor-pointer group"
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="px-2 py-1 bg-brand-primary/20 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded">
+                    {post.section === 'music' ? '音乐讨论' : post.section === 'news' ? '动态资讯' : post.section === 'fanart' ? '同人创作' : '问答区'}
+                  </span>
+                </div>
+                <h4 className="text-lg font-serif font-bold mb-2 group-hover:text-brand-primary transition-colors line-clamp-2">{post.title}</h4>
+                <div className="flex items-center gap-4 text-gray-400 text-sm">
+                  <span className="flex items-center gap-1"><MessageSquare size={14} /> {post.commentsCount || 0}</span>
+                  <span className="flex items-center gap-1"><Heart size={14} /> {post.likesCount || 0}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Community Preview */}
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-12">
         <div className="lg:col-span-2">

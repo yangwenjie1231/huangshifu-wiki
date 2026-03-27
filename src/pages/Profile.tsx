@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import { AvatarCropModal } from '../components/AvatarCropModal';
+import { useToast } from '../components/Toast';
 
 type FavoriteTargetType = 'wiki' | 'post' | 'music';
 
@@ -70,6 +71,7 @@ const Profile = () => {
   });
   const [loading, setLoading] = useState(false);
   const [avatarModalOpen, setAvatarModalOpen] = useState(false);
+  const { show } = useToast();
 
   useEffect(() => {
     if (!user) return;
@@ -203,7 +205,7 @@ const Profile = () => {
       setIsEditing(false);
     } catch (e) {
       console.error('Error updating profile:', e);
-      alert('保存失败，请稍后重试');
+      show('保存失败，请稍后重试', { variant: 'error' });
     }
     setLoading(false);
   };

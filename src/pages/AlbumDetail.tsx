@@ -70,7 +70,7 @@ const AlbumDetail = () => {
 
   const toggleFavorite = async (song: SongItem) => {
     if (!user || !song.docId || favoriting === song.docId) {
-      if (!user) alert('请先登录后收藏');
+      if (!user) show('请先登录后收藏', { variant: 'error' });
       return;
     }
 
@@ -98,7 +98,7 @@ const AlbumDetail = () => {
       });
     } catch (error) {
       console.error('Toggle favorite in album detail error:', error);
-      alert('收藏操作失败，请稍后重试');
+      show('收藏操作失败，请稍后重试', { variant: 'error' });
     } finally {
       setFavoriting(null);
     }
