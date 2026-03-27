@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, getDocs, doc, deleteDoc, where, orderBy, db, auth } from '../firebase';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useMusic } from '../context/MusicContext';
-import { Music as MusicIcon, Search, Plus, Play, Pause, Disc, List, Trash2, Heart, ExternalLink, Sparkles, ChevronRight, Volume2, Headphones, X } from 'lucide-react';
+import { Music as MusicIcon, Search, Plus, Play, Pause, Disc, List, Trash2, Heart, ExternalLink, Sparkles, ChevronRight, Volume2, Headphones, X, MessageSquare, Clock } from 'lucide-react';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'motion/react';
 import { MusicPlayer } from '../components/MusicPlayer';
 import { MusicImportModal } from '../components/MusicImportModal';
-import { apiDelete, apiPost } from '../lib/apiClient';
+import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
+import { format } from 'date-fns';
 
 enum OperationType {
   CREATE = 'create',
@@ -48,6 +50,22 @@ type SongItem = {
   primaryPlatform?: 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo' | null;
   lyric?: string | null;
   favoritedByMe?: boolean;
+};
+
+type PostItem = {
+  id: string;
+  title: string;
+  section: string;
+  musicDocId?: string | null;
+  albumDocId?: string | null;
+  content: string;
+  tags?: string[];
+  authorUid: string;
+  status?: string;
+  likesCount: number;
+  commentsCount: number;
+  createdAt: string;
+  updatedAt: string;
 };
 
 const getSongExternalUrl = (song: SongItem) => {
@@ -105,6 +123,9 @@ const Music = () => {
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{ show: boolean, type: 'single' | 'batch', id?: string }>({ show: false, type: 'single' });
   const [favoriting, setFavoriting] = useState<string | null>(null);
+  const [selectedSongForPosts, setSelectedSongForPosts] = useState<SongItem | null>(null);
+  const [songPosts, setSongPosts] = useState<PostItem[]>([]);
+  const [loadingPosts, setLoadingPosts] = useState(false);
   const { user, isAdmin, isBanned } = useAuth();
   const { currentSong, setCurrentSong, setIsPlaying, setPlaylist, playSongAtIndex } = useMusic();
 
@@ -126,6 +147,34 @@ const Music = () => {
   useEffect(() => {
     fetchSongs();
   }, []);
+
+  const fetchSongPosts = async (song: SongItem) => {
+    setLoadingPosts(true);
+    try {
+      const data = await apiGet<{ posts: PostItem[] }>(`/api/music/${song.docId}/posts`);
+      setSongPosts(data.posts || []);
+    } catch (error) {
+      console.error('Fetch song posts error:', error);
+      setSongPosts([]);
+    }
+    setLoadingPosts(false);
+  };
+
+  const handleShowPosts = (song: SongItem) => {
+    if (selectedSongForPosts?.docId === song.docId) {
+      setSelectedSongForPosts(null);
+      setSongPosts([]);
+    } else {
+      setSelectedSongForPosts(song);
+      fetchSongPosts(song);
+    }
+  };
+
+  const formatDate = (value: string | null | undefined) => {
+    if (!value) return '刚刚';
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? '刚刚' : format(parsed, 'yyyy-MM-dd');
+  };
 
   const handleAddSong = async () => {
     if (!searchId) return;
@@ -525,6 +574,19 @@ const Music = () => {
                         >
                           <ExternalLink size={18} />
                         </a>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleShowPosts(song);
+                          }}
+                          className={clsx(
+                            'p-2 transition-colors',
+                            selectedSongForPosts?.docId === song.docId ? 'text-brand-primary' : 'text-gray-400 hover:text-brand-primary',
+                          )}
+                          title="查看乐评"
+                        >
+                          <MessageSquare size={18} />
+                        </button>
                       </>
                     )}
                   </div>
@@ -532,6 +594,82 @@ const Music = () => {
               )) : (
                 <div className="py-20 text-center text-gray-400 italic">暂无音乐，快去添加吧</div>
               )}
+
+              <AnimatePresence>
+                {selectedSongForPosts && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="border-t border-gray-100 overflow-hidden"
+                  >
+                    <div className="p-6 bg-brand-cream/20">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                          <MessageSquare size={18} className="text-brand-primary" />
+                          《{selectedSongForPosts.title}》的乐评
+                        </h3>
+                        <div className="flex gap-2">
+                          <Link
+                            to={`/forum/new?musicDocId=${selectedSongForPosts.docId}&musicTitle=${encodeURIComponent(selectedSongForPosts.title)}`}
+                            className="px-3 py-1.5 bg-brand-primary text-gray-900 rounded-full text-xs font-bold hover:scale-105 transition-all"
+                          >
+                            发表乐评
+                          </Link>
+                          <button
+                            onClick={() => {
+                              setSelectedSongForPosts(null);
+                              setSongPosts([]);
+                            }}
+                            className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {loadingPosts ? (
+                        <div className="space-y-3">
+                          {[1, 2].map(i => (
+                            <div key={i} className="h-20 bg-white rounded-xl animate-pulse" />
+                          ))}
+                        </div>
+                      ) : songPosts.length > 0 ? (
+                        <div className="space-y-3">
+                          {songPosts.map(post => (
+                            <Link
+                              key={post.id}
+                              to={`/forum/${post.id}`}
+                              className="block bg-white p-4 rounded-xl hover:shadow-md transition-all"
+                            >
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="px-2 py-0.5 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded">
+                                  乐评
+                                </span>
+                                <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                                  <Clock size={10} /> {formatDate(post.updatedAt)}
+                                </span>
+                              </div>
+                              <h4 className="font-bold text-gray-900 text-sm mb-1 line-clamp-1">
+                                {post.title}
+                              </h4>
+                              <div className="flex items-center gap-4 text-xs text-gray-400">
+                                <span className="flex items-center gap-1"><Heart size={12} /> {post.likesCount || 0}</span>
+                                <span className="flex items-center gap-1"><MessageSquare size={12} /> {post.commentsCount || 0}</span>
+                              </div>
+                            </Link>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="bg-white rounded-xl p-8 text-center">
+                          <MessageSquare size={32} className="mx-auto text-gray-200 mb-3" />
+                          <p className="text-gray-400 text-sm">暂无乐评，快来发表第一篇吧！</p>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </div>
