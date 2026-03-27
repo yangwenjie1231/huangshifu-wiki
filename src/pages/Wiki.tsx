@@ -5,12 +5,14 @@ import { useAuth } from '../context/AuthContext';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar } from 'lucide-react';
+import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar, Link2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { summarizeWikiContent, generateWikiIntro } from '../services/aiService';
 import { uploadImageToCDNs, getImageUrl } from '../services/imageService';
+import { useToast } from '../components/Toast';
+import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { apiDelete, apiPost } from '../lib/apiClient';
 import MdEditor from 'react-markdown-editor-lite';
 import MarkdownIt from 'markdown-it';
@@ -128,6 +130,7 @@ const WikiList = () => {
   const [pages, setPages] = useState<WikiItem[]>([]);
   const [loading, setLoading] = useState(true);
   const { user, isBanned } = useAuth();
+  const { show } = useToast();
 
   useEffect(() => {
     const fetchPages = async () => {
@@ -147,6 +150,17 @@ const WikiList = () => {
     };
     fetchPages();
   }, [category]);
+
+  const handleCopyWikiLink = async (event: React.MouseEvent<HTMLButtonElement>, slug: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const copied = await copyToClipboard(toAbsoluteInternalUrl(`/wiki/${slug}`));
+    if (copied) {
+      show('百科内链已复制');
+      return;
+    }
+    show('复制链接失败，请稍后重试', { variant: 'error' });
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-12">
@@ -198,29 +212,38 @@ const WikiList = () => {
       ) : pages.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {pages.map((page) => (
-            <Link 
-              key={page.id} 
-              to={`/wiki/${page.slug}`}
-              className="bg-white p-8 rounded-[32px] border border-gray-100 hover:border-brand-olive/20 hover:shadow-xl transition-all group"
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <span className="px-2 py-1 bg-brand-cream text-brand-olive text-[10px] font-bold uppercase tracking-wider rounded">
-                  {page.category === 'biography' ? '人物介绍' :
-                   page.category === 'music' ? '音乐作品' :
-                   page.category === 'album' ? '专辑一览' :
-                   page.category === 'timeline' ? '时间轴' :
-                   page.category === 'event' ? '活动记录' : page.category}
-                </span>
-              </div>
-              <h3 className="text-2xl font-serif font-bold mb-4 group-hover:text-brand-olive transition-colors">{page.title}</h3>
-              <p className="text-gray-400 text-sm line-clamp-2 mb-6 italic leading-relaxed">
-                {page.content.replace(/[#*`]/g, '').substring(0, 100)}...
-              </p>
-              <div className="flex items-center justify-between text-gray-400 text-xs">
-                <span className="flex items-center gap-1"><Clock size={12} /> {formatDate(page.updatedAt, 'yyyy-MM-dd')}</span>
-                <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
-              </div>
-            </Link>
+            <div key={page.id} className="relative group">
+              <Link 
+                to={`/wiki/${page.slug}`}
+                className="block bg-white p-8 rounded-[32px] border border-gray-100 hover:border-brand-olive/20 hover:shadow-xl transition-all"
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="px-2 py-1 bg-brand-cream text-brand-olive text-[10px] font-bold uppercase tracking-wider rounded">
+                    {page.category === 'biography' ? '人物介绍' :
+                     page.category === 'music' ? '音乐作品' :
+                     page.category === 'album' ? '专辑一览' :
+                     page.category === 'timeline' ? '时间轴' :
+                     page.category === 'event' ? '活动记录' : page.category}
+                  </span>
+                </div>
+                <h3 className="text-2xl font-serif font-bold mb-4 group-hover:text-brand-olive transition-colors">{page.title}</h3>
+                <p className="text-gray-400 text-sm line-clamp-2 mb-6 italic leading-relaxed">
+                  {page.content.replace(/[#*`]/g, '').substring(0, 100)}...
+                </p>
+                <div className="flex items-center justify-between text-gray-400 text-xs">
+                  <span className="flex items-center gap-1"><Clock size={12} /> {formatDate(page.updatedAt, 'yyyy-MM-dd')}</span>
+                  <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                </div>
+              </Link>
+              <button
+                onClick={(event) => handleCopyWikiLink(event, page.slug)}
+                className="absolute bottom-5 right-5 p-2 rounded-full border border-gray-100 bg-white/90 text-gray-400 shadow-sm opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:text-brand-olive hover:border-brand-olive/30 transition-all"
+                title="复制内链"
+                aria-label="复制百科内链"
+              >
+                <Link2 size={14} />
+              </button>
+            </div>
           ))}
         </div>
       ) : (
@@ -239,6 +262,7 @@ const WikiPageView = () => {
   const [page, setPage] = useState<WikiItem | null>(null);
   const [loading, setLoading] = useState(true);
   const { user, isAdmin, isBanned } = useAuth();
+  const { show } = useToast();
   const [summary, setSummary] = useState<string | null>(null);
   const [summarizing, setSummarizing] = useState(false);
   const [backlinks, setBacklinks] = useState<WikiItem[]>([]);
@@ -276,6 +300,16 @@ const WikiPageView = () => {
 
   const isOwner = Boolean(user && page?.lastEditorUid === user.uid);
   const canSubmitReview = Boolean(!isBanned && isOwner && page && (page.status === 'draft' || page.status === 'rejected'));
+
+  const handleCopyPageLink = async () => {
+    if (!slug) return;
+    const copied = await copyToClipboard(toAbsoluteInternalUrl(`/wiki/${slug}`));
+    if (copied) {
+      show('百科内链已复制');
+      return;
+    }
+    show('复制链接失败，请稍后重试', { variant: 'error' });
+  };
 
   const handleToggleFavorite = async () => {
     if (!slug || !user || favoriting) return;
@@ -352,6 +386,14 @@ const WikiPageView = () => {
                 title={page.favoritedByMe ? '取消收藏' : '收藏页面'}
               >
                 <Save size={20} />
+              </button>
+              <button
+                onClick={handleCopyPageLink}
+                className="p-3 bg-brand-cream text-brand-olive rounded-full hover:bg-brand-olive hover:text-white transition-all"
+                title="复制内链"
+                aria-label="复制百科内链"
+              >
+                <Link2 size={20} />
               </button>
               <button 
                 onClick={async () => {
