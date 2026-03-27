@@ -7,6 +7,7 @@ import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { login, register, logoutRequest, loginWithWeChat } from '../lib/auth';
 import { apiGet, apiPost } from '../lib/apiClient';
+import { useToast } from './Toast';
 
 interface NotificationItem {
   id: string;
@@ -58,6 +59,7 @@ export const Navbar = () => {
   const [notifications, setNotifications] = React.useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [notifLoading, setNotifLoading] = React.useState(false);
+  const { show } = useToast();
 
   const fetchNotifications = React.useCallback(async () => {
     if (!user) return;
@@ -183,7 +185,7 @@ export const Navbar = () => {
       setIsMenuOpen(false);
     } catch (error) {
       console.error('Auth failed:', error);
-      alert(error instanceof Error ? error.message : '登录失败');
+      show(error instanceof Error ? error.message : '登录失败', { variant: 'error' });
     } finally {
       setAuthLoading(false);
     }
@@ -195,7 +197,7 @@ export const Navbar = () => {
       setIsMenuOpen(false);
     } catch (error) {
       console.error('Logout failed:', error);
-      alert('退出登录失败，请稍后重试');
+      show('退出登录失败，请稍后重试', { variant: 'error' });
     }
   };
 

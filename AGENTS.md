@@ -63,6 +63,14 @@ Run all commands from repo root.
 
 Test files are located in `tests/unit/`.
 
+### Test Patterns
+
+- Vitest with `describe`, `it`, `expect`, `beforeEach`, `afterEach` blocks.
+- Use `vi` from vitest for mocking (e.g., `vi.fn()`, `vi.stubGlobal()`, `vi.mockReset()`).
+- Test environment is `node` (configured in `vitest.config.ts`).
+- Global fetch is mocked via `vi.stubGlobal('fetch', mockFn)` in `beforeEach`.
+- Clean up with `vi.unstubAllGlobals()` in `afterEach`.
+
 ## Environment and Runtime Notes
 
 - Required local secret: `GEMINI_API_KEY` in `.env.local`.
@@ -138,20 +146,27 @@ If any of these files appear later, treat them as high-priority instructions and
 - Preserve existing fallback behavior (e.g., `ErrorBoundary` patterns).
 - Never silently swallow important failures.
 
-### 8) Firestore / Auth Conventions
+### 8) API Client Patterns
+
+- Use `apiGet`, `apiPost`, `apiPut`, `apiPatch`, `apiDelete`, `apiUpload` from `@/lib/apiClient`.
+- API functions auto-serialize query params and set JSON headers.
+- Form data uploads use `apiUpload` without JSON Content-Type.
+- Error responses throw with backend `error` message.
+
+### 9) Firestore / Auth Conventions
 
 - Keep document/collection paths explicit.
 - Preserve permission checks (`isAdmin`, role checks, etc.).
 - Use `serverTimestamp()` for write metadata where already used.
 - Keep write payload keys stable (`updatedAt`, editor identifiers, etc.).
 
-### 9) Markdown / Content Rendering
+### 10) Markdown / Content Rendering
 
 - Preserve wiki internal-link conversion conventions (`[[slug]]`, `[[title|slug]]`).
 - Maintain safe handling of external links (`target="_blank"`, `rel` attrs).
 - Validate Markdown rendering behavior when changing parser/renderer code.
 
-### 10) Styling
+### 11) Styling
 
 - Tailwind utilities are the primary styling mechanism.
 - Reuse existing design tokens/classes (`brand-*`, rounded card motifs, serif headings).

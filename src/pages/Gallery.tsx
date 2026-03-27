@@ -173,6 +173,7 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const filesRef = useRef<LocalPreviewFile[]>([]);
+  const { show } = useToast();
 
   useEffect(() => {
     filesRef.current = files;
@@ -192,17 +193,38 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const newFiles = Array.from(e.target.files!).map((file) => ({
-        file,
-        previewUrl: URL.createObjectURL(file),
-      }));
-      setFiles(prev => [...prev, ...newFiles]);
-      
-      // If title is empty and we have a folder path, try to use the folder name
-      if (!title && newFiles[0]?.file && (newFiles[0].file as any).webkitRelativePath) {
-        const path = (newFiles[0].file as any).webkitRelativePath;
-        const folderName = path.split('/')[0];
-        if (folderName) setTitle(folderName);
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      const maxSize = 10 * 1024 * 1024; // 10MB
+
+      const validFiles: { file: File; previewUrl: string }[] = [];
+      const invalidFiles: string[] = [];
+
+      Array.from(e.target.files!).forEach((file) => {
+        if (!allowedTypes.includes(file.type)) {
+          invalidFiles.push(`${file.name} (不支持的文件类型)`);
+        } else if (file.size > maxSize) {
+          invalidFiles.push(`${file.name} (文件过大，最大 10MB)`);
+        } else {
+          validFiles.push({
+            file,
+            previewUrl: URL.createObjectURL(file),
+          });
+        }
+      });
+
+      if (invalidFiles.length > 0) {
+        show(`以下文件无法上传：${invalidFiles.slice(0, 3).join(', ')}${invalidFiles.length > 3 ? '...' : ''}`, { variant: 'error' });
+      }
+
+      if (validFiles.length > 0) {
+        setFiles((prev) => [...prev, ...validFiles]);
+
+        // If title is empty and we have a folder path, try to use the folder name
+        if (!title && validFiles[0]?.file && (validFiles[0].file as any).webkitRelativePath) {
+          const path = (validFiles[0].file as any).webkitRelativePath;
+          const folderName = path.split('/')[0];
+          if (folderName) setTitle(folderName);
+        }
       }
     }
   };
@@ -239,8 +261,8 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
   };
 
   const handleUpload = async () => {
-    if (!user || files.length === 0) return alert('请选择图片');
-    if (isBanned) return alert('账号已被封禁，无法上传图集');
+    if (!user || files.length === 0) return show('请选择图片', { variant: 'error' });
+    if (isBanned) return show('账号已被封禁，无法上传图集', { variant: 'error' });
     
     // Group files by folder if possible
     const groups: { [key: string]: File[] } = {};
@@ -293,7 +315,7 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
       handleClose();
     } catch (e) {
       console.error("Error uploading gallery:", e);
-      alert('上传失败，请重试');
+      show('上传失败，请重试', { variant: 'error' });
     } finally {
       setUploading(false);
     }

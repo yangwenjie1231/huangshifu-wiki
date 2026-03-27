@@ -14,13 +14,15 @@ import {
   Users,
   XCircle,
   Lock,
+  FileText,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { clsx } from 'clsx';
 import { useAuth } from '../context/AuthContext';
 import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/apiClient';
+import { useToast } from '../components/Toast';
 
-type AdminTab = 'reviews' | 'wiki' | 'posts' | 'galleries' | 'users' | 'sections' | 'announcements' | 'music' | 'locks';
+type AdminTab = 'reviews' | 'wiki' | 'posts' | 'galleries' | 'users' | 'sections' | 'announcements' | 'music' | 'locks' | 'moderation_logs' | 'ban_logs';
 type ReviewFilter = 'all' | 'wiki' | 'posts';
 
 type ReviewQueueBucket = {
@@ -61,6 +63,7 @@ const Admin = () => {
 
   const [newSection, setNewSection] = useState({ name: '', description: '', order: 0 });
   const [newAnnouncement, setNewAnnouncement] = useState({ content: '', link: '', active: true });
+  const { show } = useToast();
 
   const isSuperAdmin = profile?.role === 'super_admin';
 
@@ -75,6 +78,8 @@ const Admin = () => {
       { id: 'galleries' as const, label: '图集管理', icon: ImageIcon },
       { id: 'users' as const, label: '用户管理', icon: Users },
       { id: 'locks' as const, label: '编辑锁', icon: Lock },
+      { id: 'moderation_logs' as const, label: '操作日志', icon: FileText },
+      { id: 'ban_logs' as const, label: '封禁日志', icon: Shield },
     ],
     [],
   );
@@ -119,6 +124,12 @@ const Admin = () => {
       if (activeTab === 'locks') {
         const result = await apiGet<{ locks: EditLockItem[] }>('/api/admin/locks');
         setData(result.locks || []);
+      } else if (activeTab === 'moderation_logs') {
+        const result = await apiGet<{ logs: any[] }>('/api/admin/moderation_logs');
+        setData(result.logs || []);
+      } else if (activeTab === 'ban_logs') {
+        const result = await apiGet<{ logs: any[] }>('/api/admin/ban_logs');
+        setData(result.logs || []);
       } else {
         const result = await apiGet<{ data: any[] }>(`/api/admin/${activeTab}`);
         setData(result.data || []);
@@ -147,7 +158,7 @@ const Admin = () => {
       await fetchReviewQueue();
     } catch (error) {
       console.error(`${action} review item error:`, error);
-      alert(action === 'approve' ? '审核通过失败' : '驳回失败');
+      show(action === 'approve' ? '审核通过失败' : '驳回失败', { variant: 'error' });
     }
   };
 
@@ -162,7 +173,7 @@ const Admin = () => {
       setData((prev) => prev.filter((item) => (item.docId || item.id || item.uid) !== id));
     } catch (error) {
       console.error('Delete error:', error);
-      alert('删除失败');
+      show('删除失败', { variant: 'error' });
     }
   };
 
@@ -176,7 +187,7 @@ const Admin = () => {
 
     const note = window.prompt(shouldUnban ? '解封备注（可选）' : '封禁原因', shouldUnban ? '' : '违反社区规范') || '';
     if (!shouldUnban && !note.trim()) {
-      alert('请输入封禁原因');
+      show('请输入封禁原因', { variant: 'error' });
       return;
     }
 
@@ -186,13 +197,13 @@ const Admin = () => {
       setData((prev) => prev.map((item) => (item.uid === targetUser.uid ? { ...item, ...result.user } : item)));
     } catch (error) {
       console.error('Toggle user ban error:', error);
-      alert(shouldUnban ? '解封失败' : '封禁失败');
+      show(shouldUnban ? '解封失败' : '封禁失败', { variant: 'error' });
     }
   };
 
   const toggleAdminRole = async (targetUser: any) => {
     if (!isSuperAdmin) {
-      alert('只有超级管理员可以更改权限');
+      show('只有超级管理员可以更改权限', { variant: 'error' });
       return;
     }
     const newRole = targetUser.role === 'admin' ? 'user' : 'admin';
@@ -202,7 +213,7 @@ const Admin = () => {
       setData((prev) => prev.map((item) => (item.uid === targetUser.uid ? { ...item, role: newRole } : item)));
     } catch (error) {
       console.error('Update role error:', error);
-      alert('更新角色失败');
+      show('更新角色失败', { variant: 'error' });
     }
   };
 
@@ -218,7 +229,7 @@ const Admin = () => {
       await fetchData();
     } catch (error) {
       console.error('Add section error:', error);
-      alert('新增版块失败');
+      show('新增版块失败', { variant: 'error' });
     }
   };
 
@@ -234,7 +245,7 @@ const Admin = () => {
       await fetchData();
     } catch (error) {
       console.error('Add announcement error:', error);
-      alert('新增公告失败');
+      show('新增公告失败', { variant: 'error' });
     }
   };
 
@@ -245,7 +256,7 @@ const Admin = () => {
       setData((prev) => prev.map((item) => (item.id === ann.id ? { ...item, active: updated?.active ?? !ann.active } : item)));
     } catch (error) {
       console.error('Toggle announcement error:', error);
-      alert('更新公告状态失败');
+      show('更新公告状态失败', { variant: 'error' });
     }
   };
 
@@ -256,7 +267,7 @@ const Admin = () => {
       setData((prev) => prev.filter((item) => item.id !== lock.id));
     } catch (error) {
       console.error('Force release lock error:', error);
-      alert('强制释放失败');
+      show('强制释放失败', { variant: 'error' });
     }
   };
 
@@ -440,6 +451,84 @@ const Admin = () => {
           ) : (
             <div className="bg-white rounded-3xl border border-gray-100 py-16 text-center text-gray-400 italic">当前没有待审核内容</div>
           )}
+        </div>
+      ) : activeTab === 'moderation_logs' || activeTab === 'ban_logs' ? (
+        <div className="bg-white rounded-[36px] border border-gray-100 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-brand-cream/50 border-b border-gray-100">
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-brand-olive/60">时间</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-brand-olive/60">操作者</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-brand-olive/60">目标</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-brand-olive/60">操作类型</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-brand-olive/60">备注</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {loading ? (
+                  [1, 2, 3, 4, 5].map((i) => (
+                    <tr key={i} className="animate-pulse">
+                      <td colSpan={5} className="px-6 py-4">
+                        <div className="h-8 bg-gray-50 rounded-xl" />
+                      </td>
+                    </tr>
+                  ))
+                ) : data.length > 0 ? (
+                  data.map((item) => (
+                    <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">
+                        {formatDateTime(item.createdAt)}
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <span className="font-bold text-brand-olive">{item.operatorName || item.operatorUid}</span>
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        {activeTab === 'ban_logs' ? (
+                          <span className="font-bold text-brand-olive">{item.targetName || item.targetUid}</span>
+                        ) : (
+                          <div>
+                            <span className="px-2 py-0.5 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase rounded">
+                              {item.targetType}
+                            </span>
+                            <span className="ml-2 text-gray-500 font-mono text-xs">{item.targetId}</span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {activeTab === 'ban_logs' ? (
+                          <span className={clsx(
+                            'px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider',
+                            item.action === 'ban' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                          )}>
+                            {item.action === 'ban' ? '封禁' : '解封'}
+                          </span>
+                        ) : (
+                          <span className={clsx(
+                            'px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider',
+                            item.action === 'approve' ? 'bg-green-100 text-green-700' :
+                            item.action === 'reject' ? 'bg-red-100 text-red-700' :
+                            'bg-gray-100 text-gray-600'
+                          )}>
+                            {item.action === 'approve' ? '通过' : item.action === 'reject' ? '驳回' : item.action}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-500 max-w-[200px] truncate">
+                        {item.note || '-'}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-16 text-center text-gray-400 italic">
+                      暂无数据
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
         <div className="bg-white rounded-[36px] border border-gray-100 shadow-sm overflow-hidden">

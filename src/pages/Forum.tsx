@@ -365,11 +365,11 @@ const PostDetail = () => {
     e.preventDefault();
     if (!postId || !user || !newComment.trim()) return;
     if (isBanned) {
-      alert('账号已被封禁，无法评论');
+      show('账号已被封禁，无法评论', { variant: 'error' });
       return;
     }
     if (!canComment) {
-      alert('仅已发布内容可评论');
+      show('仅已发布内容可评论', { variant: 'error' });
       return;
     }
 
@@ -388,7 +388,7 @@ const PostDetail = () => {
       setReplyTo(null);
     } catch (error) {
       console.error('Error adding comment:', error);
-      alert('发表评论失败，请稍后重试');
+      show('发表评论失败，请稍后重试', { variant: 'error' });
     }
   };
 
@@ -416,7 +416,7 @@ const PostDetail = () => {
       }
     } catch (error) {
       console.error('Error toggling like:', error);
-      alert('操作失败，请稍后重试');
+      show('操作失败，请稍后重试', { variant: 'error' });
     } finally {
       setLiking(false);
     }
@@ -435,7 +435,7 @@ const PostDetail = () => {
       }
     } catch (error) {
       console.error('Error toggling dislike:', error);
-      alert('操作失败，请稍后重试');
+      show('操作失败，请稍后重试', { variant: 'error' });
     } finally {
       setDisliking(false);
     }
@@ -454,7 +454,7 @@ const PostDetail = () => {
       }
     } catch (error) {
       console.error('Error toggling favorite:', error);
-      alert('收藏操作失败，请稍后重试');
+      show('收藏操作失败，请稍后重试', { variant: 'error' });
     } finally {
       setFavoriting(false);
     }
@@ -466,10 +466,10 @@ const PostDetail = () => {
     try {
       const data = await apiPost<{ post: PostItem }>(`/api/posts/${postId}/submit`);
       setPost((prev) => (prev ? { ...prev, ...data.post } : prev));
-      alert('已提交审核，请等待管理员处理');
+      show('已提交审核，请等待管理员处理');
     } catch (error) {
       console.error('Error submitting review:', error);
-      alert('提交审核失败，请稍后重试');
+      show('提交审核失败，请稍后重试', { variant: 'error' });
     } finally {
       setSubmittingReview(false);
     }
@@ -488,7 +488,7 @@ const PostDetail = () => {
       }
     } catch (error) {
       console.error('Error toggling pin:', error);
-      alert('操作失败，请稍后重试');
+      show('操作失败，请稍后重试', { variant: 'error' });
     } finally {
       setPinning(false);
     }
@@ -730,6 +730,7 @@ const PostEditor = () => {
   });
   const [savingMode, setSavingMode] = useState<'draft' | 'pending' | null>(null);
   const [loadingPost, setLoadingPost] = useState(false);
+  const { show } = useToast();
 
   useEffect(() => {
     const fetchSections = async () => {
@@ -767,13 +768,13 @@ const PostEditor = () => {
         setLoadingPost(true);
         const data = await apiGet<{ post: PostItem }>(`/api/posts/${postId}`);
         if (!data.post) {
-          alert('帖子不存在或无权编辑');
+          show('帖子不存在或无权编辑', { variant: 'error' });
           navigate('/forum');
           return;
         }
 
         if (!user || data.post.authorUid !== user.uid) {
-          alert('你无权编辑此帖子');
+          show('你无权编辑此帖子', { variant: 'error' });
           navigate(`/forum/${postId}`);
           return;
         }
@@ -786,7 +787,7 @@ const PostEditor = () => {
         });
       } catch (error) {
         console.error('Error loading editable post:', error);
-        alert('加载帖子失败，请稍后重试');
+        show('加载帖子失败，请稍后重试', { variant: 'error' });
         navigate('/forum');
       } finally {
         setLoadingPost(false);
@@ -799,7 +800,7 @@ const PostEditor = () => {
   const handleSubmit = async (status: 'draft' | 'pending') => {
     if (!user) return;
     if (isBanned) {
-      alert('账号已被封禁，无法发帖');
+      show('账号已被封禁，无法发帖', { variant: 'error' });
       return;
     }
     setSavingMode(status);
@@ -824,7 +825,7 @@ const PostEditor = () => {
       navigate(`/forum/${data.post.id}`);
     } catch (error) {
       console.error('Error creating post:', error);
-      alert(status === 'draft' ? '保存失败，请稍后重试' : '提交审核失败，请稍后重试');
+      show(status === 'draft' ? '保存失败，请稍后重试' : '提交审核失败，请稍后重试', { variant: 'error' });
     } finally {
       setSavingMode(null);
     }

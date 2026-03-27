@@ -12,6 +12,8 @@ export const GlobalMusicPlayer = () => {
   const [resolvedPlayUrl, setResolvedPlayUrl] = useState('');
   const [resolvingPlayUrl, setResolvingPlayUrl] = useState(false);
   const [playUrlError, setPlayUrlError] = useState('');
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
@@ -73,6 +75,12 @@ export const GlobalMusicPlayer = () => {
       }
     }
   }, [isPlaying, currentSong]);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = isMuted ? 0 : volume;
+    }
+  }, [volume, isMuted]);
 
   const togglePlay = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -188,6 +196,13 @@ export const GlobalMusicPlayer = () => {
               <span>{formatTime(duration)}</span>
             </div>
 
+            <button
+              onClick={() => setIsMuted(!isMuted)}
+              className="p-2 text-gray-400 hover:text-gray-900 transition-colors"
+            >
+              <Volume2 size={20} />
+            </button>
+
             <button 
               onClick={() => setCurrentSong(null)}
               className="p-2 text-gray-300 hover:text-red-500 transition-colors"
@@ -248,6 +263,28 @@ export const GlobalMusicPlayer = () => {
                       <SkipForward size={28} />
                     </button>
                   </div>
+
+                  <div className="flex items-center gap-4 mt-4">
+                    <button
+                      onClick={() => setIsMuted(!isMuted)}
+                      className="text-gray-400 hover:text-gray-900 transition-colors"
+                    >
+                      <Volume2 size={20} />
+                    </button>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={isMuted ? 0 : volume}
+                      onChange={(e) => {
+                        setVolume(parseFloat(e.target.value));
+                        if (isMuted) setIsMuted(false);
+                      }}
+                      className="flex-grow h-1.5 bg-gray-100 rounded-full appearance-none cursor-pointer accent-brand-primary"
+                    />
+                    <span className="text-xs text-gray-400 w-8">{Math.round((isMuted ? 0 : volume) * 100)}%</span>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -255,7 +292,7 @@ export const GlobalMusicPlayer = () => {
         </AnimatePresence>
       </div>
 
-      <audio 
+      <audio
         ref={audioRef}
         src={resolvedPlayUrl || currentSong.playUrl || currentSong.audioUrl}
         onTimeUpdate={onTimeUpdate}

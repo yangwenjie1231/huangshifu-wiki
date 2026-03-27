@@ -7726,6 +7726,69 @@ app.delete('/api/admin/locks/:collection/:recordId', requireAdmin, async (req, r
   }
 });
 
+app.get('/api/admin/moderation_logs', requireAdmin, async (req, res) => {
+  try {
+    const logs = await prisma.moderationLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      include: {
+        operator: {
+          select: { uid: true, displayName: true, email: true },
+        },
+      },
+    });
+
+    res.json({
+      logs: logs.map(log => ({
+        id: log.id,
+        targetType: log.targetType,
+        targetId: log.targetId,
+        action: log.action,
+        operatorUid: log.operatorUid,
+        operatorName: log.operator.displayName || log.operator.email || 'Unknown',
+        note: log.note,
+        createdAt: log.createdAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    console.error('Fetch moderation logs error:', error);
+    res.status(500).json({ error: '获取操作日志失败' });
+  }
+});
+
+app.get('/api/admin/ban_logs', requireAdmin, async (req, res) => {
+  try {
+    const logs = await prisma.userBanLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      include: {
+        target: {
+          select: { uid: true, displayName: true, email: true },
+        },
+        operator: {
+          select: { uid: true, displayName: true, email: true },
+        },
+      },
+    });
+
+    res.json({
+      logs: logs.map(log => ({
+        id: log.id,
+        targetUid: log.targetUid,
+        targetName: log.target.displayName || log.target.email || 'Unknown',
+        action: log.action,
+        operatorUid: log.operatorUid,
+        operatorName: log.operator.displayName || log.operator.email || 'Unknown',
+        note: log.note,
+        createdAt: log.createdAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    console.error('Fetch ban logs error:', error);
+    res.status(500).json({ error: '获取封禁日志失败' });
+  }
+});
+
 app.delete('/api/galleries/:id', requireAdmin, async (req, res) => {
   try {
     const gallery = await prisma.gallery.findUnique({
@@ -8104,6 +8167,108 @@ app.post('/api/music/from-qq', requireAdmin, async (req: AuthenticatedRequest, r
     });
   } catch (error) {
     console.error('Add song from qq failed:', error);
+    res.status(500).json({ error: '添加歌曲失败' });
+  }
+});
+
+app.post('/api/music/from-kugou', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = typeof req.body?.id === 'string' || typeof req.body?.id === 'number'
+      ? String(req.body.id).trim()
+      : '';
+    if (!id) {
+      res.status(400).json({ error: '歌曲 ID 不能为空' });
+      return;
+    }
+
+    const preview = await getMusicResourcePreview('kugou', 'song', id);
+    const track = normalizeMusicImportTracks(preview.songs)[0];
+    if (!track) {
+      res.status(404).json({ error: '未找到可导入的歌曲' });
+      return;
+    }
+
+    const result = await createOrUpdateImportedSong({
+      platform: 'kugou',
+      track,
+      userUid: req.authUser!.uid,
+      albumNameFallback: preview.title,
+    });
+
+    const song = await fetchSongWithRelationsByDocId(result.song.docId);
+    res.status(result.created ? 201 : 200).json({
+      song: song ? toSongResponse(song) : result.song,
+    });
+  } catch (error) {
+    console.error('Add song from kugou failed:', error);
+    res.status(500).json({ error: '添加歌曲失败' });
+  }
+});
+
+app.post('/api/music/from-baidu', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = typeof req.body?.id === 'string' || typeof req.body?.id === 'number'
+      ? String(req.body.id).trim()
+      : '';
+    if (!id) {
+      res.status(400).json({ error: '歌曲 ID 不能为空' });
+      return;
+    }
+
+    const preview = await getMusicResourcePreview('baidu', 'song', id);
+    const track = normalizeMusicImportTracks(preview.songs)[0];
+    if (!track) {
+      res.status(404).json({ error: '未找到可导入的歌曲' });
+      return;
+    }
+
+    const result = await createOrUpdateImportedSong({
+      platform: 'baidu',
+      track,
+      userUid: req.authUser!.uid,
+      albumNameFallback: preview.title,
+    });
+
+    const song = await fetchSongWithRelationsByDocId(result.song.docId);
+    res.status(result.created ? 201 : 200).json({
+      song: song ? toSongResponse(song) : result.song,
+    });
+  } catch (error) {
+    console.error('Add song from baidu failed:', error);
+    res.status(500).json({ error: '添加歌曲失败' });
+  }
+});
+
+app.post('/api/music/from-kuwo', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = typeof req.body?.id === 'string' || typeof req.body?.id === 'number'
+      ? String(req.body.id).trim()
+      : '';
+    if (!id) {
+      res.status(400).json({ error: '歌曲 ID 不能为空' });
+      return;
+    }
+
+    const preview = await getMusicResourcePreview('kuwo', 'song', id);
+    const track = normalizeMusicImportTracks(preview.songs)[0];
+    if (!track) {
+      res.status(404).json({ error: '未找到可导入的歌曲' });
+      return;
+    }
+
+    const result = await createOrUpdateImportedSong({
+      platform: 'kuwo',
+      track,
+      userUid: req.authUser!.uid,
+      albumNameFallback: preview.title,
+    });
+
+    const song = await fetchSongWithRelationsByDocId(result.song.docId);
+    res.status(result.created ? 201 : 200).json({
+      song: song ? toSongResponse(song) : result.song,
+    });
+  } catch (error) {
+    console.error('Add song from kuwo failed:', error);
     res.status(500).json({ error: '添加歌曲失败' });
   }
 });
@@ -10050,6 +10215,8 @@ app.get('/api/search', async (req: AuthenticatedRequest, res) => {
     const category = typeof req.query.category === 'string' ? req.query.category : undefined;
     const startDate = typeof req.query.startDate === 'string' ? parseDate(req.query.startDate) : null;
     const endDate = typeof req.query.endDate === 'string' ? parseDate(req.query.endDate) : null;
+    const tagsParam = typeof req.query.tags === 'string' ? req.query.tags : '';
+    const tags = tagsParam ? tagsParam.split(',').map(t => t.trim()).filter(Boolean) : [];
 
     const wantsWiki = type === 'all' || type === 'wiki';
     const wantsPosts = type === 'all' || type === 'posts';
