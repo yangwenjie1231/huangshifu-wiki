@@ -474,6 +474,75 @@ npm run db:seed
 - 搜索结果新增「音乐曲目」和「音乐专辑」Tab
 - 搜索建议下拉框支持音乐/专辑建议项点击跳转
 
+### 6.10 歌曲/专辑封面管理与专辑 CRUD（v3.x）
+
+本次发布新增歌曲封面管理、专辑创建/编辑、专辑封面管理功能，以及管理员后台的向量 Embeddings 管理面板。
+
+**数据库变更：**
+
+- 无新增表、无字段变更。
+- 封面管理使用现有的 `SongCover`、`AlbumCover` 表。
+
+**后端 API 变更：**
+
+| 端点 | 方法 | 功能 | 权限 |
+|------|------|------|------|
+| `GET /api/music/:docId/covers` | GET | 获取歌曲封面列表 | 公开 |
+| `POST /api/music/:docId/covers` | POST | 上传歌曲封面 | 管理员 |
+| `DELETE /api/music/:docId/covers/:coverId` | DELETE | 删除歌曲封面 | 管理员 |
+| `PATCH /api/music/:docId/covers/:coverId/default` | PATCH | 设为默认封面 | 管理员 |
+| `GET /api/albums/:docId/covers` | GET | 获取专辑封面列表 | 公开 |
+| `POST /api/albums/:docId/covers` | POST | 上传专辑封面 | 管理员 |
+| `DELETE /api/albums/:docId/covers/:coverId` | DELETE | 删除专辑封面 | 管理员 |
+| `PATCH /api/albums/:docId/covers/:coverId/default` | PATCH | 设为默认封面 | 管理员 |
+| `POST /api/albums/:docId/sync-covers-to-songs` | POST | 同步封面到专辑内歌曲 | 管理员 |
+| `POST /api/albums` | POST | 创建专辑 | 管理员 |
+| `PATCH /api/albums/:docId` | PATCH | 更新专辑 | 管理员 |
+| `DELETE /api/albums/:docId` | DELETE | 删除专辑 | 管理员 |
+| `GET /api/embeddings/status` | GET | 获取向量状态概览 | 管理员 |
+| `POST /api/embeddings/enqueue-missing` | POST | 补齐缺失向量 | 管理员 |
+| `POST /api/embeddings/sync-batch` | POST | 批量同步向量 | 管理员 |
+| `GET /api/embeddings/errors` | GET | 获取向量生成错误列表 | 管理员 |
+| `POST /api/embeddings/retry-failed` | POST | 重试失败的向量任务 | 管理员 |
+| `POST /api/embeddings/rebuild-all` | POST | 重建全部向量 | 管理员 |
+
+**前端新增组件：**
+
+| 组件 | 位置 | 功能 |
+|------|------|------|
+| `SongCoverManager` | `src/components/SongCoverManager.tsx` | 歌曲封面管理弹窗 |
+| `AlbumEditModal` | `src/components/AlbumEditModal.tsx` | 专辑创建/编辑弹窗 |
+| `AlbumCoverManager` | `src/components/AlbumCoverManager.tsx` | 专辑封面管理弹窗 |
+| `EmbeddingsTab` | `src/pages/Admin/EmbeddingsTab.tsx` | 向量管理面板 |
+
+**前端页面集成：**
+
+| 页面 | 集成位置 | 功能 |
+|------|---------|------|
+| `MusicDetail.tsx` | 歌曲详情页底部「管理功能」区 | 歌曲封面管理按钮 |
+| `Music.tsx` | 专辑 Tab 头部 | 创建专辑按钮 |
+| `AlbumDetail.tsx` | 专辑详情页底部「管理功能」区 | 专辑封面管理按钮 |
+| `Admin.tsx` | 新增「向量管理」Tab | 向量状态与批量操作 |
+
+**功能说明：**
+
+1. **歌曲封面管理**：管理员可在歌曲详情页上传多张封面、设置默认封面、删除封面
+2. **专辑 CRUD**：管理员可在专辑列表创建新专辑，填写标题、艺术家、描述、原始链接
+3. **专辑封面管理**：类似歌曲封面管理，支持上传、设默认、删除；另支持「同步到歌曲」将封面批量更新到专辑内所有歌曲
+4. **向量管理面板**：展示 pending/processing/ready/failed 数量，提供补齐缺失、批量同步、查看错误、重试失败、重建全部等批量操作
+
+**验证步骤：**
+
+1. 使用管理员账号登录
+2. 进入歌曲详情页（`/music/:songId`），滚动到底部「管理功能」区，点击「封面管理」
+3. 上传新封面、设为默认、删除旧封面
+4. 进入音乐馆，切换到「专辑」Tab，点击「创建专辑」按钮
+5. 填写专辑信息后保存
+6. 进入专辑详情页，滚动到底部「管理功能」区，点击「封面管理」
+7. 上传封面并测试「同步到歌曲」功能
+8. 进入管理后台，切换到「向量管理」Tab
+9. 查看状态概览，执行补齐/同步/重试操作
+
 ---
 
 ## 7. 构建并启动服务
@@ -1178,6 +1247,123 @@ curl "http://127.0.0.1:3000/api/search/suggest?q=关键"
 - 音乐搜索结果包含 `title`、`artist`、`album`、`cover` 字段
 - 专辑搜索结果包含 `title`、`artist`、`tracksCount` 字段
 - 切换内容类型筛选后，结果仅显示对应类型
+
+### 11.16 歌曲/专辑封面管理与专辑 CRUD 验证（v3.x）
+
+#### 11.16.1 歌曲封面管理验证
+
+```bash
+# 获取歌曲封面列表
+curl http://127.0.0.1:3000/api/music/<songDocId>/covers
+
+# 上传歌曲封面（需要先登录）
+curl -X POST http://127.0.0.1:3000/api/music/<songDocId>/covers \
+  -H "Content-Type: multipart/form-data" \
+  -b cookie.txt -c cookie.txt \
+  -F "file=@/root/test-cover.jpg"
+
+# 设为默认封面
+curl -X PATCH http://127.0.0.1:3000/api/music/<songDocId>/covers/<coverId>/default \
+  -b cookie.txt -c cookie.txt
+
+# 删除封面
+curl -X DELETE http://127.0.0.1:3000/api/music/<songDocId>/covers/<coverId> \
+  -b cookie.txt -c cookie.txt
+```
+
+**验证点：**
+- 歌曲详情页底部显示「封面管理」按钮（仅管理员可见）
+- 可上传 JPG/PNG/WEBP 等格式图片
+- 可设默认封面，默认封面带有标记
+- 不可删除已是默认的封面
+- 删除封面后，歌曲主封面不变
+
+#### 11.16.2 专辑 CRUD 验证
+
+```bash
+# 创建专辑
+curl -X POST http://127.0.0.1:3000/api/albums \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"title":"测试专辑","artist":"测试艺术家","description":"专辑描述"}'
+
+# 更新专辑
+curl -X PATCH http://127.0.0.1:3000/api/albums/<albumDocId> \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"title":"更新后的标题","description":"更新后的描述"}'
+
+# 删除专辑
+curl -X DELETE http://127.0.0.1:3000/api/albums/<albumDocId> \
+  -b cookie.txt -c cookie.txt
+```
+
+**验证点：**
+- 音乐馆专辑 Tab 显示「创建专辑」按钮（仅管理员可见）
+- 创建专辑后，专辑列表自动刷新
+- 可编辑专辑标题、艺术家、描述、原始链接
+- 删除专辑后，专辑从列表消失
+
+#### 11.16.3 专辑封面管理验证
+
+```bash
+# 获取专辑封面列表
+curl http://127.0.0.1:3000/api/albums/<albumDocId>/covers
+
+# 上传专辑封面
+curl -X POST http://127.0.0.1:3000/api/albums/<albumDocId>/covers \
+  -H "Content-Type: multipart/form-data" \
+  -b cookie.txt -c cookie.txt \
+  -F "file=@/root/test-album-cover.jpg"
+
+# 同步封面到专辑内歌曲
+curl -X POST http://127.0.0.1:3000/api/albums/<albumDocId>/sync-covers-to-songs \
+  -b cookie.txt -c cookie.txt
+```
+
+**验证点：**
+- 专辑详情页底部显示「封面管理」按钮（仅管理员可见）
+- 可上传多张封面并设默认
+- 「同步到歌曲」按钮可将封面批量更新到专辑内所有歌曲
+
+#### 11.16.4 向量 Embeddings 管理面板验证
+
+```bash
+# 获取向量状态
+curl http://127.0.0.1:3000/api/embeddings/status -b cookie.txt -c cookie.txt
+
+# 获取向量错误列表
+curl "http://127.0.0.1:3000/api/embeddings/errors?limit=20" -b cookie.txt -c cookie.txt
+
+# 补齐缺失向量
+curl -X POST http://127.0.0.1:3000/api/embeddings/enqueue-missing \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"limit":100}'
+
+# 批量同步向量
+curl -X POST http://127.0.0.1:3000/api/embeddings/sync-batch \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"limit":50}'
+
+# 重试失败向量
+curl -X POST http://127.0.0.1:3000/api/embeddings/retry-failed \
+  -b cookie.txt -c cookie.txt
+
+# 重建全部向量（危险操作）
+curl -X POST http://127.0.0.1:3000/api/embeddings/rebuild-all \
+  -b cookie.txt -c cookie.txt
+```
+
+**验证点：**
+- 管理后台新增「向量管理」Tab（仅管理员可见）
+- 状态概览显示 pending/processing/ready/failed 数量
+- 「补齐缺失」可将缺失的向量加入队列
+- 「批量同步」可处理待处理的向量任务
+- 「查看错误」显示失败详情（图片信息、错误原因、重试次数）
+- 「重试失败」可重新尝试失败的向量任务
+- 「重建全部」会删除并重建所有向量（需二次确认）
 
 ---
 

@@ -8,6 +8,7 @@ import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'motion/react';
 import { MusicPlayer } from '../components/MusicPlayer';
 import { MusicImportModal } from '../components/MusicImportModal';
+import { AlbumEditModal } from '../components/AlbumEditModal';
 import { useToast } from '../components/Toast';
 import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
@@ -132,6 +133,8 @@ const Music = () => {
   const [searchId, setSearchId] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [editingAlbum, setEditingAlbum] = useState<AlbumItem | null>(null);
+  const [isAlbumModalOpen, setIsAlbumModalOpen] = useState(false);
   const [selectedSongs, setSelectedSongs] = useState<Set<string>>(new Set());
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{ show: boolean, type: 'single' | 'batch', id?: string }>({ show: false, type: 'single' });
@@ -490,6 +493,13 @@ const Music = () => {
         onImported={fetchSongs}
       />
 
+      <AlbumEditModal
+        open={isAlbumModalOpen}
+        onClose={() => setIsAlbumModalOpen(false)}
+        onSuccess={fetchAlbums}
+        album={editingAlbum}
+      />
+
       {isBatchMode && selectedSongs.size > 0 && (
         <motion.div 
           initial={{ y: 100 }}
@@ -572,9 +582,22 @@ const Music = () => {
                   <Album size={16} /> 专辑
                 </button>
               </div>
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                {activeTab === 'music' ? `${songs.length} 首歌曲` : `${albums.length} 张专辑`}
-              </span>
+              <div className="flex items-center gap-3">
+                {isAdmin && activeTab === 'albums' && (
+                  <button
+                    onClick={() => {
+                      setEditingAlbum(null);
+                      setIsAlbumModalOpen(true);
+                    }}
+                    className="px-4 py-2 rounded-full bg-brand-primary text-gray-900 text-xs font-bold hover:scale-105 transition-all"
+                  >
+                    <Plus size={14} className="inline mr-1" /> 创建专辑
+                  </button>
+                )}
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                  {activeTab === 'music' ? `${songs.length} 首歌曲` : `${albums.length} 张专辑`}
+                </span>
+              </div>
             </div>
 
             {activeTab === 'music' ? (

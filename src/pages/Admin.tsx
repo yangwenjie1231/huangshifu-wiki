@@ -15,14 +15,16 @@ import {
   XCircle,
   Lock,
   FileText,
+  Cpu,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { clsx } from 'clsx';
 import { useAuth } from '../context/AuthContext';
 import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/apiClient';
 import { useToast } from '../components/Toast';
+import { EmbeddingsTab } from './Admin/EmbeddingsTab';
 
-type AdminTab = 'reviews' | 'wiki' | 'posts' | 'galleries' | 'users' | 'sections' | 'announcements' | 'music' | 'locks' | 'moderation_logs' | 'ban_logs';
+type AdminTab = 'reviews' | 'wiki' | 'posts' | 'galleries' | 'users' | 'sections' | 'announcements' | 'music' | 'locks' | 'moderation_logs' | 'ban_logs' | 'embeddings';
 type ReviewFilter = 'all' | 'wiki' | 'posts';
 
 type ReviewQueueBucket = {
@@ -72,6 +74,7 @@ const Admin = () => {
       { id: 'reviews' as const, label: '审核队列', icon: CheckCircle },
       { id: 'wiki' as const, label: '百科管理', icon: Book },
       { id: 'music' as const, label: '音乐管理', icon: MusicIcon },
+      { id: 'embeddings' as const, label: '向量管理', icon: Cpu },
       { id: 'posts' as const, label: '帖子管理', icon: MessageSquare },
       { id: 'sections' as const, label: '版块管理', icon: Layers },
       { id: 'announcements' as const, label: '公告管理', icon: Megaphone },
@@ -451,6 +454,10 @@ const Admin = () => {
           ) : (
             <div className="bg-white rounded-3xl border border-gray-100 py-16 text-center text-gray-400 italic">当前没有待审核内容</div>
           )}
+        </div>
+      ) : activeTab === 'embeddings' ? (
+        <div className="bg-white rounded-[36px] border border-gray-100 shadow-sm overflow-hidden p-6">
+          <EmbeddingsTab />
         </div>
       ) : activeTab === 'moderation_logs' || activeTab === 'ban_logs' ? (
         <div className="bg-white rounded-[36px] border border-gray-100 shadow-sm overflow-hidden">

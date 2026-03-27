@@ -8,6 +8,7 @@ import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
 import { useAuth } from '../context/AuthContext';
 import { useMusic } from '../context/MusicContext';
 import { useToast } from '../components/Toast';
+import { SongCoverManager } from '../components/SongCoverManager';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 
 type SongItem = {
@@ -69,7 +70,7 @@ const MusicDetail = () => {
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [favoriting, setFavoriting] = useState(false);
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { setCurrentSong, setIsPlaying, setPlaylist } = useMusic();
   const { show } = useToast();
 
@@ -277,6 +278,17 @@ const MusicDetail = () => {
           <div className="text-sm text-gray-400 italic">暂无乐评，快来发表第一篇吧！</div>
         )}
       </section>
+
+      {isAdmin && song?.docId && (
+        <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
+          <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">管理功能</h2>
+          <SongCoverManager
+            songDocId={song.docId}
+            currentCover={song.cover}
+            onCoverUpdated={(newCoverUrl) => setSong((prev) => prev ? { ...prev, cover: newCoverUrl } : prev)}
+          />
+        </section>
+      )}
     </div>
   );
 };
