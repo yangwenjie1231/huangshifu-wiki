@@ -5,6 +5,7 @@ import { apiGet, apiPatch } from '../lib/apiClient';
 import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
+import { AvatarCropModal } from '../components/AvatarCropModal';
 
 type FavoriteTargetType = 'wiki' | 'post' | 'music';
 
@@ -68,6 +69,7 @@ const Profile = () => {
     photoURL: profile?.photoURL || user?.photoURL || '',
   });
   const [loading, setLoading] = useState(false);
+  const [avatarModalOpen, setAvatarModalOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -187,13 +189,16 @@ const Profile = () => {
     );
   }
 
+  const handleAvatarSuccess = (photoURL: string) => {
+    setFormData((prev) => ({ ...prev, photoURL }));
+  };
+
   const handleSave = async () => {
     setLoading(true);
     try {
       await apiPatch('/api/users/me', {
         displayName: formData.displayName,
         bio: formData.bio,
-        photoURL: formData.photoURL,
       });
       setIsEditing(false);
     } catch (e) {
@@ -215,33 +220,17 @@ const Profile = () => {
               referrerPolicy="no-referrer"
             />
             {isEditing && (
-              <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+              <button
+                onClick={() => setAvatarModalOpen(true)}
+                className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+              >
                 <Camera className="text-white" size={24} />
-                <input
-                  type="text"
-                  value={formData.photoURL}
-                  onChange={(e) => setFormData({ ...formData, photoURL: e.target.value })}
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                  title="粘贴图片链接"
-                />
-              </div>
+              </button>
             )}
           </div>
         </div>
 
         <div className="pt-16 pb-12 px-12">
-          {isEditing && (
-            <div className="mb-6 p-4 bg-brand-cream rounded-2xl border border-brand-primary/10">
-              <p className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-widest">头像链接</p>
-              <input
-                type="text"
-                value={formData.photoURL}
-                onChange={(e) => setFormData({ ...formData, photoURL: e.target.value })}
-                className="w-full px-4 py-2 bg-white rounded-xl border-none focus:ring-2 focus:ring-brand-primary/20 text-sm"
-                placeholder="粘贴头像图片 URL..."
-              />
-            </div>
-          )}
           <div className="flex justify-between items-start mb-8">
             <div className="flex-grow mr-4">
               {isEditing ? (
@@ -562,6 +551,12 @@ const Profile = () => {
             </div>
           )}
         </div>
+
+        <AvatarCropModal
+          open={avatarModalOpen}
+          onClose={() => setAvatarModalOpen(false)}
+          onSuccess={handleAvatarSuccess}
+        />
       </div>
     </div>
   );
