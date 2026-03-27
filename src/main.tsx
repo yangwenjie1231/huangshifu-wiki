@@ -7,7 +7,7 @@ import { randomId } from './lib/randomId';
 import './index.css';
 
 if (globalThis.crypto && typeof globalThis.crypto.randomUUID !== 'function') {
-  globalThis.crypto.randomUUID = (() => randomId()) as Crypto['randomUUID'];
+  globalThis.crypto.randomUUID = randomId as Crypto['randomUUID'];
 }
 
 createRoot(document.getElementById('root')!).render(
