@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Disc3, Play, Heart, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Disc3, Play, Heart, ExternalLink, Link2 } from 'lucide-react';
 import { clsx } from 'clsx';
 
 import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
 import { useMusic } from '../context/MusicContext';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../components/Toast';
+import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 
 type SongItem = {
   docId: string;
@@ -40,6 +42,7 @@ const AlbumDetail = () => {
   const [favoriting, setFavoriting] = useState<string | null>(null);
   const { user } = useAuth();
   const { currentSong, playAlbumTracks } = useMusic();
+  const { show } = useToast();
 
   const fetchAlbum = async () => {
     if (!albumId) return;
@@ -101,6 +104,16 @@ const AlbumDetail = () => {
     }
   };
 
+  const handleCopyAlbumLink = async () => {
+    if (!album?.id) return;
+    const copied = await copyToClipboard(toAbsoluteInternalUrl(`/album/${album.id}`));
+    if (copied) {
+      show('专辑内链已复制');
+      return;
+    }
+    show('复制链接失败，请稍后重试', { variant: 'error' });
+  };
+
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-12">
@@ -140,6 +153,13 @@ const AlbumDetail = () => {
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={handleCopyAlbumLink}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 text-sm text-gray-600 hover:text-brand-olive hover:border-brand-olive/40"
+              title="复制内链"
+            >
+              <Link2 size={14} /> 复制内链
+            </button>
             {album.platformUrl ? (
               <a
                 href={album.platformUrl}

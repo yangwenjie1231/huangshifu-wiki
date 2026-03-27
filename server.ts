@@ -7468,6 +7468,55 @@ app.get('/api/music/:docId/play-url', async (req, res) => {
   }
 });
 
+app.get('/api/music/:docId', async (req: AuthenticatedRequest, res) => {
+  try {
+    const identifier = req.params.docId;
+    let song = await fetchSongWithRelationsByDocId(identifier);
+
+    if (!song) {
+      const matched = await prismaAny.musicTrack.findFirst({
+        where: {
+          OR: [
+            { id: identifier },
+            { neteaseId: identifier },
+            { tencentId: identifier },
+            { kugouId: identifier },
+            { baiduId: identifier },
+            { kuwoId: identifier },
+          ],
+        },
+        select: { docId: true },
+      });
+
+      if (matched?.docId) {
+        song = await fetchSongWithRelationsByDocId(matched.docId);
+      }
+    }
+
+    if (!song) {
+      res.status(404).json({ error: '歌曲不存在' });
+      return;
+    }
+
+    const favoritedByMe = req.authUser
+      ? Boolean(await prisma.favorite.findFirst({
+          where: {
+            userUid: req.authUser.uid,
+            targetType: 'music',
+            targetId: song.docId,
+          },
+          select: { id: true },
+        }))
+      : false;
+
+    const responseSong = toSongResponse(song, { favoritedByMe });
+    res.json({ song: responseSong });
+  } catch (error) {
+    console.error('Fetch song detail error:', error);
+    res.status(500).json({ error: '获取歌曲详情失败' });
+  }
+});
+
 app.delete('/api/music/:docId', requireAdmin, async (req, res) => {
   try {
     const docId = req.params.docId;
