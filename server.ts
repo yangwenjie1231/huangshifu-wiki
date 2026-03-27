@@ -108,6 +108,7 @@ type ModerationTargetType = 'wiki' | 'post';
 type NotificationType = 'reply' | 'like' | 'review_result';
 type BrowsingTargetType = 'wiki' | 'post' | 'music';
 type PostSortType = 'latest' | 'hot' | 'recommended';
+const MUSIC_SECTION_ID = 'music';
 
 type WikiRelationRecord = {
   type: WikiRelationType;
@@ -1800,6 +1801,14 @@ function parsePostSort(value: unknown): PostSortType {
   return 'latest';
 }
 
+function normalizeOptionalDocId(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const normalized = value.trim();
+  return normalized ? normalized : null;
+}
+
 function normalizeKeyword(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 64);
 }
@@ -2419,6 +2428,8 @@ function toPostResponse(post: {
   id: string;
   title: string;
   section: string;
+  musicDocId?: string | null;
+  albumDocId?: string | null;
   content: string;
   tags: unknown;
   authorUid: string;
@@ -2429,7 +2440,9 @@ function toPostResponse(post: {
   hotScore?: number;
   viewCount?: number;
   likesCount: number;
+  dislikesCount: number;
   commentsCount: number;
+  isPinned?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -2438,6 +2451,8 @@ function toPostResponse(post: {
     hotScore: post.hotScore ?? 0,
     viewCount: post.viewCount ?? 0,
     tags: serializeTags(post.tags),
+    musicDocId: post.musicDocId || null,
+    albumDocId: post.albumDocId || null,
     reviewedAt: post.reviewedAt ? post.reviewedAt.toISOString() : null,
     createdAt: post.createdAt.toISOString(),
     updatedAt: post.updatedAt.toISOString(),
@@ -3109,8 +3124,9 @@ app.get('/api/users/:uid/posts', async (req: AuthenticatedRequest, res) => {
 
     const likedPostSet = new Set<string>();
     const favoritedPostSet = new Set<string>();
+    const dislikedPostSet = new Set<string>();
     if (req.authUser && posts.length) {
-      const [likedPosts, favoritedPosts] = await Promise.all([
+      const [likedPosts, favoritedPosts, dislikedPosts] = await Promise.all([
         prisma.postLike.findMany({
           where: {
             userUid: req.authUser.uid,
@@ -3126,9 +3142,17 @@ app.get('/api/users/:uid/posts', async (req: AuthenticatedRequest, res) => {
           },
           select: { targetId: true },
         }),
+        prisma.postDislike.findMany({
+          where: {
+            userUid: req.authUser.uid,
+            postId: { in: posts.map((item) => item.id) },
+          },
+          select: { postId: true },
+        }),
       ]);
       likedPosts.forEach((item) => likedPostSet.add(item.postId));
       favoritedPosts.forEach((item) => favoritedPostSet.add(item.targetId));
+      dislikedPosts.forEach((item) => dislikedPostSet.add(item.postId));
     }
 
     res.json({
@@ -3136,10 +3160,8 @@ app.get('/api/users/:uid/posts', async (req: AuthenticatedRequest, res) => {
         ...toPostResponse(post),
         likedByMe: likedPostSet.has(post.id),
         favoritedByMe: favoritedPostSet.has(post.id),
+        dislikedByMe: dislikedPostSet.has(post.id),
       })),
-      total,
-      page,
-      limit,
     });
   } catch (error) {
     console.error('Fetch user posts error:', error);
@@ -4960,11 +4982,11 @@ app.get('/api/posts', async (req: AuthenticatedRequest, res) => {
 
     let orderBy: Array<Record<string, 'asc' | 'desc'>>;
     if (sort === 'hot') {
-      orderBy = [{ hotScore: 'desc' }, { updatedAt: 'desc' }];
+      orderBy = [{ isPinned: 'desc' }, { hotScore: 'desc' }, { updatedAt: 'desc' }];
     } else if (sort === 'recommended') {
-      orderBy = [{ commentsCount: 'desc' }, { likesCount: 'desc' }, { updatedAt: 'desc' }];
+      orderBy = [{ isPinned: 'desc' }, { commentsCount: 'desc' }, { likesCount: 'desc' }, { updatedAt: 'desc' }];
     } else {
-      orderBy = [{ updatedAt: 'desc' }];
+      orderBy = [{ isPinned: 'desc' }, { updatedAt: 'desc' }];
     }
 
     const posts = await prisma.post.findMany({
@@ -5122,7 +5144,7 @@ app.get('/api/posts/:id', async (req: AuthenticatedRequest, res) => {
       orderBy: { createdAt: 'asc' },
     });
 
-    const [likedByMe, favoritedByMe] = req.authUser
+    const [likedByMe, favoritedByMe, dislikedByMe] = req.authUser
       ? await Promise.all([
           prisma.postLike.count({
             where: {
@@ -5137,8 +5159,14 @@ app.get('/api/posts/:id', async (req: AuthenticatedRequest, res) => {
               userUid: req.authUser.uid,
             },
           }).then((count) => count > 0),
+          prisma.postDislike.count({
+            where: {
+              postId: req.params.id,
+              userUid: req.authUser.uid,
+            },
+          }).then((count) => count > 0),
         ])
-      : [false, false];
+      : [false, false, false];
 
     res.json({
       post: {
@@ -5148,6 +5176,7 @@ app.get('/api/posts/:id', async (req: AuthenticatedRequest, res) => {
         }),
         likedByMe,
         favoritedByMe,
+        dislikedByMe,
       },
       comments: comments.map(toCommentResponse),
     });
@@ -5159,12 +5188,14 @@ app.get('/api/posts/:id', async (req: AuthenticatedRequest, res) => {
 
 app.post('/api/posts', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
-    const { title, section, content, tags, status } = req.body as {
+    const { title, section, content, tags, status, musicDocId, albumDocId } = req.body as {
       title?: string;
       section?: string;
       content?: string;
       tags?: string[];
       status?: ContentStatus;
+      musicDocId?: string;
+      albumDocId?: string;
     };
 
     if (!title || !section || !content) {
@@ -5172,13 +5203,31 @@ app.post('/api/posts', requireAuth, requireActiveUser, async (req: Authenticated
       return;
     }
 
-    const sectionExists = await prisma.section.findUnique({
-      where: { id: section },
-      select: { id: true },
-    });
-    if (!sectionExists) {
-      res.status(400).json({ error: '版块不存在' });
-      return;
+    const normalizedMusicDocId = normalizeOptionalDocId(musicDocId);
+    const normalizedAlbumDocId = normalizeOptionalDocId(albumDocId);
+
+    let finalSection = section;
+    if (normalizedMusicDocId || normalizedAlbumDocId) {
+      const musicSection = await prisma.section.findUnique({
+        where: { id: MUSIC_SECTION_ID },
+        select: { id: true },
+      });
+      if (!musicSection) {
+        res.status(500).json({ error: '音乐版块不存在，请先在后台创建' });
+        return;
+      }
+      finalSection = MUSIC_SECTION_ID;
+    }
+
+    if (finalSection !== section) {
+      const sectionExists = await prisma.section.findUnique({
+        where: { id: section },
+        select: { id: true },
+      });
+      if (!sectionExists) {
+        res.status(400).json({ error: '版块不存在' });
+        return;
+      }
     }
 
     const nextStatus = normalizePostWriteStatus(status, req.authUser!);
@@ -5186,7 +5235,7 @@ app.post('/api/posts', requireAuth, requireActiveUser, async (req: Authenticated
     const post = await prisma.post.create({
       data: {
         title,
-        section,
+        section: finalSection,
         content,
         tags: tags || [],
         status: nextStatus,
@@ -5194,6 +5243,8 @@ app.post('/api/posts', requireAuth, requireActiveUser, async (req: Authenticated
         reviewedBy: null,
         reviewedAt: null,
         authorUid: req.authUser!.uid,
+        musicDocId: normalizedMusicDocId,
+        albumDocId: normalizedAlbumDocId,
       },
     });
 
@@ -5514,18 +5565,23 @@ app.post('/api/posts/:id/submit', requireAuth, requireActiveUser, async (req: Au
 
 app.put('/api/posts/:id', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
-    const { title, section, content, tags, status } = req.body as {
+    const { title, section, content, tags, status, musicDocId, albumDocId } = req.body as {
       title?: string;
       section?: string;
       content?: string;
       tags?: string[];
       status?: ContentStatus;
+      musicDocId?: string;
+      albumDocId?: string;
     };
 
     if (!title || !section || !content) {
       res.status(400).json({ error: '缺少必要字段' });
       return;
     }
+
+    const normalizedMusicDocId = normalizeOptionalDocId(musicDocId);
+    const normalizedAlbumDocId = normalizeOptionalDocId(albumDocId);
 
     const existingPost = await prisma.post.findUnique({
       where: { id: req.params.id },
@@ -5548,13 +5604,28 @@ app.put('/api/posts/:id', requireAuth, requireActiveUser, async (req: Authentica
       return;
     }
 
-    const sectionExists = await prisma.section.findUnique({
-      where: { id: section },
-      select: { id: true },
-    });
-    if (!sectionExists) {
-      res.status(400).json({ error: '版块不存在' });
-      return;
+    let finalSection = section;
+    if (normalizedMusicDocId || normalizedAlbumDocId) {
+      const musicSection = await prisma.section.findUnique({
+        where: { id: MUSIC_SECTION_ID },
+        select: { id: true },
+      });
+      if (!musicSection) {
+        res.status(500).json({ error: '音乐版块不存在，请先在后台创建' });
+        return;
+      }
+      finalSection = MUSIC_SECTION_ID;
+    }
+
+    if (finalSection !== section) {
+      const sectionExists = await prisma.section.findUnique({
+        where: { id: section },
+        select: { id: true },
+      });
+      if (!sectionExists) {
+        res.status(400).json({ error: '版块不存在' });
+        return;
+      }
     }
 
     let nextStatus: ContentStatus;
@@ -5571,13 +5642,15 @@ app.put('/api/posts/:id', requireAuth, requireActiveUser, async (req: Authentica
       where: { id: req.params.id },
       data: {
         title,
-        section,
+        section: finalSection,
         content,
         tags: Array.isArray(tags) ? tags : [],
         status: nextStatus,
         reviewNote: null,
         reviewedBy: null,
         reviewedAt: null,
+        musicDocId: normalizedMusicDocId,
+        albumDocId: normalizedAlbumDocId,
       },
     });
 
@@ -5709,6 +5782,110 @@ app.delete('/api/posts/:id/like', requireAuth, requireActiveUser, async (req: Au
   } catch (error) {
     console.error('Unlike post error:', error);
     res.status(500).json({ error: '取消点赞失败' });
+  }
+});
+
+app.post('/api/posts/:id/dislike', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const postId = req.params.id;
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      select: {
+        id: true,
+        status: true,
+        authorUid: true,
+      },
+    });
+
+    if (!post || !canViewPost(post, req.authUser)) {
+      res.status(404).json({ error: '帖子未找到' });
+      return;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      try {
+        await tx.postDislike.create({
+          data: {
+            postId,
+            userUid: req.authUser!.uid,
+          },
+        });
+      } catch {
+        return;
+      }
+
+      await tx.post.update({
+        where: { id: postId },
+        data: {
+          dislikesCount: { increment: 1 },
+        },
+      });
+    });
+
+    const dislikesCount = await prisma.postDislike.count({ where: { postId } });
+
+    const updatedPost = await prisma.post.update({
+      where: { id: postId },
+      data: {
+        dislikesCount,
+      },
+    });
+
+    const hotScore = calculatePostHotScore(updatedPost);
+    await prisma.post.update({
+      where: { id: postId },
+      data: { hotScore },
+    });
+
+    res.json({ disliked: true, dislikesCount });
+  } catch (error) {
+    console.error('Dislike post error:', error);
+    res.status(500).json({ error: '踩失败' });
+  }
+});
+
+app.delete('/api/posts/:id/dislike', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const postId = req.params.id;
+
+    await prisma.$transaction(async (tx) => {
+      const deleted = await tx.postDislike.deleteMany({
+        where: {
+          postId,
+          userUid: req.authUser!.uid,
+        },
+      });
+
+      if (!deleted.count) {
+        return;
+      }
+
+      await tx.post.update({
+        where: { id: postId },
+        data: {
+          dislikesCount: { decrement: 1 },
+        },
+      });
+    });
+
+    const dislikesCount = await prisma.postDislike.count({ where: { postId } });
+    const updatedPost = await prisma.post.update({
+      where: { id: postId },
+      data: {
+        dislikesCount,
+      },
+    });
+
+    const hotScore = calculatePostHotScore(updatedPost);
+    await prisma.post.update({
+      where: { id: postId },
+      data: { hotScore },
+    });
+
+    res.json({ disliked: false, dislikesCount });
+  } catch (error) {
+    console.error('Undislike post error:', error);
+    res.status(500).json({ error: '取消踩失败' });
   }
 });
 
@@ -6130,9 +6307,10 @@ app.post('/api/admin/review/:type/:id/reject', requireAdmin, async (req: Authent
 
 app.patch('/api/posts/:id', requireAdmin, async (req, res) => {
   try {
-    const { commentsCount, likesCount, status } = req.body as {
+    const { commentsCount, likesCount, dislikesCount, status } = req.body as {
       commentsCount?: number;
       likesCount?: number;
+      dislikesCount?: number;
       status?: ContentStatus;
     };
 
@@ -6143,6 +6321,7 @@ app.patch('/api/posts/:id', requireAdmin, async (req, res) => {
       data: {
         commentsCount: typeof commentsCount === 'number' ? commentsCount : undefined,
         likesCount: typeof likesCount === 'number' ? likesCount : undefined,
+        dislikesCount: typeof dislikesCount === 'number' ? dislikesCount : undefined,
         status: parsedStatus || undefined,
       },
     });
@@ -6151,6 +6330,58 @@ app.patch('/api/posts/:id', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Update post error:', error);
     res.status(500).json({ error: '更新帖子失败' });
+  }
+});
+
+app.post('/api/posts/:id/pin', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const postId = req.params.id;
+
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      select: { id: true, isPinned: true },
+    });
+
+    if (!post) {
+      res.status(404).json({ error: '帖子未找到' });
+      return;
+    }
+
+    const updatedPost = await prisma.post.update({
+      where: { id: postId },
+      data: { isPinned: true },
+    });
+
+    res.json({ isPinned: updatedPost.isPinned });
+  } catch (error) {
+    console.error('Pin post error:', error);
+    res.status(500).json({ error: '置顶帖子失败' });
+  }
+});
+
+app.delete('/api/posts/:id/pin', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const postId = req.params.id;
+
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      select: { id: true, isPinned: true },
+    });
+
+    if (!post) {
+      res.status(404).json({ error: '帖子未找到' });
+      return;
+    }
+
+    const updatedPost = await prisma.post.update({
+      where: { id: postId },
+      data: { isPinned: false },
+    });
+
+    res.json({ isPinned: updatedPost.isPinned });
+  } catch (error) {
+    console.error('Unpin post error:', error);
+    res.status(500).json({ error: '取消置顶失败' });
   }
 });
 
@@ -7911,6 +8142,70 @@ app.delete('/api/music/:docId/instrumentals/:instrumentalSongDocId', requireAdmi
   }
 });
 
+app.get('/api/music/:docId/posts', async (req: AuthenticatedRequest, res) => {
+  try {
+    const docId = req.params.docId;
+    const limit = parseInteger(req.query.limit, 20, { min: 1, max: 100 });
+    const sort = parsePostSort(req.query.sort);
+    const visibilityWhere = buildPostVisibilityWhere(req.authUser);
+
+    const where = {
+      musicDocId: docId,
+      ...visibilityWhere,
+    };
+
+    let orderBy: Array<Record<string, 'asc' | 'desc'>>;
+    if (sort === 'hot') {
+      orderBy = [{ hotScore: 'desc' }, { updatedAt: 'desc' }];
+    } else if (sort === 'recommended') {
+      orderBy = [{ commentsCount: 'desc' }, { likesCount: 'desc' }, { updatedAt: 'desc' }];
+    } else {
+      orderBy = [{ updatedAt: 'desc' }];
+    }
+
+    const posts = await prisma.post.findMany({
+      where,
+      orderBy,
+      take: limit,
+    });
+
+    const likedPostSet = new Set<string>();
+    const favoritedPostSet = new Set<string>();
+    if (req.authUser && posts.length) {
+      const [likedPosts, favoritedPosts] = await Promise.all([
+        prisma.postLike.findMany({
+          where: {
+            userUid: req.authUser.uid,
+            postId: { in: posts.map((item) => item.id) },
+          },
+          select: { postId: true },
+        }),
+        prisma.favorite.findMany({
+          where: {
+            userUid: req.authUser.uid,
+            targetType: 'post',
+            targetId: { in: posts.map((item) => item.id) },
+          },
+          select: { targetId: true },
+        }),
+      ]);
+      likedPosts.forEach((item) => likedPostSet.add(item.postId));
+      favoritedPosts.forEach((item) => favoritedPostSet.add(item.targetId));
+    }
+
+    res.json({
+      posts: posts.map((post) => ({
+        ...toPostResponse(post),
+        likedByMe: likedPostSet.has(post.id),
+        favoritedByMe: favoritedPostSet.has(post.id),
+      })),
+    });
+  } catch (error) {
+    console.error('Fetch music posts error:', error);
+    res.status(500).json({ error: '获取音乐关联帖子失败' });
+  }
+});
+
 app.get('/api/albums', async (req: AuthenticatedRequest, res) => {
   try {
     const platform = parseMusicPlatform(req.query.platform);
@@ -8061,6 +8356,70 @@ app.get('/api/albums/:id', async (req: AuthenticatedRequest, res) => {
   } catch (error) {
     console.error('Fetch album detail error:', error);
     res.status(500).json({ error: '获取专辑详情失败' });
+  }
+});
+
+app.get('/api/albums/:id/posts', async (req: AuthenticatedRequest, res) => {
+  try {
+    const docId = req.params.id;
+    const limit = parseInteger(req.query.limit, 20, { min: 1, max: 100 });
+    const sort = parsePostSort(req.query.sort);
+    const visibilityWhere = buildPostVisibilityWhere(req.authUser);
+
+    const where = {
+      albumDocId: docId,
+      ...visibilityWhere,
+    };
+
+    let orderBy: Array<Record<string, 'asc' | 'desc'>>;
+    if (sort === 'hot') {
+      orderBy = [{ hotScore: 'desc' }, { updatedAt: 'desc' }];
+    } else if (sort === 'recommended') {
+      orderBy = [{ commentsCount: 'desc' }, { likesCount: 'desc' }, { updatedAt: 'desc' }];
+    } else {
+      orderBy = [{ updatedAt: 'desc' }];
+    }
+
+    const posts = await prisma.post.findMany({
+      where,
+      orderBy,
+      take: limit,
+    });
+
+    const likedPostSet = new Set<string>();
+    const favoritedPostSet = new Set<string>();
+    if (req.authUser && posts.length) {
+      const [likedPosts, favoritedPosts] = await Promise.all([
+        prisma.postLike.findMany({
+          where: {
+            userUid: req.authUser.uid,
+            postId: { in: posts.map((item) => item.id) },
+          },
+          select: { postId: true },
+        }),
+        prisma.favorite.findMany({
+          where: {
+            userUid: req.authUser.uid,
+            targetType: 'post',
+            targetId: { in: posts.map((item) => item.id) },
+          },
+          select: { targetId: true },
+        }),
+      ]);
+      likedPosts.forEach((item) => likedPostSet.add(item.postId));
+      favoritedPosts.forEach((item) => favoritedPostSet.add(item.targetId));
+    }
+
+    res.json({
+      posts: posts.map((post) => ({
+        ...toPostResponse(post),
+        likedByMe: likedPostSet.has(post.id),
+        favoritedByMe: favoritedPostSet.has(post.id),
+      })),
+    });
+  } catch (error) {
+    console.error('Fetch album posts error:', error);
+    res.status(500).json({ error: '获取专辑关联帖子失败' });
   }
 });
 

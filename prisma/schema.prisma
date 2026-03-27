@@ -139,6 +139,7 @@ model User {
   galleries     Gallery[]      @relation("UserGalleries")
   musicAdded    MusicTrack[]   @relation("MusicAddedBy")
   postLikes     PostLike[]
+  postDislikes  PostDislike[] @relation("UserDislikes")
   favorites     Favorite[]
   moderationLogs ModerationLog[] @relation("ModerationOperator")
   userBanOps    UserBanLog[]   @relation("UserBanActionBy")
@@ -168,6 +169,8 @@ model Post {
   id            String        @id @default(cuid())
   title         String
   section       String
+  musicDocId    String?
+  albumDocId    String?
   content       String
   tags          Json?
   authorUid     String
@@ -178,15 +181,22 @@ model Post {
   hotScore      Float         @default(0)
   viewCount     Int           @default(0)
   likesCount    Int           @default(0)
+  dislikesCount Int           @default(0)
   commentsCount Int           @default(0)
+  isPinned      Boolean       @default(false)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   sectionRef    Section       @relation(fields: [section], references: [id], onDelete: Restrict)
+  musicRef      MusicTrack?   @relation(fields: [musicDocId], references: [docId], onDelete: SetNull)
+  albumRef      Album?        @relation(fields: [albumDocId], references: [docId], onDelete: SetNull)
   author        User          @relation("UserPosts", fields: [authorUid], references: [uid], onDelete: Cascade)
   comments      PostComment[]
   likes         PostLike[]
+  dislikes      PostDislike[]
 
   @@index([section])
+  @@index([musicDocId, updatedAt])
+  @@index([albumDocId, updatedAt])
   @@index([status, updatedAt])
   @@index([updatedAt])
   @@index([hotScore, updatedAt])
@@ -247,6 +257,18 @@ model PostLike {
   createdAt DateTime @default(now())
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userUid], references: [uid], onDelete: Cascade)
+
+  @@unique([postId, userUid])
+  @@index([userUid, createdAt])
+}
+
+model PostDislike {
+  id        String   @id @default(cuid())
+  postId    String
+  userUid   String
+  createdAt DateTime @default(now())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation("UserDislikes", fields: [userUid], references: [uid], onDelete: Cascade)
 
   @@unique([postId, userUid])
   @@index([userUid, createdAt])
@@ -487,6 +509,7 @@ model Album {
   updatedAt          DateTime            @updatedAt
   covers             AlbumCover[]
   songRelations      SongAlbumRelation[]
+  posts              Post[]
 
   @@unique([platform, sourceId, resourceType])
   @@index([title])
@@ -517,6 +540,7 @@ model MusicTrack {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   adder     User?    @relation("MusicAddedBy", fields: [addedBy], references: [uid], onDelete: SetNull)
+  posts     Post[]
   covers    SongCover[]
   albumRelations SongAlbumRelation[]
   instrumentalLinks   SongInstrumentalRelation[] @relation("SongInstrumentalSource")
