@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Search as SearchIcon, Book, MessageSquare, Image as ImageIcon, Clock, ChevronRight, Tag, Filter, Sparkles, Calendar, Camera } from 'lucide-react';
+import { Search as SearchIcon, Book, MessageSquare, Image as ImageIcon, Clock, ChevronRight, Tag, Filter, Sparkles, Calendar, Camera, Music } from 'lucide-react';
 import { format } from 'date-fns';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,7 +14,7 @@ const toDateValue = (value: string | null | undefined) => {
 };
 
 type SearchSuggestion = {
-  type: 'keyword' | 'wiki' | 'post';
+  type: 'keyword' | 'wiki' | 'post' | 'music' | 'album';
   text: string;
   subtext?: string;
   id?: string;
@@ -29,16 +29,18 @@ const Search = () => {
     wiki: any[];
     posts: any[];
     galleries: any[];
-  }>({ wiki: [], posts: [], galleries: [] });
+    music: any[];
+    albums: any[];
+  }>({ wiki: [], posts: [], galleries: [], music: [], albums: [] });
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(Boolean(initialQuery));
-  const [activeTab, setActiveTab] = useState<'all' | 'wiki' | 'posts' | 'galleries'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'wiki' | 'posts' | 'galleries' | 'music' | 'albums'>('all');
   
   // Advanced Filters
   const [showFilters, setShowFilters] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
-  const [contentType, setContentType] = useState<'all' | 'wiki' | 'posts' | 'galleries'>('all');
+  const [contentType, setContentType] = useState<'all' | 'wiki' | 'posts' | 'galleries' | 'music' | 'albums'>('all');
 
   // AI Image Search
   const [aiSearching, setAiSearching] = useState(false);
@@ -111,10 +113,12 @@ const Search = () => {
         wiki: 'wiki',
         posts: 'posts',
         galleries: 'galleries',
+        music: 'music',
+        albums: 'albums',
       };
       const apiType = filters.contentType === 'all' ? 'all' : typeMap[filters.contentType] || 'all';
 
-      const data = await apiGet<{ wiki: any[]; posts: any[]; galleries: any[] }>('/api/search', {
+      const data = await apiGet<{ wiki: any[]; posts: any[]; galleries: any[]; music: any[]; albums: any[] }>('/api/search', {
         q: currentQuery,
         type: apiType,
         ...(filters.dateRange.start ? { startDate: filters.dateRange.start } : {}),
@@ -125,6 +129,8 @@ const Search = () => {
         wiki: data.wiki || [],
         posts: data.posts || [],
         galleries: data.galleries || [],
+        music: data.music || [],
+        albums: data.albums || [],
       };
 
       const filterFn = (item: any) => {
@@ -136,6 +142,8 @@ const Search = () => {
         wiki: allResults.wiki.filter(filterFn),
         posts: allResults.posts.filter(filterFn),
         galleries: allResults.galleries.filter(filterFn),
+        music: allResults.music || [],
+        albums: allResults.albums || [],
       });
     } catch (e) {
       console.error("Search error:", e);
@@ -163,11 +171,13 @@ const Search = () => {
         wiki: [],
         posts: [],
         galleries: data.galleries || [],
+        music: [],
+        albums: [],
       });
       setActiveTab('galleries');
     } catch (err) {
       console.error('Semantic image search error:', err);
-      setResults({ wiki: [], posts: [], galleries: [] });
+      setResults({ wiki: [], posts: [], galleries: [], music: [], albums: [] });
     } finally {
       e.target.value = '';
       setLoading(false);
@@ -181,7 +191,7 @@ const Search = () => {
     );
   };
 
-  const totalResults = results.wiki.length + results.posts.length + results.galleries.length;
+  const totalResults = results.wiki.length + results.posts.length + results.galleries.length + results.music.length + results.albums.length;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-12">
@@ -198,7 +208,7 @@ const Search = () => {
               value={searchQuery}
               onChange={handleQueryChange}
               onFocus={() => searchQuery.length >= 2 && fetchSuggestions(searchQuery)}
-              placeholder="搜索百科、帖子或图集..."
+              placeholder="搜索百科、帖子、图集、音乐或专辑..."
               className="w-full px-14 py-6 bg-brand-cream/30 rounded-[32px] border-none focus:ring-4 focus:ring-brand-olive/10 transition-all text-xl font-serif"
             />
             <SearchIcon className="absolute left-6 top-1/2 -translate-y-1/2 text-brand-olive/40 group-focus-within:text-brand-olive transition-colors" size={24} />
@@ -224,6 +234,10 @@ const Search = () => {
                             navigate(`/wiki/${s.id}`);
                           } else if (s.type === 'post' && s.id) {
                             navigate(`/forum/${s.id}`);
+                          } else if (s.type === 'music' && s.id) {
+                            navigate(`/music/${s.id}`);
+                          } else if (s.type === 'album' && s.id) {
+                            navigate(`/album/${s.id}`);
                           }
                         }
                       }}
@@ -232,9 +246,9 @@ const Search = () => {
                       <div className="flex items-center gap-3">
                         <span className={clsx(
                           'px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider',
-                          s.type === 'keyword' ? 'bg-orange-100 text-orange-600' : s.type === 'wiki' ? 'bg-brand-cream text-brand-olive' : 'bg-brand-primary/10 text-brand-primary'
+                          s.type === 'keyword' ? 'bg-orange-100 text-orange-600' : s.type === 'wiki' ? 'bg-brand-cream text-brand-olive' : s.type === 'music' ? 'bg-pink-100 text-pink-600' : s.type === 'album' ? 'bg-purple-100 text-purple-600' : 'bg-brand-primary/10 text-brand-primary'
                         )}>
-                          {s.type === 'keyword' ? '搜索' : s.type === 'wiki' ? '百科' : '帖子'}
+                          {s.type === 'keyword' ? '搜索' : s.type === 'wiki' ? '百科' : s.type === 'music' ? '音乐' : s.type === 'album' ? '专辑' : '帖子'}
                         </span>
                         <span className="text-sm text-gray-700">{s.text}</span>
                         {s.subtext && <span className="text-xs text-gray-400">{s.subtext}</span>}
@@ -345,7 +359,7 @@ const Search = () => {
                       <Book size={14} /> 内容类型
                     </h4>
                     <div className="flex flex-wrap gap-2">
-                      {['all', 'wiki', 'posts', 'galleries'].map(type => (
+                      {['all', 'wiki', 'posts', 'galleries', 'music', 'albums'].map(type => (
                         <button
                           key={type}
                           onClick={() => setContentType(type as any)}
@@ -400,7 +414,9 @@ const Search = () => {
               { id: 'all', label: '全部', count: totalResults },
               { id: 'wiki', label: '百科', count: results.wiki.length },
               { id: 'posts', label: '帖子', count: results.posts.length },
-              { id: 'galleries', label: '图集', count: results.galleries.length }
+              { id: 'galleries', label: '图集', count: results.galleries.length },
+              { id: 'music', label: '音乐', count: results.music.length },
+              { id: 'albums', label: '专辑', count: results.albums.length }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -504,6 +520,69 @@ const Search = () => {
                         <div className="p-4">
                           <h3 className="text-sm font-serif font-bold truncate group-hover:text-brand-olive transition-colors">{gallery.title}</h3>
                           <p className="text-[10px] text-gray-400">{gallery.images.length} 张图片</p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </motion.section>
+              )}
+
+              {(activeTab === 'all' || activeTab === 'music') && results.music.length > 0 && (
+                <motion.section 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="space-y-4"
+                >
+                  <h2 className="text-sm font-bold text-brand-olive uppercase tracking-widest flex items-center gap-2">
+                    <Music size={16} /> 音乐曲目
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {results.music.map(track => (
+                      <Link 
+                        key={track.docId} 
+                        to={`/music/${track.id}`}
+                        className="bg-white p-6 rounded-3xl border border-gray-100 hover:border-pink-200 hover:shadow-lg transition-all group"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-16 h-16 rounded-xl overflow-hidden bg-brand-cream flex-shrink-0">
+                            <SmartImage src={track.cover} alt="" className="w-full h-full object-cover" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-lg font-serif font-bold truncate group-hover:text-pink-500 transition-colors">{track.title}</h3>
+                            <p className="text-sm text-gray-500 truncate">{track.artist}</p>
+                            <p className="text-xs text-gray-400 truncate">{track.album}</p>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </motion.section>
+              )}
+
+              {(activeTab === 'all' || activeTab === 'albums') && results.albums.length > 0 && (
+                <motion.section 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="space-y-4"
+                >
+                  <h2 className="text-sm font-bold text-brand-olive uppercase tracking-widest flex items-center gap-2">
+                    <Music size={16} /> 音乐专辑
+                  </h2>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                    {results.albums.map(album => (
+                      <Link 
+                        key={album.docId} 
+                        to={`/album/${album.id}`}
+                        className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all group"
+                      >
+                        <div className="h-40 overflow-hidden">
+                          <SmartImage src={album.cover} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                        </div>
+                        <div className="p-4">
+                          <h3 className="text-sm font-serif font-bold truncate group-hover:text-purple-500 transition-colors">{album.title}</h3>
+                          <p className="text-[10px] text-gray-400">{album.artist} · {album.tracksCount} 曲</p>
                         </div>
                       </Link>
                     ))}
