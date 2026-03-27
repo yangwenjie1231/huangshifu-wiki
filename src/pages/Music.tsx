@@ -3,7 +3,7 @@ import { collection, query, getDocs, doc, deleteDoc, where, orderBy, db, auth } 
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useMusic } from '../context/MusicContext';
-import { Music as MusicIcon, Search, Plus, Play, Pause, Disc, List, Trash2, Heart, ExternalLink, Sparkles, ChevronRight, Volume2, Headphones, X, MessageSquare, Clock, Link2 } from 'lucide-react';
+import { Music as MusicIcon, Search, Plus, Play, Disc, List, Trash2, Heart, ExternalLink, Sparkles, ChevronRight, Headphones, X, MessageSquare, Clock, Link2, Album, Grid3X3 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'motion/react';
 import { MusicPlayer } from '../components/MusicPlayer';
@@ -70,6 +70,17 @@ type PostItem = {
   updatedAt: string;
 };
 
+type AlbumItem = {
+  docId?: string;
+  id: string;
+  title: string;
+  artist: string;
+  cover: string;
+  description?: string | null;
+  trackCount?: number;
+  tracks?: unknown[];
+};
+
 const getSongExternalUrl = (song: SongItem) => {
   const id = (song.id || '').trim();
   if (!id) {
@@ -128,6 +139,9 @@ const Music = () => {
   const [selectedSongForPosts, setSelectedSongForPosts] = useState<SongItem | null>(null);
   const [songPosts, setSongPosts] = useState<PostItem[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(false);
+  const [albums, setAlbums] = useState<AlbumItem[]>([]);
+  const [loadingAlbums, setLoadingAlbums] = useState(false);
+  const [activeTab, setActiveTab] = useState<'music' | 'albums'>('music');
   const { user, isAdmin, isBanned } = useAuth();
   const { currentSong, setCurrentSong, setIsPlaying, setPlaylist, playSongAtIndex } = useMusic();
   const { show } = useToast();
@@ -149,7 +163,20 @@ const Music = () => {
 
   useEffect(() => {
     fetchSongs();
+    fetchAlbums();
   }, []);
+
+  const fetchAlbums = async () => {
+    setLoadingAlbums(true);
+    try {
+      const data = await apiGet<{ albums: AlbumItem[] }>('/api/albums');
+      setAlbums(data.albums || []);
+    } catch (error) {
+      console.error('Fetch albums error:', error);
+      setAlbums([]);
+    }
+    setLoadingAlbums(false);
+  };
 
   const fetchSongPosts = async (song: SongItem) => {
     setLoadingPosts(true);
@@ -252,6 +279,16 @@ const Music = () => {
     const copied = await copyToClipboard(toAbsoluteInternalUrl(`/music/${song.docId}`));
     if (copied) {
       show('歌曲内链已复制');
+      return;
+    }
+    show('复制链接失败，请稍后重试', { variant: 'error' });
+  };
+
+  const handleCopyAlbumLink = async (event: React.MouseEvent<HTMLButtonElement>, albumId: string) => {
+    event.stopPropagation();
+    const copied = await copyToClipboard(toAbsoluteInternalUrl(`/album/${albumId}`));
+    if (copied) {
+      show('专辑内链已复制');
       return;
     }
     show('复制链接失败，请稍后重试', { variant: 'error' });
@@ -499,207 +536,294 @@ const Music = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
         <div className="lg:col-span-2">
           <div className="bg-white rounded-[40px] border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-8 border-b border-gray-50 flex justify-between items-center">
-              <h2 className="text-2xl font-serif font-bold text-gray-900 flex items-center gap-2">
-                <List size={24} className="text-brand-primary" /> 播放列表
-              </h2>
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{songs.length} 首歌曲</span>
-            </div>
-            
-            <div className="divide-y divide-gray-50">
-              {loading ? (
-                [1, 2, 3, 4, 5].map(i => (
-                  <div key={i} className="p-6 animate-pulse flex gap-4">
-                    <div className="w-12 h-12 bg-gray-100 rounded-xl" />
-                    <div className="flex-grow space-y-2">
-                      <div className="h-4 bg-gray-100 rounded w-1/3" />
-                      <div className="h-3 bg-gray-100 rounded w-1/4" />
-                    </div>
-                  </div>
-                ))
-              ) : songs.length > 0 ? songs.map((song, index) => (
-                <div 
-                  key={song.docId}
-                  onClick={() => playSong(song)}
+            <div className="p-6 md:p-8 border-b border-gray-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="inline-flex bg-gray-100 rounded-full p-1.5">
+                <button
+                  onClick={() => setActiveTab('music')}
                   className={clsx(
-                    "p-6 flex items-center gap-4 hover:bg-gray-50 transition-all cursor-pointer group",
-                    currentSong?.docId === song.docId && !isBatchMode && "bg-brand-primary/5",
-                    isBatchMode && selectedSongs.has(song.docId) && "bg-brand-primary/10"
+                    'px-5 py-2 rounded-full text-sm font-bold transition-all inline-flex items-center gap-2',
+                    activeTab === 'music' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800',
                   )}
                 >
-                  {isBatchMode ? (
-                    <div className={clsx(
-                      "w-5 h-5 rounded border-2 flex items-center justify-center transition-all",
-                      selectedSongs.has(song.docId) ? "bg-brand-primary border-brand-primary" : "border-gray-200 bg-white"
-                    )}>
-                      {selectedSongs.has(song.docId) && <X size={14} className="text-gray-900" />}
-                    </div>
-                  ) : (
-                    <span className="text-xs font-bold text-gray-300 w-4">{index + 1}</span>
+                  <Grid3X3 size={16} /> 音乐
+                </button>
+                <button
+                  onClick={() => setActiveTab('albums')}
+                  className={clsx(
+                    'px-5 py-2 rounded-full text-sm font-bold transition-all inline-flex items-center gap-2',
+                    activeTab === 'albums' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800',
                   )}
-                  <div className="relative w-12 h-12 rounded-xl overflow-hidden shadow-md">
-                    <img src={song.cover} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    {currentSong?.docId === song.docId && !isBatchMode && (
-                      <div className="absolute inset-0 bg-brand-primary/40 flex items-center justify-center">
-                        <Play size={16} className="text-gray-900 fill-current" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-grow">
-                    <h4 className="font-bold text-gray-900 group-hover:text-brand-primary transition-colors">
-                      <Link
-                        to={`/music/${song.docId}`}
-                        onClick={(event) => event.stopPropagation()}
-                        className="hover:underline underline-offset-4"
-                        title="查看歌曲详情"
-                      >
-                        {song.title}
-                      </Link>
-                    </h4>
-                    <p className="text-xs text-gray-400">{song.artist} — {song.album}</p>
-                  </div>
-                  <div className="flex items-center gap-4 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                    {isAdmin && !isBatchMode && (
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setConfirmModal({ show: true, type: 'single', id: song.docId });
-                        }}
-                        className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                        title="删除歌曲"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    )}
-                    {!isBatchMode && (
-                      <>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleToggleFavorite(song);
-                          }}
-                          disabled={favoriting === song.docId}
-                          className={clsx(
-                            'p-2 transition-colors',
-                            song.favoritedByMe ? 'text-red-500' : 'text-gray-400 hover:text-red-500',
-                            favoriting === song.docId && 'opacity-50 cursor-not-allowed',
-                          )}
-                        >
-                          <Heart size={18} />
-                        </button>
-                        <a 
-                          href={getSongExternalUrl(song)} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
-                          onClick={e => e.stopPropagation()}
-                        >
-                          <ExternalLink size={18} />
-                        </a>
-                        <button
-                          onClick={(event) => handleCopySongLink(event, song)}
-                          className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
-                          title="复制内链"
-                        >
-                          <Link2 size={18} />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleShowPosts(song);
-                          }}
-                          className={clsx(
-                            'p-2 transition-colors',
-                            selectedSongForPosts?.docId === song.docId ? 'text-brand-primary' : 'text-gray-400 hover:text-brand-primary',
-                          )}
-                          title="查看乐评"
-                        >
-                          <MessageSquare size={18} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )) : (
-                <div className="py-20 text-center text-gray-400 italic">暂无音乐，快去添加吧</div>
-              )}
-
-              <AnimatePresence>
-                {selectedSongForPosts && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="border-t border-gray-100 overflow-hidden"
-                  >
-                    <div className="p-6 bg-brand-cream/20">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                          <MessageSquare size={18} className="text-brand-primary" />
-                          《{selectedSongForPosts.title}》的乐评
-                        </h3>
-                        <div className="flex gap-2">
-                          <Link
-                            to={`/forum/new?musicDocId=${selectedSongForPosts.docId}&musicTitle=${encodeURIComponent(selectedSongForPosts.title)}`}
-                            className="px-3 py-1.5 bg-brand-primary text-gray-900 rounded-full text-xs font-bold hover:scale-105 transition-all"
-                          >
-                            发表乐评
-                          </Link>
-                          <button
-                            onClick={() => {
-                              setSelectedSongForPosts(null);
-                              setSongPosts([]);
-                            }}
-                            className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                      </div>
-
-                      {loadingPosts ? (
-                        <div className="space-y-3">
-                          {[1, 2].map(i => (
-                            <div key={i} className="h-20 bg-white rounded-xl animate-pulse" />
-                          ))}
-                        </div>
-                      ) : songPosts.length > 0 ? (
-                        <div className="space-y-3">
-                          {songPosts.map(post => (
-                            <Link
-                              key={post.id}
-                              to={`/forum/${post.id}`}
-                              className="block bg-white p-4 rounded-xl hover:shadow-md transition-all"
-                            >
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="px-2 py-0.5 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded">
-                                  乐评
-                                </span>
-                                <span className="text-[10px] text-gray-400 flex items-center gap-1">
-                                  <Clock size={10} /> {formatDate(post.updatedAt)}
-                                </span>
-                              </div>
-                              <h4 className="font-bold text-gray-900 text-sm mb-1 line-clamp-1">
-                                {post.title}
-                              </h4>
-                              <div className="flex items-center gap-4 text-xs text-gray-400">
-                                <span className="flex items-center gap-1"><Heart size={12} /> {post.likesCount || 0}</span>
-                                <span className="flex items-center gap-1"><MessageSquare size={12} /> {post.commentsCount || 0}</span>
-                              </div>
-                            </Link>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="bg-white rounded-xl p-8 text-center">
-                          <MessageSquare size={32} className="mx-auto text-gray-200 mb-3" />
-                          <p className="text-gray-400 text-sm">暂无乐评，快来发表第一篇吧！</p>
-                        </div>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                >
+                  <Album size={16} /> 专辑
+                </button>
+              </div>
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                {activeTab === 'music' ? `${songs.length} 首歌曲` : `${albums.length} 张专辑`}
+              </span>
             </div>
+
+            {activeTab === 'music' ? (
+              <div className="p-6 md:p-8 space-y-6">
+                {loading ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                    {[1, 2, 3, 4, 5, 6].map(i => (
+                      <div key={i} className="rounded-3xl border border-gray-100 p-4 animate-pulse">
+                        <div className="aspect-square rounded-2xl bg-gray-100" />
+                        <div className="mt-4 h-4 bg-gray-100 rounded w-2/3" />
+                        <div className="mt-2 h-3 bg-gray-100 rounded w-1/2" />
+                      </div>
+                    ))}
+                  </div>
+                ) : songs.length > 0 ? (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                      {songs.map((song) => (
+                        <div
+                          key={song.docId}
+                          className={clsx(
+                            'rounded-3xl border transition-all p-4 group bg-white',
+                            currentSong?.docId === song.docId && !isBatchMode ? 'border-brand-primary/40 shadow-lg shadow-brand-primary/10' : 'border-gray-100 hover:border-brand-primary/30 hover:shadow-md',
+                            isBatchMode && selectedSongs.has(song.docId) && 'border-brand-primary bg-brand-primary/5',
+                          )}
+                        >
+                          <div className="relative aspect-square rounded-2xl overflow-hidden bg-gray-100">
+                            <img src={song.cover} alt={song.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent opacity-90" />
+                            <div className="absolute left-3 right-3 bottom-3 flex items-center justify-between gap-2">
+                              <button
+                                onClick={() => playSong(song)}
+                                className={clsx(
+                                  'w-10 h-10 rounded-full inline-flex items-center justify-center transition-all',
+                                  isBatchMode ? 'bg-white/80 text-gray-900 hover:bg-white' : 'bg-brand-primary text-gray-900 hover:scale-105',
+                                )}
+                                title={isBatchMode ? '选择歌曲' : '播放歌曲'}
+                              >
+                                <Play size={16} className={clsx(!isBatchMode && currentSong?.docId === song.docId && 'fill-current')} />
+                              </button>
+                              <Link
+                                to={`/music/${song.docId}`}
+                                className="inline-flex items-center gap-1 text-xs px-3 py-2 rounded-full bg-black/60 text-white hover:bg-black/75 transition-colors"
+                                title="查看歌曲详情"
+                              >
+                                详情 <ChevronRight size={14} />
+                              </Link>
+                            </div>
+                          </div>
+
+                          <div className="mt-4">
+                            <Link to={`/music/${song.docId}`} className="font-bold text-gray-900 line-clamp-1 hover:text-brand-primary transition-colors" title="查看歌曲详情">
+                              {song.title}
+                            </Link>
+                            <p className="text-xs text-gray-400 mt-1 line-clamp-1">{song.artist} — {song.album}</p>
+                          </div>
+
+                          <div className="mt-4 flex items-center justify-between gap-2">
+                            {isBatchMode ? (
+                              <button
+                                onClick={() => toggleSelect(song.docId)}
+                                className={clsx(
+                                  'px-3 py-1.5 rounded-full text-xs font-bold transition-all',
+                                  selectedSongs.has(song.docId) ? 'bg-brand-primary text-gray-900' : 'bg-gray-100 text-gray-500 hover:text-gray-800',
+                                )}
+                              >
+                                {selectedSongs.has(song.docId) ? '已选择' : '选择'}
+                              </button>
+                            ) : (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleToggleFavorite(song)}
+                                  disabled={favoriting === song.docId}
+                                  className={clsx(
+                                    'p-2 transition-colors',
+                                    song.favoritedByMe ? 'text-red-500' : 'text-gray-400 hover:text-red-500',
+                                    favoriting === song.docId && 'opacity-50 cursor-not-allowed',
+                                  )}
+                                  title="收藏"
+                                >
+                                  <Heart size={16} />
+                                </button>
+                                <a
+                                  href={getSongExternalUrl(song)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
+                                  title="打开原始链接"
+                                >
+                                  <ExternalLink size={16} />
+                                </a>
+                                <button
+                                  onClick={(event) => handleCopySongLink(event, song)}
+                                  className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
+                                  title="复制内链"
+                                >
+                                  <Link2 size={16} />
+                                </button>
+                                <button
+                                  onClick={() => handleShowPosts(song)}
+                                  className={clsx(
+                                    'p-2 transition-colors',
+                                    selectedSongForPosts?.docId === song.docId ? 'text-brand-primary' : 'text-gray-400 hover:text-brand-primary',
+                                  )}
+                                  title="查看乐评"
+                                >
+                                  <MessageSquare size={16} />
+                                </button>
+                              </div>
+                            )}
+
+                            {isAdmin && !isBatchMode ? (
+                              <button
+                                onClick={() => setConfirmModal({ show: true, type: 'single', id: song.docId })}
+                                className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                                title="删除歌曲"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <AnimatePresence>
+                      {selectedSongForPosts && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 12 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 12 }}
+                          className="border border-gray-100 rounded-3xl overflow-hidden"
+                        >
+                          <div className="p-6 bg-brand-cream/20">
+                            <div className="flex items-center justify-between mb-4">
+                              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                                <MessageSquare size={18} className="text-brand-primary" />
+                                《{selectedSongForPosts.title}》的乐评
+                              </h3>
+                              <div className="flex gap-2">
+                                <Link
+                                  to={`/forum/new?musicDocId=${selectedSongForPosts.docId}&musicTitle=${encodeURIComponent(selectedSongForPosts.title)}`}
+                                  className="px-3 py-1.5 bg-brand-primary text-gray-900 rounded-full text-xs font-bold hover:scale-105 transition-all"
+                                >
+                                  发表乐评
+                                </Link>
+                                <button
+                                  onClick={() => {
+                                    setSelectedSongForPosts(null);
+                                    setSongPosts([]);
+                                  }}
+                                  className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
+                                >
+                                  <X size={16} />
+                                </button>
+                              </div>
+                            </div>
+
+                            {loadingPosts ? (
+                              <div className="space-y-3">
+                                {[1, 2].map(i => (
+                                  <div key={i} className="h-20 bg-white rounded-xl animate-pulse" />
+                                ))}
+                              </div>
+                            ) : songPosts.length > 0 ? (
+                              <div className="space-y-3">
+                                {songPosts.map(post => (
+                                  <Link
+                                    key={post.id}
+                                    to={`/forum/${post.id}`}
+                                    className="block bg-white p-4 rounded-xl hover:shadow-md transition-all"
+                                  >
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="px-2 py-0.5 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded">
+                                        乐评
+                                      </span>
+                                      <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                                        <Clock size={10} /> {formatDate(post.updatedAt)}
+                                      </span>
+                                    </div>
+                                    <h4 className="font-bold text-gray-900 text-sm mb-1 line-clamp-1">
+                                      {post.title}
+                                    </h4>
+                                    <div className="flex items-center gap-4 text-xs text-gray-400">
+                                      <span className="flex items-center gap-1"><Heart size={12} /> {post.likesCount || 0}</span>
+                                      <span className="flex items-center gap-1"><MessageSquare size={12} /> {post.commentsCount || 0}</span>
+                                    </div>
+                                  </Link>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="bg-white rounded-xl p-8 text-center">
+                                <MessageSquare size={32} className="mx-auto text-gray-200 mb-3" />
+                                <p className="text-gray-400 text-sm">暂无乐评，快来发表第一篇吧！</p>
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </>
+                ) : (
+                  <div className="py-20 text-center text-gray-400 italic">暂无音乐，快去添加吧</div>
+                )}
+              </div>
+            ) : (
+              <div className="p-6 md:p-8">
+                {loadingAlbums ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {[1, 2, 3, 4, 5, 6].map(i => (
+                      <div key={i} className="rounded-3xl border border-gray-100 p-4 animate-pulse">
+                        <div className="aspect-square rounded-2xl bg-gray-100" />
+                        <div className="mt-4 h-4 bg-gray-100 rounded w-2/3" />
+                        <div className="mt-2 h-3 bg-gray-100 rounded w-1/3" />
+                      </div>
+                    ))}
+                  </div>
+                ) : albums.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {albums.map((album) => {
+                      const albumId = album.docId || album.id;
+                      const trackCount = album.trackCount ?? album.tracks?.length ?? 0;
+
+                      return (
+                        <div key={albumId} className="rounded-3xl border border-gray-100 p-4 hover:border-brand-primary/30 hover:shadow-md transition-all bg-white group">
+                          <Link to={`/album/${albumId}`} className="block relative aspect-square rounded-2xl overflow-hidden bg-gray-100">
+                            <img src={album.cover} alt={album.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent opacity-80" />
+                            <div className="absolute left-3 bottom-3 inline-flex items-center gap-1 text-xs text-white bg-black/60 rounded-full px-3 py-1.5">
+                              <List size={13} /> {trackCount} 首
+                            </div>
+                          </Link>
+
+                          <div className="mt-4">
+                            <Link to={`/album/${albumId}`} className="font-bold text-gray-900 line-clamp-1 hover:text-brand-primary transition-colors">
+                              {album.title}
+                            </Link>
+                            <p className="text-xs text-gray-400 mt-1 line-clamp-1">{album.artist}</p>
+                          </div>
+
+                          <div className="mt-3 flex items-center justify-between">
+                            <Link
+                              to={`/album/${albumId}`}
+                              className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full bg-brand-primary/15 text-gray-900 hover:bg-brand-primary/25 transition-colors"
+                            >
+                              查看专辑 <ChevronRight size={14} />
+                            </Link>
+                            <button
+                              onClick={(event) => handleCopyAlbumLink(event, albumId)}
+                              className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
+                              title="复制专辑内链"
+                            >
+                              <Link2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="py-20 text-center text-gray-400 italic">暂无专辑，快去导入吧</div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
