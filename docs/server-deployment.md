@@ -237,6 +237,40 @@ npm run db:seed
 
 注意：此操作会清空当前数据库全部业务表。
 
+### 6.3 帖子功能升级说明（v2.5+）
+
+本次发布新增帖子点赞、踩、置顶功能，数据库升级步骤：
+
+**已包含在 `db:deploy` 中，无需手动操作。**
+
+相关数据库变更：
+
+| 表名 | 变更类型 | 说明 |
+|------|---------|------|
+| `Post` | 新增列 | `dislikesCount` Int，默认 0 |
+| `Post` | 新增列 | `isPinned` Boolean，默认 false |
+| `PostDislike` | 新建表 | 踩记录表，防止重复踩 |
+
+**PostDislike 表结构：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | String | 主键 |
+| postId | String | 关联帖子 ID |
+| userUid | String | 踩的用户 ID |
+| createdAt | DateTime | 踩的时间 |
+
+唯一约束：`([postId, userUid])` - 同一用户对同一帖子只能踩一次。
+
+**API 变更：**
+
+| 端点 | 方法 | 功能 | 权限 |
+|------|------|------|------|
+| `/api/posts/:id/dislike` | POST | 踩（toggle） | 登录用户 |
+| `/api/posts/:id/dislike` | DELETE | 取消踩 | 登录用户 |
+| `/api/posts/:id/pin` | POST | 置顶 | 管理员 |
+| `/api/posts/:id/pin` | DELETE | 取消置顶 | 管理员 |
+
 ---
 
 ## 7. 构建并启动服务
@@ -349,6 +383,42 @@ certbot renew --dry-run
 - 管理员账号可进入后台
 - 图集上传可写入 `uploads/`
 - 数据可写入 PostgreSQL
+
+### 11.1 帖子功能验证（v2.5+）
+
+帖子点赞、踩、置顶功能验证：
+
+```bash
+# 创建测试帖子（需先登录）
+curl -X POST http://127.0.0.1:3000/api/posts \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"title":"测试帖子","section":"general","content":"内容"}'
+
+# 点赞帖子
+curl -X POST http://127.0.0.1:3000/api/posts/<帖子ID>/like \
+  -b cookie.txt -c cookie.txt
+
+# 踩帖子
+curl -X POST http://127.0.0.1:3000/api/posts/<帖子ID>/dislike \
+  -b cookie.txt -c cookie.txt
+
+# 置顶帖子（仅管理员）
+curl -X POST http://127.0.0.1:3000/api/posts/<帖子ID>/pin \
+  -b cookie.txt -c cookie.txt
+
+# 取消置顶（仅管理员）
+curl -X DELETE http://127.0.0.1:3000/api/posts/<帖子ID>/pin \
+  -b cookie.txt -c cookie.txt
+```
+
+验证点：
+- 重复点赞/踩会自动切换状态（toggle）
+- 同一用户对同一帖子只能踩一次（`PostDislike` 表唯一约束）
+- 非管理员调用置顶 API 返回 403
+- 帖子列表默认按置顶优先排序
+
+### 11.2 图集上传链路专项验证
 
 ### 11.1 图集上传链路专项验证
 

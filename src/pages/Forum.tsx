@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Routes, Route, Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ReactMarkdown from 'react-markdown';
-import { MessageSquare, Heart, Share2, Plus, Clock, User as UserIcon, ArrowLeft, Save, X, Send, Edit3 } from 'lucide-react';
+import { MessageSquare, Heart, ThumbsDown, Share2, Plus, Clock, User as UserIcon, ArrowLeft, Save, X, Send, Edit3, Pin } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import MdEditor from 'react-markdown-editor-lite';
@@ -49,9 +49,12 @@ type PostItem = {
   reviewedBy?: string | null;
   reviewedAt?: string | null;
   likedByMe?: boolean;
+  dislikedByMe?: boolean;
   favoritedByMe?: boolean;
   likesCount: number;
+  dislikesCount: number;
   commentsCount: number;
+  isPinned?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -81,7 +84,9 @@ const PostList = () => {
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [sections, setSections] = useState<SectionItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const { user, isBanned } = useAuth();
+  const [pinning, setPinning] = useState<string | null>(null);
+  const { user, profile, isBanned } = useAuth();
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
 
   useEffect(() => {
     const fetchSections = async () => {
@@ -114,6 +119,24 @@ const PostList = () => {
 
     fetchPosts();
   }, [section, sort]);
+
+  const handleTogglePin = async (postId: string, currentlyPinned: boolean) => {
+    if (!isAdmin || pinning) return;
+    try {
+      setPinning(postId);
+      if (currentlyPinned) {
+        await apiDelete<{ isPinned: boolean }>(`/api/posts/${postId}/pin`);
+        setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, isPinned: false } : p)));
+      } else {
+        await apiPost<{ isPinned: boolean }>(`/api/posts/${postId}/pin`);
+        setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, isPinned: true } : p)));
+      }
+    } catch (error) {
+      console.error('Toggle pin error:', error);
+    } finally {
+      setPinning(null);
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-12">
@@ -187,46 +210,71 @@ const PostList = () => {
       ) : posts.length > 0 ? (
         <div className="space-y-6">
           {posts.map((post) => (
-            <Link
+            <div
               key={post.id}
-              to={`/forum/${post.id}`}
-              className="block bg-white p-8 rounded-[32px] border border-gray-100 hover:border-brand-primary/20 hover:shadow-lg transition-all group"
+              className={clsx(
+                'bg-white p-8 rounded-[32px] border hover:shadow-lg transition-all group relative',
+                post.isPinned ? 'border-l-4 border-l-brand-primary border-gray-100' : 'border-gray-100 hover:border-brand-primary/20',
+              )}
             >
-              <div className="flex items-center gap-3 mb-4">
-                <span className="px-2 py-1 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded">
-                  {sections.find((s) => s.id === post.section)?.name || post.section}
-                </span>
-                <span className="text-gray-300">|</span>
-                <span className="text-gray-400 text-xs flex items-center gap-1">
-                  <Clock size={12} /> {formatDate(post.updatedAt, 'yyyy-MM-dd')}
-                </span>
-                {post.status && post.status !== 'published' && (
-                  <span className={clsx(
-                    'px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider',
-                    post.status === 'pending'
-                      ? 'bg-amber-100 text-amber-700'
-                      : post.status === 'rejected'
-                        ? 'bg-red-100 text-red-700'
-                        : 'bg-gray-100 text-gray-600',
-                  )}>
-                    {getStatusText(post.status)}
+              <Link to={`/forum/${post.id}`} className="block">
+                <div className="flex items-center gap-3 mb-4">
+                  {post.isPinned && (
+                    <span className="flex items-center gap-1 px-2 py-1 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded">
+                      <Pin size={10} /> 已置顶
+                    </span>
+                  )}
+                  <span className="px-2 py-1 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded">
+                    {sections.find((s) => s.id === post.section)?.name || post.section}
                   </span>
-                )}
-              </div>
-              <h3 className="text-2xl font-serif font-bold mb-3 group-hover:text-brand-primary transition-colors">{post.title}</h3>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-6 text-gray-400 text-sm">
-                  <span className="flex items-center gap-1.5"><Heart size={16} /> {post.likesCount || 0}</span>
-                  <span className="flex items-center gap-1.5"><MessageSquare size={16} /> {post.commentsCount || 0}</span>
+                  <span className="text-gray-300">|</span>
+                  <span className="text-gray-400 text-xs flex items-center gap-1">
+                    <Clock size={12} /> {formatDate(post.updatedAt, 'yyyy-MM-dd')}
+                  </span>
+                  {post.status && post.status !== 'published' && (
+                    <span className={clsx(
+                      'px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider',
+                      post.status === 'pending'
+                        ? 'bg-amber-100 text-amber-700'
+                        : post.status === 'rejected'
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-gray-100 text-gray-600',
+                    )}>
+                      {getStatusText(post.status)}
+                    </span>
+                  )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-gray-200 overflow-hidden">
-                    <UserIcon size={14} className="m-auto text-gray-400" />
+                <h3 className="text-2xl font-serif font-bold mb-3 group-hover:text-brand-primary transition-colors">{post.title}</h3>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-6 text-gray-400 text-sm">
+                    <span className="flex items-center gap-1.5"><Heart size={16} /> {post.likesCount || 0}</span>
+                    <span className="flex items-center gap-1.5"><ThumbsDown size={16} /> {post.dislikesCount || 0}</span>
+                    <span className="flex items-center gap-1.5"><MessageSquare size={16} /> {post.commentsCount || 0}</span>
                   </div>
-                  <span className="text-xs text-gray-500">作者 ID: {post.authorUid?.substring(0, 6)}</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-gray-200 overflow-hidden">
+                      <UserIcon size={14} className="m-auto text-gray-400" />
+                    </div>
+                    <span className="text-xs text-gray-500">作者 ID: {post.authorUid?.substring(0, 6)}</span>
+                  </div>
                 </div>
-              </div>
-            </Link>
+              </Link>
+              {isAdmin && (
+                <button
+                  onClick={() => handleTogglePin(post.id, !!post.isPinned)}
+                  disabled={pinning === post.id}
+                  className={clsx(
+                    'absolute top-4 right-4 px-3 py-1.5 rounded-full text-xs font-medium transition-all',
+                    post.isPinned
+                      ? 'bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/20'
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200',
+                    pinning === post.id && 'opacity-50 cursor-not-allowed',
+                  )}
+                >
+                  {pinning === post.id ? '处理中...' : post.isPinned ? '取消置顶' : '置顶'}
+                </button>
+              )}
+            </div>
           ))}
         </div>
       ) : (
@@ -250,7 +298,10 @@ const PostDetail = () => {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [favoriting, setFavoriting] = useState(false);
   const [liking, setLiking] = useState(false);
-  const { user, isBanned } = useAuth();
+  const [disliking, setDisliking] = useState(false);
+  const [pinning, setPinning] = useState(false);
+  const { user, profile, isBanned } = useAuth();
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -345,6 +396,25 @@ const PostDetail = () => {
     }
   };
 
+  const handleToggleDislike = async () => {
+    if (!post || !postId || !user || disliking) return;
+    setDisliking(true);
+    try {
+      if (post.dislikedByMe) {
+        const data = await apiDelete<{ disliked: boolean; dislikesCount: number }>(`/api/posts/${postId}/dislike`);
+        setPost((prev) => (prev ? { ...prev, dislikedByMe: data.disliked, dislikesCount: data.dislikesCount } : prev));
+      } else {
+        const data = await apiPost<{ disliked: boolean; dislikesCount: number }>(`/api/posts/${postId}/dislike`);
+        setPost((prev) => (prev ? { ...prev, dislikedByMe: data.disliked, dislikesCount: data.dislikesCount } : prev));
+      }
+    } catch (error) {
+      console.error('Error toggling dislike:', error);
+      alert('操作失败，请稍后重试');
+    } finally {
+      setDisliking(false);
+    }
+  };
+
   const handleToggleFavorite = async () => {
     if (!post || !postId || !user || favoriting) return;
     setFavoriting(true);
@@ -376,6 +446,25 @@ const PostDetail = () => {
       alert('提交审核失败，请稍后重试');
     } finally {
       setSubmittingReview(false);
+    }
+  };
+
+  const handleTogglePin = async () => {
+    if (!post || !postId || !isAdmin || pinning) return;
+    setPinning(true);
+    try {
+      if (post.isPinned) {
+        await apiDelete<{ isPinned: boolean }>(`/api/posts/${postId}/pin`);
+        setPost((prev) => (prev ? { ...prev, isPinned: false } : prev));
+      } else {
+        await apiPost<{ isPinned: boolean }>(`/api/posts/${postId}/pin`);
+        setPost((prev) => (prev ? { ...prev, isPinned: true } : prev));
+      }
+    } catch (error) {
+      console.error('Error toggling pin:', error);
+      alert('操作失败，请稍后重试');
+    } finally {
+      setPinning(false);
     }
   };
 
@@ -464,6 +553,17 @@ const PostDetail = () => {
             <Heart size={20} /> {post.likesCount || 0}
           </button>
           <button
+            onClick={handleToggleDislike}
+            disabled={!user || disliking}
+            className={clsx(
+              'flex items-center gap-2 transition-colors',
+              post.dislikedByMe ? 'text-orange-500' : 'text-gray-400 hover:text-orange-500',
+              (!user || disliking) && 'opacity-50 cursor-not-allowed',
+            )}
+          >
+            <ThumbsDown size={20} /> {post.dislikesCount || 0}
+          </button>
+          <button
             onClick={handleToggleFavorite}
             disabled={!user || favoriting}
             className={clsx(
@@ -481,6 +581,19 @@ const PostDetail = () => {
             <Link to={`/forum/${post.id}/edit`} className="flex items-center gap-2 text-gray-400 hover:text-brand-primary transition-colors">
               <Edit3 size={20} /> 编辑
             </Link>
+          )}
+          {isAdmin && (
+            <button
+              onClick={handleTogglePin}
+              disabled={pinning}
+              className={clsx(
+                'flex items-center gap-2 transition-colors',
+                post.isPinned ? 'text-brand-primary' : 'text-gray-400 hover:text-brand-primary',
+                pinning && 'opacity-50 cursor-not-allowed',
+              )}
+            >
+              <Pin size={20} /> {post.isPinned ? '已置顶' : '置顶'}
+            </button>
           )}
           {canSubmitReview && (
             <button
@@ -594,6 +707,9 @@ const PostEditor = () => {
   const isEditing = Boolean(postId);
   const navigate = useNavigate();
   const { user, isBanned, loading: authLoading } = useAuth();
+  const [searchParams] = useSearchParams();
+  const musicDocIdParam = searchParams.get('musicDocId');
+  const musicTitleParam = searchParams.get('musicTitle');
   const [sections, setSections] = useState<SectionItem[]>([]);
   const [formData, setFormData] = useState({
     title: '',
@@ -610,16 +726,28 @@ const PostEditor = () => {
         const data = await apiGet<{ sections: SectionItem[] }>('/api/sections');
         const fetchedSections = data.sections || [];
         setSections(fetchedSections);
-        if (fetchedSections.length > 0) {
-          setFormData((prev) => (prev.section ? prev : { ...prev, section: fetchedSections[0].id }));
+
+        let defaultSection = fetchedSections[0]?.id || '';
+        let defaultContent = '';
+
+        if (musicDocIdParam && musicTitleParam) {
+          defaultSection = 'music';
+          defaultContent = `\n\n---\n*本文为《${decodeURIComponent(musicTitleParam)}》的乐评*\n`;
         }
+
+        setFormData((prev) => ({
+          title: prev.title,
+          section: prev.section || defaultSection,
+          content: prev.content || defaultContent,
+          tags: prev.tags,
+        }));
       } catch (error) {
         console.error('Error fetching sections:', error);
       }
     };
 
     fetchSections();
-  }, []);
+  }, [musicDocIdParam, musicTitleParam]);
 
   useEffect(() => {
     const fetchEditingPost = async () => {
@@ -666,13 +794,17 @@ const PostEditor = () => {
     setSavingMode(status);
 
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         title: formData.title,
         section: formData.section,
         content: formData.content,
         tags: formData.tags.split(',').map((t) => t.trim()).filter(Boolean),
         status,
       };
+
+      if (!isEditing && musicDocIdParam) {
+        payload.musicDocId = musicDocIdParam;
+      }
 
       const data = isEditing && postId
         ? await apiPut<{ post: PostItem }>(`/api/posts/${postId}`, payload)
