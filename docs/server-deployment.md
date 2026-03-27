@@ -820,6 +820,42 @@ curl -X POST http://127.0.0.1:3000/api/wiki/pull-requests/<prId>/merge \
 - PR 合并后，`WikiPage` 正文与状态更新为最新分支内容，分支状态变为 `merged`。
 - base revision 失配时返回 `409`，分支状态进入 `conflict`，可通过 `resolve-conflict` 恢复流程。
 
+### 11.7 Wiki 内链 Hover 卡片预览验证（v3.1+）
+
+本次发布新增 Wiki 页面内链的 hover 卡片预览功能，提升站内导航体验。
+
+**功能说明：**
+
+- 在 Wiki 页面中，将鼠标悬停在 `[[slug]]` 或 `[[显示文本|slug]]` 格式的内链上
+- 300ms 后自动显示悬浮卡片，展示目标页面的标题和内容摘要
+- 卡片支持自动定位（空间不足时显示在触发元素上方）
+- 鼠标移出后卡片立即消失
+
+**验证步骤：**
+
+1. 访问任意已存在的 Wiki 页面
+2. 在页面内容中找到以 `[[` 开头的内链
+3. 将鼠标悬停在内链文字上
+4. 预期：300ms 后显示悬浮卡片，包含目标页面的标题和约 150 字符的内容摘要
+5. 鼠标移开后卡片立即消失
+
+**验证点：**
+
+- hover 延迟约 300ms（非立即显示，防止误触）
+- 卡片显示目标页面的加粗标题（品牌色 `brand-olive`）
+- 卡片显示内容摘要（最多 3 行，超过时截断并加省略号）
+- 卡片底部显示分类标签
+- 卡片加载中显示旋转加载动画
+- 目标页面不存在时显示"无法加载预览"
+- 快速移入移出不会触发请求（防抖处理）
+
+**相关代码：**
+
+| 文件 | 说明 |
+|------|------|
+| `src/components/WikiLinkPreview.tsx` | Hover 卡片预览组件 |
+| `src/pages/Wiki.tsx` | `WikiMarkdown` 组件集成预览功能 |
+
 ---
 
 ## 12. 常见问题排查
@@ -885,6 +921,95 @@ curl http://127.0.0.1:6333/healthz
 ```bash
 curl http://127.0.0.1:3000/api/embeddings/status -b cookie.txt -c cookie.txt
 ```
+
+### 12.6 数据库 Schema 漂移（500 错误）
+
+**症状**：API 返回 500 错误，但 PostgreSQL 服务正常。错误日志中出现类似以下错误：
+
+```
+ERROR: column Post.musicDocId does not exist
+ERROR: column Gallery.published does not exist
+ERROR: relation "public.EditLock" does not exist
+```
+
+**原因**：`prisma db push` 或 `prisma migrate deploy` 在某些情况下（如存在数据、约束冲突、或迁移历史损坏）未能正确应用 schema 变更，导致 Prisma Client 生成的查询与实际数据库结构不匹配。
+
+**诊断命令**：
+
+```bash
+# 查看 PostgreSQL 错误日志
+sudo tail -100 /var/log/postgresql/postgresql-*-main.log
+
+# 检查缺失的列/表（以 musicDocId 为例）
+sudo -u postgres psql -d huangshifu_wiki -c '\d "Post"' | grep musicDocId
+
+# 检查 Gallery 表 published 列
+sudo -u postgres psql -d huangshifu_wiki -c '\d "Gallery"' | grep published
+
+# 检查 EditLock 表是否存在
+sudo -u postgres psql -d huangshifu_wiki -c '\dt' | grep EditLock
+```
+
+**解决方案一：强制重新同步（无旧数据）**
+
+如果数据库中没有需要保留的数据，执行完全重建：
+
+```bash
+# 1. 停止服务
+pm2 delete huangshifu-wiki || true
+pkill -f "tsx server.ts" || true
+
+# 2. 重建 public schema
+psql "postgresql://hsf_app:<密码>@127.0.0.1:5432/huangshifu_wiki" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+
+# 3. 重新应用 Prisma schema
+cd /root/huangshifu-wiki
+npm run db:push
+
+# 4. 重新播种（如果需要）
+npm run db:seed
+
+# 5. 重启服务
+npm run dev
+```
+
+**解决方案二：手动补全缺失字段/表**
+
+如果数据不可丢失，逐个修复缺失的列和表：
+
+```bash
+sudo -u postgres psql -d huangshifu_wiki << 'EOF'
+-- 补全 Post 表缺失列
+ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "musicDocId" TEXT;
+ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "albumDocId" TEXT;
+
+-- 补全 Gallery 表缺失列
+ALTER TABLE "Gallery" ADD COLUMN IF NOT EXISTS "published" BOOLEAN DEFAULT false;
+ALTER TABLE "Gallery" ADD COLUMN IF NOT EXISTS "publishedAt" TIMESTAMPTZ;
+
+-- 创建 EditLock 表（如果不存在）
+CREATE TABLE IF NOT EXISTS "EditLock" (
+  "id" TEXT PRIMARY KEY DEFAULT 'cunique'(),
+  "collection" TEXT NOT NULL,
+  "recordId" TEXT NOT NULL,
+  "userId" TEXT NOT NULL,
+  "username" TEXT NOT NULL,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "expiresAt" TIMESTAMPTZ NOT NULL,
+  UNIQUE("collection", "recordId")
+);
+EOF
+
+# 重启服务
+pm2 restart huangshifu-wiki --update-env
+```
+
+**预防措施**：
+
+- 每次 `git pull` 后都要执行 `npm run db:generate` 和 `npm run db:deploy`
+- 大版本升级后（如 v2.5 -> v2.6），务必检查 `npx prisma migrate status`
+- 生产环境部署前先在测试环境验证迁移
+- 定期检查 PostgreSQL 错误日志（`/var/log/postgresql/`）
 
 ---
 

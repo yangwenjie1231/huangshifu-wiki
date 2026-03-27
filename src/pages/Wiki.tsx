@@ -18,6 +18,7 @@ import { randomId } from '../lib/randomId';
 import MdEditor from 'react-markdown-editor-lite';
 import MarkdownIt from 'markdown-it';
 import 'react-markdown-editor-lite/lib/index.css';
+import WikiLinkPreview from '../components/WikiLinkPreview';
 
 const mdParser = new MarkdownIt({
   html: true,
@@ -189,17 +190,19 @@ const WikiMarkdown = ({ content }: { content: string }) => {
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[rehypeRaw]}
       components={{
-        // Use Link from react-router-dom for internal links
         a: ({ href, children, ...props }) => {
           if (href?.startsWith('/wiki/')) {
+            const slug = href.replace('/wiki/', '');
             return (
-              <Link 
-                to={href} 
-                className="text-brand-olive font-bold hover:underline decoration-brand-olive/30 underline-offset-4"
-                {...props}
-              >
-                {children}
-              </Link>
+              <WikiLinkPreview slug={slug}>
+                <Link 
+                  to={href} 
+                  className="text-brand-olive font-bold hover:underline decoration-brand-olive/30 underline-offset-4"
+                  {...props}
+                >
+                  {children}
+                </Link>
+              </WikiLinkPreview>
             );
           }
           return (
