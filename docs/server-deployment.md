@@ -41,11 +41,16 @@ apt install -y git curl nginx
 安装 Docker（如果未安装）：
 
 ```bash
-apt install -y docker.io docker-compose-plugin
+# Debian 推荐直接安装 docker.io
+apt install -y docker.io
 systemctl enable --now docker
+
+# 验证安装（新版 Docker 已内置 docker compose v2 命令）
 docker --version
 docker compose version
 ```
+
+> **注意**：Debian 官方源的 `docker.io` 包可用，但不含 `docker-compose-plugin`。Docker v2+ 已内置 `docker compose` 命令（注意是空格不是横杠），无需单独安装 compose 插件。若需要 `docker-compose` 传统命令，可通过 `npm install -g docker-compose` 安装。
 
 安装 Node.js 20（示例）：
 
@@ -109,6 +114,25 @@ npm ci
 ```bash
 npm ci --registry=https://registry.npmmirror.com
 ```
+
+> **重要：Prisma 版本兼容性**
+>
+> 本项目使用 Prisma 6.x（见 `package.json` 中的 `prisma` 版本），不支持 Prisma 7.x。
+>
+> 如果 `npm run db:generate` 报 `prisma: not found` 或 Prisma 7.x 特有的 schema 错误（如 `The datasource property url is no longer supported`），说明全局 `npx prisma` 调用了错误版本。
+>
+> 解决方法：
+> ```bash
+> # 方案一：重新安装依赖
+> cd /root/huangshifu-wiki
+> npm install --registry=https://registry.npmmirror.com
+>
+> # 方案二：显式安装正确版本
+> npm install prisma@^6.7.0 @prisma/client@^6.7.0
+>
+> # 验证版本
+> npx prisma --version  # 应显示 6.x
+> ```
 
 ---
 
@@ -548,6 +572,12 @@ npm run db:seed
 ---
 
 ## 7. 构建并启动服务
+
+> **重要：必须先构建前端**
+>
+> `npm run build` 会生成 `dist/` 目录，包含所有前端静态文件。如果不执行此步骤，服务只能提供 API，前端页面会 404（此时只有 `/api/health` 等接口正常）。
+>
+> **每次代码更新（包括 `.env` 修改）后，都需要重新构建并重启 PM2**。
 
 ```bash
 cd /root/huangshifu-wiki
@@ -1536,6 +1566,38 @@ pm2 restart huangshifu-wiki --update-env
 - 大版本升级后（如 v2.5 -> v2.6），务必检查 `npx prisma migrate status`
 - 生产环境部署前先在测试环境验证迁移
 - 定期检查 PostgreSQL 错误日志（`/var/log/postgresql/`）
+
+### 12.7 `prisma: not found`
+
+**症状**：运行 `npm run db:generate` 等命令时报 `sh: 1: prisma: not found`
+
+**原因**：
+- `npm ci` 网络超时导致依赖安装不完整
+- 全局 `npx prisma` 调用了与项目不匹配的版本
+
+**解决**：
+
+```bash
+cd /root/huangshifu-wiki
+npm install --registry=https://registry.npmmirror.com
+npx prisma --version  # 确认是 6.x
+npm run db:generate
+```
+
+### 12.8 前端页面 404（访问根路径）
+
+**症状**：`curl http://IP:3000/` 返回 404；但 `curl http://IP:3000/api/health` 正常返回 `{"status":"ok"}`
+
+**原因**：未执行 `npm run build`，PM2 只启动了 API 服务，前端静态文件不存在
+
+**解决**：
+
+```bash
+cd /root/huangshifu-wiki
+npm run build
+pm2 restart huangshifu-wiki --update-env
+pm2 save
+```
 
 ---
 
