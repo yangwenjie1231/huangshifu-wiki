@@ -214,47 +214,10 @@ if [[ "$COMPOSE_NEEDS_SETUP" == "true" ]]; then
     warn "extracted DB_PASSWORD from existing .env"
   fi
 
-  PG_PORT=""
-  for port in 5432 5433 5434 5435; do
-    if ! is_port_in_use "$port"; then
-      PG_PORT="$port"
-      break
-    fi
-  done
-
-  if [[ -z "$PG_PORT" ]]; then
-    error "no available port found for postgres (tried 5432-5435)"
-    exit 1
-  fi
-
-  if [[ "$PG_PORT" != "5432" ]]; then
-    warn "port 5432 is in use, using port ${PG_PORT} for Docker postgres"
-    warn "updating DATABASE_URL to use port ${PG_PORT}"
-    sed -i "s|@postgres:[0-9]*|@postgres:${PG_PORT}|g" "$ENV_FILE"
-  fi
-
-  warn "creating docker-compose.yml with postgres + qdrant + app services"
+  warn "creating docker-compose.yml with qdrant service (postgres uses host)"
 
   cat > "$ROOT_DIR/docker-compose.yml" << EOF
 services:
-  postgres:
-    image: postgres:18
-    container_name: hsf-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: hsf_wiki
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: huangshifu_wiki
-    volumes:
-      - postgres_data:/var/lib/postgresql
-    ports:
-      - "127.0.0.1:${PG_PORT}:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hsf_wiki -d huangshifu_wiki"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   qdrant:
     image: qdrant/qdrant:v1.9.4
     container_name: hsf-qdrant
@@ -262,6 +225,36 @@ services:
     ports:
       - "127.0.0.1:6333:6333"
       - "127.0.0.1:6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hsf-app
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${APP_PORT}:3000"
+    environment:
+      NODE_ENV: production
+    env_file:
+      - .env
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      qdrant:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  qdrant_storage:
+EOF
     volumes:
       - qdrant_storage:/qdrant/storage
 
@@ -346,19 +339,33 @@ fi
 log "creating uploads directory if not exists"
 mkdir -p "$ROOT_DIR/uploads"
 
-log "starting postgres and qdrant containers"
-docker compose up -d postgres qdrant
+log "checking for existing postgres..."
+if docker ps --format '{{.Names}}' | grep -q '^hsf-postgres$'; then
+  log "found existing hsf-postgres container, removing it first"
+  docker rm -f hsf-postgres
+fi
 
-log "waiting for postgres to be ready..."
+if ss -tuln 2>/dev/null | grep -q ':5432 ' && docker ps --format '{{.Names}}' | grep -q '^hsf-postgres$'; then
+  log "host postgres detected on 5432, will use host postgres for migrations"
+  USE_HOST_PG=1
+elif ! command -v psql >/dev/null 2>&1; then
+  log "no psql client, installing..."
+  if command -v apt >/dev/null 2>&1; then
+    apt update && apt install -y postgresql-client-15 2>/dev/null || apt install -y postgresql-client 2>/dev/null || true
+  fi
+fi
+
+log "starting qdrant container"
+docker compose up -d qdrant
+
+log "waiting for qdrant to be ready..."
 for i in {1..30}; do
-  if docker exec hsf-postgres pg_isready -U hsf_wiki -d huangshifu_wiki >/dev/null 2>&1; then
-    log "postgres is ready"
+  if curl -sf http://127.0.0.1:6333/healthz >/dev/null 2>&1; then
+    log "qdrant is ready"
     break
   fi
   if [[ $i -eq 30 ]]; then
-    error "postgres did not become ready in time"
-    docker compose logs postgres
-    exit 1
+    warn "qdrant did not become ready in time, continuing anyway"
   fi
   sleep 2
 done
@@ -404,16 +411,27 @@ if [[ "$SKIP_DB_INIT" != "1" ]]; then
   log "generating prisma client"
   npm run db:generate
 
-  log "applying prisma migrations (using host-compatible DATABASE_URL)"
+  log "applying prisma migrations"
   ORIGINAL_DB_URL="${DATABASE_URL}"
-  export DATABASE_URL="${DATABASE_URL//postgres:/127.0.0.1:}"
+  if [[ "${USE_HOST_PG:-0}" == "1" ]]; then
+    log "using host postgres - adjusting DATABASE_URL"
+    export DATABASE_URL="${DATABASE_URL//postgres@/hsf_app@}"
+    export DATABASE_URL="${DATABASE_URL//postgres:5434/127.0.0.1:5432}"
+    export DATABASE_URL="${DATABASE_URL//postgres:5433/127.0.0.1:5432}"
+    export DATABASE_URL="${DATABASE_URL//postgres:5432/127.0.0.1:5432}"
+  fi
   log "DATABASE_URL for migration: $DATABASE_URL"
   npm run db:deploy
   export DATABASE_URL="$ORIGINAL_DB_URL"
 
   if [[ "$SKIP_SEED" != "1" ]]; then
     log "seeding database"
-    export DATABASE_URL="${DATABASE_URL//postgres:/127.0.0.1:}"
+    if [[ "${USE_HOST_PG:-0}" == "1" ]]; then
+      export DATABASE_URL="${DATABASE_URL//postgres@/hsf_app@}"
+      export DATABASE_URL="${DATABASE_URL//postgres:5434/127.0.0.1:5432}"
+      export DATABASE_URL="${DATABASE_URL//postgres:5433/127.0.0.1:5432}"
+      export DATABASE_URL="${DATABASE_URL//postgres:5432/127.0.0.1:5432}"
+    fi
     npm run db:seed
     export DATABASE_URL="$ORIGINAL_DB_URL"
   else
