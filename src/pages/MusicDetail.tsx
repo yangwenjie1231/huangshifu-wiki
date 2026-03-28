@@ -12,6 +12,14 @@ import { SongCoverManager } from '../components/SongCoverManager';
 import { SongEditModal } from '../components/SongEditModal';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 
+type PlatformIds = {
+  neteaseId?: string | null;
+  tencentId?: string | null;
+  kugouId?: string | null;
+  baiduId?: string | null;
+  kuwoId?: string | null;
+};
+
 type SongItem = {
   docId: string;
   id: string;
@@ -23,10 +31,11 @@ type SongItem = {
   lyric?: string | null;
   primaryPlatform?: 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo' | null;
   favoritedByMe?: boolean;
+  platformIds?: PlatformIds;
 };
 
 type SongDetailResponse = {
-  song: SongItem;
+  song: SongItem & { platformIds?: PlatformIds };
 };
 
 type PostItem = {

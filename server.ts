@@ -28,7 +28,10 @@ import {
   resolveAudioUrl as resolveMetingAudioUrl,
   resolveLyric as resolveMetingLyric,
   resolveCoverUrl as resolveMetingCoverUrl,
+  searchMusicResources,
 } from './src/server/music/metingService';
+import { registerRegionRoutes } from './src/server/location/routes';
+import { registerExifRoutes } from './src/server/location/exifRoutes';
 
 dotenv.config({ path: '.env.local' });
 dotenv.config();
@@ -399,6 +402,7 @@ type WikiResponseInput = {
   tags: unknown;
   relations?: unknown;
   eventDate: string | null;
+  locationCode?: string | null;
   status: ContentStatus;
   reviewNote: string | null;
   reviewedBy: string | null;
@@ -409,6 +413,7 @@ type WikiResponseInput = {
   lastEditorName: string;
   createdAt: Date;
   updatedAt: Date;
+  location?: { code: string; name: string; fullName: string } | null;
 };
 
 type WikiReverseRelationEntry = {
@@ -1653,7 +1658,7 @@ async function createOrUpdateImportedSong(params: {
   const sourceField = getPlatformSourceField(platform);
   const platformId = track.sourceId;
 
-  const existing = await prismaAny.musicTrack.findFirst({
+  const existingByPlatformId = await prismaAny.musicTrack.findFirst({
     where: {
       OR: [
         { [sourceField]: platformId },
@@ -1662,36 +1667,114 @@ async function createOrUpdateImportedSong(params: {
     },
   });
 
+  if (existingByPlatformId) {
+    const fallbackTitle = `未命名歌曲 ${track.sourceId}`;
+    const title = track.title || fallbackTitle;
+    const artist = track.artist || '未知歌手';
+    const album = track.album || albumNameFallback || '未知专辑';
+
+    const resolvedCover = (await resolveMetingCoverUrl(platform as ParsedMusicPlatform, track.picId, track.cover)) || track.cover;
+    const resolvedAudioUrl = (await resolveMetingAudioUrl(platform as ParsedMusicPlatform, track.urlId)) || '';
+    const resolvedLyric = (await resolveMetingLyric(platform as ParsedMusicPlatform, track.lyricId)) || '';
+
+    const song = await prismaAny.musicTrack.update({
+      where: { docId: existingByPlatformId.docId },
+      data: {
+        id: existingByPlatformId.id || track.sourceId,
+        title,
+        artist,
+        album,
+        cover: resolvedCover || '',
+        audioUrl: resolvedAudioUrl || '',
+        lyric: resolvedLyric || null,
+        primaryPlatform: platform,
+        enabledPlatform: platform,
+        [sourceField]: platformId,
+      },
+    });
+    return {
+      song,
+      created: false,
+      linked: false,
+    };
+  }
+
   const fallbackTitle = `未命名歌曲 ${track.sourceId}`;
   const title = track.title || fallbackTitle;
   const artist = track.artist || '未知歌手';
   const album = track.album || albumNameFallback || '未知专辑';
 
+  const existingByTitleArtist = await prismaAny.musicTrack.findFirst({
+    where: {
+      AND: [
+        { title: { equals: title } },
+        { artist: { equals: artist } },
+        {
+          OR: [
+            { neteaseId: { not: null } },
+            { tencentId: { not: null } },
+            { kugouId: { not: null } },
+            { baiduId: { not: null } },
+            { kuwoId: { not: null } },
+          ],
+        },
+      ],
+    } as Prisma.MusicTrackWhereInput,
+  });
+
   const resolvedCover = (await resolveMetingCoverUrl(platform as ParsedMusicPlatform, track.picId, track.cover)) || track.cover;
   const resolvedAudioUrl = (await resolveMetingAudioUrl(platform as ParsedMusicPlatform, track.urlId)) || '';
   const resolvedLyric = (await resolveMetingLyric(platform as ParsedMusicPlatform, track.lyricId)) || '';
 
-  const updateData: Record<string, unknown> = {
-    id: existing?.id || track.sourceId,
-    title,
-    artist,
-    album,
-    cover: resolvedCover || '',
-    audioUrl: resolvedAudioUrl || '',
-    lyric: resolvedLyric || null,
-    primaryPlatform: platform,
-    enabledPlatform: platform,
-    [sourceField]: platformId,
-  };
+  if (existingByTitleArtist) {
+    const conflictPlatformId = (existingByTitleArtist as Record<string, string | null>)[sourceField];
+    if (conflictPlatformId) {
+      const song = await prismaAny.musicTrack.create({
+        data: {
+          id: track.sourceId,
+          title,
+          artist,
+          album,
+          cover: resolvedCover || '',
+          audioUrl: resolvedAudioUrl || '',
+          lyric: resolvedLyric || null,
+          primaryPlatform: platform,
+          enabledPlatform: platform,
+          [sourceField]: platformId,
+          addedBy: userUid,
+        },
+      });
+      return {
+        song,
+        created: true,
+        linked: false,
+      };
+    }
 
-  if (existing) {
-    const song = await prismaAny.musicTrack.update({
-      where: { docId: existing.docId },
-      data: updateData,
+    const updatedSong = await prismaAny.musicTrack.update({
+      where: { docId: existingByTitleArtist.docId },
+      data: {
+        id: existingByTitleArtist.id || track.sourceId,
+        title,
+        artist,
+        album,
+        cover: resolvedCover || '',
+        audioUrl: resolvedAudioUrl || '',
+        lyric: resolvedLyric || null,
+        primaryPlatform: platform,
+        enabledPlatform: platform,
+        [sourceField]: platformId,
+      },
     });
     return {
-      song,
+      song: updatedSong,
       created: false,
+      linked: true,
+      linkedFrom: {
+        docId: existingByTitleArtist.docId,
+        title: existingByTitleArtist.title,
+        artist: existingByTitleArtist.artist,
+      },
     };
   }
 
@@ -1714,6 +1797,7 @@ async function createOrUpdateImportedSong(params: {
   return {
     song,
     created: true,
+    linked: false,
   };
 }
 
@@ -2342,6 +2426,8 @@ function toWikiResponse(page: WikiResponseInput) {
     tags: serializeTags(page.tags),
     relations: serializeRelations(page.relations, page.slug),
     eventDate: page.eventDate,
+    locationCode: page.locationCode || null,
+    locationName: page.location?.fullName || null,
     status: page.status,
     reviewNote: page.reviewNote,
     reviewedBy: page.reviewedBy,
@@ -2472,6 +2558,7 @@ function toPostResponse(post: {
   albumDocId?: string | null;
   content: string;
   tags: unknown;
+  locationCode?: string | null;
   authorUid: string;
   status: ContentStatus;
   reviewNote: string | null;
@@ -2485,9 +2572,12 @@ function toPostResponse(post: {
   isPinned?: boolean;
   createdAt: Date;
   updatedAt: Date;
+  location?: { code: string; name: string; fullName: string } | null;
 }) {
   return {
     ...post,
+    locationCode: post.locationCode || null,
+    locationName: post.location?.fullName || null,
     hotScore: post.hotScore ?? 0,
     viewCount: post.viewCount ?? 0,
     tags: serializeTags(post.tags),
@@ -2522,10 +2612,12 @@ function toGalleryResponse(gallery: {
   authorUid: string;
   authorName: string;
   tags: unknown;
+  locationCode?: string | null;
   published: boolean;
   publishedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  location?: { code: string; name: string; fullName: string } | null;
   images: {
     id: string;
     url: string;
@@ -2549,6 +2641,8 @@ function toGalleryResponse(gallery: {
     authorUid: gallery.authorUid,
     authorName: gallery.authorName,
     tags: serializeTags(gallery.tags),
+    locationCode: gallery.locationCode || null,
+    locationName: gallery.location?.fullName || null,
     published: gallery.published,
     publishedAt: gallery.publishedAt ? gallery.publishedAt.toISOString() : null,
     createdAt: gallery.createdAt.toISOString(),
@@ -2632,6 +2726,9 @@ function toEditLockResponse(lock: {
 }
 
 app.use(authMiddleware);
+
+registerRegionRoutes(app);
+registerExifRoutes(app);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -3947,6 +4044,7 @@ app.post('/api/wiki', requireAuth, requireActiveUser, async (req: AuthenticatedR
       relations,
       eventDate,
       status,
+      locationCode,
     } = req.body as {
       title?: string;
       slug?: string;
@@ -3956,6 +4054,7 @@ app.post('/api/wiki', requireAuth, requireActiveUser, async (req: AuthenticatedR
       relations?: unknown;
       eventDate?: string;
       status?: ContentStatus;
+      locationCode?: string;
     };
 
     if (!title || !slug || !category || !content) {
@@ -3999,6 +4098,7 @@ app.post('/api/wiki', requireAuth, requireActiveUser, async (req: AuthenticatedR
         reviewedAt: null,
         lastEditorUid: req.authUser!.uid,
         lastEditorName: req.authUser!.displayName,
+        locationCode: locationCode || null,
       },
       update: {
         title,
@@ -4013,6 +4113,7 @@ app.post('/api/wiki', requireAuth, requireActiveUser, async (req: AuthenticatedR
         reviewedAt: null,
         lastEditorUid: req.authUser!.uid,
         lastEditorName: req.authUser!.displayName,
+        locationCode: locationCode || null,
       },
     });
 
@@ -4185,6 +4286,7 @@ app.put('/api/wiki/:slug', requireAuth, requireActiveUser, async (req: Authentic
       relations,
       eventDate,
       status,
+      locationCode,
     } = req.body as {
       title?: string;
       category?: string;
@@ -4193,6 +4295,7 @@ app.put('/api/wiki/:slug', requireAuth, requireActiveUser, async (req: Authentic
       relations?: unknown;
       eventDate?: string;
       status?: ContentStatus;
+      locationCode?: string;
     };
 
     if (!title || !category || !content) {
@@ -4231,6 +4334,7 @@ app.put('/api/wiki/:slug', requireAuth, requireActiveUser, async (req: Authentic
         reviewedAt: null,
         lastEditorUid: req.authUser!.uid,
         lastEditorName: req.authUser!.displayName,
+        locationCode: locationCode || null,
       },
     });
 
@@ -6978,13 +7082,14 @@ app.post('/api/galleries/upload', requireAuth, requireActiveUser, upload.array('
 
 app.post('/api/galleries', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
-    const { title, description, tags, images, assetIds, uploadSessionId } = req.body as {
+    const { title, description, tags, images, assetIds, uploadSessionId, locationCode } = req.body as {
       title?: string;
       description?: string;
       tags?: string[];
       images?: { url: string; name: string }[];
       assetIds?: string[];
       uploadSessionId?: string;
+      locationCode?: string;
     };
 
     const normalizedAssetIds = parseAssetIdList(assetIds);
@@ -7055,6 +7160,7 @@ app.post('/api/galleries', requireAuth, requireActiveUser, async (req: Authentic
           authorUid: req.authUser!.uid,
           authorName: req.authUser!.displayName,
           tags: finalTags,
+          locationCode: locationCode || null,
           images: {
             create: orderedAssets.map((asset, index) => ({
               assetId: asset.id,
@@ -7141,6 +7247,7 @@ app.post('/api/galleries', requireAuth, requireActiveUser, async (req: Authentic
         authorUid: req.authUser!.uid,
         authorName: req.authUser!.displayName,
         tags: normalizedTags,
+        locationCode: locationCode || null,
         images: {
           create: normalizedImages.map((image, index) => ({
             assetId: assetByUrl.get(image.url) || null,
@@ -7199,11 +7306,13 @@ app.patch('/api/galleries/:id', requireAuth, requireActiveUser, async (req: Auth
     const title = typeof req.body?.title === 'string' ? req.body.title.trim() : undefined;
     const description = typeof req.body?.description === 'string' ? req.body.description.trim() : undefined;
     const tags = req.body?.tags !== undefined ? normalizeTagList(req.body.tags) : undefined;
+    const locationCode = req.body?.locationCode !== undefined ? (typeof req.body.locationCode === 'string' && req.body.locationCode.length > 0 ? req.body.locationCode : null) : undefined;
 
     const data: {
       title?: string;
       description?: string;
       tags?: string[];
+      locationCode?: string | null;
     } = {};
 
     if (title !== undefined && title.length > 0) {
@@ -7214,6 +7323,9 @@ app.patch('/api/galleries/:id', requireAuth, requireActiveUser, async (req: Auth
     }
     if (tags !== undefined) {
       data.tags = tags;
+    }
+    if (locationCode !== undefined) {
+      data.locationCode = locationCode;
     }
 
     if (!Object.keys(data).length) {
@@ -8034,8 +8146,10 @@ app.post('/api/music/import', requireAdmin, async (req: AuthenticatedRequest, re
     let imported = 0;
     let skipped = 0;
     let failed = 0;
+    let linked = 0;
 
     const importedSongs: Array<{ docId: string; trackOrder: number }> = [];
+    const linkedSongs: Array<{ docId: string; title: string; artist: string; platform: string }> = [];
     for (let index = 0; index < tracks.length; index += 1) {
       const track = tracks[index];
       try {
@@ -8049,6 +8163,15 @@ app.post('/api/music/import', requireAdmin, async (req: AuthenticatedRequest, re
           imported += 1;
         } else {
           skipped += 1;
+        }
+        if (result.linked) {
+          linked += 1;
+          linkedSongs.push({
+            docId: result.song.docId,
+            title: result.song.title,
+            artist: result.song.artist,
+            platform: preview.platform,
+          });
         }
         importedSongs.push({ docId: result.song.docId, trackOrder: index });
       } catch (error) {
@@ -8520,6 +8643,38 @@ app.patch('/api/music/:docId', requireAdmin, async (req, res) => {
     if (baiduId) updateData.baiduId = baiduId;
     if (kuwoId) updateData.kuwoId = kuwoId;
 
+    const platformIdFields: Array<{ field: string; value: string }> = [];
+    if (neteaseId) platformIdFields.push({ field: 'neteaseId', value: neteaseId });
+    if (tencentId) platformIdFields.push({ field: 'tencentId', value: tencentId });
+    if (kugouId) platformIdFields.push({ field: 'kugouId', value: kugouId });
+    if (baiduId) platformIdFields.push({ field: 'baiduId', value: baiduId });
+    if (kuwoId) platformIdFields.push({ field: 'kuwoId', value: kuwoId });
+
+    if (platformIdFields.length > 0) {
+      for (const { field, value } of platformIdFields) {
+        if (!value) continue;
+        const conflict = await prismaAny.musicTrack.findFirst({
+          where: {
+            docId: { not: docId },
+            [field]: value,
+          },
+          select: { docId: true, title: true, artist: true },
+        });
+        if (conflict) {
+          res.status(409).json({
+            error: `该平台ID已被歌曲「${conflict.title}」使用`,
+            conflict: true,
+            conflictingSong: {
+              docId: conflict.docId,
+              title: conflict.title,
+              artist: conflict.artist,
+            },
+          });
+          return;
+        }
+      }
+    }
+
     await prismaAny.musicTrack.update({
       where: { docId },
       data: updateData,
@@ -8537,6 +8692,143 @@ app.patch('/api/music/:docId', requireAdmin, async (req, res) => {
     res.status(500).json({ error: '更新歌曲失败' });
   }
 });
+
+app.get('/api/music/match-suggestions', async (req: AuthenticatedRequest, res) => {
+  try {
+    const platform = typeof req.query.platform === 'string' ? req.query.platform.trim() : '';
+    const title = typeof req.query.title === 'string' ? req.query.title.trim() : '';
+    const artist = typeof req.query.artist === 'string' ? req.query.artist.trim() : '';
+    const docId = typeof req.query.docId === 'string' ? req.query.docId.trim() : '';
+
+    if (!platform || !title || !artist) {
+      res.status(400).json({ error: '缺少必要参数：platform, title, artist' });
+      return;
+    }
+
+    const validPlatforms = ['netease', 'tencent', 'kugou', 'baidu', 'kuwo'];
+    if (!validPlatforms.includes(platform)) {
+      res.status(400).json({ error: '无效的平台' });
+      return;
+    }
+
+    const searchResults = await searchMusicResources({
+      platform: platform as MusicPlatform,
+      keyword: `${title} ${artist}`,
+      type: 'song',
+      limit: 10,
+    });
+
+    const normalizedTitle = title.toLowerCase().replace(/\s+/g, '');
+    const normalizedArtist = artist.toLowerCase().replace(/\s+/g, '');
+
+    const scored = searchResults
+      .map((item) => {
+        const itemTitleNorm = item.title.toLowerCase().replace(/\s+/g, '');
+        const itemArtistNorm = item.artist.toLowerCase().replace(/\s+/g, '');
+        const titleScore = calculateSimilarity(normalizedTitle, itemTitleNorm);
+        const artistScore = calculateSimilarity(normalizedArtist, itemArtistNorm);
+        const avgScore = (titleScore + artistScore) / 2;
+        return { ...item, score: avgScore };
+      })
+      .filter((item) => item.score >= 0.5)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+
+    let autoSelectedIndex: number | null = null;
+    if (scored.length === 1 && scored[0].score >= 0.8) {
+      autoSelectedIndex = 0;
+    } else if (scored.length > 1 && scored[0].score >= 0.85 && scored[1].score < scored[0].score - 0.15) {
+      autoSelectedIndex = 0;
+    }
+
+    const existingSongsByPlatformId = await prismaAny.musicTrack.findMany({
+      where: {
+        OR: scored.map((item) => {
+          const field = getPlatformSourceField(platform as MusicPlatform);
+          return { [field]: item.sourceId };
+        }),
+      },
+      select: { docId: true, id: true, title: true, artist: true },
+    });
+
+    const existingMap = new Map<string, { docId: string; title: string; artist: string }>();
+    for (const s of existingSongsByPlatformId) {
+      existingMap.set(s.id, { docId: s.docId, title: s.title, artist: s.artist });
+    }
+
+    const suggestions = scored.map((item, index) => {
+      const existing = existingMap.get(item.sourceId);
+      return {
+        sourceId: item.sourceId,
+        title: item.title,
+        artist: item.artist,
+        album: item.album,
+        cover: item.picId,
+        sourceUrl: item.sourceUrl,
+        score: Math.round(item.score * 100),
+        isAutoSelected: index === autoSelectedIndex,
+        alreadyLinked: existing ? { docId: existing.docId, title: existing.title } : null,
+      };
+    });
+
+    res.json({ suggestions, autoSelectedIndex });
+  } catch (error) {
+    console.error('Match suggestions error:', error);
+    res.status(500).json({ error: '搜索匹配歌曲失败' });
+  }
+});
+
+function calculateSimilarity(a: string, b: string): number {
+  if (a === b) return 1;
+  if (a.length === 0 || b.length === 0) return 0;
+
+  const maxLen = Math.max(a.length, b.length);
+  if (maxLen > 50) {
+    return a.includes(b) || b.includes(a) ? 0.85 : 0;
+  }
+
+  const d = Math.max(a.length, b.length);
+  let similarity = 0;
+
+  if (d <= 200) {
+    similarity = levenshteinSimilarity(a, b);
+  } else {
+    const aSub = a.slice(0, 50);
+    const bSub = b.slice(0, 50);
+    similarity = levenshteinSimilarity(aSub, bSub);
+  }
+
+  if (a.includes(b) || b.includes(a)) {
+    similarity = Math.max(similarity, 0.85);
+  }
+
+  return similarity;
+}
+
+function levenshteinSimilarity(a: string, b: string): number {
+  const matrix: number[][] = [];
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1,
+        );
+      }
+    }
+  }
+  const distance = matrix[b.length][a.length];
+  return 1 - distance / Math.max(a.length, b.length);
+}
 
 app.get('/api/music/:docId/covers', async (req, res) => {
   try {

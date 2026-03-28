@@ -42,6 +42,14 @@ interface FirestoreErrorInfo {
   }
 }
 
+type PlatformIds = {
+  neteaseId?: string | null;
+  tencentId?: string | null;
+  kugouId?: string | null;
+  baiduId?: string | null;
+  kuwoId?: string | null;
+};
+
 type SongItem = {
   docId: string;
   id: string;
@@ -53,6 +61,7 @@ type SongItem = {
   primaryPlatform?: 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo' | null;
   lyric?: string | null;
   favoritedByMe?: boolean;
+  platformIds?: PlatformIds;
 };
 
 type PostItem = {
@@ -437,6 +446,13 @@ const Music = () => {
               {isAdding ? <X size={20} /> : <Plus size={20} />}
               {isAdding ? '取消添加' : '添加音乐'}
             </button>
+            <Link
+              to="/music/links"
+              className="px-8 py-4 bg-white text-gray-900 border border-gray-200 rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-xl"
+            >
+              <Link2 size={20} />
+              关联管理
+            </Link>
           </div>
         )}
       </header>
@@ -653,6 +669,65 @@ const Music = () => {
                               {song.title}
                             </Link>
                             <p className="text-xs text-gray-400 mt-1 line-clamp-1">{song.artist} — {song.album}</p>
+                            {song.platformIds && (
+                              <div className="flex items-center gap-1.5 mt-2">
+                                {song.platformIds.neteaseId && (
+                                  <a
+                                    href={`https://music.163.com/song?id=${song.platformIds.neteaseId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
+                                    title={`网易云: ${song.platformIds.neteaseId}`}
+                                  >
+                                    网易云
+                                  </a>
+                                )}
+                                {song.platformIds.tencentId && (
+                                  <a
+                                    href={`https://y.qq.com/n/ryqq/songDetail/${song.platformIds.tencentId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
+                                    title={`QQ音乐: ${song.platformIds.tencentId}`}
+                                  >
+                                    QQ
+                                  </a>
+                                )}
+                                {song.platformIds.kugouId && (
+                                  <a
+                                    href={`https://www.kugou.com/song/#hash=${song.platformIds.kugouId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
+                                    title={`酷狗: ${song.platformIds.kugouId}`}
+                                  >
+                                    酷狗
+                                  </a>
+                                )}
+                                {song.platformIds.baiduId && (
+                                  <a
+                                    href={`https://music.baidu.com/song/${song.platformIds.baiduId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 hover:bg-orange-200 transition-colors"
+                                    title={`百度: ${song.platformIds.baiduId}`}
+                                  >
+                                    百度
+                                  </a>
+                                )}
+                                {song.platformIds.kuwoId && (
+                                  <a
+                                    href={`https://www.kuwo.cn/song_detail/${song.platformIds.kuwoId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors"
+                                    title={`酷我: ${song.platformIds.kuwoId}`}
+                                  >
+                                    酷我
+                                  </a>
+                                )}
+                              </div>
+                            )}
                           </div>
 
                           <div className="mt-4 flex items-center justify-between gap-2">
