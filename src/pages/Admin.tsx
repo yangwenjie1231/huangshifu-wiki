@@ -16,6 +16,7 @@ import {
   Lock,
   FileText,
   Cpu,
+  Database,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { clsx } from 'clsx';
@@ -23,8 +24,9 @@ import { useAuth } from '../context/AuthContext';
 import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/apiClient';
 import { useToast } from '../components/Toast';
 import { EmbeddingsTab } from './Admin/EmbeddingsTab';
+import { BackupsTab } from './Admin/BackupsTab';
 
-type AdminTab = 'reviews' | 'wiki' | 'posts' | 'galleries' | 'users' | 'sections' | 'announcements' | 'music' | 'locks' | 'moderation_logs' | 'ban_logs' | 'embeddings';
+type AdminTab = 'reviews' | 'wiki' | 'posts' | 'galleries' | 'users' | 'sections' | 'announcements' | 'music' | 'locks' | 'moderation_logs' | 'ban_logs' | 'embeddings' | 'backups';
 type ReviewFilter = 'all' | 'wiki' | 'posts';
 
 type ReviewQueueBucket = {
@@ -83,6 +85,7 @@ const Admin = () => {
       { id: 'locks' as const, label: '编辑锁', icon: Lock },
       { id: 'moderation_logs' as const, label: '操作日志', icon: FileText },
       { id: 'ban_logs' as const, label: '封禁日志', icon: Shield },
+      ...(isSuperAdmin ? [{ id: 'backups' as const, label: '数据库备份', icon: Database }] : []),
     ],
     [],
   );
@@ -456,8 +459,12 @@ const Admin = () => {
           )}
         </div>
       ) : activeTab === 'embeddings' ? (
-        <div className="bg-white rounded-[36px] border border-gray-100 shadow-sm overflow-hidden p-6">
+        <div className="bg-white rounded-[36px] border border-gray-100 shadow--sm overflow-hidden p-6">
           <EmbeddingsTab />
+        </div>
+      ) : activeTab === 'backups' ? (
+        <div className="bg-white rounded-[36px] border border-gray-100 shadow-sm overflow-hidden p-6">
+          <BackupsTab />
         </div>
       ) : activeTab === 'moderation_logs' || activeTab === 'ban_logs' ? (
         <div className="bg-white rounded-[36px] border border-gray-100 shadow-sm overflow-hidden">

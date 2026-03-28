@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
+import { customSchema, isTrustedIframeDomain } from '../lib/htmlSanitizer';
 import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar, Link2, GitBranch, Network, MapPin, Heart, ThumbsDown, Pin } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
@@ -223,8 +225,21 @@ const WikiMarkdown = ({ content }: { content: string }) => {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeRaw]}
+      rehypePlugins={[rehypeRaw, [rehypeSanitize, customSchema]]}
       components={{
+        iframe: ({ src, width, height, ...props }: React.IframeHTMLAttributes<HTMLIFrameElement>) => {
+          if (!isTrustedIframeDomain(src)) {
+            return null;
+          }
+          return (
+            <iframe
+              src={src}
+              width={width || '100%'}
+              height={height || '400px'}
+              {...props}
+            />
+          );
+        },
         a: ({ href, children, ...props }) => {
           if (href?.startsWith('/wiki/')) {
             const slug = href.replace('/wiki/', '');
