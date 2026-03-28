@@ -332,6 +332,10 @@ if [[ "${USE_HOST_PG:-0}" == "1" ]]; then
   PG_DB_NAME="${PG_DB_NAME##*/}"
 
   if command -v sudo >/dev/null 2>&1 && id -u >/dev/null 2>&1; then
+    log "checking PostgreSQL authentication settings"
+    PG_HBA=$(sudo -u postgres psql -t -c "SHOW password_encryption" 2>/dev/null | tr -d ' ')
+    log "password_encryption = ${PG_HBA}"
+
     if sudo -u postgres psql -t -c "SELECT 1 FROM pg_roles WHERE rolname='${PG_DB_USER}'" 2>/dev/null | grep -q '1'; then
       log "user ${PG_DB_USER} exists, updating password"
       sudo -u postgres psql -c "ALTER USER ${PG_DB_USER} WITH PASSWORD '${DB_PASSWORD}';" 
@@ -350,6 +354,12 @@ if [[ "${USE_HOST_PG:-0}" == "1" ]]; then
     sudo -u postgres psql -d "${PG_DB_NAME}" -c "GRANT ALL ON SCHEMA public TO ${PG_DB_USER};"
     sudo -u postgres psql -d "${PG_DB_NAME}" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${PG_DB_USER};"
     sudo -u postgres psql -d "${PG_DB_NAME}" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${PG_DB_USER};"
+
+    log "testing connection as ${PG_DB_USER}"
+    PGPASSWORD="${DB_PASSWORD}" psql -h 127.0.0.1 -p 5432 -U "${PG_DB_USER}" -d "${PG_DB_NAME}" -c "SELECT 1;" || {
+      warn "connection test failed, checking pg_hba.conf"
+      sudo cat /etc/postgresql/*/main/pg_hba.conf 2>/dev/null | grep -v "^#" | grep -v "^$" | head -10
+    }
   fi
 
   log "updating .env to use host postgres (127.0.0.1:5432)"
