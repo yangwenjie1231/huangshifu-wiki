@@ -349,6 +349,9 @@ if [[ "${USE_HOST_PG:-0}" == "1" ]]; then
     sudo -u postgres psql -d "${PG_DB}" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${PG_USER};" 2>/dev/null || true
     sudo -u postgres psql -d "${PG_DB}" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${PG_USER};" 2>/dev/null || true
   fi
+
+  log "updating .env to use host postgres (127.0.0.1:5432, keep hsf_wiki user)"
+  sed -i "s|@postgres:[0-9]*|@127.0.0.1:5432|g" "$ENV_FILE"
 fi
 
 log "starting qdrant container"
