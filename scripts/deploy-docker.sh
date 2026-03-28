@@ -364,8 +364,13 @@ for i in {1..30}; do
 done
 
 if [[ "$SKIP_DB_INIT" != "1" ]]; then
+  log "installing system dependencies for sharp (libvips)"
+  if command -v apt >/dev/null 2>&1; then
+    apt update && apt install -y libvips-dev --no-install-recommends 2>/dev/null || true
+  fi
+
   log "installing dependencies"
-  npm ci --registry="${NPM_REGISTRY}"
+  npm ci --registry="${NPM_REGISTRY}" || npm install --registry="${NPM_REGISTRY}"
 
   log "generating prisma client"
   npm run db:generate

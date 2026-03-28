@@ -254,9 +254,14 @@ if [[ "$USE_PM2" != "1" ]]; then
   log "USE_PM2=0, using nohup mode"
 fi
 
+log "installing system dependencies for sharp (libvips)"
+if command -v apt >/dev/null 2>&1; then
+  apt update && apt install -y libvips-dev --no-install-recommends 2>/dev/null || true
+fi
+
 if [[ "$INSTALL_MODE" == "ci" && -f "$ROOT_DIR/package-lock.json" ]]; then
   log "installing dependencies with npm ci"
-  npm ci --registry="${NPM_REGISTRY}"
+  npm ci --registry="${NPM_REGISTRY}" || npm install --registry="${NPM_REGISTRY}"
 else
   log "installing dependencies with npm install"
   npm install --registry="${NPM_REGISTRY}"
