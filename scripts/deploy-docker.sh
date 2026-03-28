@@ -214,12 +214,23 @@ if [[ "$COMPOSE_NEEDS_SETUP" == "true" ]]; then
     warn "extracted DB_PASSWORD from existing .env"
   fi
 
-  PG_PORT="5432"
-  if is_port_in_use 5432; then
-    warn "port 5432 is already in use by host postgres, will use 5433 for Docker postgres"
-    PG_PORT="5433"
-    warn "updating DATABASE_URL to use port 5433"
-    sed -i 's|@postgres:5432|@postgres:5433|g' "$ENV_FILE"
+  PG_PORT=""
+  for port in 5432 5433 5434 5435; do
+    if ! is_port_in_use "$port"; then
+      PG_PORT="$port"
+      break
+    fi
+  done
+
+  if [[ -z "$PG_PORT" ]]; then
+    error "no available port found for postgres (tried 5432-5435)"
+    exit 1
+  fi
+
+  if [[ "$PG_PORT" != "5432" ]]; then
+    warn "port 5432 is in use, using port ${PG_PORT} for Docker postgres"
+    warn "updating DATABASE_URL to use port ${PG_PORT}"
+    sed -i "s|@postgres:[0-9]*|@postgres:${PG_PORT}|g" "$ENV_FILE"
   fi
 
   warn "creating docker-compose.yml with postgres + qdrant + app services"
