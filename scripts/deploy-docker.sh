@@ -255,39 +255,6 @@ services:
 volumes:
   qdrant_storage:
 EOF
-    volumes:
-      - qdrant_storage:/qdrant/storage
-
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: hsf-app
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:${APP_PORT}:3000"
-    environment:
-      NODE_ENV: production
-    env_file:
-      - .env
-    volumes:
-      - ./uploads:/app/uploads
-    depends_on:
-      postgres:
-        condition: service_healthy
-      qdrant:
-        condition: service_started
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
-
-volumes:
-  postgres_data:
-  qdrant_storage:
-EOF
 fi
 
 if [[ "$DOCKERFILE_NEEDS_CREATE" == "true" ]]; then
