@@ -97,9 +97,16 @@ npm -v
 
 ```bash
 apt install -y gnupg ca-certificates lsb-release
-install -d /usr/share/postgresql-common/pgdg
-curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
-sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+
+# 创建 keyring 目录
+install -d /usr/share/keyrings
+
+# 下载并转换 GPG 密钥到 keyring 格式
+curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg
+
+# 配置 apt 源（使用 signed-by）
+echo "deb [signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list
+
 apt update
 apt install -y postgresql-18 postgresql-client-18
 systemctl enable --now postgresql

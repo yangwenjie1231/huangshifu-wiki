@@ -65,7 +65,7 @@ cd /root/huangshifu-wiki
 
 ## 3. 配置环境变量
 
-创建生产环境变量文件：
+创建生产环境变量文件（注意：Docker 部署需要使用 `postgres` 服务名）：
 
 ```bash
 cat > /root/huangshifu-wiki/.env <<'EOF'
@@ -91,6 +91,8 @@ MUSIC_PLAY_URL_CACHE_TTL_SECONDS="600"
 EOF
 ```
 
+> **重要**：Docker 部署时 `DATABASE_URL` 必须使用 `postgres:5432`（Docker 服务名），不能使用 `127.0.0.1:5432`。
+
 说明：
 
 - `VITE_GEMINI_API_KEY` 为空时，AI 功能会自动降级（不报致命错）。
@@ -106,9 +108,42 @@ EOF
 
 ---
 
-## 4. 创建 Docker Compose 配置
+## 4. 一键部署（推荐）
 
-项目根目录已包含 `docker-compose.yml`（仅含 Qdrant）。创建完整版配置：
+项目提供了 Docker 一键部署脚本，会自动创建 `docker-compose.yml` 和 `Dockerfile` 并完成部署。
+
+```bash
+cd /root/huangshifu-wiki
+chmod +x scripts/deploy-docker.sh
+DB_PASSWORD=你的强密码 ./scripts/deploy-docker.sh
+```
+
+常用选项：
+
+```bash
+# 拉取最新代码后部署
+PULL_LATEST=1 DB_PASSWORD=你的密码 ./scripts/deploy-docker.sh
+
+# 跳过数据库初始化（已有数据）
+SKIP_DB_INIT=1 DB_PASSWORD=你的密码 ./scripts/deploy-docker.sh
+
+# 跳过 seed
+SKIP_SEED=1 DB_PASSWORD=你的密码 ./scripts/deploy-docker.sh
+```
+
+部署完成后访问：
+- 应用：`http://127.0.0.1:3000`
+- Qdrant：`http://127.0.0.1:6333`
+
+查看日志：`docker compose logs -f`
+
+---
+
+## 5. 手动部署（可选）
+
+如需手动配置，可按以下步骤操作。
+
+### 5.1 创建 Docker Compose 配置
 
 ```bash
 cat > /root/huangshifu-wiki/docker-compose.yml <<'EOF'
@@ -175,7 +210,7 @@ EOF
 
 ---
 
-## 5. 创建 Dockerfile
+### 5.2 创建 Dockerfile
 
 在项目根目录创建 `Dockerfile`：
 
@@ -220,7 +255,7 @@ EOF
 
 ---
 
-## 6. 启动基础服务（PostgreSQL + Qdrant）
+### 5.3 启动基础服务（PostgreSQL + Qdrant）
 
 ```bash
 cd /root/huangshifu-wiki
@@ -242,7 +277,7 @@ curl http://127.0.0.1:6333/healthz
 
 ---
 
-## 7. 安装依赖并初始化数据库
+### 5.4 安装依赖并初始化数据库
 
 在宿主机安装依赖（用于运行 Prisma 命令）：
 
@@ -300,16 +335,16 @@ docker exec -it hsf-postgres psql -U hsf_wiki -d huangshifu_wiki -c "SELECT tabl
 
 ---
 
-## 8. 构建并启动应用
+### 5.5 构建并启动应用
 
-### 8.1 构建应用镜像
+#### 5.5.1 构建应用镜像
 
 ```bash
 cd /root/huangshifu-wiki
 docker compose build app
 ```
 
-### 8.2 启动应用
+#### 5.5.2 启动应用
 
 ```bash
 docker compose up -d app
@@ -326,7 +361,7 @@ curl http://127.0.0.1:3000/api/health
 
 ---
 
-## 9. 查看日志
+### 5.6 查看日志
 
 ```bash
 # 查看所有服务日志
@@ -344,7 +379,7 @@ docker compose logs -f qdrant
 
 ---
 
-## 10. 配置 Nginx 反向代理
+### 5.7 配置 Nginx 反向代理
 
 创建站点配置：`/etc/nginx/sites-available/huangshifu-wiki.conf`
 
@@ -382,7 +417,7 @@ systemctl restart nginx
 
 ---
 
-## 11. 配置 HTTPS（Let's Encrypt）
+### 5.8 配置 HTTPS（Let's Encrypt）
 
 ```bash
 apt install -y certbot python3-certbot-nginx
@@ -538,51 +573,38 @@ docker run --rm -v huangshifu-wiki_qdrant_storage:/data -v /root/backup:/backup 
 
 ---
 
-## 15. 一键部署脚本（推荐）
+## 15. 常用操作
 
-项目已提供脚本：`scripts/deploy.sh`
+### 15.1 一键部署脚本
 
-首次给执行权限：
+项目提供两个部署脚本：
+
+**deploy-docker.sh（推荐用于 Docker 部署）**：
 
 ```bash
-cd /root/huangshifu-wiki
-chmod +x scripts/deploy.sh
+chmod +x scripts/deploy-docker.sh
+DB_PASSWORD=你的密码 ./scripts/deploy-docker.sh
 ```
 
-常用用法：
+可选参数：
+- `PULL_LATEST=1` - 拉取最新代码
+- `SKIP_DB_INIT=1` - 跳过数据库初始化
+- `SKIP_SEED=1` - 跳过 seed
+- `APP_PORT` - 应用端口（默认 3000）
+
+**deploy.sh（通用部署脚本）**：
 
 ```bash
+# 非 Docker 模式（PM2）
 ./scripts/deploy.sh
-PULL_LATEST=1 ./scripts/deploy.sh
-SKIP_SEED=1 ./scripts/deploy.sh
-```
 
-Docker 部署用法：
-
-```bash
+# Docker 模式
 USE_DOCKER=1 ./scripts/deploy.sh
-PULL_LATEST=1 USE_DOCKER=1 ./scripts/deploy.sh
 ```
 
-可选环境变量：
+### 15.2 Docker 特定操作
 
-- `APP_NAME`：容器名（默认 `huangshifu-wiki`）
-- `ENV_FILE`：环境文件路径（默认 `.env`）
-- `USE_DOCKER`：使用 Docker Compose 部署（默认 `0`，设为 `1` 启用）
-- `USE_PM2`：使用 PM2 部署（默认 `1`）
-- `PULL_LATEST`：部署前拉取最新代码（默认 `0`）
-- `SKIP_SEED`：跳过数据库初始化（默认 `0`）
-- `INSTALL_MODE`：依赖安装模式，`ci` 或 `install`（默认 `ci`）
-- `ENABLE_VECTOR_SYNC`：部署时自动执行向量同步（默认 `1`）
-- `VECTOR_SYNC_LIMIT`：向量同步批次大小（默认 `100`）
-
-> **注意**：`USE_DOCKER=1` 时，脚本会自动启动 PostgreSQL、Qdrant 和应用容器，并等待服务健康检查通过。
-
----
-
-## 16. Docker 特定操作
-
-### 16.1 进入容器内部
+### 15.3 进入容器内部
 
 ```bash
 # 进入应用容器
@@ -595,7 +617,7 @@ docker exec -it hsf-postgres psql -U hsf_wiki -d huangshifu_wiki
 docker exec -it hsf-qdrant sh
 ```
 
-### 16.2 重启服务
+### 15.4 重启服务
 
 ```bash
 # 重启单个服务
@@ -607,7 +629,7 @@ docker compose restart qdrant
 docker compose restart
 ```
 
-### 16.3 停止服务
+### 15.5 停止服务
 
 ```bash
 # 停止所有服务（保留卷）
@@ -617,7 +639,7 @@ docker compose down
 docker compose down -v
 ```
 
-### 16.4 查看资源使用
+### 15.6 查看资源使用
 
 ```bash
 docker stats
@@ -626,7 +648,7 @@ docker compose ps
 
 ---
 
-## 17. 生产环境安全建议
+## 16. 生产环境安全建议
 
 1. **不要将端口暴露给公网**：所有服务只绑定到 `127.0.0.1`，通过 Nginx 对外服务
 2. **定期更新镜像版本**：关注 PostgreSQL、Qdrant、Node.js 的安全更新
@@ -648,7 +670,7 @@ docker compose ps
 
 ---
 
-## 18. 环境变量参考
+## 17. 环境变量参考
 
 | 变量名 | 说明 | 默认值 |
 |--------|------|--------|
