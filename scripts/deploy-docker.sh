@@ -404,12 +404,22 @@ if [[ "$SKIP_DB_INIT" != "1" ]]; then
   log "generating prisma client"
   npm run db:generate
 
-  log "applying prisma migrations"
+  log "applying prisma migrations (using host-compatible DATABASE_URL)"
+  local original_db_url="${DATABASE_URL}"
+  export DATABASE_URL="${DATABASE_URL//postgres:5434/127.0.0.1:5434}"
+  export DATABASE_URL="${DATABASE_URL//postgres:5433/127.0.0.1:5433}"
+  export DATABASE_URL="${DATABASE_URL//postgres:5432/127.0.0.1:5432}"
+  log "DATABASE_URL for migration: $DATABASE_URL"
   npm run db:deploy
+  export DATABASE_URL="$original_db_url"
 
   if [[ "$SKIP_SEED" != "1" ]]; then
     log "seeding database"
+    export DATABASE_URL="${DATABASE_URL//postgres:5434/127.0.0.1:5434}"
+    export DATABASE_URL="${DATABASE_URL//postgres:5433/127.0.0.1:5433}"
+    export DATABASE_URL="${DATABASE_URL//postgres:5432/127.0.0.1:5432}"
     npm run db:seed
+    export DATABASE_URL="$original_db_url"
   else
     log "skipping seed"
   fi
