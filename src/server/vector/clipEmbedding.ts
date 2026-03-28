@@ -79,3 +79,28 @@ export async function generateImageEmbedding(imageBuffer: Buffer) {
 
   return vector;
 }
+
+export async function generateTextEmbedding(text: string): Promise<number[]> {
+  if (!text || text.trim().length === 0) {
+    throw new Error('文本内容为空，无法生成向量');
+  }
+
+  const extractor = await getExtractor();
+  const output = await extractor(text, {
+    pooling: 'mean',
+    normalize: true,
+  });
+
+  const vectorData = output.data;
+  if (!vectorData) {
+    throw new Error('未获取到文本向量数据');
+  }
+
+  const vector = normalizeVector(Array.from(vectorData));
+  const expectedSize = getEmbeddingVectorSize();
+  if (vector.length !== expectedSize) {
+    throw new Error(`向量维度异常: expected=${expectedSize}, actual=${vector.length}`);
+  }
+
+  return vector;
+}

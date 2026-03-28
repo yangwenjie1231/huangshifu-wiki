@@ -530,6 +530,7 @@ npm run db:seed
 | `GET /api/embeddings/errors` | GET | 获取向量生成错误列表 | 管理员 |
 | `POST /api/embeddings/retry-failed` | POST | 重试失败的向量任务 | 管理员 |
 | `POST /api/embeddings/rebuild-all` | POST | 重建全部向量 | 管理员 |
+| `GET /api/search/semantic-galleries` | GET | 文字语义搜图 | 所有用户 |
 
 **前端新增组件：**
 
@@ -750,7 +751,7 @@ curl -X POST http://127.0.0.1:3000/api/uploads/sessions \
 验证点：
 
 - 非图片文件上传会返回 `400`
-- 超过 20MB 图片会返回 `413`
+- 超过 25MB 图片会返回 `413`
 - 超过会话文件上限会返回 `400`
 - 会话过期会返回 `410`
 - 图集返回的图片包含 `assetId`
@@ -775,6 +776,10 @@ curl -X POST http://127.0.0.1:3000/api/search/by-image \
   -F "image=@/root/test-images/1.jpg" \
   -F "limit=12" \
   -F "minScore=0.2"
+
+# 文字语义搜图（输入文字描述，查找语义相关的图集）
+curl "http://127.0.0.1:3000/api/search/semantic-galleries?q=%E9%9B%85%E8%89%87%E6%AD%8C%E5%A5%B3%E5%AD%90&limit=12&minScore=0.2" \
+  -b cookie.txt -c cookie.txt
 ```
 
 ### 11.3 头像上传功能验证（v2.7+）
@@ -825,7 +830,7 @@ curl -X POST http://127.0.0.1:3000/api/users/me/avatar \
 **验证点：**
 
 - 仅支持 JPG、PNG、WEBP、GIF、BMP 格式
-- 文件大小限制：20MB
+- 文件大小限制：25MB
 - 非图片文件返回 `400`
 - 上传成功后 `User.photoURL` 更新为新头像 URL
 - 头像存储为 `MediaAsset`，可通过媒体库统一管理
@@ -1411,6 +1416,127 @@ curl -X POST http://127.0.0.1:3000/api/embeddings/rebuild-all \
 - 「查看错误」显示失败详情（图片信息、错误原因、重试次数）
 - 「重试失败」可重新尝试失败的向量任务
 - 「重建全部」会删除并重建所有向量（需二次确认）
+
+### 11.17 上传功能优化（v3.x）
+
+本次发布对上传功能进行了多项优化，提升了大文件上传的稳定性和多文件上传的速度。
+
+#### 11.17.1 文件大小限制调整
+
+| 上传类型 | 原限制 | 新限制 |
+|---------|-------|-------|
+| 普通图片上传（图集、头像等） | 20MB | **25MB** |
+| AI 图片搜索 | 10MB | 10MB（保持不变） |
+
+**验证命令**：
+
+```bash
+# 测试上传超过 25MB 的文件
+curl -X POST http://127.0.0.1:3000/api/uploads/sessions \
+  -H "Content-Type: application/json" \
+  -c cookie.txt -b cookie.txt \
+  -d '{"maxFiles":1}'
+
+# 上传一个 26MB 的文件（应返回 413）
+curl -X POST http://127.0.0.1:3000/api/uploads/sessions/<sessionId>/files \
+  -b cookie.txt -c cookie.txt \
+  -F "file=@/root/test-large.jpg"
+```
+
+#### 11.17.2 AI 图片搜索内存优化
+
+AI 图片搜索（`/api/search/by-image`）的原实现使用内存存储上传文件，在并发请求或大文件时可能导致 OOM。
+
+**优化方案**：改为临时文件存储，处理完成后自动清理。
+
+**验证步骤**：
+
+1. 观察 uploads 目录，确保没有残留的 `.tmp` 文件：
+
+```bash
+ls -la /root/huangshifu-wiki/uploads/ | grep search_temp
+```
+
+2. 多次执行 AI 图片搜索，验证均无 `.tmp` 文件残留
+
+#### 11.17.3 图集多文件并发上传
+
+图集多文件上传从串行改为并发（最大 3 个并发），显著提升上传速度。
+
+**效果对比**（假设单文件上传耗时 2 秒）：
+
+| 文件数量 | 串行上传 | 并发上传（3并发） |
+|---------|---------|-----------------|
+| 10 个文件 | 20 秒 | 约 8 秒 |
+| 20 个文件 | 40 秒 | 约 14 秒 |
+
+**优化代码位置**：
+
+- `src/pages/Gallery.tsx`：并发上传逻辑
+- `src/lib/apiClient.ts`：新增 `apiUploadWithProgress` 和 `apiUploadWithRetry` 工具函数
+
+**验证步骤**：
+
+1. 进入图集上传页面
+2. 选择 10 张以上图片
+3. 点击上传，观察进度条
+4. 验证进度平滑增长，无明显卡顿
+
+#### 11.17.4 文字语义搜图功能
+
+新增文字语义搜图功能，用户可通过文字描述搜索语义相关的图集。
+
+**技术实现**：
+
+- 使用 CLIP text encoder 将文字描述转换为向量
+- 通过 Qdrant 向量数据库进行相似度搜索
+- 复用已有的图片向量索引
+
+**API 端点**：
+
+| 端点 | 方法 | 功能 | 权限 |
+|------|------|------|------|
+| `/api/search/semantic-galleries` | GET | 文字语义搜图 | 所有用户 |
+
+**前端入口**：
+
+- 搜索页面 → 高级筛选 → 「AI 搜图」区域 → 开启「语义搜图」开关
+
+**请求参数**：
+
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| `q` | string | 是 | 搜索文字描述 |
+| `limit` | number | 否 | 返回结果数量，默认 24，最大 60 |
+| `minScore` | number | 否 | 最小相似度分数，0-1 之间 |
+
+**响应格式**：
+
+```json
+{
+  "mode": "semantic_text",
+  "query": "荷词歌女子",
+  "totalMatches": 5,
+  "totalGalleries": 3,
+  "galleries": [
+    {
+      "id": "xxx",
+      "title": "荷词歌女子演出照",
+      "description": "...",
+      "similarity": 0.8523,
+      ...
+    }
+  ]
+}
+```
+
+**与图片搜图的区别**：
+
+| 特性 | 以图搜图 (`/api/search/by-image`) | 文字搜图 (`/api/search/semantic-galleries`) |
+|------|----------------------------------|------------------------------------------|
+| 输入 | 图片文件或 base64 | 文字字符串 |
+| 编码器 | CLIP image encoder | CLIP text encoder |
+| 适用场景 | 找相似图片 | 用文字描述找相关图集 |
 
 ---
 

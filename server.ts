@@ -15,7 +15,7 @@ import {
   PrismaClient,
   UserRole as PrismaUserRole,
 } from '@prisma/client';
-import { getEmbeddingModelName, getEmbeddingVectorSize, generateImageEmbedding } from './src/server/vector/clipEmbedding';
+import { getEmbeddingModelName, getEmbeddingVectorSize, generateImageEmbedding, generateTextEmbedding } from './src/server/vector/clipEmbedding';
 import { getQdrantCollectionName, searchImageEmbeddingPoints } from './src/server/vector/qdrantService';
 import { enqueueGalleryImageEmbeddings, enqueueMissingImageEmbeddings, syncImageEmbeddingBatch } from './src/server/vector/embeddingSync';
 import {
@@ -238,7 +238,7 @@ const uploadStorage = multer.diskStorage({
 const upload = multer({
   storage: uploadStorage,
   limits: {
-    fileSize: 20 * 1024 * 1024,
+    fileSize: 25 * 1024 * 1024,
   },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -252,7 +252,15 @@ const upload = multer({
 });
 
 const searchImageUpload = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      cb(null, uploadsDir);
+    },
+    filename: (_req, _file, cb) => {
+      const nonce = Math.random().toString(36).slice(2, 10);
+      cb(null, `search_temp_${Date.now()}_${nonce}.tmp`);
+    },
+  }),
   limits: {
     fileSize: 10 * 1024 * 1024,
   },
@@ -10732,6 +10740,7 @@ app.get('/api/search/hot-keywords', async (_req, res) => {
 });
 
 app.post('/api/search/by-image', searchImageUpload.single('image'), async (req: AuthenticatedRequest, res) => {
+  const tempFile = req.file;
   try {
     const requestedLimit = parseInteger(req.body?.limit, IMAGE_SEARCH_RESULT_LIMIT, {
       min: 1,
@@ -10740,11 +10749,16 @@ app.post('/api/search/by-image', searchImageUpload.single('image'), async (req: 
     const minScore = parseMinSimilarityScore(req.body?.minScore);
 
     let imageBuffer: Buffer | null = null;
-    const uploadedFile = req.file;
 
-    if (uploadedFile?.buffer && uploadedFile.buffer.length > 0) {
-      imageBuffer = uploadedFile.buffer;
-    } else {
+    if (tempFile?.path) {
+      try {
+        imageBuffer = await fs.promises.readFile(tempFile.path);
+      } catch {
+        imageBuffer = null;
+      }
+    }
+
+    if (!imageBuffer || imageBuffer.length === 0) {
       const base64Payload = extractBase64Payload(req.body?.imageBase64);
       if (base64Payload) {
         try {
@@ -10841,6 +10855,110 @@ app.post('/api/search/by-image', searchImageUpload.single('image'), async (req: 
   } catch (error) {
     console.error('Image semantic search error:', error);
     res.status(500).json({ error: '图片语义搜索失败' });
+  } finally {
+    if (tempFile?.path) {
+      await fs.promises.unlink(tempFile.path).catch(() => {});
+    }
+  }
+});
+
+app.get('/api/search/semantic-galleries', async (req: AuthenticatedRequest, res) => {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const requestedLimit = parseInteger(req.query.limit as string, IMAGE_SEARCH_RESULT_LIMIT, {
+      min: 1,
+      max: 60,
+    });
+    const minScore = parseMinSimilarityScore(req.query.minScore);
+
+    if (!q) {
+      res.status(400).json({ error: '请提供搜索文字 (q 参数)' });
+      return;
+    }
+
+    const queryVector = await generateTextEmbedding(q);
+    const matches = await searchImageEmbeddingPoints({
+      vector: queryVector,
+      limit: requestedLimit,
+      minScore,
+    });
+
+    const seenGalleryIds = new Set<string>();
+    const seenImageIds = new Set<string>();
+    const orderedGalleryIds: string[] = [];
+    const scoreByGalleryId = new Map<string, number>();
+
+    matches.forEach((match) => {
+      const parsed = toEmbeddingPayload(match.payload);
+      if (!parsed) {
+        return;
+      }
+
+      if (!seenImageIds.has(parsed.galleryImageId)) {
+        seenImageIds.add(parsed.galleryImageId);
+      }
+
+      const score = typeof match.score === 'number' ? match.score : 0;
+      const previousBest = scoreByGalleryId.get(parsed.galleryId);
+      if (previousBest === undefined || score > previousBest) {
+        scoreByGalleryId.set(parsed.galleryId, score);
+      }
+
+      if (!seenGalleryIds.has(parsed.galleryId)) {
+        seenGalleryIds.add(parsed.galleryId);
+        orderedGalleryIds.push(parsed.galleryId);
+      }
+    });
+
+    if (!orderedGalleryIds.length) {
+      res.json({
+        mode: 'semantic_text',
+        query: q,
+        totalMatches: 0,
+        totalGalleries: 0,
+        galleries: [],
+      });
+      return;
+    }
+
+    const galleryRows = await prisma.gallery.findMany({
+      where: {
+        id: { in: orderedGalleryIds },
+      },
+      include: {
+        images: {
+          include: {
+            asset: true,
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    const galleryById = new Map(galleryRows.map((gallery) => [gallery.id, gallery]));
+    const galleries = orderedGalleryIds
+      .map((galleryId) => {
+        const gallery = galleryById.get(galleryId);
+        if (!gallery) {
+          return null;
+        }
+        return {
+          ...toGalleryResponse(gallery),
+          similarity: Number((scoreByGalleryId.get(galleryId) ?? 0).toFixed(4)),
+        };
+      })
+      .filter((item): item is ReturnType<typeof toGalleryResponse> & { similarity: number } => item !== null);
+
+    res.json({
+      mode: 'semantic_text',
+      query: q,
+      totalMatches: seenImageIds.size,
+      totalGalleries: galleries.length,
+      galleries,
+    });
+  } catch (error) {
+    console.error('Text semantic search error:', error);
+    res.status(500).json({ error: '文字语义搜索失败' });
   }
 });
 
