@@ -41,6 +41,7 @@ const Search = () => {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
   const [contentType, setContentType] = useState<'all' | 'wiki' | 'posts' | 'galleries' | 'music' | 'albums'>('all');
+  const [semanticImageSearch, setSemanticImageSearch] = useState(false);
 
   // AI Image Search
   const [aiSearching, setAiSearching] = useState(false);
@@ -106,7 +107,7 @@ const Search = () => {
     setSearchParams({ q: currentQuery });
     setSearchQuery(currentQuery);
 
-    const filters = filtersOverride || { selectedTags, dateRange, contentType };
+    const filters = filtersOverride || { selectedTags, dateRange, contentType, semanticImageSearch };
 
     try {
       const typeMap: Record<string, string> = {
@@ -125,13 +126,29 @@ const Search = () => {
         ...(filters.dateRange.end ? { endDate: filters.dateRange.end } : {}),
       });
 
-      const allResults = {
+      let allResults = {
         wiki: data.wiki || [],
         posts: data.posts || [],
         galleries: data.galleries || [],
         music: data.music || [],
         albums: data.albums || [],
       };
+
+      if (filters.semanticImageSearch && currentQuery) {
+        try {
+          const semanticData = await apiGet<{ galleries: any[] }>('/api/search/semantic-galleries', {
+            q: currentQuery,
+            limit: 24,
+          });
+          if (semanticData.galleries && semanticData.galleries.length > 0) {
+            const existingGalleryIds = new Set(allResults.galleries.map((g: any) => g.id));
+            const newGalleries = semanticData.galleries.filter((g: any) => !existingGalleryIds.has(g.id));
+            allResults.galleries = [...allResults.galleries, ...newGalleries];
+          }
+        } catch (semanticErr) {
+          console.error('Semantic search error:', semanticErr);
+        }
+      }
 
       const filterFn = (item: any) => {
         const matchesTags = filters.selectedTags.length === 0 || filters.selectedTags.every(tag => (item.tags || []).includes(tag));
@@ -311,7 +328,7 @@ const Search = () => {
                 exit={{ height: 0, opacity: 0 }}
                 className="overflow-hidden mt-8 pt-8 border-t border-gray-100"
               >
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                   <div className="space-y-4">
                     <h4 className="text-xs font-bold uppercase tracking-widest text-brand-olive/60 flex items-center gap-2">
                       <Tag size={14} /> 标签筛选
@@ -375,6 +392,27 @@ const Search = () => {
                       ))}
                     </div>
                   </div>
+
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-widest text-brand-olive/60 flex items-center gap-2">
+                      <Sparkles size={14} /> AI 搜图
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => setSemanticImageSearch(!semanticImageSearch)}
+                        className={clsx(
+                          "px-3 py-1 rounded-full text-xs transition-all flex items-center gap-1.5",
+                          semanticImageSearch 
+                            ? "bg-brand-olive text-white" 
+                            : "bg-gray-50 text-gray-400 hover:bg-gray-100"
+                        )}
+                      >
+                        <Sparkles size={12} />
+                        语义搜图
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-gray-400">开启后，文字搜索将同时对图集进行语义匹配</p>
+                  </div>
                 </div>
                 
                 <div className="mt-8 flex justify-end gap-4">
@@ -383,6 +421,7 @@ const Search = () => {
                       setSelectedTags([]);
                       setDateRange({ start: '', end: '' });
                       setContentType('all');
+                      setSemanticImageSearch(false);
                     }}
                     className="text-xs font-bold text-gray-400 hover:text-red-500"
                   >
