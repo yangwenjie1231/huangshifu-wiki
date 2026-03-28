@@ -205,7 +205,7 @@ fi
 
 if [[ "$COMPOSE_NEEDS_SETUP" == "true" ]]; then
   if [[ -z "$DB_PASSWORD" ]]; then
-    DB_PASSWORD=$(grep 'hsf_wiki:' "$ENV_FILE" 2>/dev/null | sed -n 's/.*hsf_wiki:\([^@]*\)@.*/\1/p')
+    DB_PASSWORD=$(grep 'DATABASE_URL' "$ENV_FILE" 2>/dev/null | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p' | head -1)
     if [[ -z "$DB_PASSWORD" ]]; then
       error "DB_PASSWORD not set and could not be extracted from DATABASE_URL"
       error "please run: DB_PASSWORD=your_strong_password ./scripts/deploy-docker.sh"
@@ -326,31 +326,33 @@ fi
 
 if [[ "${USE_HOST_PG:-0}" == "1" ]]; then
   log "setting up host postgres user and database if needed"
-  PG_USER="hsf_wiki"
-  PG_DB="huangshifu_wiki"
+
+  PG_DB_USER=$(grep 'DATABASE_URL' "$ENV_FILE" 2>/dev/null | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p' | head -1)
+  PG_DB="${PG_DB_USER:-hsf_wiki}"
+  PG_DB="${PG_DB##*/}"
 
   if command -v sudo >/dev/null 2>&1 && id -u >/dev/null 2>&1; then
-    if sudo -u postgres psql -c "SELECT 1 FROM pg_roles WHERE rolname='${PG_USER}'" 2>/dev/null | grep -q '1 row'; then
-      log "user ${PG_USER} already exists"
+    if sudo -u postgres psql -c "SELECT 1 FROM pg_roles WHERE rolname='${PG_DB_USER}'" 2>/dev/null | grep -q '1 row'; then
+      log "user ${PG_DB_USER} already exists"
     else
-      log "creating user ${PG_USER}"
-      sudo -u postgres psql -c "CREATE USER ${PG_USER} WITH ENCRYPTED PASSWORD '${DB_PASSWORD}';" 2>/dev/null || true
-      sudo -u postgres psql -c "ALTER USER ${PG_USER} CREATEDB;" 2>/dev/null || true
+      log "creating user ${PG_DB_USER}"
+      sudo -u postgres psql -c "CREATE USER ${PG_DB_USER} WITH ENCRYPTED PASSWORD '${DB_PASSWORD}';" 2>/dev/null || true
+      sudo -u postgres psql -c "ALTER USER ${PG_DB_USER} CREATEDB;" 2>/dev/null || true
     fi
 
     if sudo -u postgres psql -lqt 2>/dev/null | grep -q "^ ${PG_DB} "; then
       log "database ${PG_DB} already exists"
     else
       log "creating database ${PG_DB}"
-      sudo -u postgres psql -c "CREATE DATABASE ${PG_DB} OWNER ${PG_USER};" 2>/dev/null || true
+      sudo -u postgres psql -c "CREATE DATABASE ${PG_DB} OWNER ${PG_DB_USER};" 2>/dev/null || true
     fi
 
-    sudo -u postgres psql -d "${PG_DB}" -c "GRANT ALL ON SCHEMA public TO ${PG_USER};" 2>/dev/null || true
-    sudo -u postgres psql -d "${PG_DB}" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${PG_USER};" 2>/dev/null || true
-    sudo -u postgres psql -d "${PG_DB}" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${PG_USER};" 2>/dev/null || true
+    sudo -u postgres psql -d "${PG_DB}" -c "GRANT ALL ON SCHEMA public TO ${PG_DB_USER};" 2>/dev/null || true
+    sudo -u postgres psql -d "${PG_DB}" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${PG_DB_USER};" 2>/dev/null || true
+    sudo -u postgres psql -d "${PG_DB}" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${PG_DB_USER};" 2>/dev/null || true
   fi
 
-  log "updating .env to use host postgres (127.0.0.1:5432, keep hsf_wiki user)"
+  log "updating .env to use host postgres (127.0.0.1:5432)"
   sed -i "s|@postgres:[0-9]*|@127.0.0.1:5432|g" "$ENV_FILE"
 fi
 
