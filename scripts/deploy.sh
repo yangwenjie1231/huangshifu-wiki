@@ -123,7 +123,7 @@ auto_configure() {
   if detect_docker; then
     log "Docker Compose with postgres service detected"
     if [[ "$USE_DOCKER" != "1" ]]; then
-      log "suggesting USE_DOCKER=1 for Docker deployment"
+      log "automatically enabling Docker mode (USE_DOCKER=1)"
       USE_DOCKER=1
     fi
   fi
@@ -146,9 +146,11 @@ auto_configure() {
 
   if [[ -f "$ENV_FILE" ]]; then
     if grep -q 'DATABASE_URL.*@postgres:' "$ENV_FILE" 2>/dev/null; then
-      error "DATABASE_URL uses Docker service name (postgres), but USE_DOCKER=0"
-      error "either set USE_DOCKER=1 or fix DATABASE_URL to use 127.0.0.1:5432"
-      exit 1
+      if [[ "$USE_DOCKER" != "1" ]]; then
+        error "DATABASE_URL uses Docker service name (postgres), but USE_DOCKER=0"
+        error "either set USE_DOCKER=1 or fix DATABASE_URL to use 127.0.0.1:5432"
+        exit 1
+      fi
     fi
 
     if ! grep -q 'DATABASE_URL' "$ENV_FILE" 2>/dev/null; then
@@ -165,11 +167,7 @@ auto_configure() {
       echo "DATABASE_URL=\"postgresql://hsf_app:${DB_PASSWORD}@127.0.0.1:5432/huangshifu_wiki\"" >> "$ENV_FILE"
     elif grep -q 'DATABASE_URL.*hsf_wiki:' "$ENV_FILE" 2>/dev/null; then
       warn "DATABASE_URL uses hsf_wiki user, converting to hsf_app for host mode"
-      local old_url
-      old_url=$(grep 'DATABASE_URL' "$ENV_FILE" | sed 's/DATABASE_URL=//')
-      local new_url
-      new_url=$(echo "$old_url" | sed 's/hsf_wiki/hsf_app/g')
-      sed -i "s|$old_url|$new_url|" "$ENV_FILE"
+      sed -i 's|hsf_wiki|hsf_app|g' "$ENV_FILE"
     fi
   fi
 }
