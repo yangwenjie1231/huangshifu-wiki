@@ -312,15 +312,21 @@ if docker ps --format '{{.Names}}' | grep -q '^hsf-postgres$'; then
   docker rm -f hsf-postgres
 fi
 
-log "detecting host postgres on port 5432..."
-if ss -tuln 2>/dev/null | grep -q '5432'; then
-  log "host postgres detected on 5432, will use host postgres for migrations"
+log "detecting host postgres port..."
+PG_PORT=""
+for port in 5432 5433 5434 5435; do
+  if ss -tuln 2>/dev/null | grep -q ":${port} " || ss -tuln 2>/dev/null | grep -q ":${port}$"; then
+    PG_PORT="$port"
+    log "host postgres detected on port ${port}"
+    break
+  fi
+done
+
+if [[ -n "$PG_PORT" ]]; then
   USE_HOST_PG=1
-elif netstat -tuln 2>/dev/null | grep -q '5432'; then
-  log "host postgres detected on 5432 (via netstat), will use host postgres for migrations"
-  USE_HOST_PG=1
+  log "will use host postgres on port ${PG_PORT} for migrations"
 else
-  log "no postgres detected on 5432"
+  log "no postgres detected"
 fi
 
 if ! command -v psql >/dev/null 2>&1; then
@@ -352,8 +358,9 @@ if [[ "${USE_HOST_PG:-0}" == "1" ]]; then
     }
   fi
 
-  log "updating .env to use host postgres (127.0.0.1:5432)"
-  sed -i "s|@postgres:[0-9]*|@127.0.0.1:5432|g" "$ENV_FILE"
+  log "updating .env to use host postgres (127.0.0.1:${PG_PORT})"
+  sed -i "s|@postgres:[0-9]*|@127.0.0.1:${PG_PORT}|g" "$ENV_FILE"
+  sed -i "s|127\.0\.0\.1:[0-9]*/|127.0.0.1:${PG_PORT}/|g" "$ENV_FILE"
 fi
 
 log "starting qdrant container"
@@ -415,11 +422,10 @@ if [[ "$SKIP_DB_INIT" != "1" ]]; then
   log "applying prisma migrations"
   ORIGINAL_DB_URL="${DATABASE_URL}"
   if [[ "${USE_HOST_PG:-0}" == "1" ]]; then
-    log "using host postgres - adjusting DATABASE_URL"
+    log "using host postgres - adjusting DATABASE_URL to use 127.0.0.1:${PG_PORT}"
     export DATABASE_URL="${DATABASE_URL//postgres@/hsf_app@}"
-    export DATABASE_URL="${DATABASE_URL//postgres:5434/127.0.0.1:5432}"
-    export DATABASE_URL="${DATABASE_URL//postgres:5433/127.0.0.1:5432}"
-    export DATABASE_URL="${DATABASE_URL//postgres:5432/127.0.0.1:5432}"
+    export DATABASE_URL="${DATABASE_URL//postgres:[0-9]*/127.0.0.1:${PG_PORT}}"
+    export DATABASE_URL="${DATABASE_URL//127.0.0.1:[0-9]*/127.0.0.1:${PG_PORT}}"
   fi
   log "DATABASE_URL for migration: $DATABASE_URL"
   npm run db:deploy
@@ -429,15 +435,15 @@ if [[ "$SKIP_DB_INIT" != "1" ]]; then
     log "seeding database"
     if [[ "${USE_HOST_PG:-0}" == "1" ]]; then
       export DATABASE_URL="${DATABASE_URL//postgres@/hsf_app@}"
-      export DATABASE_URL="${DATABASE_URL//postgres:5434/127.0.0.1:5432}"
-      export DATABASE_URL="${DATABASE_URL//postgres:5433/127.0.0.1:5432}"
-      export DATABASE_URL="${DATABASE_URL//postgres:5432/127.0.0.1:5432}"
+      export DATABASE_URL="${DATABASE_URL//postgres:[0-9]*/127.0.0.1:${PG_PORT}}"
+      export DATABASE_URL="${DATABASE_URL//127.0.0.1:[0-9]*/127.0.0.1:${PG_PORT}}"
     fi
     npm run db:seed
     export DATABASE_URL="$ORIGINAL_DB_URL"
   else
     log "skipping seed"
   fi
+
 else
   log "skipping database initialization"
 fi
