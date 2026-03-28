@@ -238,7 +238,7 @@ const uploadStorage = multer.diskStorage({
 const upload = multer({
   storage: uploadStorage,
   limits: {
-    fileSize: 20 * 1024 * 1024,
+    fileSize: 25 * 1024 * 1024,
   },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -252,7 +252,15 @@ const upload = multer({
 });
 
 const searchImageUpload = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      cb(null, uploadsDir);
+    },
+    filename: (_req, _file, cb) => {
+      const nonce = Math.random().toString(36).slice(2, 10);
+      cb(null, `search_temp_${Date.now()}_${nonce}.tmp`);
+    },
+  }),
   limits: {
     fileSize: 10 * 1024 * 1024,
   },
@@ -10732,6 +10740,7 @@ app.get('/api/search/hot-keywords', async (_req, res) => {
 });
 
 app.post('/api/search/by-image', searchImageUpload.single('image'), async (req: AuthenticatedRequest, res) => {
+  const tempFile = req.file;
   try {
     const requestedLimit = parseInteger(req.body?.limit, IMAGE_SEARCH_RESULT_LIMIT, {
       min: 1,
@@ -10740,11 +10749,16 @@ app.post('/api/search/by-image', searchImageUpload.single('image'), async (req: 
     const minScore = parseMinSimilarityScore(req.body?.minScore);
 
     let imageBuffer: Buffer | null = null;
-    const uploadedFile = req.file;
 
-    if (uploadedFile?.buffer && uploadedFile.buffer.length > 0) {
-      imageBuffer = uploadedFile.buffer;
-    } else {
+    if (tempFile?.path) {
+      try {
+        imageBuffer = await fs.promises.readFile(tempFile.path);
+      } catch {
+        imageBuffer = null;
+      }
+    }
+
+    if (!imageBuffer || imageBuffer.length === 0) {
       const base64Payload = extractBase64Payload(req.body?.imageBase64);
       if (base64Payload) {
         try {
@@ -10841,6 +10855,10 @@ app.post('/api/search/by-image', searchImageUpload.single('image'), async (req: 
   } catch (error) {
     console.error('Image semantic search error:', error);
     res.status(500).json({ error: '图片语义搜索失败' });
+  } finally {
+    if (tempFile?.path) {
+      await fs.promises.unlink(tempFile.path).catch(() => {});
+    }
   }
 });
 

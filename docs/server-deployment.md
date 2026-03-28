@@ -750,7 +750,7 @@ curl -X POST http://127.0.0.1:3000/api/uploads/sessions \
 验证点：
 
 - 非图片文件上传会返回 `400`
-- 超过 20MB 图片会返回 `413`
+- 超过 25MB 图片会返回 `413`
 - 超过会话文件上限会返回 `400`
 - 会话过期会返回 `410`
 - 图集返回的图片包含 `assetId`
@@ -825,7 +825,7 @@ curl -X POST http://127.0.0.1:3000/api/users/me/avatar \
 **验证点：**
 
 - 仅支持 JPG、PNG、WEBP、GIF、BMP 格式
-- 文件大小限制：20MB
+- 文件大小限制：25MB
 - 非图片文件返回 `400`
 - 上传成功后 `User.photoURL` 更新为新头像 URL
 - 头像存储为 `MediaAsset`，可通过媒体库统一管理
@@ -1411,6 +1411,71 @@ curl -X POST http://127.0.0.1:3000/api/embeddings/rebuild-all \
 - 「查看错误」显示失败详情（图片信息、错误原因、重试次数）
 - 「重试失败」可重新尝试失败的向量任务
 - 「重建全部」会删除并重建所有向量（需二次确认）
+
+### 11.17 上传功能优化（v3.x）
+
+本次发布对上传功能进行了多项优化，提升了大文件上传的稳定性和多文件上传的速度。
+
+#### 11.17.1 文件大小限制调整
+
+| 上传类型 | 原限制 | 新限制 |
+|---------|-------|-------|
+| 普通图片上传（图集、头像等） | 20MB | **25MB** |
+| AI 图片搜索 | 10MB | 10MB（保持不变） |
+
+**验证命令**：
+
+```bash
+# 测试上传超过 25MB 的文件
+curl -X POST http://127.0.0.1:3000/api/uploads/sessions \
+  -H "Content-Type: application/json" \
+  -c cookie.txt -b cookie.txt \
+  -d '{"maxFiles":1}'
+
+# 上传一个 26MB 的文件（应返回 413）
+curl -X POST http://127.0.0.1:3000/api/uploads/sessions/<sessionId>/files \
+  -b cookie.txt -c cookie.txt \
+  -F "file=@/root/test-large.jpg"
+```
+
+#### 11.17.2 AI 图片搜索内存优化
+
+AI 图片搜索（`/api/search/by-image`）的原实现使用内存存储上传文件，在并发请求或大文件时可能导致 OOM。
+
+**优化方案**：改为临时文件存储，处理完成后自动清理。
+
+**验证步骤**：
+
+1. 观察 uploads 目录，确保没有残留的 `.tmp` 文件：
+
+```bash
+ls -la /root/huangshifu-wiki/uploads/ | grep search_temp
+```
+
+2. 多次执行 AI 图片搜索，验证均无 `.tmp` 文件残留
+
+#### 11.17.3 图集多文件并发上传
+
+图集多文件上传从串行改为并发（最大 3 个并发），显著提升上传速度。
+
+**效果对比**（假设单文件上传耗时 2 秒）：
+
+| 文件数量 | 串行上传 | 并发上传（3并发） |
+|---------|---------|-----------------|
+| 10 个文件 | 20 秒 | 约 8 秒 |
+| 20 个文件 | 40 秒 | 约 14 秒 |
+
+**优化代码位置**：
+
+- `src/pages/Gallery.tsx`：并发上传逻辑
+- `src/lib/apiClient.ts`：新增 `apiUploadWithProgress` 和 `apiUploadWithRetry` 工具函数
+
+**验证步骤**：
+
+1. 进入图集上传页面
+2. 选择 10 张以上图片
+3. 点击上传，观察进度条
+4. 验证进度平滑增长，无明显卡顿
 
 ---
 

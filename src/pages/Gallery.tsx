@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { SmartImage } from '../components/SmartImage';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
-import { apiPost } from '../lib/apiClient';
+import { apiPost, apiUpload } from '../lib/apiClient';
 import { LocationTagInput } from '../components/LocationTagInput';
 
 const toDateValue = (value: string | null | undefined) => {
@@ -245,22 +245,10 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
   const uploadFileToSession = async (sessionId: string, file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-
-    const response = await fetch(`/api/uploads/sessions/${sessionId}/files`, {
-      method: 'POST',
-      credentials: 'include',
-      body: formData,
-    });
-
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const message = typeof data === 'object' && data && 'error' in data
-        ? String((data as Record<string, unknown>).error)
-        : '上传图片失败';
-      throw new Error(message);
-    }
-
-    return data as UploadFileResponse;
+    return apiUpload<UploadFileResponse>(
+      `/api/uploads/sessions/${sessionId}/files`,
+      formData
+    );
   };
 
   const handleUpload = async () => {
@@ -279,6 +267,30 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
     setUploading(true);
     setProgress(0);
 
+    const MAX_CONCURRENT = 3;
+
+    const uploadFilesWithConcurrency = async (
+      sessionId: string,
+      fileList: File[],
+      onFileComplete: () => void
+    ): Promise<string[]> => {
+      const results: string[] = [];
+
+      for (let i = 0; i < fileList.length; i += MAX_CONCURRENT) {
+        const batch = fileList.slice(i, i + MAX_CONCURRENT);
+        const batchResults = await Promise.all(
+          batch.map(async (file) => {
+            const uploadData = await uploadFileToSession(sessionId, file);
+            onFileComplete();
+            return uploadData.asset.id;
+          })
+        );
+        results.push(...batchResults);
+      }
+
+      return results;
+    };
+
     try {
       const groupNames = Object.keys(groups);
       const totalFiles = files.length;
@@ -290,19 +302,17 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
           maxFiles: groupFiles.length,
         });
         const sessionId = sessionData.session.id;
-        const uploadedAssetIds: string[] = [];
-        
-        // Use user-provided title for the first/only group if it's not a folder upload
-        // or if it's a single folder. If multiple folders, use folder names.
+
         const galleryTitle = groupNames.length === 1 && title ? title : groupName;
 
-        for (const file of groupFiles) {
-          const uploadData = await uploadFileToSession(sessionId, file);
-          uploadedAssetIds.push(uploadData.asset.id);
-          
-          uploadedCount++;
-          setProgress(Math.round((uploadedCount / totalFiles) * 100));
-        }
+        const uploadedAssetIds = await uploadFilesWithConcurrency(
+          sessionId,
+          groupFiles,
+          () => {
+            uploadedCount++;
+            setProgress(Math.round((uploadedCount / totalFiles) * 100));
+          }
+        );
 
         await apiPost(`/api/uploads/sessions/${sessionId}/finalize`);
 
