@@ -366,10 +366,12 @@ done
 if [[ "$SKIP_DB_INIT" != "1" ]]; then
   log "installing system dependencies for sharp (libvips)"
   if command -v apt >/dev/null 2>&1; then
-    apt update && apt install -y libvips-dev --no-install-recommends 2>/dev/null || true
+    apt update && apt install -y libvips libvips-dev --no-install-recommends 2>/dev/null || true
   fi
 
   log "installing dependencies"
+  export SHARP_IGNORE_GLOBAL_LIBVIPS=1
+  export npm_config_sharp_libvips_binary_host="https://npmmirror.com/mirrors/sharp-libvips"
   npm ci --registry="${NPM_REGISTRY}" || npm install --registry="${NPM_REGISTRY}"
 
   log "generating prisma client"
