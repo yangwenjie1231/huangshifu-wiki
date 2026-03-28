@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar, Link2, GitBranch, Network, MapPin } from 'lucide-react';
+import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar, Link2, GitBranch, Network, MapPin, Heart, ThumbsDown, Pin } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
@@ -86,6 +86,11 @@ type WikiItem = {
   reviewedAt?: string | null;
   favoritesCount?: number;
   favoritedByMe?: boolean;
+  likesCount?: number;
+  dislikesCount?: number;
+  likedByMe?: boolean;
+  dislikedByMe?: boolean;
+  isPinned?: boolean;
   lastEditorUid: string;
   lastEditorName: string;
   relations?: WikiRelationRecord[];
@@ -358,9 +363,17 @@ const WikiList = () => {
             <div key={page.id} className="relative group">
               <Link 
                 to={`/wiki/${page.slug}`}
-                className="block bg-white p-8 rounded-[32px] border border-gray-100 hover:border-brand-olive/20 hover:shadow-xl transition-all"
+                className={clsx(
+                  'block bg-white p-8 rounded-[32px] border hover:border-brand-olive/20 hover:shadow-xl transition-all',
+                  page.isPinned ? 'border-l-4 border-l-brand-olive' : 'border-gray-100'
+                )}
               >
                 <div className="flex items-center gap-2 mb-4">
+                  {page.isPinned && (
+                    <span className="flex items-center gap-1 px-2 py-1 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded">
+                      <Pin size={10} /> 已置顶
+                    </span>
+                  )}
                   <span className="px-2 py-1 bg-brand-cream text-brand-olive text-[10px] font-bold uppercase tracking-wider rounded">
                     {page.category === 'biography' ? '人物介绍' :
                      page.category === 'music' ? '音乐作品' :
@@ -374,7 +387,11 @@ const WikiList = () => {
                   {page.content.replace(/[#*`]/g, '').substring(0, 100)}...
                 </p>
                 <div className="flex items-center justify-between text-gray-400 text-xs">
-                  <span className="flex items-center gap-1"><Clock size={12} /> {formatDate(page.updatedAt, 'yyyy-MM-dd')}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1"><Clock size={12} /> {formatDate(page.updatedAt, 'yyyy-MM-dd')}</span>
+                    <span className="flex items-center gap-1"><Heart size={12} /> {page.likesCount || 0}</span>
+                    <span className="flex items-center gap-1"><ThumbsDown size={12} /> {page.dislikesCount || 0}</span>
+                  </div>
                   <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
                 </div>
               </Link>
@@ -412,6 +429,9 @@ const WikiPageView = () => {
   const [backlinks, setBacklinks] = useState<WikiItem[]>([]);
   const [submittingReview, setSubmittingReview] = useState(false);
   const [favoriting, setFavoriting] = useState(false);
+  const [liking, setLiking] = useState(false);
+  const [disliking, setDisliking] = useState(false);
+  const [pinning, setPinning] = useState(false);
   const [relationGraph, setRelationGraph] = useState<RelationGraphData | null>(null);
   const [showGraph, setShowGraph] = useState(false);
 
@@ -450,6 +470,81 @@ const WikiPageView = () => {
       return;
     }
     show('复制链接失败，请稍后重试', { variant: 'error' });
+  };
+
+  const handleToggleLike = async () => {
+    if (!slug || !user || liking) return;
+    setLiking(true);
+    try {
+      if (page.likedByMe) {
+        await apiDelete<{ liked: boolean; likesCount: number }>(`/api/wiki/${slug}/like`);
+        setPage((prev) => prev ? {
+          ...prev,
+          likedByMe: false,
+          likesCount: Math.max(0, Number(prev.likesCount || 0) - 1),
+        } : prev);
+      } else {
+        const data = await apiPost<{ liked: boolean; likesCount: number }>(`/api/wiki/${slug}/like`);
+        setPage((prev) => prev ? {
+          ...prev,
+          likedByMe: data.liked,
+          likesCount: data.likesCount,
+          dislikedByMe: false,
+        } : prev);
+      }
+    } catch (error) {
+      console.error('Toggle wiki like failed:', error);
+      show('点赞操作失败，请稍后重试', { variant: 'error' });
+    } finally {
+      setLiking(false);
+    }
+  };
+
+  const handleToggleDislike = async () => {
+    if (!slug || !user || disliking) return;
+    setDisliking(true);
+    try {
+      if (page.dislikedByMe) {
+        await apiDelete<{ disliked: boolean; dislikesCount: number }>(`/api/wiki/${slug}/dislike`);
+        setPage((prev) => prev ? {
+          ...prev,
+          dislikedByMe: false,
+          dislikesCount: Math.max(0, Number(prev.dislikesCount || 0) - 1),
+        } : prev);
+      } else {
+        const data = await apiPost<{ disliked: boolean; dislikesCount: number }>(`/api/wiki/${slug}/dislike`);
+        setPage((prev) => prev ? {
+          ...prev,
+          dislikedByMe: data.disliked,
+          dislikesCount: data.dislikesCount,
+          likedByMe: false,
+        } : prev);
+      }
+    } catch (error) {
+      console.error('Toggle wiki dislike failed:', error);
+      show('踩操作失败，请稍后重试', { variant: 'error' });
+    } finally {
+      setDisliking(false);
+    }
+  };
+
+  const handleTogglePin = async () => {
+    if (!slug || !isAdmin || pinning) return;
+    setPinning(true);
+    try {
+      if (page.isPinned) {
+        await apiDelete<{ isPinned: boolean }>(`/api/wiki/${slug}/pin`);
+        setPage((prev) => prev ? { ...prev, isPinned: false } : prev);
+      } else {
+        const data = await apiPost<{ isPinned: boolean }>(`/api/wiki/${slug}/pin`);
+        setPage((prev) => prev ? { ...prev, isPinned: data.isPinned } : prev);
+      }
+    } catch (error) {
+      console.error('Toggle wiki pin failed:', error);
+      show('置顶操作失败，请稍后重试', { variant: 'error' });
+    } finally {
+      setPinning(false);
+    }
   };
 
   const handleToggleFavorite = async () => {
@@ -529,6 +624,42 @@ const WikiPageView = () => {
                 <Save size={20} />
               </button>
               <button
+                onClick={handleToggleLike}
+                disabled={!user || liking}
+                className={clsx(
+                  'p-3 rounded-full transition-all flex items-center gap-2',
+                  page.likedByMe ? 'bg-red-500 text-white' : 'bg-brand-cream text-brand-olive hover:bg-red-500 hover:text-white',
+                  (!user || liking) && 'opacity-50 cursor-not-allowed',
+                )}
+                title={page.likedByMe ? '取消点赞' : '点赞'}
+              >
+                <Heart size={20} />
+              </button>
+              <button
+                onClick={handleToggleDislike}
+                disabled={!user || disliking}
+                className={clsx(
+                  'p-3 rounded-full transition-all flex items-center gap-2',
+                  page.dislikedByMe ? 'bg-orange-500 text-white' : 'bg-brand-cream text-brand-olive hover:bg-orange-500 hover:text-white',
+                  (!user || disliking) && 'opacity-50 cursor-not-allowed',
+                )}
+                title={page.dislikedByMe ? '取消踩' : '踩'}
+              >
+                <ThumbsDown size={20} />
+              </button>
+              <button
+                onClick={handleTogglePin}
+                disabled={!isAdmin || pinning}
+                className={clsx(
+                  'p-3 rounded-full transition-all flex items-center gap-2',
+                  page.isPinned ? 'bg-brand-primary text-gray-900' : 'bg-brand-cream text-brand-olive hover:bg-brand-primary hover:text-gray-900',
+                  (!isAdmin || pinning) && 'opacity-50 cursor-not-allowed',
+                )}
+                title={page.isPinned ? '取消置顶' : '置顶'}
+              >
+                <Pin size={20} />
+              </button>
+              <button
                 onClick={handleCopyPageLink}
                 className="p-3 bg-brand-cream text-brand-olive rounded-full hover:bg-brand-olive hover:text-white transition-all"
                 title="复制内链"
@@ -599,6 +730,11 @@ const WikiPageView = () => {
               {getStatusText(page.status)}
             </span>
             <span className="text-xs text-gray-500">收藏 {page.favoritesCount || 0}</span>
+            <span className="text-xs text-gray-500">点赞 {page.likesCount || 0}</span>
+            <span className="text-xs text-gray-500">踩 {page.dislikesCount || 0}</span>
+            {page.isPinned && (
+              <span className="text-xs text-brand-olive font-bold">已置顶</span>
+            )}
             {canSubmitReview && (
               <button
                 onClick={handleSubmitReview}

@@ -140,6 +140,8 @@ model User {
   musicAdded    MusicTrack[]   @relation("MusicAddedBy")
   postLikes     PostLike[]
   postDislikes  PostDislike[] @relation("UserDislikes")
+  wikiLikes     WikiLike[]
+  wikiDislikes  WikiDislike[]
   favorites     Favorite[]
   moderationLogs ModerationLog[] @relation("ModerationOperator")
   userBanOps    UserBanLog[]   @relation("UserBanActionBy")
@@ -261,6 +263,9 @@ model WikiPage {
   reviewedAt    DateTime?
   viewCount     Int            @default(0)
   favoritesCount Int           @default(0)
+  likesCount    Int            @default(0)
+  dislikesCount Int            @default(0)
+  isPinned      Boolean        @default(false)
   lastEditorUid String
   lastEditorName String
   mainBranchId  String?
@@ -272,6 +277,8 @@ model WikiPage {
   revisions     WikiRevision[]
   branches      WikiBranch[]
   pullRequests  WikiPullRequest[]
+  likes         WikiLike[]
+  dislikes      WikiDislike[]
 
   @@index([category, updatedAt])
   @@index([status, updatedAt])
@@ -301,6 +308,30 @@ model PostDislike {
   user      User     @relation("UserDislikes", fields: [userUid], references: [uid], onDelete: Cascade)
 
   @@unique([postId, userUid])
+  @@index([userUid, createdAt])
+}
+
+model WikiLike {
+  id        String   @id @default(cuid())
+  pageSlug  String
+  userUid   String
+  createdAt DateTime @default(now())
+  page      WikiPage @relation(fields: [pageSlug], references: [slug], onDelete: Cascade)
+  user      User     @relation(fields: [userUid], references: [uid], onDelete: Cascade)
+
+  @@unique([pageSlug, userUid])
+  @@index([userUid, createdAt])
+}
+
+model WikiDislike {
+  id        String   @id @default(cuid())
+  pageSlug  String
+  userUid   String
+  createdAt DateTime @default(now())
+  page      WikiPage @relation(fields: [pageSlug], references: [slug], onDelete: Cascade)
+  user      User     @relation(fields: [userUid], references: [uid], onDelete: Cascade)
+
+  @@unique([pageSlug, userUid])
   @@index([userUid, createdAt])
 }
 

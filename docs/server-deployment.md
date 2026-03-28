@@ -295,6 +295,78 @@ npm run db:seed
 | `/api/posts/:id/pin` | POST | 置顶 | 管理员 |
 | `/api/posts/:id/pin` | DELETE | 取消置顶 | 管理员 |
 
+### 6.3.1 Wiki 点赞/踩/置顶功能说明（v3.x+）
+
+本次发布新增 Wiki 页面点赞、踩、置顶功能，与帖子功能保持一致的交互体验。
+
+**数据库变更（已包含在 `db:deploy` 中）：**
+
+| 表名 | 变更类型 | 说明 |
+|------|---------|------|
+| `WikiPage` | 新增列 | `likesCount` Int，默认 0 |
+| `WikiPage` | 新增列 | `dislikesCount` Int，默认 0 |
+| `WikiPage` | 新增列 | `isPinned` Boolean，默认 false |
+| `WikiLike` | 新建表 | 点赞记录表，防止重复点赞 |
+| `WikiDislike` | 新建表 | 踩记录表，防止重复踩 |
+
+**WikiLike 表结构：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | String | 主键 |
+| pageSlug | String | 关联 Wiki 页面 slug |
+| userUid | String | 点赞的用户 ID |
+| createdAt | DateTime | 点赞的时间 |
+
+唯一约束：`([pageSlug, userUid])` - 同一用户对同一页面只能点赞一次。
+
+**WikiDislike 表结构：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | String | 主键 |
+| pageSlug | String | 关联 Wiki 页面 slug |
+| userUid | String | 踩的用户 ID |
+| createdAt | DateTime | 踩的时间 |
+
+唯一约束：`([pageSlug, userUid])` - 同一用户对同一页面只能踩一次。
+
+**API 变更：**
+
+| 端点 | 方法 | 功能 | 权限 |
+|------|------|------|------|
+| `/api/wiki/:slug/like` | POST | 点赞（toggle） | 登录用户 |
+| `/api/wiki/:slug/like` | DELETE | 取消点赞 | 登录用户 |
+| `/api/wiki/:slug/dislike` | POST | 踩（toggle） | 登录用户 |
+| `/api/wiki/:slug/dislike` | DELETE | 取消踩 | 登录用户 |
+| `/api/wiki/:slug/pin` | POST | 置顶 | 管理员 |
+| `/api/wiki/:slug/pin` | DELETE | 取消置顶 | 管理员 |
+
+**前端变更：**
+
+- Wiki 列表页每个卡片显示点赞数、踩数
+- 置顶的页面卡片左侧显示绿色边框和"已置顶"标签
+- Wiki 详情页顶部操作栏新增：
+  - 点赞按钮（红色图标，点击切换状态）
+  - 踩按钮（橙色图标，点击切换状态）
+  - 置顶按钮（仅管理员可见，点击切换状态）
+- 置顶的页面详情页状态区显示"已置顶"标签
+
+**排序逻辑：**
+
+- Wiki 列表按 `isPinned` 降序、`updatedAt` 降序排序
+- 置顶页面始终排在列表最前面
+
+**验证点：**
+
+- 同一用户对同一页面只能点赞或踩一次（互斥）
+- 重复点赞会自动切换为取消点赞
+- 重复踩会自动切换为取消踩
+- 点赞和踩互斥（点赞后再踩会取消点赞）
+- 非管理员调用置顶 API 返回 403
+- Wiki 列表默认按置顶优先排序
+- 置顶页面在列表卡片左侧有绿色边框和"已置顶"标签
+
 ### 6.4 音乐乐评功能说明（v2.6+）
 
 本次发布新增音乐乐评功能，支持在歌曲/专辑下发帖并自动归类到乐评区。
@@ -722,6 +794,69 @@ curl -X DELETE http://127.0.0.1:3000/api/posts/<帖子ID>/pin \
 - 同一用户对同一帖子只能踩一次（`PostDislike` 表唯一约束）
 - 非管理员调用置顶 API 返回 403
 - 帖子列表默认按置顶优先排序
+
+### 11.1.1 Wiki 点赞/踩/置顶功能验证（v3.x+）
+
+Wiki 页面点赞、踩、置顶功能验证：
+
+```bash
+# 先登录（创建 Cookie）
+curl -X POST http://127.0.0.1:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"email":"admin@example.com","password":"请替换为管理员密码"}'
+
+# 点赞 Wiki 页面
+curl -X POST http://127.0.0.1:3000/api/wiki/<页面slug>/like \
+  -b cookie.txt -c cookie.txt
+
+# 取消点赞
+curl -X DELETE http://127.0.0.1:3000/api/wiki/<页面slug>/like \
+  -b cookie.txt -c cookie.txt
+
+# 踩 Wiki 页面
+curl -X POST http://127.0.0.1:3000/api/wiki/<页面slug>/dislike \
+  -b cookie.txt -c cookie.txt
+
+# 取消踩
+curl -X DELETE http://127.0.0.1:3000/api/wiki/<页面slug>/dislike \
+  -b cookie.txt -c cookie.txt
+
+# 置顶 Wiki 页面（仅管理员）
+curl -X POST http://127.0.0.1:3000/api/wiki/<页面slug>/pin \
+  -b cookie.txt -c cookie.txt
+
+# 取消置顶（仅管理员）
+curl -X DELETE http://127.0.0.1:3000/api/wiki/<页面slug>/pin \
+  -b cookie.txt -c cookie.txt
+
+# 获取 Wiki 列表（验证置顶排序）
+curl http://127.0.0.1:3000/api/wiki -b cookie.txt -c cookie.txt
+```
+
+前端验证步骤：
+
+1. 访问 Wiki 列表页，验证：
+   - 每个卡片显示点赞数和踩数
+   - 置顶页面卡片左侧有绿色边框
+   - 置顶页面显示"已置顶"标签
+   - 置顶页面排在列表最前面
+
+2. 访问 Wiki 详情页，验证：
+   - 顶部操作栏有点赞、踩、置顶按钮（置顶按钮仅管理员可见）
+   - 点赞按钮点击后变红色，再次点击取消
+   - 踩按钮点击后变橙色，再次点击取消
+   - 点赞和踩互斥（点赞后再点踩会取消点赞）
+   - 置顶按钮点击后显示"已置顶"状态
+   - 状态区显示点赞数、踩数和置顶状态
+
+验证点：
+- 重复点赞/踩会自动切换状态（toggle）
+- 同一用户对同一页面只能点赞/踩一次（唯一约束）
+- 点赞和踩互斥
+- 非管理员调用置顶 API 返回 403
+- Wiki 列表默认按置顶优先排序
+- 置顶页面在列表卡片左侧有绿色边框和"已置顶"标签
 
 ### 11.2 图集上传链路专项验证
 
