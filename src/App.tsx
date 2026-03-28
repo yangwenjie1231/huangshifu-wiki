@@ -16,6 +16,7 @@ import GalleryDetail from './pages/GalleryDetail';
 import Music from './pages/Music';
 import AlbumDetail from './pages/AlbumDetail';
 import MusicDetail from './pages/MusicDetail';
+import MusicLinks from './pages/MusicLinks';
 import Search from './pages/Search';
 import Admin from './pages/Admin';
 
@@ -38,6 +39,7 @@ const MainLayout = () => {
           <Route path="/gallery/:galleryId" element={<GalleryDetail />} />
           <Route path="/music" element={<Music />} />
           <Route path="/music/:songId" element={<MusicDetail />} />
+          <Route path="/music/links" element={<MusicLinks />} />
           <Route path="/album/:albumId" element={<AlbumDetail />} />
           <Route path="/search" element={<Search />} />
           <Route path="/profile" element={<Profile />} />

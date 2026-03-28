@@ -1605,3 +1605,317 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 ```
 
 建议配合 `crontab` 做每日自动备份。
+
+---
+
+## 15. 地点标签功能（v4.0+）
+
+本次发布新增地点标签功能，支持为图集、帖子等内容设置地点标签。
+
+### 15.1 功能概述
+
+- **行政区划数据**：使用 `slightlee/regions-data` 四级行政区划数据（省/市/区县/乡镇）
+- **地点输入**：支持模糊搜索已有地点，也支持在地图上选点
+- **EXIF 提取**：支持从图片 EXIF GPS 数据自动提取拍摄地点
+- **地点显示**：地点标签以特殊样式显示（琥珀色区分普通标签）
+
+### 15.2 环境变量配置
+
+在 `.env` 中新增以下配置：
+
+```bash
+# 高德地图 - 前端 JS API（用于地图选点组件）
+VITE_AMAP_JS_API_KEY="your_amap_js_api_key"
+
+# 高德地图 - 后端 Web Service API（用于经纬度解析为行政区划）
+AMAP_API_KEY="your_amap_web_service_api_key"
+```
+
+**获取高德地图 API Key**：
+1. 注册高德开放平台账号：https://lbs.amap.com/
+2. 创建应用，获取 Web JS API Key 和 Web Service API Key
+
+### 15.3 数据库变更（已包含在 `db:deploy` 中）
+
+| 表名 | 变更类型 | 说明 |
+|------|---------|------|
+| `Region` | 新建表 | 行政区划表，存储全国四级行政区划数据 |
+| `Post` | 新增列 | `locationCode` String，可选，关联行政区划代码 |
+| `Gallery` | 新增列 | `locationCode` String，可选，关联行政区划代码 |
+| `WikiPage` | 新增列 | `locationCode` String，可选，关联行政区划代码 |
+
+**Region 表结构**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| code | String (PK) | 行政区划代码，如 "440300"（深圳市） |
+| name | String | 地名，如 "深圳市" |
+| fullName | String | 完整名称，如 "广东省深圳市" |
+| level | Int | 级别：1-省 2-市 3-区县 4-乡镇 |
+| depth | Int | 深度（同 level） |
+| parentCode | String | 上级代码，如 "440000"（广东省） |
+| path | String | 路径代码，如 "440000,440300" |
+| type | String | 类型名，如 "地级" |
+| year | Int | 数据年份 |
+| sortOrder | Int | 排序序号 |
+
+### 15.4 导入行政区划数据
+
+首次部署后需要导入行政区划数据：
+
+```bash
+cd /root/huangshifu-wiki
+npm run regions:import
+```
+
+该命令会：
+1. 从 `slightlee/regions-data` GitHub 仓库下载最新行政区划数据
+2. 解析并转换数据格式
+3. 清空并重新导入全部 42,935 条行政区划记录
+
+### 15.5 后端 API 变更
+
+| 端点 | 方法 | 功能 | 权限 |
+|------|------|------|------|
+| `/api/regions` | GET | 获取地点列表（支持模糊搜索） | 公开 |
+| `/api/regions/search` | GET | 模糊搜索地点 `?q=深圳` | 公开 |
+| `/api/regions/suggest` | GET | 获取地点建议 `?q=深` | 公开 |
+| `/api/regions/provinces` | GET | 获取省份列表 | 公开 |
+| `/api/regions/cities/:provinceCode` | GET | 获取城市列表 | 公开 |
+| `/api/regions/districts/:cityCode` | GET | 获取区县列表 | 公开 |
+| `/api/regions/path/:code` | GET | 获取完整行政区划路径 | 公开 |
+| `/api/regions/:code` | GET | 获取地点详情 | 公开 |
+| `/api/regions/resolve` | POST | 经纬度 → 行政区划 | 公开 |
+| `/api/regions/search/address` | GET | 搜索地址（高德） | 公开 |
+| `/api/exif/extract-gps` | POST | 从图片提取 GPS | 公开 |
+| `/api/exif/extract-gps-with-region` | POST | 提取 GPS 并解析行政区划 | 公开 |
+| `/api/exif/extract-single` | GET | 提取单张图片 GPS | 公开 |
+
+**创建/更新内容时传入地点**：
+
+```bash
+# 创建帖子时指定地点
+curl -X POST http://127.0.0.1:3000/api/posts \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"title":"测试帖子","section":"general","content":"内容","locationCode":"440300"}'
+
+# 更新图集时指定地点
+curl -X PATCH http://127.0.0.1:3000/api/galleries/<galleryId> \
+  -H "Content-Type: application/json" \
+  -b cookie.txt -c cookie.txt \
+  -d '{"locationCode":"440305"}'
+```
+
+### 15.6 前端组件
+
+| 组件 | 位置 | 功能 |
+|------|------|------|
+| `LocationTagInput` | `src/components/LocationTagInput.tsx` | 地点输入框（模糊搜索+地图选点） |
+| `MapPickerModal` | `src/components/MapPickerModal.tsx` | 地图选点弹窗（基于高德地图 JS API） |
+| `LocationConfirmDialog` | `src/components/LocationConfirmDialog.tsx` | EXIF 提取后的地点确认弹窗 |
+
+### 15.7 验证步骤
+
+#### 15.7.1 行政区划数据导入验证
+
+```bash
+# 检查 Region 表记录数
+psql "postgresql://hsf_app:<密码>@127.0.0.1:5432/huangshifu_wiki" -c "SELECT COUNT(*) FROM \"Region\";"
+
+# 检查各层级分布
+psql "postgresql://hsf_app:<密码>@127.0.0.1:5432/huangshifu_wiki" -c "SELECT level, COUNT(*) FROM \"Region\" GROUP BY level ORDER BY level;"
+```
+
+预期结果：
+- 总记录数约 42,935 条
+- 省级 34 条、地级 333 条、县级 2,845 条、乡级约 38,723 条
+
+#### 15.7.2 地点 API 验证
+
+```bash
+# 搜索地点
+curl "http://127.0.0.1:3000/api/regions/search?q=深圳"
+
+# 获取省份
+curl "http://127.0.0.1:3000/api/regions/provinces"
+
+# 获取城市
+curl "http://127.0.0.1:3000/api/regions/cities/440000"
+
+# 经纬度解析（需要配置 AMAP_API_KEY）
+curl -X POST http://127.0.0.1:3000/api/regions/resolve \
+  -H "Content-Type: application/json" \
+  -d '{"lng":114.065,"lat":22.548}'
+```
+
+#### 15.7.3 前端地点功能验证
+
+1. 进入图集上传页面
+2. 在标签输入框下方找到「地点」输入框
+3. 输入"深圳"应显示模糊搜索建议
+4. 点击地图图标应打开地图选点弹窗
+5. 选择地点后，地点以琥珀色标签样式显示
+6. 创建图集后，地点信息保存成功
+
+#### 15.7.4 帖子地点功能验证
+
+1. 进入发帖页面
+2. 在标签输入框下方找到「地点」输入框
+3. 选择一个地点后提交帖子
+4. 帖子详情页应显示地点标签
+
+### 15.8 EXIF GPS 提取功能验证
+
+EXIF GPS 提取需要：
+1. 图片包含 GPS 元数据
+2. 已配置 `AMAP_API_KEY`（用于将 GPS 坐标解析为行政区划）
+
+```bash
+# 提取单张图片 GPS
+curl "http://127.0.0.1:3000/api/exif/extract-single?url=https://example.com/photo_with_gps.jpg"
+```
+
+**验证点**：
+- 没有 GPS 信息的图片返回 `gps: null`
+- 有 GPS 信息的图片返回经纬度
+- `extract-gps-with-region` 可直接返回对应的行政区划信息
+
+### 16.1 歌曲跨平台关联功能（v3.x）
+
+本次发布新增歌曲跨平台关联功能，支持手动关联和自动匹配。
+
+**功能说明：**
+
+- **编辑歌曲时关联**：在歌曲编辑弹窗中，可手动填写其他平台的歌曲 ID
+- **自动匹配搜索**：点击「匹配」按钮，在目标平台搜索相似歌曲并自动填入 ID
+- **平台 ID 冲突检测**：如果填入的 ID 已被其他歌曲使用，提示冲突
+- **导入时自动关联**：导入歌曲时，如果发现同歌曲其他平台版本，自动关联（不创建重复记录）
+- **歌曲列表显示**：歌曲卡片上显示已关联的平台标签（可点击跳转）
+- **关联管理页面**：新增 `/music/links` 页面，表格展示所有歌曲的平台关联状态
+
+**数据库变更：**
+
+- 无新增表，平台 ID 字段（`neteaseId`、`tencentId`、`kugouId`、`baiduId`、`kuwoId`）已在 `MusicTrack` 模型中存在
+
+**后端 API 变更：**
+
+| 端点 | 方法 | 功能 | 权限 |
+|------|------|------|------|
+| `GET /api/music/match-suggestions` | GET | 搜索跨平台匹配歌曲 | 公开 |
+| `PATCH /api/music/:docId` | PATCH | 编辑歌曲信息（支持平台 ID） | 管理员 |
+| `POST /api/music/import` | POST | 导入歌曲（支持自动关联） | 管理员 |
+
+**新增端点详细说明：**
+
+#### `GET /api/music/match-suggestions`
+
+根据歌名和艺术家在指定平台搜索匹配的歌曲。
+
+**请求参数：**
+
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| `platform` | string | 是 | 目标平台：`netease`、`tencent`、`kugou`、`baidu`、`kuwo` |
+| `title` | string | 是 | 歌曲标题 |
+| `artist` | string | 是 | 艺术家名称 |
+
+**响应：**
+
+```json
+{
+  "suggestions": [
+    {
+      "sourceId": "12345678",
+      "title": "歌曲名",
+      "artist": "歌手名",
+      "album": "专辑名",
+      "cover": "封面URL",
+      "sourceUrl": "平台歌曲页URL",
+      "score": 85,
+      "isAutoSelected": true,
+      "alreadyLinked": { "docId": "xxx", "title": "已关联的歌曲" }
+    }
+  ],
+  "autoSelectedIndex": 0
+}
+```
+
+**匹配度计算：**
+- 标题 + 艺术家各占 50% 权重
+- 相似度 ≥80% 且明显高于其他结果时，`isAutoSelected: true`
+- `alreadyLinked` 表示该 ID 已关联到其他歌曲
+
+#### `PATCH /api/music/:docId` 平台 ID 字段
+
+在原有字段基础上，新增以下平台 ID 字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `neteaseId` | string \| null | 网易云音乐歌曲 ID |
+| `tencentId` | string \| null | QQ 音乐歌曲 ID |
+| `kugouId` | string \| null | 酷狗音乐歌曲 ID |
+| `baiduId` | string \| null | 百度音乐歌曲 ID |
+| `kuwoId` | string \| null | 酷我音乐歌曲 ID |
+
+**冲突响应（状态码 409）：**
+
+```json
+{
+  "error": "该平台ID已被歌曲「歌曲名」使用",
+  "conflict": true,
+  "conflictingSong": {
+    "docId": "xxx",
+    "title": "歌曲名",
+    "artist": "艺术家"
+  }
+}
+```
+
+**前端新增组件：**
+
+| 组件 | 位置 | 功能 |
+|------|------|------|
+| `MatchSuggestionModal` | `src/components/MatchSuggestionModal.tsx` | 跨平台匹配搜索弹窗 |
+| `MusicLinks` | `src/pages/MusicLinks.tsx` | 歌曲关联管理页面 |
+
+**前端页面变更：**
+
+| 页面 | 变更 |
+|------|------|
+| `Music.tsx` | 歌曲卡片新增平台标签显示；新增「关联管理」按钮 |
+| `MusicDetail.tsx` | `SongItem` 类型新增 `platformIds` 字段 |
+| `SongEditModal.tsx` | 新增「关联平台」可折叠区域；平台 ID 输入框和匹配按钮 |
+
+**新增路由：**
+
+| 路径 | 页面 | 说明 |
+|------|------|------|
+| `/music/links` | MusicLinks | 歌曲关联管理页面 |
+
+**验证步骤：**
+
+1. **手动关联验证**：
+   - 进入歌曲详情页，点击「编辑歌曲」
+   - 展开「关联平台」区域
+   - 填写某个平台的歌曲 ID（如网易云 ID），点击保存
+   - 预期：刷新后歌曲卡片显示该平台标签
+
+2. **自动匹配验证**：
+   - 在歌曲编辑弹窗中，点击某平台行的「匹配」按钮
+   - 弹出匹配搜索弹窗，显示搜索结果
+   - 选择正确的结果并确认
+   - 预期：ID 自动填入输入框
+
+3. **冲突检测验证**：
+   - 尝试将一个已被其他歌曲使用的平台 ID 填入
+   - 预期：显示错误提示「该平台ID已被歌曲「XXX」使用」
+
+4. **导入自动关联验证**：
+   - 导入一首已有其他平台版本的歌曲
+   - 预期：该歌曲的平台 ID 被更新，而非创建新记录
+
+5. **关联管理页面验证**：
+   - 进入音乐馆，点击「关联管理」按钮
+   - 预期：显示 `/music/links` 页面，表格展示所有歌曲的平台关联状态
+   - 可按平台、关联状态筛选
