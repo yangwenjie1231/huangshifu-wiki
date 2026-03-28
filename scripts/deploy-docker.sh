@@ -376,13 +376,28 @@ if [[ "$SKIP_DB_INIT" != "1" ]]; then
       libjpeg-dev \
       libpng-dev \
       libtiff-dev \
-      --no-install-recommends 2>/dev/null || true
+      gobject-introspection \
+      libgirepository1.0-dev \
+      pkg-config \
+      --no-install-recommends
+
+    ldconfig
+
+    if [[ ! -f /usr/include/glib-2.0/glib-object.h ]]; then
+      error "glib-object.h not found after installation"
+      error "please check apt sources and try manually: apt install libglib2.0-dev"
+    fi
   fi
 
-  log "installing dependencies"
+  log "installing dependencies (skipping native scripts)"
   export SHARP_IGNORE_GLOBAL_LIBVIPS=1
   export npm_config_sharp_libvips_binary_host="https://npmmirror.com/mirrors/sharp-libvips"
-  npm ci --registry="${NPM_REGISTRY}" || npm install --registry="${NPM_REGISTRY}"
+  npm ci --registry="${NPM_REGISTRY}" --ignore-scripts || npm install --registry="${NPM_REGISTRY}" --ignore-scripts
+
+  log "rebuilding sharp with system libvips"
+  npm rebuild sharp --registry="${NPM_REGISTRY}" 2>/dev/null || {
+    warn "sharp rebuild failed, sharp may not work correctly"
+  }
 
   log "generating prisma client"
   npm run db:generate
