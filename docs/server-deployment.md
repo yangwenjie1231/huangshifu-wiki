@@ -20,6 +20,38 @@
 
 ---
 
+## 安全机制说明
+
+### 1. 认证令牌安全存储
+- 所有认证令牌（JWT）均通过 `httpOnly` Cookie 存储，不存储在 `localStorage`
+- Cookie 配置：`httpOnly: true`, `sameSite: 'lax'`, `secure: true`（生产环境）
+- 有效期：7 天
+- 这有效防止了 XSS 攻击导致令牌被窃取的风险
+
+### 2. 内容安全与 XSS 防护
+- Wiki 和论坛内容使用 `rehype-sanitize` 进行 HTML 清理
+- 默认阻止危险元素：`<script>`, `<form>`, `<object>`, `<embed>` 等
+- 阻止事件处理器：`onclick`, `onerror`, `onload` 等
+- 阻止危险协议：`javascript:`, `data:`, `vbscript:`
+
+### 3. 安全嵌入平台白名单
+系统支持以下平台的视频/音乐嵌入（需通过域名白名单验证）：
+
+| 平台 | 域名 |
+|------|------|
+| Bilibili | player.bilibili.com |
+| 网易云音乐 | music.163.com |
+| QQ 音乐 | y.qq.com |
+| YouTube | youtube.com / www.youtube.com |
+| 优酷 | player.youku.com |
+| 爱奇艺 | open.iqiyi.com / www.iqiyi.com |
+| 微博视频 | weibo.com / www.weibo.com |
+| Vimeo | vimeo.com / player.vimeo.com |
+
+详细嵌入说明见 `docs/supported-embed-platforms.md`
+
+---
+
 ## 1. 部署前准备
 
 建议环境：
