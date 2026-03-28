@@ -312,9 +312,14 @@ if docker ps --format '{{.Names}}' | grep -q '^hsf-postgres$'; then
   docker rm -f hsf-postgres
 fi
 
-if ss -tuln 2>/dev/null | grep -q ':5432'; then
+log "detecting host postgres on port 5432..."
+SS_OUTPUT=$(ss -tuln 2>/dev/null || netstat -tuln 2>/dev/null || echo "")
+log "ss/netstat output: ${SS_OUTPUT}"
+if echo "$SS_OUTPUT" | grep -q ':5432'; then
   log "host postgres detected on 5432, will use host postgres for migrations"
   USE_HOST_PG=1
+else
+  log "no postgres detected on 5432"
 fi
 
 if ! command -v psql >/dev/null 2>&1; then
