@@ -364,9 +364,19 @@ for i in {1..30}; do
 done
 
 if [[ "$SKIP_DB_INIT" != "1" ]]; then
-  log "installing system dependencies for sharp (libvips)"
+  log "installing system dependencies for sharp"
   if command -v apt >/dev/null 2>&1; then
-    apt update && apt install -y libvips libvips-dev --no-install-recommends 2>/dev/null || true
+    apt update
+    apt install -y \
+      libvips \
+      libvips-dev \
+      libglib2.0-dev \
+      libxml2-dev \
+      libexif-dev \
+      libjpeg-dev \
+      libpng-dev \
+      libtiff-dev \
+      --no-install-recommends 2>/dev/null || true
   fi
 
   log "installing dependencies"
