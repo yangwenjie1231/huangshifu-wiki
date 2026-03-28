@@ -214,6 +214,14 @@ if [[ "$COMPOSE_NEEDS_SETUP" == "true" ]]; then
     warn "extracted DB_PASSWORD from existing .env"
   fi
 
+  PG_PORT="5432"
+  if is_port_in_use 5432; then
+    warn "port 5432 is already in use by host postgres, will use 5433 for Docker postgres"
+    PG_PORT="5433"
+    warn "updating DATABASE_URL to use port 5433"
+    sed -i 's|@postgres:5432|@postgres:5433|g' "$ENV_FILE"
+  fi
+
   warn "creating docker-compose.yml with postgres + qdrant + app services"
 
   cat > "$ROOT_DIR/docker-compose.yml" << EOF
@@ -229,7 +237,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${PG_PORT}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U hsf_wiki -d huangshifu_wiki"]
       interval: 5s
@@ -314,11 +322,6 @@ EXPOSE 3000
 
 CMD ["node", "dist/server.js"]
 DOCKERFILE_EOF
-fi
-
-if is_port_in_use 5432; then
-  warn "port 5432 is already in use, postgres container may fail to start"
-  warn "if postgres is running on host, consider stopping it or using host mode deployment"
 fi
 
 if is_port_in_use 6333; then

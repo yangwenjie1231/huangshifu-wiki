@@ -147,9 +147,11 @@ auto_configure() {
   if [[ -f "$ENV_FILE" ]]; then
     if grep -q 'DATABASE_URL.*@postgres:' "$ENV_FILE" 2>/dev/null; then
       if [[ "$USE_DOCKER" != "1" ]]; then
-        error "DATABASE_URL uses Docker service name (postgres), but USE_DOCKER=0"
-        error "either set USE_DOCKER=1 or fix DATABASE_URL to use 127.0.0.1:5432"
-        exit 1
+        warn "DATABASE_URL uses Docker service name (postgres), auto-converting to host mode"
+        sed -i 's|@postgres:5432|@127.0.0.1:5432|g' "$ENV_FILE"
+        sed -i 's|@postgres:5433|@127.0.0.1:5432|g' "$ENV_FILE"
+        sed -i 's|hsf_wiki|hsf_app|g' "$ENV_FILE"
+        warn "converted DATABASE_URL to host mode (127.0.0.1:5432, hsf_app)"
       fi
     fi
 
