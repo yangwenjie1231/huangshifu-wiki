@@ -8441,7 +8441,7 @@ app.post('/api/music/import', requireAdmin, async (req: AuthenticatedRequest, re
     let failed = 0;
     let linked = 0;
 
-    const importedSongs: Array<{ docId: string; trackOrder: number }> = [];
+    const importedSongs: Array<{ songDocId: string; trackOrder: number }> = [];
     const linkedSongs: Array<{ docId: string; title: string; artist: string; platform: string }> = [];
     for (let index = 0; index < tracks.length; index += 1) {
       const track = tracks[index];
@@ -8466,7 +8466,7 @@ app.post('/api/music/import', requireAdmin, async (req: AuthenticatedRequest, re
             platform: preview.platform,
           });
         }
-        importedSongs.push({ docId: result.song.docId, trackOrder: index });
+        importedSongs.push({ songDocId: result.song.docId, trackOrder: index });
       } catch (error) {
         failed += 1;
         console.error('Import single song failed:', error);
@@ -8529,17 +8529,17 @@ app.post('/api/music/import', requireAdmin, async (req: AuthenticatedRequest, re
       await prismaAny.songAlbumRelation.updateMany({
         where: {
           albumDocId,
-          songDocId: { in: importedSongs.map((item) => item.docId) },
+          songDocId: { in: importedSongs.map((item) => item.songDocId) },
         },
         data: {
           isDisplay: false,
         },
       });
-      if (importedSongs[0]?.docId) {
+      if (importedSongs[0]?.songDocId) {
         await prismaAny.songAlbumRelation.updateMany({
           where: {
             albumDocId,
-            songDocId: importedSongs[0].docId,
+            songDocId: importedSongs[0].songDocId,
           },
           data: {
             isDisplay: true,
