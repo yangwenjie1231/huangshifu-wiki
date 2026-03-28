@@ -312,10 +312,12 @@ if docker ps --format '{{.Names}}' | grep -q '^hsf-postgres$'; then
   docker rm -f hsf-postgres
 fi
 
-if ss -tuln 2>/dev/null | grep -q ':5432 ' && docker ps --format '{{.Names}}' | grep -q '^hsf-postgres$'; then
+if ss -tuln 2>/dev/null | grep -q ':5432'; then
   log "host postgres detected on 5432, will use host postgres for migrations"
   USE_HOST_PG=1
-elif ! command -v psql >/dev/null 2>&1; then
+fi
+
+if ! command -v psql >/dev/null 2>&1; then
   log "no psql client, installing..."
   if command -v apt >/dev/null 2>&1; then
     apt update && apt install -y postgresql-client-15 2>/dev/null || apt install -y postgresql-client 2>/dev/null || true
