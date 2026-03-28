@@ -313,10 +313,11 @@ if docker ps --format '{{.Names}}' | grep -q '^hsf-postgres$'; then
 fi
 
 log "detecting host postgres on port 5432..."
-SS_OUTPUT=$(ss -tuln 2>/dev/null || netstat -tuln 2>/dev/null || echo "")
-log "ss/netstat output: ${SS_OUTPUT}"
-if echo "$SS_OUTPUT" | grep -q ':5432'; then
+if ss -tuln 2>/dev/null | grep -q '5432'; then
   log "host postgres detected on 5432, will use host postgres for migrations"
+  USE_HOST_PG=1
+elif netstat -tuln 2>/dev/null | grep -q '5432'; then
+  log "host postgres detected on 5432 (via netstat), will use host postgres for migrations"
   USE_HOST_PG=1
 else
   log "no postgres detected on 5432"
@@ -337,33 +338,17 @@ if [[ "${USE_HOST_PG:-0}" == "1" ]]; then
   PG_DB_NAME="${PG_DB_NAME##*/}"
 
   if command -v sudo >/dev/null 2>&1 && id -u >/dev/null 2>&1; then
-    log "checking PostgreSQL authentication settings"
-    PG_HBA=$(sudo -u postgres psql -t -c "SHOW password_encryption" 2>/dev/null | tr -d ' ')
-    log "password_encryption = ${PG_HBA}"
+    log "resetting password for ${PG_DB_USER} to match .env"
+    sudo -u postgres psql -c "ALTER USER ${PG_DB_USER} WITH PASSWORD '${DB_PASSWORD}';"
 
-    if sudo -u postgres psql -t -c "SELECT 1 FROM pg_roles WHERE rolname='${PG_DB_USER}'" 2>/dev/null | grep -q '1'; then
-      log "user ${PG_DB_USER} exists, updating password"
-      sudo -u postgres psql -c "ALTER USER ${PG_DB_USER} WITH PASSWORD '${DB_PASSWORD}';" 
-    else
-      log "creating user ${PG_DB_USER}"
-      sudo -u postgres psql -c "CREATE USER ${PG_DB_USER} WITH PASSWORD '${DB_PASSWORD}' CREATEDB;" 
-    fi
-
-    if sudo -u postgres psql -t -c "SELECT 1 FROM pg_database WHERE datname='${PG_DB_NAME}'" 2>/dev/null | grep -q '1'; then
-      log "database ${PG_DB_NAME} already exists"
-    else
-      log "creating database ${PG_DB_NAME}"
-      sudo -u postgres psql -c "CREATE DATABASE ${PG_DB_NAME} OWNER ${PG_DB_USER};"
-    fi
-
+    log "granting permissions"
     sudo -u postgres psql -d "${PG_DB_NAME}" -c "GRANT ALL ON SCHEMA public TO ${PG_DB_USER};"
     sudo -u postgres psql -d "${PG_DB_NAME}" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${PG_DB_USER};"
     sudo -u postgres psql -d "${PG_DB_NAME}" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${PG_DB_USER};"
 
     log "testing connection as ${PG_DB_USER}"
     PGPASSWORD="${DB_PASSWORD}" psql -h 127.0.0.1 -p 5432 -U "${PG_DB_USER}" -d "${PG_DB_NAME}" -c "SELECT 1;" || {
-      warn "connection test failed, checking pg_hba.conf"
-      sudo cat /etc/postgresql/*/main/pg_hba.conf 2>/dev/null | grep -v "^#" | grep -v "^$" | head -10
+      warn "connection test failed"
     }
   fi
 
