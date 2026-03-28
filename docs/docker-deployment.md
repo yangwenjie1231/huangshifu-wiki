@@ -275,7 +275,9 @@ npm run db:seed
 
 ### 7.1 行政区划数据导入（v4.0+ 特性）
 
-首次部署后需要导入行政区划数据：
+> **注意**：如果不需要地点标签功能，可跳过此步骤。
+
+首次部署时需要导入行政区划数据（如需要地点标签功能）：
 
 ```bash
 cd /root/huangshifu-wiki
@@ -283,6 +285,10 @@ npm run regions:import
 ```
 
 该命令会从 `slightlee/regions-data` GitHub 仓库下载最新行政区划数据并导入。
+
+> **高德地图 API 配置（如需地点功能）**：
+> - `VITE_AMAP_JS_API_KEY`：前端地图选点组件用
+> - `AMAP_API_KEY`：后端经纬度解析行政区划用
 
 建议迁移后快速检查核心表是否创建成功：
 
@@ -409,6 +415,11 @@ docker compose up -d app
 # 查看日志确认启动成功
 docker compose logs -f app
 ```
+
+> **地点标签功能（v4.0+）**：如果需要更新行政区划数据，可执行：
+> ```bash
+> npm run regions:import
+> ```
 
 发布后建议补一条数据库状态检查：
 
@@ -546,12 +557,26 @@ PULL_LATEST=1 ./scripts/deploy.sh
 SKIP_SEED=1 ./scripts/deploy.sh
 ```
 
+Docker 部署用法：
+
+```bash
+USE_DOCKER=1 ./scripts/deploy.sh
+PULL_LATEST=1 USE_DOCKER=1 ./scripts/deploy.sh
+```
+
 可选环境变量：
 
 - `APP_NAME`：容器名（默认 `huangshifu-wiki`）
 - `ENV_FILE`：环境文件路径（默认 `.env`）
+- `USE_DOCKER`：使用 Docker Compose 部署（默认 `0`，设为 `1` 启用）
+- `USE_PM2`：使用 PM2 部署（默认 `1`）
+- `PULL_LATEST`：部署前拉取最新代码（默认 `0`）
+- `SKIP_SEED`：跳过数据库初始化（默认 `0`）
+- `INSTALL_MODE`：依赖安装模式，`ci` 或 `install`（默认 `ci`）
+- `ENABLE_VECTOR_SYNC`：部署时自动执行向量同步（默认 `1`）
+- `VECTOR_SYNC_LIMIT`：向量同步批次大小（默认 `100`）
 
-> **注意**：Docker 部署不支持 `USE_PM2=0`，因为应用直接运行在 Docker 容器中。
+> **注意**：`USE_DOCKER=1` 时，脚本会自动启动 PostgreSQL、Qdrant 和应用容器，并等待服务健康检查通过。
 
 ---
 

@@ -6,6 +6,7 @@ APP_NAME="${APP_NAME:-huangshifu-wiki}"
 APP_PORT="${APP_PORT:-3000}"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env}"
 USE_PM2="${USE_PM2:-1}"
+USE_DOCKER="${USE_DOCKER:-0}"
 PULL_LATEST="${PULL_LATEST:-0}"
 SKIP_SEED="${SKIP_SEED:-0}"
 INSTALL_MODE="${INSTALL_MODE:-ci}"
@@ -39,6 +40,61 @@ log "loading environment from $ENV_FILE"
 set -a
 source "$ENV_FILE"
 set +a
+
+if [[ "$USE_DOCKER" == "1" ]]; then
+  require_cmd docker
+  require_cmd docker compose
+  log "Docker mode enabled"
+
+  if [[ "$PULL_LATEST" == "1" ]]; then
+    require_cmd git
+    log "pulling latest code"
+    git pull --ff-only
+  fi
+
+  log "starting Docker services (postgres + qdrant)"
+  docker compose up -d postgres qdrant
+
+  log "waiting for postgres to be ready"
+  for i in {1..30}; do
+    if docker exec hsf-postgres pg_isready -U hsf_wiki -d huangshifu_wiki >/dev/null 2>&1; then
+      log "postgres is ready"
+      break
+    fi
+    if [[ $i -eq 30 ]]; then
+      log "postgres did not become ready in time"
+      exit 1
+    fi
+    sleep 2
+  done
+
+  log "building app Docker image"
+  docker compose build app
+
+  log "starting app container"
+  docker compose up -d app
+
+  log "waiting for app to be healthy"
+  for i in {1..30}; do
+    if curl -fsS "http://127.0.0.1:${APP_PORT}/api/health" >/dev/null 2>&1; then
+      log "app is healthy"
+      break
+    fi
+    if [[ $i -eq 30 ]]; then
+      log "app did not become healthy in time"
+      docker compose logs app
+      exit 1
+    fi
+    sleep 2
+  done
+
+  log "deploy completed (Docker mode)"
+  exit 0
+fi
+
+if [[ "$USE_DOCKER" == "0" && "$USE_PM2" != "1" ]]; then
+  log "USE_PM2=0 and USE_DOCKER=0, using nohup mode"
+fi
 
 if [[ "$PULL_LATEST" == "1" ]]; then
   require_cmd git
