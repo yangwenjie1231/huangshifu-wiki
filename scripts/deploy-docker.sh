@@ -324,6 +324,33 @@ if ! command -v psql >/dev/null 2>&1; then
   fi
 fi
 
+if [[ "${USE_HOST_PG:-0}" == "1" ]]; then
+  log "setting up host postgres user and database if needed"
+  PG_USER="hsf_wiki"
+  PG_DB="huangshifu_wiki"
+
+  if command -v sudo >/dev/null 2>&1 && id -u >/dev/null 2>&1; then
+    if sudo -u postgres psql -c "SELECT 1 FROM pg_roles WHERE rolname='${PG_USER}'" 2>/dev/null | grep -q '1 row'; then
+      log "user ${PG_USER} already exists"
+    else
+      log "creating user ${PG_USER}"
+      sudo -u postgres psql -c "CREATE USER ${PG_USER} WITH ENCRYPTED PASSWORD '${DB_PASSWORD}';" 2>/dev/null || true
+      sudo -u postgres psql -c "ALTER USER ${PG_USER} CREATEDB;" 2>/dev/null || true
+    fi
+
+    if sudo -u postgres psql -lqt 2>/dev/null | grep -q "^ ${PG_DB} "; then
+      log "database ${PG_DB} already exists"
+    else
+      log "creating database ${PG_DB}"
+      sudo -u postgres psql -c "CREATE DATABASE ${PG_DB} OWNER ${PG_USER};" 2>/dev/null || true
+    fi
+
+    sudo -u postgres psql -d "${PG_DB}" -c "GRANT ALL ON SCHEMA public TO ${PG_USER};" 2>/dev/null || true
+    sudo -u postgres psql -d "${PG_DB}" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${PG_USER};" 2>/dev/null || true
+    sudo -u postgres psql -d "${PG_DB}" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${PG_USER};" 2>/dev/null || true
+  fi
+fi
+
 log "starting qdrant container"
 docker compose up -d qdrant
 
