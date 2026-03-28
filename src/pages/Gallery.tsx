@@ -9,6 +9,7 @@ import { SmartImage } from '../components/SmartImage';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { apiPost } from '../lib/apiClient';
+import { LocationTagInput } from '../components/LocationTagInput';
 
 const toDateValue = (value: string | null | undefined) => {
   if (!value) return null;
@@ -167,6 +168,8 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
+  const [locationName, setLocationName] = useState<string | null>(null);
+  const [locationCode, setLocationCode] = useState<string | null>(null);
   const [files, setFiles] = useState<LocalPreviewFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -309,6 +312,7 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
           uploadSessionId: sessionId,
           assetIds: uploadedAssetIds,
           tags: tags.split(',').map(t => t.trim()).filter(t => t),
+          locationCode: locationCode,
         });
       }
 
@@ -344,16 +348,6 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
         <div className="flex-grow overflow-y-auto p-8 space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">图集标题</label>
-              <input 
-                type="text" 
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-                placeholder="例如：2024 线下演出精选"
-                className="w-full px-6 py-4 bg-brand-cream rounded-2xl border-none focus:ring-2 focus:ring-brand-olive/20 font-serif text-xl"
-              />
-            </div>
-            <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">标签 (逗号分隔)</label>
               <input 
                 type="text" 
@@ -361,6 +355,21 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
                 onChange={e => setTags(e.target.value)}
                 placeholder="例如：Live, 绝色, 2024"
                 className="w-full px-6 py-4 bg-brand-cream rounded-2xl border-none focus:ring-2 focus:ring-brand-olive/20"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">地点</label>
+              <LocationTagInput
+                value={locationName}
+                locationCode={locationCode}
+                onChange={(name, code) => {
+                  setLocationName(name);
+                  setLocationCode(code);
+                }}
+                onClear={() => {
+                  setLocationName(null);
+                  setLocationCode(null);
+                }}
               />
             </div>
           </div>

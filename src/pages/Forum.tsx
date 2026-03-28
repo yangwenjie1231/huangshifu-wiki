@@ -12,6 +12,7 @@ import { uploadImageToCDNs, getImageUrl } from '../services/imageService';
 import { apiDelete, apiGet, apiPost, apiPut } from '../lib/apiClient';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
+import { LocationTagInput } from '../components/LocationTagInput';
 
 type ContentStatus = 'draft' | 'pending' | 'published' | 'rejected';
 
@@ -45,6 +46,8 @@ type PostItem = {
   section: string;
   content: string;
   tags?: string[];
+  locationCode?: string | null;
+  locationName?: string | null;
   authorUid: string;
   status?: ContentStatus;
   reviewNote?: string | null;
@@ -727,6 +730,8 @@ const PostEditor = () => {
     section: '',
     content: '',
     tags: '',
+    locationName: null as string | null,
+    locationCode: null as string | null,
   });
   const [savingMode, setSavingMode] = useState<'draft' | 'pending' | null>(null);
   const [loadingPost, setLoadingPost] = useState(false);
@@ -752,6 +757,8 @@ const PostEditor = () => {
           section: prev.section || defaultSection,
           content: prev.content || defaultContent,
           tags: prev.tags,
+          locationName: prev.locationName,
+          locationCode: prev.locationCode,
         }));
       } catch (error) {
         console.error('Error fetching sections:', error);
@@ -784,6 +791,8 @@ const PostEditor = () => {
           section: data.post.section,
           content: data.post.content,
           tags: (data.post.tags || []).join(', '),
+          locationName: data.post.locationName || null,
+          locationCode: data.post.locationCode || null,
         });
       } catch (error) {
         console.error('Error loading editable post:', error);
@@ -811,6 +820,7 @@ const PostEditor = () => {
         section: formData.section,
         content: formData.content,
         tags: formData.tags.split(',').map((t) => t.trim()).filter(Boolean),
+        locationCode: formData.locationCode,
         status,
       };
 
@@ -885,6 +895,20 @@ const PostEditor = () => {
               onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
               placeholder="例如：Live, 绝色, 2024"
               className="w-full px-6 py-4 bg-brand-cream rounded-2xl border-none focus:ring-2 focus:ring-brand-primary/20"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold uppercase tracking-widest text-gray-400">地点</label>
+            <LocationTagInput
+              value={formData.locationName}
+              locationCode={formData.locationCode}
+              onChange={(name, code) => {
+                setFormData({ ...formData, locationName: name, locationCode: code });
+              }}
+              onClear={() => {
+                setFormData({ ...formData, locationName: null, locationCode: null });
+              }}
             />
           </div>
 

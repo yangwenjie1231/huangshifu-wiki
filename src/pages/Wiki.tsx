@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar, Link2, GitBranch, Network } from 'lucide-react';
+import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar, Link2, GitBranch, Network, MapPin } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
@@ -20,6 +20,7 @@ import MarkdownIt from 'markdown-it';
 import 'react-markdown-editor-lite/lib/index.css';
 import WikiLinkPreview from '../components/WikiLinkPreview';
 import RelationGraph, { RelationGraphData, WikiRelationType as GraphRelationType } from '../components/wiki/RelationGraph';
+import { LocationTagInput } from '../components/LocationTagInput';
 
 const mdParser = new MarkdownIt({
   html: true,
@@ -88,6 +89,8 @@ type WikiItem = {
   lastEditorUid: string;
   lastEditorName: string;
   relations?: WikiRelationRecord[];
+  locationCode?: string | null;
+  locationName?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -696,11 +699,21 @@ const WikiPageView = () => {
         )}
 
         <footer className="mt-20 pt-12 border-t border-gray-100 flex flex-wrap gap-4 items-center justify-between">
-          <div className="flex items-center gap-2 text-gray-400 text-sm italic">
-            <Tag size={14} />
-            {page.tags?.map((tag: string) => (
-              <span key={tag} className="hover:text-brand-olive cursor-pointer px-2 py-0.5 bg-brand-cream/30 rounded-full text-[10px] font-bold uppercase tracking-wider">#{tag}</span>
-            ))}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 text-gray-400 text-sm italic">
+              <Tag size={14} />
+              {page.tags?.map((tag: string) => (
+                <span key={tag} className="hover:text-brand-olive cursor-pointer px-2 py-0.5 bg-brand-cream/30 rounded-full text-[10px] font-bold uppercase tracking-wider">#{tag}</span>
+              ))}
+            </div>
+            {page.locationName && (
+              <div className="flex items-center gap-2 text-gray-400 text-sm">
+                <MapPin size={14} className="text-amber-500" />
+                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                  {page.locationName}
+                </span>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2 text-gray-400 text-sm">
             <UserIcon size={14} /> 编辑者: <span className="font-bold text-brand-olive">{page.lastEditorName || '匿名用户'}</span> <span className="text-[10px] opacity-50">({page.lastEditorUid?.substring(0, 8)})</span>
@@ -1422,6 +1435,8 @@ const WikiEditor = () => {
     tags: '',
     eventDate: '',
     relations: [] as WikiRelationRecord[],
+    locationCode: '',
+    locationName: '',
   });
   const [savingMode, setSavingMode] = useState<'draft' | 'pending' | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -1449,12 +1464,22 @@ const WikiEditor = () => {
             tags: data.tags?.join(', ') || '',
             eventDate: data.eventDate || '',
             relations: (data.relations as WikiRelationRecord[]) || [],
+            locationCode: data.locationCode || '',
+            locationName: data.locationName || '',
           });
         }
       };
       fetchPage();
     }
   }, [slug, isNew]);
+
+  const handleLocationChange = (locationName: string, locationCode: string) => {
+    setFormData({ ...formData, locationName, locationCode });
+  };
+
+  const handleLocationClear = () => {
+    setFormData({ ...formData, locationName: '', locationCode: '' });
+  };
 
   const handleSubmit = async (status: 'draft' | 'pending') => {
     if (!user) return;
@@ -1489,6 +1514,8 @@ const WikiEditor = () => {
       tags: formData.tags.split(',').map(t => t.trim()).filter(t => t),
       eventDate: formData.eventDate,
       relations: formData.relations,
+      locationCode: formData.locationCode || null,
+      locationName: formData.locationName || null,
       status,
       lastEditorUid: user.uid,
       lastEditorName: profile?.displayName || user.displayName || '匿名用户',
@@ -1649,6 +1676,16 @@ const WikiEditor = () => {
               onChange={e => setFormData({...formData, tags: e.target.value})}
               placeholder="例如：古风, 原创, 歌手"
               className="w-full px-6 py-4 bg-brand-cream rounded-2xl border-none focus:ring-2 focus:ring-brand-olive/20"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">地点</label>
+            <LocationTagInput
+              value={formData.locationName || null}
+              locationCode={formData.locationCode || null}
+              onChange={handleLocationChange}
+              onClear={handleLocationClear}
             />
           </div>
 

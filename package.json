@@ -19,7 +19,8 @@
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "embeddings:sync": "tsx scripts/sync-image-embeddings.ts",
-    "embeddings:enqueue": "tsx scripts/sync-image-embeddings.ts --enqueue-only"
+    "embeddings:enqueue": "tsx scripts/sync-image-embeddings.ts --enqueue-only",
+    "regions:import": "tsx scripts/import-regions.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
@@ -36,6 +37,7 @@
     "cookie-parser": "^1.4.7",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",
+    "exifreader": "^4.37.0",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.546.0",
