@@ -328,28 +328,28 @@ if [[ "${USE_HOST_PG:-0}" == "1" ]]; then
   log "setting up host postgres user and database if needed"
 
   PG_DB_USER=$(grep 'DATABASE_URL' "$ENV_FILE" 2>/dev/null | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p' | head -1)
-  PG_DB="${PG_DB_USER:-hsf_wiki}"
-  PG_DB="${PG_DB##*/}"
+  PG_DB_NAME="${PG_DB_USER:-hsf_wiki}"
+  PG_DB_NAME="${PG_DB_NAME##*/}"
 
   if command -v sudo >/dev/null 2>&1 && id -u >/dev/null 2>&1; then
-    if sudo -u postgres psql -c "SELECT 1 FROM pg_roles WHERE rolname='${PG_DB_USER}'" 2>/dev/null | grep -q '1 row'; then
-      log "user ${PG_DB_USER} already exists"
+    if sudo -u postgres psql -t -c "SELECT 1 FROM pg_roles WHERE rolname='${PG_DB_USER}'" 2>/dev/null | grep -q '1'; then
+      log "user ${PG_DB_USER} exists, updating password"
+      sudo -u postgres psql -c "ALTER USER ${PG_DB_USER} WITH PASSWORD '${DB_PASSWORD}';" 
     else
       log "creating user ${PG_DB_USER}"
-      sudo -u postgres psql -c "CREATE USER ${PG_DB_USER} WITH ENCRYPTED PASSWORD '${DB_PASSWORD}';" 2>/dev/null || true
-      sudo -u postgres psql -c "ALTER USER ${PG_DB_USER} CREATEDB;" 2>/dev/null || true
+      sudo -u postgres psql -c "CREATE USER ${PG_DB_USER} WITH PASSWORD '${DB_PASSWORD}' CREATEDB;" 
     fi
 
-    if sudo -u postgres psql -lqt 2>/dev/null | grep -q "^ ${PG_DB} "; then
-      log "database ${PG_DB} already exists"
+    if sudo -u postgres psql -t -c "SELECT 1 FROM pg_database WHERE datname='${PG_DB_NAME}'" 2>/dev/null | grep -q '1'; then
+      log "database ${PG_DB_NAME} already exists"
     else
-      log "creating database ${PG_DB}"
-      sudo -u postgres psql -c "CREATE DATABASE ${PG_DB} OWNER ${PG_DB_USER};" 2>/dev/null || true
+      log "creating database ${PG_DB_NAME}"
+      sudo -u postgres psql -c "CREATE DATABASE ${PG_DB_NAME} OWNER ${PG_DB_USER};"
     fi
 
-    sudo -u postgres psql -d "${PG_DB}" -c "GRANT ALL ON SCHEMA public TO ${PG_DB_USER};" 2>/dev/null || true
-    sudo -u postgres psql -d "${PG_DB}" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${PG_DB_USER};" 2>/dev/null || true
-    sudo -u postgres psql -d "${PG_DB}" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${PG_DB_USER};" 2>/dev/null || true
+    sudo -u postgres psql -d "${PG_DB_NAME}" -c "GRANT ALL ON SCHEMA public TO ${PG_DB_USER};"
+    sudo -u postgres psql -d "${PG_DB_NAME}" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${PG_DB_USER};"
+    sudo -u postgres psql -d "${PG_DB_NAME}" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${PG_DB_USER};"
   fi
 
   log "updating .env to use host postgres (127.0.0.1:5432)"
