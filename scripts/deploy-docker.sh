@@ -390,7 +390,9 @@ if [[ "$SKIP_DB_INIT" != "1" ]]; then
   fi
 
   log "installing dependencies (skipping native scripts)"
-  export SHARP_IGNORE_GLOBAL_LIBVIPS=1
+  export SHARP_BINARY_HOST="https://npmmirror.com/mirrors/sharp"
+  export SHARP_LIBVIPS_BINARY_HOST="https://npmmirror.com/mirrors/sharp-libvips"
+  export npm_config_sharp_binary_host="https://npmmirror.com/mirrors/sharp"
   export npm_config_sharp_libvips_binary_host="https://npmmirror.com/mirrors/sharp-libvips"
   npm ci --registry="${NPM_REGISTRY}" --ignore-scripts || npm install --registry="${NPM_REGISTRY}" --ignore-scripts
 
