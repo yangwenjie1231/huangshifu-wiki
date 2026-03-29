@@ -36,6 +36,7 @@ import {
 } from './src/server/music/metingService';
 import { registerRegionRoutes } from './src/server/location/routes';
 import { registerExifRoutes } from './src/server/location/exifRoutes';
+import { authRateLimiter } from './src/server/middleware/rateLimiter';
 
 dotenv.config({ path: '.env.local' });
 dotenv.config();
@@ -2811,6 +2812,11 @@ app.post('/api/auth/register', authRateLimiter, async (req, res) => {
       return;
     }
 
+    if (password.length < 6) {
+      res.status(400).json({ error: '密码至少需要6个字符' });
+      return;
+    }
+
     const normalizedEmail = email.toLowerCase().trim();
     const name = (displayName || normalizedEmail.split('@')[0] || '匿名用户').trim();
 
@@ -2885,7 +2891,7 @@ app.post('/api/auth/login', authRateLimiter, async (req, res) => {
   }
 });
 
-app.post('/api/auth/wechat/login', async (req, res) => {
+app.post('/api/auth/wechat/login', authRateLimiter, async (req, res) => {
   try {
     const code = typeof req.body?.code === 'string' ? req.body.code : '';
     const displayNameRaw = typeof req.body?.displayName === 'string' ? req.body.displayName.trim() : '';
