@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import express, { Request, Response, NextFunction } from 'express';
+import helmet from 'helmet';
 import fs from 'fs';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import multer from 'multer';
@@ -64,7 +65,7 @@ const BACKUP_RETAIN_COUNT = Math.max(1, Number(process.env.BACKUP_RETAIN_COUNT |
 const WECHAT_MP_APPID = process.env.WECHAT_MP_APPID || process.env.WECHAT_APP_ID || '';
 const WECHAT_MP_APP_SECRET =
   process.env.WECHAT_MP_APP_SECRET || process.env.WECHAT_MP_APPSECRET || process.env.WECHAT_APP_SECRET || '';
-const WECHAT_LOGIN_MOCK = process.env.WECHAT_LOGIN_MOCK === 'true';
+const WECHAT_LOGIN_MOCK = process.env.NODE_ENV !== 'production' && process.env.WECHAT_LOGIN_MOCK === 'true';
 
 if (!JWT_SECRET) {
   throw new Error('Missing JWT_SECRET. Please set it in .env.local');
@@ -311,6 +312,17 @@ const searchImageUpload = multer({
 app.use(express.json({ limit: '8mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use(helmet({
+  crossOriginEmbedderPolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+    },
+  },
+}));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 if (CORS_ORIGIN) {

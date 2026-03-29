@@ -72,14 +72,12 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin'] ||
-          (request.auth.token.email == "yangwenjie1231@gmail.com" && request.auth.token.email_verified == true));
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin'];
     }
 
     function isSuperAdmin() {
       return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin' ||
-          (request.auth.token.email == "yangwenjie1231@gmail.com" && request.auth.token.email_verified == true));
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin';
     }
 
     function hasRequiredFields(fields) {
