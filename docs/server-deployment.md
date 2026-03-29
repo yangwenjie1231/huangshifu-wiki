@@ -147,6 +147,7 @@ MUSIC_PLAY_URL_CACHE_TTL_SECONDS="600"
 # 数据库备份（必须设置，否则备份功能不可用）
 BACKUP_PASSWORD="请替换为备份加密密码"
 BACKUP_RETAIN_COUNT="20"
+
 # 高德地图 - 前端 JS API（地点选择、地图展示）
 VITE_AMAP_JS_API_KEY=""
 VITE_AMAP_SECURITY_JS_CODE=""
