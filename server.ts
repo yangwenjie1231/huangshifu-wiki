@@ -334,6 +334,7 @@ app.use(helmet({
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       upgradeInsecureRequests: null,
+      mediaSrc: ["'self'", "https://music.163.com"],
     },
   },
 }));
