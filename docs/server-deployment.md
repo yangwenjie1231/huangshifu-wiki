@@ -543,7 +543,7 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 | 平台 | 域名 |
 |------|------|
 | Bilibili | player.bilibili.com |
-| 网易云音乐 | music.163.com |
+| 网易云音乐 | music.163.com, *.music.126.net |
 | QQ 音乐 | y.qq.com |
 | YouTube | youtube.com / www.youtube.com |
 | 优酷 | player.youku.com |
@@ -571,9 +571,15 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 - 无网易云音乐 ID 时，依次尝试其他平台
 - 直链方式绕过 Meting API，播放更稳定
 
----
+**服务器 CSP 配置要求**：
 
-## 附录：主要数据库表
+网易云音乐直链需要服务器 CSP 允许以下域名：
+
+```typescript
+mediaSrc: ["'self'", "https://music.163.com", "https://*.music.126.net", "http://*.music.126.net"]
+```
+
+其中 `*.music.126.net` 用于匹配 CDN 节点域名（如 `m701.music.126.net`、`m801.music.126.net` 等）。
 
 | 表名 | 说明 |
 |------|------|
