@@ -1,4 +1,4 @@
-import { RawImage, pipeline } from '@xenova/transformers';
+import { RawImage, pipeline, CLIPTextModelWithProjection, CLIPTokenizer } from '@xenova/transformers';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -19,7 +19,8 @@ type ExtractorFunc = (
 ) => Promise<TensorLike>;
 
 let imageExtractorPromise: Promise<ExtractorFunc> | null = null;
-let textExtractorPromise: Promise<ExtractorFunc> | null = null;
+let textModelPromise: Promise<CLIPTextModelWithProjection> | null = null;
+let textTokenizerPromise: Promise<CLIPTokenizer> | null = null;
 
 function parseInteger(value: string | undefined, fallback: number) {
   const parsed = Number(value);
@@ -57,16 +58,26 @@ async function getImageExtractor() {
   return imageExtractorPromise;
 }
 
-async function getTextExtractor() {
-  if (!textExtractorPromise) {
-    textExtractorPromise = pipeline('feature-extraction', getEmbeddingModelName())
-      .then((extractor) => extractor as ExtractorFunc)
+async function getTextModel() {
+  if (!textModelPromise) {
+    textModelPromise = CLIPTextModelWithProjection.from_pretrained(getEmbeddingModelName())
       .catch((error) => {
-        textExtractorPromise = null;
+        textModelPromise = null;
         throw error;
       });
   }
-  return textExtractorPromise;
+  return textModelPromise;
+}
+
+async function getTextTokenizer() {
+  if (!textTokenizerPromise) {
+    textTokenizerPromise = CLIPTokenizer.from_pretrained(getEmbeddingModelName())
+      .catch((error) => {
+        textTokenizerPromise = null;
+        throw error;
+      });
+  }
+  return textTokenizerPromise;
 }
 
 export async function generateImageEmbedding(imageBuffer: Buffer) {
@@ -106,13 +117,12 @@ export async function generateTextEmbedding(text: string): Promise<number[]> {
     throw new Error('文本内容为空，无法生成向量');
   }
 
-  const extractor = await getTextExtractor();
-  const output = await extractor(text, {
-    pooling: 'mean',
-    normalize: true,
-  });
+  const model = await getTextModel();
+  const tokenizer = await getTextTokenizer();
 
-  const vectorData = output.data;
+  const outputs = await model.forward(tokenizer(text));
+  const vectorData = outputs.text_embeds.data;
+
   if (!vectorData) {
     throw new Error('未获取到文本向量数据');
   }
