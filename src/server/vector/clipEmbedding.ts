@@ -10,7 +10,7 @@ type TensorLike = {
   data?: ArrayLike<number>;
 };
 
-type ImageFeatureExtractor = (
+type ExtractorFunc = (
   input: unknown,
   options?: {
     pooling?: 'mean';
@@ -18,7 +18,8 @@ type ImageFeatureExtractor = (
   },
 ) => Promise<TensorLike>;
 
-let extractorPromise: Promise<ImageFeatureExtractor> | null = null;
+let imageExtractorPromise: Promise<ExtractorFunc> | null = null;
+let textExtractorPromise: Promise<ExtractorFunc> | null = null;
 
 function parseInteger(value: string | undefined, fallback: number) {
   const parsed = Number(value);
@@ -44,16 +45,28 @@ export function getEmbeddingVectorSize() {
   return parseInteger(process.env.IMAGE_EMBEDDING_VECTOR_SIZE, DEFAULT_VECTOR_SIZE);
 }
 
-async function getExtractor() {
-  if (!extractorPromise) {
-    extractorPromise = pipeline('image-feature-extraction', getEmbeddingModelName())
-      .then((extractor) => extractor as unknown as ImageFeatureExtractor)
+async function getImageExtractor() {
+  if (!imageExtractorPromise) {
+    imageExtractorPromise = pipeline('image-feature-extraction', getEmbeddingModelName())
+      .then((extractor) => extractor as ExtractorFunc)
       .catch((error) => {
-        extractorPromise = null;
+        imageExtractorPromise = null;
         throw error;
       });
   }
-  return extractorPromise;
+  return imageExtractorPromise;
+}
+
+async function getTextExtractor() {
+  if (!textExtractorPromise) {
+    textExtractorPromise = pipeline('feature-extraction', getEmbeddingModelName())
+      .then((extractor) => extractor as ExtractorFunc)
+      .catch((error) => {
+        textExtractorPromise = null;
+        throw error;
+      });
+  }
+  return textExtractorPromise;
 }
 
 export async function generateImageEmbedding(imageBuffer: Buffer) {
@@ -61,7 +74,7 @@ export async function generateImageEmbedding(imageBuffer: Buffer) {
     throw new Error('图片内容为空，无法生成向量');
   }
 
-  const extractor = await getExtractor();
+  const extractor = await getImageExtractor();
   const tmpPath = path.join(os.tmpdir(), `embedding_${Date.now()}_${Math.random().toString(36).slice(2)}.tmp`);
   try {
     await fs.promises.writeFile(tmpPath, imageBuffer);
@@ -93,7 +106,7 @@ export async function generateTextEmbedding(text: string): Promise<number[]> {
     throw new Error('文本内容为空，无法生成向量');
   }
 
-  const extractor = await getExtractor();
+  const extractor = await getTextExtractor();
   const output = await extractor(text, {
     pooling: 'mean',
     normalize: true,
