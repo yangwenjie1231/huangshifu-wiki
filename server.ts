@@ -317,9 +317,12 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https://*.amap.com", "https://*.gaode.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://webapi.amap.com"],
       styleSrc: ["'self'", "'unsafe-inline'"],
+      connectSrc: ["'self'", "https://restapi.amap.com", "https://webapi.amap.com"],
+      upgradeInsecureRequests: null,
+      mediaSrc: ["'self'", "https://music.163.com"],
     },
   },
 }));
@@ -12550,6 +12553,14 @@ async function startServer() {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
+
+  app.use((_req, res, next) => {
+    res.setHeader(
+      'Content-Security-Policy',
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://p1.music.126.net http://p2.music.126.net http://p3.music.126.net; style-src 'self' 'unsafe-inline';"
+    );
+    next();
+  });
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://localhost:${PORT}`);
