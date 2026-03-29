@@ -12553,6 +12553,14 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 async function startServer() {
+  app.use((_req, res, next) => {
+    res.setHeader(
+      'Content-Security-Policy',
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net https://picsum.photos; style-src 'self' 'unsafe-inline';"
+    );
+    next();
+  });
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -12566,14 +12574,6 @@ async function startServer() {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
-
-  app.use((_req, res, next) => {
-    res.setHeader(
-      'Content-Security-Policy',
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://picsum.photos; style-src 'self' 'unsafe-inline';"
-    );
-    next();
-  });
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://localhost:${PORT}`);
