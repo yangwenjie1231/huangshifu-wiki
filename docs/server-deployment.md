@@ -147,7 +147,6 @@ MUSIC_PLAY_URL_CACHE_TTL_SECONDS="600"
 # 数据库备份（必须设置，否则备份功能不可用）
 BACKUP_PASSWORD="请替换为备份加密密码"
 BACKUP_RETAIN_COUNT="20"
-
 # 高德地图 - 前端 JS API（地点选择、地图展示）
 VITE_AMAP_JS_API_KEY=""
 VITE_AMAP_SECURITY_JS_CODE=""
@@ -219,6 +218,16 @@ psql "postgresql://hsf_app:请替换为强密码@127.0.0.1:5432/huangshifu_wiki"
 npm run db:deploy
 npm run db:seed
 ```
+
+### 5.3 导入行政区划数据（v4.0+ 地点标签功能）
+
+地点标签功能需要导入中国行政区划数据：
+
+```bash
+npm run regions:import
+```
+
+此命令从 [slightlee/regions-data](https://github.com/slightlee/regions-data) 获取最新行政区划数据并写入 `Region` 表。
 
 ---
 
@@ -586,6 +595,26 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 | 爱奇艺 | open.iqiyi.com / www.iqiyi.com |
 | 微博视频 | weibo.com / www.weibo.com |
 | Vimeo | vimeo.com / player.vimeo.com |
+
+### 15.4 音乐播放音源优先级
+
+所有歌曲优先使用网易云音乐（NetEase Cloud Music）作为播放音源。
+
+**实现机制**：
+
+| 优先级 | 平台 | 音频 URL 格式 |
+|--------|------|---------------|
+| 1（最高）| 网易云音乐 | `https://music.163.com/song/media/outer/url?id={id}.mp3` |
+| 2 | QQ 音乐 | 通过 Meting API 解析 |
+| 3 | 酷狗音乐 | 通过 Meting API 解析 |
+| 4 | 百度音乐 | 通过 Meting API 解析 |
+| 5 | 酷我音乐 | 通过 Meting API 解析 |
+
+**说明**：
+
+- 当歌曲存在网易云音乐 ID（`neteaseId`）时，直接构造网易云音乐直链作为播放地址
+- 无网易云音乐 ID 时，依次尝试其他平台
+- 直链方式绕过 Meting API，播放更稳定
 
 ---
 
