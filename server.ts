@@ -47,6 +47,16 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 app.set('trust proxy', 1);
+
+// Content Security Policy - Allow loading Amap JS API
+app.use((req: Request, res: Response, next: NextFunction) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com; img-src 'self' data: https://*.amap.com https://*.gaode.com blob:; style-src 'self' 'unsafe-inline';"
+  );
+  next();
+});
+
 const prisma = new PrismaClient();
 const prismaAny = prisma as any;
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -314,6 +324,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: false,
+  originAgentCluster: false,
+  hsts: false,
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
