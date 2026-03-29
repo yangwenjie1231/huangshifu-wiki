@@ -4,6 +4,10 @@ import { X, MapPin, Search, Loader2 } from 'lucide-react';
 declare global {
   interface Window {
     AMap: any;
+    _AMapSecurityConfig: {
+      securityJsCode?: string;
+      serviceHost?: string;
+    };
   }
 }
 
@@ -25,6 +29,7 @@ interface MapPickerModalProps {
 }
 
 const AMAP_JS_API_KEY = import.meta.env.VITE_AMAP_JS_API_KEY as string | undefined;
+const AMAP_SECURITY_JS_CODE = import.meta.env.VITE_AMAP_SECURITY_JS_CODE as string | undefined;
 
 let amapLoaded = false;
 let amapLoadPromise: Promise<void> | null = null;
@@ -37,6 +42,12 @@ async function loadAmap(): Promise<void> {
     if (!AMAP_JS_API_KEY) {
       reject(new Error('AMAP_JS_API_KEY is not configured'));
       return;
+    }
+
+    if (AMAP_SECURITY_JS_CODE) {
+      window._AMapSecurityConfig = {
+        securityJsCode: AMAP_SECURITY_JS_CODE,
+      };
     }
 
     const script = document.createElement('script');

@@ -143,6 +143,12 @@ IMAGE_EMBEDDING_VECTOR_SIZE="512"
 IMAGE_EMBEDDING_BATCH_SIZE="100"
 IMAGE_SEARCH_RESULT_LIMIT="24"
 MUSIC_PLAY_URL_CACHE_TTL_SECONDS="600"
+
+# 高德地图 - 前端 JS API（地点选择、地图展示）
+VITE_AMAP_JS_API_KEY=""
+VITE_AMAP_SECURITY_JS_CODE=""
+# 高德地图 - 后端 API（地理编码、逆地理编码）
+AMAP_API_KEY=""
 EOF
 ```
 
@@ -155,6 +161,9 @@ EOF
 | `WECHAT_LOGIN_MOCK` | 联调阶段可设 `true`，正式环境设 `false` |
 | `COOKIE_SECURE` | HTTP 部署自动关闭，HTTPS 自动启用 |
 | `QDRANT_URL` | 指向本机 Qdrant 时保持 `http://127.0.0.1:6333` |
+| `VITE_AMAP_JS_API_KEY` | 高德地图 JS API Key（Web 平台） |
+| `VITE_AMAP_SECURITY_JS_CODE` | 高德地图安全密钥（JS API 2.0 必须） |
+| `AMAP_API_KEY` | 高德地图 Web 服务 API Key（服务端地理编码用） |
 
 > **注意**：修改 `VITE_*` 变量后需要重新构建前端：`npm run build`
 
@@ -204,6 +213,16 @@ psql "postgresql://hsf_app:请替换为强密码@127.0.0.1:5432/huangshifu_wiki"
 npm run db:deploy
 npm run db:seed
 ```
+
+### 5.3 导入行政区划数据（v4.0+ 地点标签功能）
+
+地点标签功能需要导入中国行政区划数据：
+
+```bash
+npm run regions:import
+```
+
+此命令从 [slightlee/regions-data](https://github.com/slightlee/regions-data) 获取最新行政区划数据并写入 `Region` 表。
 
 ---
 
@@ -531,26 +550,6 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 | 爱奇艺 | open.iqiyi.com / www.iqiyi.com |
 | 微博视频 | weibo.com / www.weibo.com |
 | Vimeo | vimeo.com / player.vimeo.com |
-
-### 15.4 音乐播放音源优先级
-
-所有歌曲优先使用网易云音乐（NetEase Cloud Music）作为播放音源。
-
-**实现机制**：
-
-| 优先级 | 平台 | 音频 URL 格式 |
-|--------|------|---------------|
-| 1（最高）| 网易云音乐 | `https://music.163.com/song/media/outer/url?id={id}.mp3` |
-| 2 | QQ 音乐 | 通过 Meting API 解析 |
-| 3 | 酷狗音乐 | 通过 Meting API 解析 |
-| 4 | 百度音乐 | 通过 Meting API 解析 |
-| 5 | 酷我音乐 | 通过 Meting API 解析 |
-
-**说明**：
-
-- 当歌曲存在网易云音乐 ID（`neteaseId`）时，直接构造网易云音乐直链作为播放地址
-- 无网易云音乐 ID 时，依次尝试其他平台
-- 直链方式绕过 Meting API，播放更稳定
 
 ---
 
