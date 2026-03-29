@@ -143,6 +143,16 @@ IMAGE_EMBEDDING_VECTOR_SIZE="512"
 IMAGE_EMBEDDING_BATCH_SIZE="100"
 IMAGE_SEARCH_RESULT_LIMIT="24"
 MUSIC_PLAY_URL_CACHE_TTL_SECONDS="600"
+
+# 数据库备份（必须设置，否则备份功能不可用）
+BACKUP_PASSWORD="请替换为备份加密密码"
+BACKUP_RETAIN_COUNT="20"
+
+# 高德地图 - 前端 JS API（地点选择、地图展示）
+VITE_AMAP_JS_API_KEY=""
+VITE_AMAP_SECURITY_JS_CODE=""
+# 高德地图 - 后端 API（地理编码、逆地理编码）
+AMAP_API_KEY=""
 EOF
 ```
 
@@ -155,6 +165,11 @@ EOF
 | `WECHAT_LOGIN_MOCK` | 联调阶段可设 `true`，正式环境设 `false` |
 | `COOKIE_SECURE` | HTTP 部署自动关闭，HTTPS 自动启用 |
 | `QDRANT_URL` | 指向本机 Qdrant 时保持 `http://127.0.0.1:6333` |
+| `VITE_AMAP_JS_API_KEY` | 高德地图 JS API Key（Web 平台） |
+| `VITE_AMAP_SECURITY_JS_CODE` | 高德地图安全密钥（JS API 2.0 必须） |
+| `AMAP_API_KEY` | 高德地图 Web 服务 API Key（服务端地理编码用） |
+| `BACKUP_PASSWORD` | 数据库备份加密密码（必须设置，否则备份功能不可用） |
+| `BACKUP_RETAIN_COUNT` | 备份文件保留数量（默认 20），超过后自动删除最旧备份 |
 
 > **注意**：修改 `VITE_*` 变量后需要重新构建前端：`npm run build`
 
@@ -486,15 +501,55 @@ npx prisma migrate status
 
 ---
 
-## 14. 备份建议
+## 14. 数据库备份
 
-### 14.1 数据库备份
+### 14.1 内置备份功能（推荐）
+
+项目已内置数据库备份管理功能，超级管理员可通过管理面板操作。
+
+**前置条件**：
+
+1. 服务器已安装 `pg_dump` 和 `psql`（PostgreSQL 客户端工具，安装 PostgreSQL 时自带）
+2. 在 `.env` 中配置 `BACKUP_PASSWORD`（备份加密密码）
+
+**使用方法**：
+
+1. 使用超级管理员账号登录
+2. 进入管理面板，选择「数据库备份」标签页
+3. 点击「创建备份」并输入备份密码
+4. 备份完成后可点击下载按钮将加密备份文件下载到本地
+5. 需要恢复时，点击「上传恢复」，选择之前下载的 `.zip` 备份文件并输入密码
+
+**功能特性**：
+
+- 手动创建加密备份（AES-256-CBC 加密 + ZIP 压缩）
+- 下载备份文件到本地
+- 上传备份文件恢复数据库
+- 删除旧备份
+- 自动保留最近 N 个备份（默认 20 个，可通过 `BACKUP_RETAIN_COUNT` 配置）
+
+**备份范围**：
+
+- 包含全部数据表（用户、帖子、百科、音乐、图集等）
+- 不包含向量数据（`ImageEmbedding` 表，可通过管理面板的向量管理功能重建）
+- 不包含 Prisma 迁移记录（`_prisma_migrations` 表）
+
+**注意事项**：
+
+- 恢复操作会**覆盖当前数据库中的所有数据**，请谨慎操作
+- 备份密码用于加密备份文件内容，请妥善保管
+- 每次创建/恢复/删除操作都需要输入备份密码验证
+- 备份文件存储在服务器 `backups/` 目录下
+
+### 14.2 手动备份（备选方案）
+
+如需手动备份，可使用以下命令：
 
 ```bash
 pg_dump "postgresql://hsf_app:密码@127.0.0.1:5432/huangshifu_wiki" > /root/backup/huangshifu_wiki_$(date +%F).sql
 ```
 
-### 14.2 上传文件备份
+### 14.3 上传文件备份
 
 ```bash
 tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
