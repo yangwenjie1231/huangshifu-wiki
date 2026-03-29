@@ -398,6 +398,11 @@ export async function resolveAudioUrl(platform: MusicPlatform, urlId: string) {
   if (!urlId) {
     return '';
   }
+
+  if (platform === 'netease') {
+    return `https://music.163.com/song/media/outer/url?id=${urlId}.mp3`;
+  }
+
   try {
     const client = createClient(platform, true);
     const raw = await client.url(urlId, 320);
