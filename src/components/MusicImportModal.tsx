@@ -301,7 +301,7 @@ export const MusicImportModal = ({ open, onClose, onImported }: MusicImportModal
                 </div>
               ) : null}
 
-              {!confirmingImport ? (
+              {!importResult && !confirmingImport ? (
                 <button
                   onClick={() => {
                     if (!selectedCount) {
@@ -315,7 +315,7 @@ export const MusicImportModal = ({ open, onClose, onImported }: MusicImportModal
                 >
                   下一步：确认导入
                 </button>
-              ) : (
+              ) : !importResult ? (
                 <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-4 space-y-3">
                   <p className="text-sm text-amber-800 flex items-center gap-2">
                     <AlertTriangle size={16} />
@@ -338,7 +338,7 @@ export const MusicImportModal = ({ open, onClose, onImported }: MusicImportModal
                     </button>
                   </div>
                 </div>
-              )}
+              ) : null}
             </section>
           ) : null}
         </div>
