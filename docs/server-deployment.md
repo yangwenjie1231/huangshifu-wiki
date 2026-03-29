@@ -532,6 +532,26 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 | 微博视频 | weibo.com / www.weibo.com |
 | Vimeo | vimeo.com / player.vimeo.com |
 
+### 15.4 音乐播放音源优先级
+
+所有歌曲优先使用网易云音乐（NetEase Cloud Music）作为播放音源。
+
+**实现机制**：
+
+| 优先级 | 平台 | 音频 URL 格式 |
+|--------|------|---------------|
+| 1（最高）| 网易云音乐 | `https://music.163.com/song/media/outer/url?id={id}.mp3` |
+| 2 | QQ 音乐 | 通过 Meting API 解析 |
+| 3 | 酷狗音乐 | 通过 Meting API 解析 |
+| 4 | 百度音乐 | 通过 Meting API 解析 |
+| 5 | 酷我音乐 | 通过 Meting API 解析 |
+
+**说明**：
+
+- 当歌曲存在网易云音乐 ID（`neteaseId`）时，直接构造网易云音乐直链作为播放地址
+- 无网易云音乐 ID 时，依次尝试其他平台
+- 直链方式绕过 Meting API，播放更稳定
+
 ---
 
 ## 附录：主要数据库表
