@@ -538,18 +538,49 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 - 阻止事件处理器：`onclick`, `onerror`, `onload` 等
 - 阻止危险协议：`javascript:`, `data:`, `vbscript:`
 
-### 15.3 安全嵌入平台白名单
+### 15.3 安全嵌入平台白名单与 CSP 配置
 
-| 平台 | 域名 |
-|------|------|
-| Bilibili | player.bilibili.com |
-| 网易云音乐 | music.163.com, *.music.126.net |
-| QQ 音乐 | y.qq.com |
-| YouTube | youtube.com / www.youtube.com |
-| 优酷 | player.youku.com |
-| 爱奇艺 | open.iqiyi.com / www.iqiyi.com |
-| 微博视频 | weibo.com / www.weibo.com |
-| Vimeo | vimeo.com / player.vimeo.com |
+| 平台 | 域名 | CSP 指令 |
+|------|------|----------|
+| Bilibili | player.bilibili.com | frame-src |
+| 网易云音乐 | music.163.com, *.music.126.net | media-src |
+| QQ 音乐 | y.qq.com | frame-src |
+| YouTube | youtube.com, www.youtube.com | frame-src |
+| 优酷 | player.youku.com | frame-src |
+| 爱奇艺 | open.iqiyi.com, www.iqiyi.com | frame-src |
+| 微博视频 | weibo.com, www.weibo.com | frame-src |
+| Vimeo | vimeo.com, player.vimeo.com | frame-src |
+| 高德地图 | webapi.amap.com, restapi.amap.com, *.amap.com, *.gaode.com | script-src, connect-src, img-src |
+
+**服务器 CSP 配置代码示例**：
+
+```typescript
+contentSecurityPolicy: {
+  directives: {
+    defaultSrc: ["'self'"],
+    imgSrc: ["'self'", "data:", "https:", "https://*.amap.com", "https://*.gaode.com", "blob:"],
+    scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://webapi.amap.com"],
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    connectSrc: ["'self'", "https://restapi.amap.com", "https://webapi.amap.com"],
+    frameSrc: [
+      "'self'",
+      "https://player.bilibili.com",
+      "https://y.qq.com",
+      "https://www.youtube.com",
+      "https://youtube.com",
+      "https://player.youku.com",
+      "https://open.iqiyi.com",
+      "https://www.iqiyi.com",
+      "https://weibo.com",
+      "https://www.weibo.com",
+      "https://vimeo.com",
+      "https://player.vimeo.com",
+    ],
+    mediaSrc: ["'self'", "https://music.163.com", "https://*.music.126.net", "http://*.music.126.net"],
+    upgradeInsecureRequests: null,
+  },
+},
+```
 
 ### 15.4 音乐播放音源优先级
 
@@ -570,16 +601,11 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 - 当歌曲存在网易云音乐 ID（`neteaseId`）时，直接构造网易云音乐直链作为播放地址
 - 无网易云音乐 ID 时，依次尝试其他平台
 - 直链方式绕过 Meting API，播放更稳定
+- CDN 节点域名 `*.music.126.net`（如 `m701.music.126.net`、`m801.music.126.net` 等）已在 15.3 节 CSP 配置中包含
 
-**服务器 CSP 配置要求**：
+---
 
-网易云音乐直链需要服务器 CSP 允许以下域名：
-
-```typescript
-mediaSrc: ["'self'", "https://music.163.com", "https://*.music.126.net", "http://*.music.126.net"]
-```
-
-其中 `*.music.126.net` 用于匹配 CDN 节点域名（如 `m701.music.126.net`、`m801.music.126.net` 等）。
+## 附录：主要数据库表
 
 | 表名 | 说明 |
 |------|------|

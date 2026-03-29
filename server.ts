@@ -48,15 +48,6 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.set('trust proxy', 1);
 
-// Content Security Policy - Allow loading Amap JS API
-app.use((req: Request, res: Response, next: NextFunction) => {
-  res.setHeader(
-    'Content-Security-Policy',
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com; img-src 'self' data: https://*.amap.com https://*.gaode.com blob:; style-src 'self' 'unsafe-inline';"
-  );
-  next();
-});
-
 const prisma = new PrismaClient();
 const prismaAny = prisma as any;
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -330,9 +321,24 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:", "https://*.amap.com", "https://*.gaode.com", "blob:"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://webapi.amap.com"],
       styleSrc: ["'self'", "'unsafe-inline'"],
+      connectSrc: ["'self'", "https://restapi.amap.com", "https://webapi.amap.com"],
+      frameSrc: [
+        "'self'",
+        "https://player.bilibili.com",
+        "https://y.qq.com",
+        "https://www.youtube.com",
+        "https://youtube.com",
+        "https://player.youku.com",
+        "https://open.iqiyi.com",
+        "https://www.iqiyi.com",
+        "https://weibo.com",
+        "https://www.weibo.com",
+        "https://vimeo.com",
+        "https://player.vimeo.com",
+      ],
       upgradeInsecureRequests: null,
       mediaSrc: ["'self'", "https://music.163.com", "https://*.music.126.net", "http://*.music.126.net"],
     },
