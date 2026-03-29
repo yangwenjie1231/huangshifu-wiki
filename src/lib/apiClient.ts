@@ -80,3 +80,71 @@ export async function apiUpload<T>(path: string, formData: FormData) {
   });
   return parseResponse<T>(response);
 }
+
+export function apiUploadWithProgress<T>(
+  path: string,
+  formData: FormData,
+  onProgress: (percent: number) => void
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    });
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText));
+        } catch {
+          resolve(xhr.responseText as T);
+        }
+      } else {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          reject(new Error(data.error || `Upload failed: ${xhr.status}`));
+        } catch {
+          reject(new Error(`Upload failed: ${xhr.status}`));
+        }
+      }
+    });
+
+    xhr.addEventListener('error', () => reject(new Error('Network error')));
+    xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')));
+
+    xhr.open('POST', path);
+    xhr.withCredentials = true;
+    xhr.send(formData);
+  });
+}
+
+export async function apiUploadWithRetry<T>(
+  path: string,
+  formData: FormData,
+  options: {
+    retries?: number;
+    delay?: number;
+    onRetry?: (attempt: number, error: Error) => void;
+  } = {}
+): Promise<T> {
+  const { retries = 3, delay = 1000, onRetry } = options;
+  let lastError: Error;
+
+  for (let attempt = 1; attempt <= retries + 1; attempt++) {
+    try {
+      return await apiUpload<T>(path, formData);
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+
+      if (attempt <= retries) {
+        onRetry?.(attempt, lastError);
+        await new Promise((resolve) => setTimeout(resolve, delay * attempt));
+      }
+    }
+  }
+
+  throw lastError!;
+}

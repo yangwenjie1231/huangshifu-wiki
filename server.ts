@@ -3,19 +3,24 @@ import bcrypt from 'bcryptjs';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import express, { Request, Response, NextFunction } from 'express';
+import helmet from 'helmet';
 import fs from 'fs';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import archiver from 'archiver';
+import crypto from 'crypto';
 import * as cheerio from 'cheerio';
 import {
   Prisma,
   PrismaClient,
   UserRole as PrismaUserRole,
 } from '@prisma/client';
-import { getEmbeddingModelName, getEmbeddingVectorSize, generateImageEmbedding } from './src/server/vector/clipEmbedding';
+import { getEmbeddingModelName, getEmbeddingVectorSize, generateImageEmbedding, generateTextEmbedding } from './src/server/vector/clipEmbedding';
 import { getQdrantCollectionName, searchImageEmbeddingPoints } from './src/server/vector/qdrantService';
 import { enqueueGalleryImageEmbeddings, enqueueMissingImageEmbeddings, syncImageEmbeddingBatch } from './src/server/vector/embeddingSync';
 import {
@@ -32,6 +37,7 @@ import {
 } from './src/server/music/metingService';
 import { registerRegionRoutes } from './src/server/location/routes';
 import { registerExifRoutes } from './src/server/location/exifRoutes';
+import { authRateLimiter } from './src/server/middleware/rateLimiter';
 
 dotenv.config({ path: '.env.local' });
 dotenv.config();
@@ -45,15 +51,21 @@ const prisma = new PrismaClient();
 const prismaAny = prisma as any;
 const uploadsDir = path.join(__dirname, 'uploads');
 fs.mkdirSync(uploadsDir, { recursive: true });
+const backupsDir = path.join(__dirname, 'backups');
+fs.mkdirSync(backupsDir, { recursive: true });
+
+const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PORT) || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || '';
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '';
 const SUPER_ADMIN_EMAIL = process.env.SEED_SUPER_ADMIN_EMAIL || '';
+const BACKUP_PASSWORD = process.env.BACKUP_PASSWORD || '';
+const BACKUP_RETAIN_COUNT = Math.max(1, Number(process.env.BACKUP_RETAIN_COUNT || 20));
 const WECHAT_MP_APPID = process.env.WECHAT_MP_APPID || process.env.WECHAT_APP_ID || '';
 const WECHAT_MP_APP_SECRET =
   process.env.WECHAT_MP_APP_SECRET || process.env.WECHAT_MP_APPSECRET || process.env.WECHAT_APP_SECRET || '';
-const WECHAT_LOGIN_MOCK = process.env.WECHAT_LOGIN_MOCK === 'true';
+const WECHAT_LOGIN_MOCK = process.env.NODE_ENV !== 'production' && process.env.WECHAT_LOGIN_MOCK === 'true';
 
 if (!JWT_SECRET) {
   throw new Error('Missing JWT_SECRET. Please set it in .env.local');
@@ -238,7 +250,7 @@ const uploadStorage = multer.diskStorage({
 const upload = multer({
   storage: uploadStorage,
   limits: {
-    fileSize: 20 * 1024 * 1024,
+    fileSize: 25 * 1024 * 1024,
   },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -251,8 +263,38 @@ const upload = multer({
   },
 });
 
+const uploadBackup = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      cb(null, backupsDir);
+    },
+    filename: (_req, _file, cb) => {
+      cb(null, `upload_${Date.now()}_${Math.random().toString(36).slice(2, 10)}.zip`);
+    },
+  }),
+  limits: {
+    fileSize: 1024 * 1024 * 1024,
+  },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext !== '.zip') {
+      cb(new Error('仅支持 .zip 备份文件'));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
 const searchImageUpload = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      cb(null, uploadsDir);
+    },
+    filename: (_req, _file, cb) => {
+      const nonce = Math.random().toString(36).slice(2, 10);
+      cb(null, `search_temp_${Date.now()}_${nonce}.tmp`);
+    },
+  }),
   limits: {
     fileSize: 10 * 1024 * 1024,
   },
@@ -270,6 +312,21 @@ const searchImageUpload = multer({
 app.use(express.json({ limit: '8mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use(helmet({
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: false,
+  originAgentCluster: false,
+  hsts: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      upgradeInsecureRequests: null,
+    },
+  },
+}));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 if (CORS_ORIGIN) {
@@ -2758,7 +2815,7 @@ app.get('/api/auth/me', async (req: AuthenticatedRequest, res) => {
   });
 });
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authRateLimiter, async (req, res) => {
   try {
     const { email, password, displayName } = req.body as {
       email?: string;
@@ -2768,6 +2825,11 @@ app.post('/api/auth/register', async (req, res) => {
 
     if (!email || !password) {
       res.status(400).json({ error: '邮箱和密码不能为空' });
+      return;
+    }
+
+    if (password.length < 6) {
+      res.status(400).json({ error: '密码至少需要6个字符' });
       return;
     }
 
@@ -2807,7 +2869,7 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authRateLimiter, async (req, res) => {
   try {
     const { email, password } = req.body as {
       email?: string;
@@ -2845,7 +2907,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-app.post('/api/auth/wechat/login', async (req, res) => {
+app.post('/api/auth/wechat/login', authRateLimiter, async (req, res) => {
   try {
     const code = typeof req.body?.code === 'string' ? req.body.code : '';
     const displayNameRaw = typeof req.body?.displayName === 'string' ? req.body.displayName.trim() : '';
@@ -3662,27 +3724,50 @@ app.get('/api/wiki', async (req: AuthenticatedRequest, res) => {
 
     const pages = await prisma.wikiPage.findMany({
       where,
-      orderBy: { updatedAt: 'desc' },
+      orderBy: [{ isPinned: 'desc' }, { updatedAt: 'desc' }],
       take: 200,
     });
 
     const favoritedWikiSet = new Set<string>();
+    const likedWikiSet = new Set<string>();
+    const dislikedWikiSet = new Set<string>();
+
     if (req.authUser && pages.length) {
-      const favorites = await prisma.favorite.findMany({
-        where: {
-          userUid: req.authUser.uid,
-          targetType: 'wiki',
-          targetId: { in: pages.map((item) => item.slug) },
-        },
-        select: { targetId: true },
-      });
+      const [favorites, likes, dislikes] = await Promise.all([
+        prisma.favorite.findMany({
+          where: {
+            userUid: req.authUser.uid,
+            targetType: 'wiki',
+            targetId: { in: pages.map((item) => item.slug) },
+          },
+          select: { targetId: true },
+        }),
+        prisma.wikiLike.findMany({
+          where: {
+            userUid: req.authUser.uid,
+            pageSlug: { in: pages.map((item) => item.slug) },
+          },
+          select: { pageSlug: true },
+        }),
+        prisma.wikiDislike.findMany({
+          where: {
+            userUid: req.authUser.uid,
+            pageSlug: { in: pages.map((item) => item.slug) },
+          },
+          select: { pageSlug: true },
+        }),
+      ]);
       favorites.forEach((item) => favoritedWikiSet.add(item.targetId));
+      likes.forEach((item) => likedWikiSet.add(item.pageSlug));
+      dislikes.forEach((item) => dislikedWikiSet.add(item.pageSlug));
     }
 
     res.json({
       pages: pages.map((page) => ({
         ...toWikiResponse(page),
         favoritedByMe: favoritedWikiSet.has(page.slug),
+        likedByMe: likedWikiSet.has(page.slug),
+        dislikedByMe: dislikedWikiSet.has(page.slug),
       })),
     });
   } catch (error) {
@@ -3926,10 +4011,30 @@ app.get('/api/wiki/:slug', async (req: AuthenticatedRequest, res) => {
         })) > 0
       : false;
 
+    const likedByMe = req.authUser
+      ? (await prisma.wikiLike.count({
+          where: {
+            userUid: req.authUser.uid,
+            pageSlug: req.params.slug,
+          },
+        })) > 0
+      : false;
+
+    const dislikedByMe = req.authUser
+      ? (await prisma.wikiDislike.count({
+          where: {
+            userUid: req.authUser.uid,
+            pageSlug: req.params.slug,
+          },
+        })) > 0
+      : false;
+
     res.json({
       page: {
         ...toWikiResponse(freshPage),
         favoritedByMe,
+        likedByMe,
+        dislikedByMe,
       },
       backlinks: backlinks.map(toWikiResponse),
       relations: relationBundle.relations,
@@ -3938,6 +4043,216 @@ app.get('/api/wiki/:slug', async (req: AuthenticatedRequest, res) => {
   } catch (error) {
     console.error('Fetch wiki page error:', error);
     res.status(500).json({ error: '获取页面失败' });
+  }
+});
+
+app.post('/api/wiki/:slug/like', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const slug = req.params.slug;
+    const page = await prisma.wikiPage.findUnique({
+      where: { slug },
+      select: {
+        slug: true,
+        status: true,
+        lastEditorUid: true,
+      },
+    });
+
+    if (!page || !canViewWikiPage(page, req.authUser)) {
+      res.status(404).json({ error: '页面未找到' });
+      return;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      try {
+        await tx.wikiLike.create({
+          data: {
+            pageSlug: slug,
+            userUid: req.authUser!.uid,
+          },
+        });
+      } catch {
+        return;
+      }
+
+      await tx.wikiPage.update({
+        where: { slug },
+        data: {
+          likesCount: { increment: 1 },
+        },
+      });
+    });
+
+    const likesCount = await prisma.wikiLike.count({ where: { pageSlug: slug } });
+
+    res.json({ liked: true, likesCount });
+  } catch (error) {
+    console.error('Like wiki page error:', error);
+    res.status(500).json({ error: '点赞失败' });
+  }
+});
+
+app.delete('/api/wiki/:slug/like', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const slug = req.params.slug;
+
+    await prisma.$transaction(async (tx) => {
+      const deleted = await tx.wikiLike.deleteMany({
+        where: {
+          pageSlug: slug,
+          userUid: req.authUser!.uid,
+        },
+      });
+
+      if (!deleted.count) {
+        return;
+      }
+
+      await tx.wikiPage.update({
+        where: { slug },
+        data: {
+          likesCount: { decrement: 1 },
+        },
+      });
+    });
+
+    const likesCount = await prisma.wikiLike.count({ where: { pageSlug: slug } });
+
+    res.json({ liked: false, likesCount });
+  } catch (error) {
+    console.error('Unlike wiki page error:', error);
+    res.status(500).json({ error: '取消点赞失败' });
+  }
+});
+
+app.post('/api/wiki/:slug/dislike', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const slug = req.params.slug;
+    const page = await prisma.wikiPage.findUnique({
+      where: { slug },
+      select: {
+        slug: true,
+        status: true,
+        lastEditorUid: true,
+      },
+    });
+
+    if (!page || !canViewWikiPage(page, req.authUser)) {
+      res.status(404).json({ error: '页面未找到' });
+      return;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      try {
+        await tx.wikiDislike.create({
+          data: {
+            pageSlug: slug,
+            userUid: req.authUser!.uid,
+          },
+        });
+      } catch {
+        return;
+      }
+
+      await tx.wikiPage.update({
+        where: { slug },
+        data: {
+          dislikesCount: { increment: 1 },
+        },
+      });
+    });
+
+    const dislikesCount = await prisma.wikiDislike.count({ where: { pageSlug: slug } });
+
+    res.json({ disliked: true, dislikesCount });
+  } catch (error) {
+    console.error('Dislike wiki page error:', error);
+    res.status(500).json({ error: '踩失败' });
+  }
+});
+
+app.delete('/api/wiki/:slug/dislike', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const slug = req.params.slug;
+
+    await prisma.$transaction(async (tx) => {
+      const deleted = await tx.wikiDislike.deleteMany({
+        where: {
+          pageSlug: slug,
+          userUid: req.authUser!.uid,
+        },
+      });
+
+      if (!deleted.count) {
+        return;
+      }
+
+      await tx.wikiPage.update({
+        where: { slug },
+        data: {
+          dislikesCount: { decrement: 1 },
+        },
+      });
+    });
+
+    const dislikesCount = await prisma.wikiDislike.count({ where: { pageSlug: slug } });
+
+    res.json({ disliked: false, dislikesCount });
+  } catch (error) {
+    console.error('Undislike wiki page error:', error);
+    res.status(500).json({ error: '取消踩失败' });
+  }
+});
+
+app.post('/api/wiki/:slug/pin', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const slug = req.params.slug;
+
+    const page = await prisma.wikiPage.findUnique({
+      where: { slug },
+      select: { slug: true, isPinned: true },
+    });
+
+    if (!page) {
+      res.status(404).json({ error: '页面未找到' });
+      return;
+    }
+
+    const updatedPage = await prisma.wikiPage.update({
+      where: { slug },
+      data: { isPinned: true },
+    });
+
+    res.json({ isPinned: updatedPage.isPinned });
+  } catch (error) {
+    console.error('Pin wiki page error:', error);
+    res.status(500).json({ error: '置顶页面失败' });
+  }
+});
+
+app.delete('/api/wiki/:slug/pin', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const slug = req.params.slug;
+
+    const page = await prisma.wikiPage.findUnique({
+      where: { slug },
+      select: { slug: true, isPinned: true },
+    });
+
+    if (!page) {
+      res.status(404).json({ error: '页面未找到' });
+      return;
+    }
+
+    const updatedPage = await prisma.wikiPage.update({
+      where: { slug },
+      data: { isPinned: false },
+    });
+
+    res.json({ isPinned: updatedPage.isPinned });
+  } catch (error) {
+    console.error('Unpin wiki page error:', error);
+    res.status(500).json({ error: '取消置顶失败' });
   }
 });
 
@@ -8148,7 +8463,7 @@ app.post('/api/music/import', requireAdmin, async (req: AuthenticatedRequest, re
     let failed = 0;
     let linked = 0;
 
-    const importedSongs: Array<{ docId: string; trackOrder: number }> = [];
+    const importedSongs: Array<{ songDocId: string; trackOrder: number }> = [];
     const linkedSongs: Array<{ docId: string; title: string; artist: string; platform: string }> = [];
     for (let index = 0; index < tracks.length; index += 1) {
       const track = tracks[index];
@@ -8173,7 +8488,7 @@ app.post('/api/music/import', requireAdmin, async (req: AuthenticatedRequest, re
             platform: preview.platform,
           });
         }
-        importedSongs.push({ docId: result.song.docId, trackOrder: index });
+        importedSongs.push({ songDocId: result.song.docId, trackOrder: index });
       } catch (error) {
         failed += 1;
         console.error('Import single song failed:', error);
@@ -8236,17 +8551,17 @@ app.post('/api/music/import', requireAdmin, async (req: AuthenticatedRequest, re
       await prismaAny.songAlbumRelation.updateMany({
         where: {
           albumDocId,
-          songDocId: { in: importedSongs.map((item) => item.docId) },
+          songDocId: { in: importedSongs.map((item) => item.songDocId) },
         },
         data: {
           isDisplay: false,
         },
       });
-      if (importedSongs[0]?.docId) {
+      if (importedSongs[0]?.songDocId) {
         await prismaAny.songAlbumRelation.updateMany({
           where: {
             albumDocId,
-            songDocId: importedSongs[0].docId,
+            songDocId: importedSongs[0].songDocId,
           },
           data: {
             isDisplay: true,
@@ -10732,6 +11047,7 @@ app.get('/api/search/hot-keywords', async (_req, res) => {
 });
 
 app.post('/api/search/by-image', searchImageUpload.single('image'), async (req: AuthenticatedRequest, res) => {
+  const tempFile = req.file;
   try {
     const requestedLimit = parseInteger(req.body?.limit, IMAGE_SEARCH_RESULT_LIMIT, {
       min: 1,
@@ -10740,11 +11056,16 @@ app.post('/api/search/by-image', searchImageUpload.single('image'), async (req: 
     const minScore = parseMinSimilarityScore(req.body?.minScore);
 
     let imageBuffer: Buffer | null = null;
-    const uploadedFile = req.file;
 
-    if (uploadedFile?.buffer && uploadedFile.buffer.length > 0) {
-      imageBuffer = uploadedFile.buffer;
-    } else {
+    if (tempFile?.path) {
+      try {
+        imageBuffer = await fs.promises.readFile(tempFile.path);
+      } catch {
+        imageBuffer = null;
+      }
+    }
+
+    if (!imageBuffer || imageBuffer.length === 0) {
       const base64Payload = extractBase64Payload(req.body?.imageBase64);
       if (base64Payload) {
         try {
@@ -10841,6 +11162,110 @@ app.post('/api/search/by-image', searchImageUpload.single('image'), async (req: 
   } catch (error) {
     console.error('Image semantic search error:', error);
     res.status(500).json({ error: '图片语义搜索失败' });
+  } finally {
+    if (tempFile?.path) {
+      await fs.promises.unlink(tempFile.path).catch(() => {});
+    }
+  }
+});
+
+app.get('/api/search/semantic-galleries', async (req: AuthenticatedRequest, res) => {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const requestedLimit = parseInteger(req.query.limit as string, IMAGE_SEARCH_RESULT_LIMIT, {
+      min: 1,
+      max: 60,
+    });
+    const minScore = parseMinSimilarityScore(req.query.minScore);
+
+    if (!q) {
+      res.status(400).json({ error: '请提供搜索文字 (q 参数)' });
+      return;
+    }
+
+    const queryVector = await generateTextEmbedding(q);
+    const matches = await searchImageEmbeddingPoints({
+      vector: queryVector,
+      limit: requestedLimit,
+      minScore,
+    });
+
+    const seenGalleryIds = new Set<string>();
+    const seenImageIds = new Set<string>();
+    const orderedGalleryIds: string[] = [];
+    const scoreByGalleryId = new Map<string, number>();
+
+    matches.forEach((match) => {
+      const parsed = toEmbeddingPayload(match.payload);
+      if (!parsed) {
+        return;
+      }
+
+      if (!seenImageIds.has(parsed.galleryImageId)) {
+        seenImageIds.add(parsed.galleryImageId);
+      }
+
+      const score = typeof match.score === 'number' ? match.score : 0;
+      const previousBest = scoreByGalleryId.get(parsed.galleryId);
+      if (previousBest === undefined || score > previousBest) {
+        scoreByGalleryId.set(parsed.galleryId, score);
+      }
+
+      if (!seenGalleryIds.has(parsed.galleryId)) {
+        seenGalleryIds.add(parsed.galleryId);
+        orderedGalleryIds.push(parsed.galleryId);
+      }
+    });
+
+    if (!orderedGalleryIds.length) {
+      res.json({
+        mode: 'semantic_text',
+        query: q,
+        totalMatches: 0,
+        totalGalleries: 0,
+        galleries: [],
+      });
+      return;
+    }
+
+    const galleryRows = await prisma.gallery.findMany({
+      where: {
+        id: { in: orderedGalleryIds },
+      },
+      include: {
+        images: {
+          include: {
+            asset: true,
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    const galleryById = new Map(galleryRows.map((gallery) => [gallery.id, gallery]));
+    const galleries = orderedGalleryIds
+      .map((galleryId) => {
+        const gallery = galleryById.get(galleryId);
+        if (!gallery) {
+          return null;
+        }
+        return {
+          ...toGalleryResponse(gallery),
+          similarity: Number((scoreByGalleryId.get(galleryId) ?? 0).toFixed(4)),
+        };
+      })
+      .filter((item): item is ReturnType<typeof toGalleryResponse> & { similarity: number } => item !== null);
+
+    res.json({
+      mode: 'semantic_text',
+      query: q,
+      totalMatches: seenImageIds.size,
+      totalGalleries: galleries.length,
+      galleries,
+    });
+  } catch (error) {
+    console.error('Text semantic search error:', error);
+    res.status(500).json({ error: '文字语义搜索失败' });
   }
 });
 
@@ -11078,7 +11503,7 @@ app.get('/api/search/suggest', async (req: AuthenticatedRequest, res) => {
         },
         orderBy: { updatedAt: 'desc' },
         take: 3,
-        select: { slug: true, title: true, category: true },
+        select: { slug: true, title: true, category: true, content: true },
       }),
       prisma.post.findMany({
         where: {
@@ -11122,7 +11547,8 @@ app.get('/api/search/suggest', async (req: AuthenticatedRequest, res) => {
     });
 
     wikiMatches.forEach((w) => {
-      suggestions.push({ type: 'wiki', text: w.title, subtext: w.category, id: w.slug });
+      const contentSnippet = w.content ? w.content.slice(0, 80).replace(/<[^>]+>/g, '') + '...' : '';
+      suggestions.push({ type: 'wiki', text: w.title, subtext: contentSnippet || w.category, id: w.slug });
     });
 
     postMatches.forEach((p) => {
@@ -11449,6 +11875,319 @@ app.patch('/api/admin/batch/songs/display-info', requireAdmin, async (req, res) 
   } catch (error) {
     console.error('Batch update songs display info error:', error);
     res.status(500).json({ error: '批量更新歌曲展示信息失败' });
+  }
+});
+
+function parseDatabaseUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    return {
+      host: parsed.hostname,
+      port: parsed.port || '5432',
+      user: parsed.username,
+      password: decodeURIComponent(parsed.password),
+      database: parsed.pathname.slice(1),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function verifyBackupPassword(password: string): boolean {
+  if (!BACKUP_PASSWORD) return false;
+  return password === BACKUP_PASSWORD;
+}
+
+function sanitizeFilename(name: string): boolean {
+  return /^backup_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.zip$/.test(name);
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+async function cleanupOldBackups() {
+  try {
+    const files = fs.readdirSync(backupsDir)
+      .filter((f) => f.startsWith('backup_') && f.endsWith('.zip'))
+      .map((f) => {
+        const filePath = path.join(backupsDir, f);
+        const stat = fs.statSync(filePath);
+        return { name: f, mtime: stat.mtime.getTime() };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+
+    if (files.length > BACKUP_RETAIN_COUNT) {
+      const toDelete = files.slice(BACKUP_RETAIN_COUNT);
+      for (const file of toDelete) {
+        fs.unlinkSync(path.join(backupsDir, file.name));
+        console.log(`Cleaned up old backup: ${file.name}`);
+      }
+    }
+  } catch (error) {
+    console.error('Cleanup old backups error:', error);
+  }
+}
+
+function encryptBuffer(buffer: Buffer, password: string): Buffer {
+  const key = crypto.scryptSync(password, 'huangshifu-backup-salt', 32);
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+  const encrypted = Buffer.concat([iv, cipher.update(buffer), cipher.final()]);
+  return encrypted;
+}
+
+function decryptBuffer(buffer: Buffer, password: string): Buffer {
+  const key = crypto.scryptSync(password, 'huangshifu-backup-salt', 32);
+  const iv = buffer.subarray(0, 16);
+  const encrypted = buffer.subarray(16);
+  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+  return Buffer.concat([decipher.update(encrypted), decipher.final()]);
+}
+
+app.post('/api/admin/backup/create', requireSuperAdmin, async (req, res) => {
+  try {
+    const { password } = req.body as { password?: string };
+
+    if (!BACKUP_PASSWORD) {
+      res.status(500).json({ error: '未配置 BACKUP_PASSWORD 环境变量' });
+      return;
+    }
+
+    if (!password || !verifyBackupPassword(password)) {
+      res.status(401).json({ error: '备份密码错误' });
+      return;
+    }
+
+    const dbConfig = parseDatabaseUrl(process.env.DATABASE_URL || '');
+    if (!dbConfig) {
+      res.status(500).json({ error: 'DATABASE_URL 格式无效' });
+      return;
+    }
+
+    const timestamp = new Date().toISOString().replace(/:/g, '-').replace('T', '_').slice(0, 19);
+    const sqlFilename = `backup_${timestamp}.sql`;
+    const sqlFilePath = path.join(backupsDir, sqlFilename);
+    const zipFilename = `backup_${timestamp}.zip`;
+    const zipFilePath = path.join(backupsDir, zipFilename);
+
+    const pgDumpArgs = [
+      '-h', dbConfig.host,
+      '-p', dbConfig.port,
+      '-U', dbConfig.user,
+      '-d', dbConfig.database,
+      '--no-owner',
+      '--no-privileges',
+      '--exclude-table-data=ImageEmbedding',
+      '--exclude-table-data=_prisma_migrations',
+      '-f', sqlFilePath,
+    ];
+
+    const pgDumpEnv = { ...process.env, PGPASSWORD: dbConfig.password };
+
+    await execFileAsync('pg_dump', pgDumpArgs, { env: pgDumpEnv, timeout: 300000 });
+
+    const sqlContent = fs.readFileSync(sqlFilePath);
+    fs.unlinkSync(sqlFilePath);
+
+    const encryptedContent = encryptBuffer(sqlContent, password);
+
+    await new Promise<void>((resolve, reject) => {
+      const output = fs.createWriteStream(zipFilePath);
+      const archive = archiver('zip', { zlib: { level: 9 } });
+
+      output.on('close', () => resolve());
+      archive.on('error', (err) => reject(err));
+
+      archive.pipe(output);
+      archive.append(encryptedContent, { name: sqlFilename });
+      archive.finalize();
+    });
+
+    const stat = fs.statSync(zipFilePath);
+
+    await cleanupOldBackups();
+
+    res.json({
+      backup: {
+        filename: zipFilename,
+        size: stat.size,
+        sizeFormatted: formatFileSize(stat.size),
+        createdAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error('Create backup error:', error);
+    res.status(500).json({ error: '创建备份失败: ' + (error instanceof Error ? error.message : String(error)) });
+  }
+});
+
+app.get('/api/admin/backup/list', requireSuperAdmin, async (_req, res) => {
+  try {
+    const files = fs.readdirSync(backupsDir)
+      .filter((f) => f.startsWith('backup_') && f.endsWith('.zip'))
+      .map((f) => {
+        const filePath = path.join(backupsDir, f);
+        const stat = fs.statSync(filePath);
+        return {
+          filename: f,
+          size: stat.size,
+          sizeFormatted: formatFileSize(stat.size),
+          createdAt: stat.mtime.toISOString(),
+        };
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    res.json({ backups: files });
+  } catch (error) {
+    console.error('List backups error:', error);
+    res.status(500).json({ error: '获取备份列表失败' });
+  }
+});
+
+app.get('/api/admin/backup/:filename/download', requireSuperAdmin, async (req, res) => {
+  try {
+    const filename = req.params.filename;
+
+    if (!sanitizeFilename(filename)) {
+      res.status(400).json({ error: '无效的文件名' });
+      return;
+    }
+
+    const filePath = path.join(backupsDir, filename);
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ error: '备份文件不存在' });
+      return;
+    }
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+  } catch (error) {
+    console.error('Download backup error:', error);
+    res.status(500).json({ error: '下载备份失败' });
+  }
+});
+
+app.post('/api/admin/backup/restore', requireSuperAdmin, uploadBackup.single('file'), async (req, res) => {
+  try {
+    const { password } = req.body as { password?: string };
+    const file = req.file;
+
+    if (!BACKUP_PASSWORD) {
+      res.status(500).json({ error: '未配置 BACKUP_PASSWORD 环境变量' });
+      return;
+    }
+
+    if (!password || !verifyBackupPassword(password)) {
+      res.status(401).json({ error: '备份密码错误' });
+      return;
+    }
+
+    if (!file) {
+      res.status(400).json({ error: '请上传备份文件' });
+      return;
+    }
+
+    const dbConfig = parseDatabaseUrl(process.env.DATABASE_URL || '');
+    if (!dbConfig) {
+      res.status(500).json({ error: 'DATABASE_URL 格式无效' });
+      return;
+    }
+
+    const AdmZip = (await import('adm-zip')).default;
+    const zip = new AdmZip(file.path);
+    const zipEntries = zip.getEntries();
+
+    const sqlEntry = zipEntries.find((e) => e.entryName.endsWith('.sql'));
+    if (!sqlEntry) {
+      fs.unlinkSync(file.path);
+      res.status(400).json({ error: '备份文件中未找到 SQL 数据' });
+      return;
+    }
+
+    const encryptedContent = sqlEntry.getData();
+
+    let sqlContent: Buffer;
+    try {
+      sqlContent = decryptBuffer(encryptedContent, password);
+    } catch {
+      fs.unlinkSync(file.path);
+      res.status(401).json({ error: '备份密码错误或文件已损坏' });
+      return;
+    }
+
+    const sqlContentStr = sqlContent.toString('utf-8');
+    if (!sqlContentStr.includes('PostgreSQL database dump') && !sqlContentStr.includes('pg_dump')) {
+      fs.unlinkSync(file.path);
+      res.status(400).json({ error: '备份文件格式无效' });
+      return;
+    }
+
+    const tempSqlPath = path.join(backupsDir, `restore_${Date.now()}.sql`);
+    fs.writeFileSync(tempSqlPath, sqlContent);
+
+    try {
+      const psqlArgs = [
+        '-h', dbConfig.host,
+        '-p', dbConfig.port,
+        '-U', dbConfig.user,
+        '-d', dbConfig.database,
+        '-f', tempSqlPath,
+      ];
+      const psqlEnv = { ...process.env, PGPASSWORD: dbConfig.password };
+
+      await execFileAsync('psql', psqlArgs, { env: psqlEnv, timeout: 600000 });
+    } finally {
+      fs.unlinkSync(tempSqlPath);
+      fs.unlinkSync(file.path);
+    }
+
+    res.json({ success: true, message: '数据库恢复成功' });
+  } catch (error) {
+    console.error('Restore backup error:', error);
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    res.status(500).json({ error: '恢复数据库失败: ' + (error instanceof Error ? error.message : String(error)) });
+  }
+});
+
+app.delete('/api/admin/backup/:filename', requireSuperAdmin, async (req, res) => {
+  try {
+    const { password } = req.query as { password?: string };
+    const filename = req.params.filename;
+
+    if (!BACKUP_PASSWORD) {
+      res.status(500).json({ error: '未配置 BACKUP_PASSWORD 环境变量' });
+      return;
+    }
+
+    if (!password || !verifyBackupPassword(password)) {
+      res.status(401).json({ error: '备份密码错误' });
+      return;
+    }
+
+    if (!sanitizeFilename(filename)) {
+      res.status(400).json({ error: '无效的文件名' });
+      return;
+    }
+
+    const filePath = path.join(backupsDir, filename);
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ error: '备份文件不存在' });
+      return;
+    }
+
+    fs.unlinkSync(filePath);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete backup error:', error);
+    res.status(500).json({ error: '删除备份失败' });
   }
 });
 
