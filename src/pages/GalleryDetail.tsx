@@ -45,6 +45,20 @@ type GalleryItem = {
   images: GalleryImage[];
 };
 
+type EditableGalleryImage = GalleryImage & {
+  clientId: string;
+  pendingFile?: File;
+  isPending?: boolean;
+};
+
+type GalleryDraft = {
+  title: string;
+  description: string;
+  tagsText: string;
+  published: boolean;
+  images: EditableGalleryImage[];
+};
+
 type UploadSessionResponse = {
   session: {
     id: string;
@@ -74,6 +88,42 @@ const splitTagsInput = (value: string) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
+const toEditableImage = (image: GalleryImage): EditableGalleryImage => ({
+  ...image,
+  clientId: image.id,
+});
+
+const createPendingImage = (file: File): EditableGalleryImage => ({
+  clientId: `pending-${Math.random().toString(36).slice(2, 10)}`,
+  assetId: null,
+  id: '',
+  url: URL.createObjectURL(file),
+  name: file.name,
+  mimeType: file.type || null,
+  sizeBytes: file.size,
+  pendingFile: file,
+  isPending: true,
+});
+
+const releasePendingImageUrls = (images: EditableGalleryImage[]) => {
+  images.forEach((image) => {
+    if (image.isPending) {
+      URL.revokeObjectURL(image.url);
+    }
+  });
+};
+
+const createDraftFromGallery = (item: GalleryItem): GalleryDraft => ({
+  title: item.title || '',
+  description: item.description || '',
+  tagsText: (item.tags || []).join(', '),
+  published: item.published,
+  images: item.images.map(toEditableImage),
+});
+
+const hasDraggedFiles = (event: Pick<React.DragEvent<HTMLElement>, 'dataTransfer'>) =>
+  Array.from(event.dataTransfer?.types || []).includes('Files');
+
 const GalleryDetail = () => {
   const { galleryId } = useParams();
   const navigate = useNavigate();
@@ -85,15 +135,23 @@ const GalleryDetail = () => {
   const [activeIndex, setActiveIndex] = useState(0);
 
   const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<GalleryDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
-
-  const [editTitle, setEditTitle] = useState('');
-  const [editDescription, setEditDescription] = useState('');
-  const [editTagsText, setEditTagsText] = useState('');
+  const [pageDragDepth, setPageDragDepth] = useState(0);
 
   const addImagesInputRef = useRef<HTMLInputElement>(null);
+  const draftRef = useRef<GalleryDraft | null>(null);
+
+  const applyDraft = (updater: GalleryDraft | null | ((prev: GalleryDraft | null) => GalleryDraft | null)) => {
+    const previous = draftRef.current;
+    const next = typeof updater === 'function'
+      ? (updater as (value: GalleryDraft | null) => GalleryDraft | null)(previous)
+      : updater;
+    draftRef.current = next;
+    setDraft(next);
+  };
 
   const fetchGallery = async () => {
     if (!galleryId) return;
@@ -102,9 +160,13 @@ const GalleryDetail = () => {
       const data = await apiGet<{ gallery: GalleryItem }>(`/api/galleries/${galleryId}`);
       setGallery(data.gallery);
       setActiveIndex(0);
-      setEditTitle(data.gallery.title || '');
-      setEditDescription(data.gallery.description || '');
-      setEditTagsText((data.gallery.tags || []).join(', '));
+      applyDraft((prev) => {
+        if (prev) {
+          releasePendingImageUrls(prev.images);
+        }
+        return null;
+      });
+      setEditing(false);
     } catch (error) {
       console.error('Fetch gallery detail error:', error);
       setGallery(null);
@@ -117,7 +179,16 @@ const GalleryDetail = () => {
     fetchGallery();
   }, [galleryId]);
 
-  const images = useMemo(() => gallery?.images || [], [gallery?.images]);
+  useEffect(() => () => {
+    if (draftRef.current) {
+      releasePendingImageUrls(draftRef.current.images);
+    }
+  }, []);
+
+  const images = useMemo<EditableGalleryImage[]>(
+    () => (editing ? draft?.images || [] : (gallery?.images || []).map(toEditableImage)),
+    [draft?.images, editing, gallery?.images],
+  );
   const activeImage = images[activeIndex] || null;
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
@@ -143,44 +214,94 @@ const GalleryDetail = () => {
     show('复制链接失败，请稍后重试', { variant: 'error' });
   };
 
+  const handleEnterEditMode = () => {
+    if (!gallery || !canManage || saving || uploading) return;
+    applyDraft((prev) => {
+      if (prev) {
+        releasePendingImageUrls(prev.images);
+      }
+      return createDraftFromGallery(gallery);
+    });
+    setEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    applyDraft((prev) => {
+      if (prev) {
+        releasePendingImageUrls(prev.images);
+      }
+      return null;
+    });
+    setEditing(false);
+    setPageDragDepth(0);
+    setDraggingIndex(null);
+    setActiveIndex((prev) => Math.min(prev, Math.max(0, (gallery?.images.length || 1) - 1)));
+  };
+
   const handleSaveMeta = async () => {
-    if (!gallery || !canManage || saving) return;
+    const currentDraft = draftRef.current;
+    if (!gallery || !currentDraft || !canManage || saving || uploading) return;
+    if (currentDraft.images.length === 0) {
+      show('图集至少需要保留一张图片', { variant: 'error' });
+      return;
+    }
     try {
       setSaving(true);
+      const pendingImages = currentDraft.images.filter((image) => image.isPending && image.pendingFile);
+      let assetIdByClientId = new Map<string, string>();
+
+      if (pendingImages.length) {
+        setUploading(true);
+        const sessionData = await apiPost<UploadSessionResponse>('/api/uploads/sessions', {
+          maxFiles: pendingImages.length,
+        });
+        const sessionId = sessionData.session.id;
+        const assetIds: string[] = [];
+
+        for (const image of pendingImages) {
+          const uploadResult = await uploadFileToSession(sessionId, image.pendingFile!);
+          assetIds.push(uploadResult.asset.id);
+          assetIdByClientId.set(image.clientId, uploadResult.asset.id);
+        }
+
+        await apiPost(`/api/uploads/sessions/${sessionId}/finalize`);
+      }
+
       const result = await apiPatch<{ gallery: GalleryItem }>(`/api/galleries/${gallery.id}`, {
-        title: editTitle,
-        description: editDescription,
-        tags: splitTagsInput(editTagsText),
+        title: currentDraft.title,
+        description: currentDraft.description,
+        tags: splitTagsInput(currentDraft.tagsText),
+        published: currentDraft.published,
+        images: currentDraft.images.map((image) => (
+          image.isPending
+            ? { assetId: assetIdByClientId.get(image.clientId) }
+            : { imageId: image.id }
+        )),
       });
+      releasePendingImageUrls(currentDraft.images);
       setGallery(result.gallery);
-      setEditTitle(result.gallery.title || '');
-      setEditDescription(result.gallery.description || '');
-      setEditTagsText((result.gallery.tags || []).join(', '));
+      applyDraft(null);
       setEditing(false);
-      show('图集信息已保存');
+      setActiveIndex((prev) => Math.min(prev, Math.max(0, result.gallery.images.length - 1)));
+      show('图集修改已保存');
     } catch (error) {
       console.error('Save gallery meta error:', error);
       show('保存失败，请稍后重试', { variant: 'error' });
     } finally {
+      setUploading(false);
       setSaving(false);
     }
   };
 
   const handleTogglePublish = async () => {
-    if (!gallery || !canManage || saving) return;
-    try {
-      setSaving(true);
-      const result = await apiPatch<{ gallery: GalleryItem }>(`/api/galleries/${gallery.id}/publish`, {
-        published: !gallery.published,
-      });
-      setGallery(result.gallery);
-      show(result.gallery.published ? '图集已发布' : '已切换为草稿');
-    } catch (error) {
-      console.error('Toggle gallery publish error:', error);
-      show('切换发布状态失败', { variant: 'error' });
-    } finally {
-      setSaving(false);
-    }
+    if (!editing || !canManage || saving) return;
+    applyDraft((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        published: !prev.published,
+      };
+    });
   };
 
   const uploadFileToSession = async (sessionId: string, file: File) => {
@@ -201,91 +322,95 @@ const GalleryDetail = () => {
     return data as UploadFileResponse;
   };
 
+  const appendPendingFiles = (fileList: FileList | File[]) => {
+    if (!editing || !draftRef.current || !canManage || uploading) return;
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'];
+    const maxSize = 10 * 1024 * 1024;
+    const files = Array.from(fileList);
+    const invalidFiles: string[] = [];
+    const validImages: EditableGalleryImage[] = [];
+
+    files.forEach((file) => {
+      if (!allowedTypes.includes(file.type)) {
+        invalidFiles.push(`${file.name} (不支持的文件类型)`);
+        return;
+      }
+      if (file.size > maxSize) {
+        invalidFiles.push(`${file.name} (文件过大，最大 10MB)`);
+        return;
+      }
+      validImages.push(createPendingImage(file));
+    });
+
+    if (invalidFiles.length) {
+      show(`以下文件无法加入：${invalidFiles.slice(0, 3).join(', ')}${invalidFiles.length > 3 ? '...' : ''}`, { variant: 'error' });
+    }
+    if (!validImages.length) return;
+
+    applyDraft((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        images: [...prev.images, ...validImages],
+      };
+    });
+    show(`已加入 ${validImages.length} 张待上传图片`);
+  };
+
   const handleAddImages = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = event.target.files;
     event.target.value = '';
 
-    if (!gallery || !canManage || !fileList?.length || uploading) return;
-    const files = Array.from(fileList);
-
-    try {
-      setUploading(true);
-      const sessionData = await apiPost<UploadSessionResponse>('/api/uploads/sessions', {
-        maxFiles: files.length,
-      });
-      const sessionId = sessionData.session.id;
-      const assetIds: string[] = [];
-
-      for (const file of files) {
-        const uploadResult = await uploadFileToSession(sessionId, file);
-        assetIds.push(uploadResult.asset.id);
-      }
-
-      await apiPost(`/api/uploads/sessions/${sessionId}/finalize`);
-      const result = await apiPost<{ gallery: GalleryItem }>(`/api/galleries/${gallery.id}/images`, {
-        uploadSessionId: sessionId,
-        assetIds,
-      });
-
-      setGallery(result.gallery);
-      setActiveIndex((prev) => Math.min(prev, Math.max(0, result.gallery.images.length - 1)));
-      show(`已追加 ${assetIds.length} 张图片`);
-    } catch (error) {
-      console.error('Add gallery images error:', error);
-      show('追加图片失败，请稍后重试', { variant: 'error' });
-    } finally {
-      setUploading(false);
-    }
+    if (!fileList?.length) return;
+    appendPendingFiles(fileList);
   };
 
   const handleDeleteImage = async (index: number) => {
-    if (!gallery || !canManage) return;
-    if (!window.confirm('确定删除这张图片吗？')) return;
-
-    const image = gallery.images[index];
-    if (!image?.id) {
+    const currentDraft = draftRef.current;
+    if (!editing || !currentDraft || !canManage) return;
+    const image = currentDraft.images[index];
+    if (!image?.clientId) {
       show('无法删除该图片', { variant: 'error' });
       return;
     }
 
-    try {
-      const result = await apiDelete<{ gallery: GalleryItem }>(`/api/galleries/${gallery.id}/images/${image.id}`);
-      setGallery(result.gallery);
-      setActiveIndex((prev) => {
-        if (result.gallery.images.length === 0) return 0;
-        return Math.min(prev, result.gallery.images.length - 1);
-      });
-      show('图片已删除');
-    } catch (error) {
-      console.error('Delete gallery image error:', error);
-      show('删除图片失败', { variant: 'error' });
+    if (image.isPending) {
+      URL.revokeObjectURL(image.url);
     }
+
+    const nextImages = currentDraft.images.filter((_, currentIndex) => currentIndex !== index);
+    applyDraft((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        images: nextImages,
+      };
+    });
+    setActiveIndex((prev) => Math.min(prev, Math.max(0, nextImages.length - 1)));
+    show(image.isPending ? '已移除待上传图片' : '已加入待删除列表');
   };
 
   const handleReorder = async (fromIndex: number, toIndex: number) => {
-    if (!gallery || !canManage || fromIndex === toIndex) return;
-    const next = [...gallery.images];
+    const currentDraft = draftRef.current;
+    if (!editing || !currentDraft || !canManage || fromIndex === toIndex) return;
+    const next = [...currentDraft.images];
     const [moved] = next.splice(fromIndex, 1);
     if (!moved) return;
     next.splice(toIndex, 0, moved);
 
-    setGallery({ ...gallery, images: next });
+    applyDraft((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        images: next,
+      };
+    });
     setActiveIndex(toIndex);
-
-    try {
-      const imageIds = next.map((image) => image.id).filter((id): id is string => Boolean(id));
-      const result = await apiPatch<{ gallery: GalleryItem }>(`/api/galleries/${gallery.id}/images/reorder`, {
-        imageIds,
-      });
-      setGallery(result.gallery);
-    } catch (error) {
-      console.error('Reorder gallery images error:', error);
-      show('保存排序失败，已刷新原始顺序', { variant: 'error' });
-      await fetchGallery();
-    }
   };
 
-  const onThumbDragStart = (index: number) => {
+  const onThumbDragStart = (event: React.DragEvent<HTMLDivElement>, index: number) => {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(index));
     setDraggingIndex(index);
   };
 
@@ -294,6 +419,32 @@ const GalleryDetail = () => {
     const sourceIndex = draggingIndex;
     setDraggingIndex(null);
     await handleReorder(sourceIndex, targetIndex);
+  };
+
+  const handlePageDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!editing || !canManage || !hasDraggedFiles(event)) return;
+    event.preventDefault();
+    setPageDragDepth((prev) => prev + 1);
+  };
+
+  const handlePageDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!editing || !canManage || !hasDraggedFiles(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handlePageDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!editing || !canManage || !hasDraggedFiles(event)) return;
+    event.preventDefault();
+    setPageDragDepth((prev) => Math.max(0, prev - 1));
+  };
+
+  const handlePageDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!editing || !canManage || !hasDraggedFiles(event)) return;
+    event.preventDefault();
+    setPageDragDepth(0);
+    if (!event.dataTransfer.files?.length) return;
+    appendPendingFiles(event.dataTransfer.files);
   };
 
   if (loading) {
@@ -316,7 +467,22 @@ const GalleryDetail = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-12 space-y-8">
+    <div
+      className="relative min-h-screen"
+      onDragEnter={handlePageDragEnter}
+      onDragOver={handlePageDragOver}
+      onDragLeave={handlePageDragLeave}
+      onDrop={handlePageDrop}
+    >
+      {editing && canManage && pageDragDepth > 0 ? (
+        <div className="pointer-events-none fixed inset-0 z-20 flex items-center justify-center bg-brand-cream/70 px-4 text-brand-olive backdrop-blur-[2px]">
+          <div className="w-full max-w-3xl rounded-[36px] border-2 border-dashed border-brand-olive bg-white/92 px-8 py-12 text-center shadow-lg">
+            <p className="text-lg font-bold">松开鼠标即可加入待上传列表</p>
+            <p className="mt-2 text-sm text-brand-olive/70">整个图集页面都可以拖入图片，保存时统一上传并生效</p>
+          </div>
+        </div>
+      ) : null}
+      <div className="max-w-6xl mx-auto px-4 py-12 space-y-8">
       <div className="flex items-center justify-between gap-3">
         <Link to="/gallery" className="inline-flex items-center gap-2 text-gray-400 hover:text-brand-olive transition-colors">
           <ArrowLeft size={18} /> 返回图集
@@ -324,38 +490,40 @@ const GalleryDetail = () => {
         {canManage && (
           <div className="flex flex-wrap items-center gap-2">
             {editing ? (
-              <button
-                onClick={handleSaveMeta}
-                disabled={saving}
-                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold bg-brand-primary text-gray-900 disabled:opacity-50"
-              >
-                <Save size={14} /> {saving ? '保存中...' : '保存信息'}
-              </button>
+              <>
+                <button
+                  onClick={handleSaveMeta}
+                  disabled={saving || uploading}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold bg-brand-primary text-gray-900 disabled:opacity-50"
+                >
+                  <Save size={14} /> {saving || uploading ? '保存中...' : '保存修改'}
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  disabled={saving || uploading}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border border-gray-200 text-gray-600 hover:text-brand-olive hover:border-brand-olive/40 disabled:opacity-50"
+                >
+                  取消编辑
+                </button>
+              </>
             ) : (
               <button
-                onClick={() => setEditing(true)}
+                onClick={handleEnterEditMode}
                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border border-gray-200 text-gray-600 hover:text-brand-olive hover:border-brand-olive/40"
               >
-                <Save size={14} /> 编辑信息
+                <Save size={14} /> 打开编辑模式
               </button>
             )}
             <button
               onClick={handleTogglePublish}
-              disabled={saving}
+              disabled={!editing || saving || uploading}
               className={clsx(
                 'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold disabled:opacity-50',
-                gallery.published ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700',
+                (editing ? draft?.published : gallery.published) ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700',
               )}
             >
-              {gallery.published ? <EyeOff size={14} /> : <Eye size={14} />}
-              {saving ? '处理中...' : gallery.published ? '切换草稿' : '发布图集'}
-            </button>
-            <button
-              onClick={() => addImagesInputRef.current?.click()}
-              disabled={uploading}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold bg-brand-olive text-white disabled:opacity-50"
-            >
-              <Plus size={14} /> {uploading ? '上传中...' : '追加图片'}
+              {(editing ? draft?.published : gallery.published) ? <Eye size={14} /> : <EyeOff size={14} />}
+              {editing ? ((draft?.published ? '设为草稿' : '设为发布') as string) : (gallery.published ? '已发布' : '草稿中')}
             </button>
             <input ref={addImagesInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handleAddImages} />
           </div>
@@ -386,46 +554,46 @@ const GalleryDetail = () => {
         <div className="p-8 sm:p-10">
           <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
             <div className="min-w-0 flex-1">
-              {editing ? (
+              {editing && draft ? (
                 <div className="space-y-3 max-w-2xl">
                   <div className="space-y-1.5">
                     <label htmlFor="gallery-title" className="block text-sm font-medium text-gray-600">
                       图集标题
                     </label>
-                    <input
-                      id="gallery-title"
-                      type="text"
-                      value={editTitle}
-                      onChange={(event) => setEditTitle(event.target.value)}
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-olive/20"
-                      placeholder="图集标题"
-                    />
+                      <input
+                        id="gallery-title"
+                        type="text"
+                        value={draft.title}
+                        onChange={(event) => applyDraft((prev) => prev ? { ...prev, title: event.target.value } : prev)}
+                        className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-olive/20"
+                        placeholder="图集标题"
+                      />
                   </div>
                   <div className="space-y-1.5">
                     <label htmlFor="gallery-description" className="block text-sm font-medium text-gray-600">
                       图集描述
                     </label>
-                    <textarea
-                      id="gallery-description"
-                      value={editDescription}
-                      onChange={(event) => setEditDescription(event.target.value)}
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-olive/20 resize-none"
-                      rows={3}
-                      placeholder="图集描述"
+                      <textarea
+                        id="gallery-description"
+                        value={draft.description}
+                        onChange={(event) => applyDraft((prev) => prev ? { ...prev, description: event.target.value } : prev)}
+                        className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-olive/20 resize-none"
+                        rows={3}
+                        placeholder="图集描述"
                     />
                   </div>
                   <div className="space-y-1.5">
                     <label htmlFor="gallery-tags" className="block text-sm font-medium text-gray-600">
                       标签
                     </label>
-                    <input
-                      id="gallery-tags"
-                      type="text"
-                      value={editTagsText}
-                      onChange={(event) => setEditTagsText(event.target.value)}
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-olive/20"
-                      placeholder="标签，逗号分隔"
-                    />
+                      <input
+                        id="gallery-tags"
+                        type="text"
+                        value={draft.tagsText}
+                        onChange={(event) => applyDraft((prev) => prev ? { ...prev, tagsText: event.target.value } : prev)}
+                        className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-olive/20"
+                        placeholder="标签，逗号分隔"
+                      />
                   </div>
                 </div>
               ) : (
@@ -460,11 +628,16 @@ const GalleryDetail = () => {
             <span
               className={clsx(
                 'text-[11px] px-2.5 py-1 rounded-full font-bold',
-                gallery.published ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700',
+                (editing ? draft?.published : gallery.published) ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700',
               )}
             >
-              {gallery.published ? '已发布' : '草稿'}
+              {(editing ? draft?.published : gallery.published) ? '已发布' : '草稿'}
             </span>
+            {editing ? (
+              <span className="text-[11px] px-2.5 py-1 rounded-full font-bold bg-brand-cream text-brand-olive">
+                编辑模式
+              </span>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-6 text-xs text-gray-400">
@@ -474,28 +647,32 @@ const GalleryDetail = () => {
             <span className="flex items-center gap-1">
               <UserIcon size={12} /> {gallery.authorName || gallery.authorUid?.slice(0, 8)}
             </span>
-            {gallery.publishedAt && (
-              <span className="flex items-center gap-1">
-                <Eye size={12} /> 发布于 {formatDateTime(gallery.publishedAt)}
-              </span>
-            )}
+            {gallery.publishedAt ? <span>发布于 {formatDateTime(gallery.publishedAt)}</span> : null}
           </div>
         </div>
       </section>
 
-      {images.length > 1 && (
+      {(images.length > 1 || editing) && (
         <section className="bg-white rounded-[32px] border border-gray-100 p-4 sm:p-6">
+          {editing ? (
+            <p className="mb-3 text-xs text-gray-500">
+              拖拽缩略图可调整顺序，点击删除只会先加入本地修改，保存后统一提交。也可以把图片拖到整个页面中加入待上传列表。
+            </p>
+          ) : null}
           <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 gap-3">
             {images.map((image, index) => (
               <div
-                key={image.id}
-                draggable={canManage}
-                onDragStart={() => onThumbDragStart(index)}
+                key={image.clientId || image.id}
+                draggable={editing && canManage}
+                onDragStart={(event) => onThumbDragStart(event, index)}
                 onDragOver={(event) => {
-                  if (!canManage) return;
+                  if (!editing || !canManage) return;
                   event.preventDefault();
                 }}
-                onDrop={() => onThumbDrop(index)}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  onThumbDrop(index);
+                }}
                 className={clsx(
                   'relative h-20 rounded-xl overflow-hidden',
                   index === activeIndex ? 'ring-2 ring-brand-olive' : 'ring-1 ring-transparent hover:ring-gray-200',
@@ -506,7 +683,7 @@ const GalleryDetail = () => {
                   <SmartImage src={image.url} alt={image.name || ''} className="w-full h-full object-cover" />
                 </button>
 
-                {canManage && (
+                {editing && canManage && (
                   <div className="absolute inset-x-0 top-0 flex items-center justify-between p-1 bg-black/35 text-white opacity-0 hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => handleDeleteImage(index)}
@@ -515,13 +692,31 @@ const GalleryDetail = () => {
                     >
                       <Trash2 size={11} />
                     </button>
-                    <span className="inline-flex items-center gap-0.5 text-[10px] px-1 py-0.5 rounded bg-black/40">
-                      <GripVertical size={10} /> 拖拽
-                    </span>
+                    <div className="flex items-center gap-1">
+                      {image.isPending ? (
+                        <span className="inline-flex items-center gap-0.5 text-[10px] px-1 py-0.5 rounded bg-brand-primary/80 text-gray-900">
+                          待上传
+                        </span>
+                      ) : null}
+                      <span className="inline-flex items-center gap-0.5 text-[10px] px-1 py-0.5 rounded bg-black/40">
+                        <GripVertical size={10} /> 拖拽
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>
             ))}
+            {editing && canManage ? (
+              <button
+                type="button"
+                onClick={() => addImagesInputRef.current?.click()}
+                disabled={uploading || saving}
+                className="flex h-20 items-center justify-center rounded-xl border border-dashed border-brand-olive/35 bg-brand-cream/55 text-brand-olive transition-colors hover:border-brand-olive hover:bg-brand-cream disabled:opacity-50"
+                title={uploading ? '上传中' : '加入图片'}
+              >
+                <Plus size={20} />
+              </button>
+            ) : null}
           </div>
         </section>
       )}
@@ -530,6 +725,7 @@ const GalleryDetail = () => {
         <button onClick={() => navigate('/gallery')} className="text-xs text-gray-400 hover:text-brand-olive">
           返回图集列表
         </button>
+      </div>
       </div>
     </div>
   );
