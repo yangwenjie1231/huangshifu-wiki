@@ -61,6 +61,17 @@ export const BottomNav = () => {
           <Music size={20} />
           <span className="text-[10px] font-bold uppercase tracking-widest">音乐</span>
         </NavLink>
+
+        <NavLink 
+          to="/search" 
+          className={({ isActive }) => clsx(
+            "flex flex-col items-center gap-1 transition-all",
+            isActive ? "text-brand-olive scale-110" : "text-gray-400"
+          )}
+        >
+          <Search size={20} />
+          <span className="text-[10px] font-bold uppercase tracking-widest">搜索</span>
+        </NavLink>
       </div>
     </nav>
   );

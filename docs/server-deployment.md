@@ -635,3 +635,11 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 | `EditLock` | 编辑锁 |
 | `WikiBranch` | Wiki 分支 |
 | `WikiPullRequest` | Wiki PR |
+
+---
+
+## 附录：更新日志
+
+### v4.x
+
+- **移动端底部导航新增搜索入口**：移动端视图（`< md`）的底部导航栏（`BottomNav`）已新增「搜索」按钮，与桌面端导航栏的搜索链接保持一致。无需服务器端操作，仅需前端重新构建部署。
