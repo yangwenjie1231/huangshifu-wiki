@@ -712,9 +712,9 @@ const WikiPageView = () => {
             <span className="text-gray-300">/</span>
             <span className="text-gray-400 text-sm flex items-center gap-1"><Clock size={14} /> 最后更新: {formatDate(page.updatedAt, 'yyyy-MM-dd HH:mm')}</span>
           </div>
-          <div className="flex justify-between items-start gap-4">
-            <h1 className="text-5xl sm:text-6xl font-serif font-bold text-brand-olive leading-tight">{page.title}</h1>
-            <div className="flex gap-2">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <h1 className="min-w-0 flex-1 text-5xl sm:text-6xl font-serif font-bold text-brand-olive leading-tight">{page.title}</h1>
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
               <button
                 onClick={handleToggleFavorite}
                 disabled={!user || favoriting}
