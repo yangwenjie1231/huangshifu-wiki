@@ -792,7 +792,14 @@ const Music = () => {
                                 )}
                               </div>
 
-                              <div className="mt-4 flex items-center justify-between gap-2">
+                              <div
+                                className={clsx(
+                                  'mt-4 gap-2',
+                                  viewMode === 'small'
+                                    ? 'flex flex-col items-stretch'
+                                    : 'flex items-center justify-between',
+                                )}
+                              >
                                 {isBatchMode ? (
                                   <button
                                     onClick={() => toggleSelect(song.docId)}
@@ -804,7 +811,7 @@ const Music = () => {
                                     {selectedSongs.has(song.docId) ? '已选择' : '选择'}
                                   </button>
                                 ) : (
-                                  <div className="flex items-center gap-1">
+                                  <div className="flex flex-wrap items-center gap-1">
                                     <button
                                       onClick={() => handleToggleFavorite(song)}
                                       disabled={favoriting === song.docId}
@@ -849,7 +856,10 @@ const Music = () => {
                                 {isAdmin && !isBatchMode ? (
                                   <button
                                     onClick={() => setConfirmModal({ show: true, type: 'single', id: song.docId })}
-                                    className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                                    className={clsx(
+                                      'p-2 text-gray-400 hover:text-red-500 transition-colors',
+                                      viewMode === 'small' && 'self-end',
+                                    )}
                                     title="删除歌曲"
                                   >
                                     <Trash2 size={16} />
