@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, query, orderBy, onSnapshot, db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
@@ -14,6 +14,9 @@ import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { apiDelete, apiPost, apiUpload } from '../lib/apiClient';
 import { LocationTagInput } from '../components/LocationTagInput';
+import Pagination from '../components/Pagination';
+
+const DEFAULT_PAGE_SIZE = 24;
 
 const toDateValue = (value: string | null | undefined) => {
   if (!value) return null;
@@ -65,9 +68,27 @@ const GalleryList = () => {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [galleryToDelete, setGalleryToDelete] = useState<{ id: string; title: string } | null>(null);
   const [deletingGalleryId, setDeletingGalleryId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const { show } = useToast();
   const { preferences, setViewMode } = useUserPreferences();
   const viewMode = preferences.viewMode;
+
+  const totalGalleryPages = Math.ceil(galleries.length / pageSize);
+  const paginatedGalleries = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return galleries.slice(start, start + pageSize);
+  }, [galleries, page, pageSize]);
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setPage(1);
+  };
 
   useEffect(() => {
     const q = query(collection(db, 'galleries'), orderBy('createdAt', 'desc'));
@@ -146,8 +167,9 @@ const GalleryList = () => {
           ))}
         </div>
       ) : galleries.length > 0 ? (
-        <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
-          {galleries.map((gallery) => (
+        <>
+          <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
+            {paginatedGalleries.map((gallery) => (
             <div key={gallery.id} className={clsx('relative group', viewMode === 'list' && 'flex')}>
               <Link
                 to={`/gallery/${gallery.id}`}
@@ -236,7 +258,18 @@ const GalleryList = () => {
               </button>
             </div>
           ))}
-        </div>
+          </div>
+          {totalGalleryPages > 1 && (
+            <Pagination
+              page={page}
+              totalPages={totalGalleryPages}
+              onPageChange={handlePageChange}
+              pageSize={pageSize}
+              onPageSizeChange={handlePageSizeChange}
+              showPageSizeSelector
+            />
+          )}
+        </>
       ) : (
         <div className="bg-white p-20 rounded-[40px] border border-gray-100 text-center">
           <ImageIcon size={48} className="mx-auto text-gray-200 mb-6" />

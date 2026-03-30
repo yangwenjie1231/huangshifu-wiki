@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, getDocs, doc, deleteDoc, where, orderBy, db, auth } from '../firebase';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -8,7 +8,7 @@ import { useUserPreferences } from '../context/UserPreferencesContext';
 import { ViewModeSelector } from '../components/ViewModeSelector';
 import { VIEW_MODE_CONFIG } from '../lib/viewModes';
 import { clsx } from 'clsx';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { MusicPlayer } from '../components/MusicPlayer';
 import { MusicImportModal } from '../components/MusicImportModal';
 import { AlbumEditModal } from '../components/AlbumEditModal';
@@ -16,6 +16,9 @@ import { useToast } from '../components/Toast';
 import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { format } from 'date-fns';
+import Pagination from '../components/Pagination';
+
+const DEFAULT_PAGE_SIZE = 40;
 
 enum OperationType {
   CREATE = 'create',
@@ -158,11 +161,33 @@ const Music = () => {
   const [loadingAlbums, setLoadingAlbums] = useState(false);
   const [activeTab, setActiveTab] = useState<'music' | 'albums'>('music');
   const [selectedPlatform, setSelectedPlatform] = useState<'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo'>('netease');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const { user, isAdmin, isBanned } = useAuth();
   const { currentSong, setCurrentSong, setIsPlaying, setPlaylist, playSongAtIndex } = useMusic();
   const { show } = useToast();
   const { preferences, setViewMode } = useUserPreferences();
   const viewMode = preferences.viewMode;
+
+  const totalMusicPages = Math.ceil(songs.length / pageSize);
+  const paginatedSongs = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return songs.slice(start, start + pageSize);
+  }, [songs, page, pageSize]);
+
+  const handleMusicPageChange = (newPage: number) => {
+    setPage(newPage);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setPage(1);
+  };
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab]);
 
   const fetchSongs = async () => {
     setLoading(true);
@@ -644,7 +669,7 @@ const Music = () => {
                 ) : songs.length > 0 ? (
                   <>
                     <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
-                      {songs.map((song) => (
+                      {paginatedSongs.map((song) => (
                         <div
                           key={song.docId}
                           className={clsx(
@@ -883,6 +908,16 @@ const Music = () => {
                         </motion.div>
                       )}
                     </AnimatePresence>
+                    {totalMusicPages > 1 && (
+                      <Pagination
+                        page={page}
+                        totalPages={totalMusicPages}
+                        onPageChange={handleMusicPageChange}
+                        pageSize={pageSize}
+                        onPageSizeChange={handlePageSizeChange}
+                        showPageSizeSelector
+                      />
+                    )}
                   </>
                 ) : (
                   <div className="py-20 text-center text-gray-400 italic">暂无音乐，快去添加吧</div>

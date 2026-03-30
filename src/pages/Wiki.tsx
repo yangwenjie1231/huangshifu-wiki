@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { Routes, Route, Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, orderBy, addDoc, limit, db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
@@ -26,6 +26,9 @@ import 'react-markdown-editor-lite/lib/index.css';
 import WikiLinkPreview from '../components/WikiLinkPreview';
 import RelationGraph, { RelationGraphData, WikiRelationType as GraphRelationType } from '../components/wiki/RelationGraph';
 import { LocationTagInput } from '../components/LocationTagInput';
+import Pagination from '../components/Pagination';
+
+const DEFAULT_PAGE_SIZE = 24;
 
 const mdParser = new MarkdownIt({
   html: true,
@@ -295,10 +298,32 @@ const WikiList = () => {
   const category = searchParams.get('category') || 'all';
   const [pages, setPages] = useState<WikiItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const { user, isBanned } = useAuth();
   const { show } = useToast();
   const { preferences, setViewMode } = useUserPreferences();
   const viewMode = preferences.viewMode;
+
+  const totalWikiPages = Math.ceil(pages.length / pageSize);
+  const paginatedPages = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return pages.slice(start, start + pageSize);
+  }, [pages, page, pageSize]);
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setPage(1);
+  };
+
+  useEffect(() => {
+    setPage(1);
+  }, [category]);
 
   useEffect(() => {
     const fetchPages = async () => {
@@ -382,8 +407,9 @@ const WikiList = () => {
           ))}
         </div>
       ) : pages.length > 0 ? (
-        <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
-          {pages.map((page) => (
+        <>
+          <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
+            {paginatedPages.map((page) => (
             <div key={page.id} className={clsx('relative group', viewMode === 'list' && 'flex')}>
               <Link 
                 to={`/wiki/${page.slug}`}
@@ -472,7 +498,18 @@ const WikiList = () => {
               </button>
             </div>
           ))}
-        </div>
+          </div>
+          {totalWikiPages > 1 && (
+            <Pagination
+              page={page}
+              totalPages={totalWikiPages}
+              onPageChange={handlePageChange}
+              pageSize={pageSize}
+              onPageSizeChange={handlePageSizeChange}
+              showPageSizeSelector
+            />
+          )}
+        </>
       ) : (
         <div className="bg-white p-20 rounded-[40px] border border-gray-100 text-center">
           <Book size={48} className="mx-auto text-gray-200 mb-6" />
