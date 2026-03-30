@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { Routes, Route, Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, orderBy, addDoc, limit, db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
@@ -7,7 +7,10 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import { customSchema, isTrustedIframeDomain } from '../lib/htmlSanitizer';
-import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar, Link2, GitBranch, Network, MapPin, Heart, ThumbsDown, Pin } from 'lucide-react';
+import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar, Link2, GitBranch, Network, MapPin, Heart, ThumbsDown, Pin, Image as ImageIcon } from 'lucide-react';
+import { useUserPreferences } from '../context/UserPreferencesContext';
+import { ViewModeSelector } from '../components/ViewModeSelector';
+import { VIEW_MODE_CONFIG } from '../lib/viewModes';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
@@ -23,6 +26,9 @@ import 'react-markdown-editor-lite/lib/index.css';
 import WikiLinkPreview from '../components/WikiLinkPreview';
 import RelationGraph, { RelationGraphData, WikiRelationType as GraphRelationType } from '../components/wiki/RelationGraph';
 import { LocationTagInput } from '../components/LocationTagInput';
+import Pagination from '../components/Pagination';
+
+const DEFAULT_PAGE_SIZE = 24;
 
 const mdParser = new MarkdownIt({
   html: true,
@@ -292,8 +298,32 @@ const WikiList = () => {
   const category = searchParams.get('category') || 'all';
   const [pages, setPages] = useState<WikiItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const { user, isBanned } = useAuth();
   const { show } = useToast();
+  const { preferences, setViewMode } = useUserPreferences();
+  const viewMode = preferences.viewMode;
+
+  const totalWikiPages = Math.ceil(pages.length / pageSize);
+  const paginatedPages = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return pages.slice(start, start + pageSize);
+  }, [pages, page, pageSize]);
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setPage(1);
+  };
+
+  useEffect(() => {
+    setPage(1);
+  }, [category]);
 
   useEffect(() => {
     const fetchPages = async () => {
@@ -333,6 +363,7 @@ const WikiList = () => {
           <p className="text-gray-500 italic">诗扶百科 · 记录每一个动人瞬间</p>
         </div>
         <div className="flex items-center gap-4">
+          <ViewModeSelector value={viewMode} onChange={setViewMode} />
           <Link to="/wiki/timeline" className="px-6 py-3 bg-brand-cream text-brand-olive rounded-full font-medium hover:bg-brand-olive hover:text-white transition-all flex items-center gap-2 shadow-sm">
             <Calendar size={18} /> 时间轴视图
           </Link>
@@ -367,52 +398,99 @@ const WikiList = () => {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
           {[1, 2, 3, 4, 5, 6].map(i => (
-            <div key={i} className="h-48 bg-white rounded-[32px] animate-pulse border border-gray-100"></div>
+            <div key={i} className={clsx(
+              viewMode === 'list' ? 'h-24' : VIEW_MODE_CONFIG[viewMode].cardHeight,
+              'bg-white rounded-[32px] animate-pulse border border-gray-100'
+            )}></div>
           ))}
         </div>
       ) : pages.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {pages.map((page) => (
-            <div key={page.id} className="relative group">
+        <>
+          <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
+            {paginatedPages.map((page) => (
+            <div key={page.id} className={clsx('relative group', viewMode === 'list' && 'flex')}>
               <Link 
                 to={`/wiki/${page.slug}`}
                 className={clsx(
-                  'block bg-white p-8 rounded-[32px] border hover:border-brand-olive/20 hover:shadow-xl transition-all',
-                  page.isPinned ? 'border-l-4 border-l-brand-olive' : 'border-gray-100'
+                  viewMode === 'list' 
+                    ? 'flex gap-4 p-4 bg-white rounded-xl border hover:border-brand-olive/20 hover:shadow-lg transition-all w-full' 
+                    : 'block bg-white p-8 rounded-[32px] border hover:border-brand-olive/20 hover:shadow-xl transition-all',
+                  page.isPinned && viewMode !== 'list' ? 'border-l-4 border-l-brand-olive' : 'border-gray-100',
+                  page.isPinned && viewMode === 'list' && 'border-l-4 border-l-brand-olive'
                 )}
               >
-                <div className="flex items-center gap-2 mb-4">
-                  {page.isPinned && (
-                    <span className="flex items-center gap-1 px-2 py-1 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded">
-                      <Pin size={10} /> 已置顶
-                    </span>
-                  )}
-                  <span className="px-2 py-1 bg-brand-cream text-brand-olive text-[10px] font-bold uppercase tracking-wider rounded">
-                    {page.category === 'biography' ? '人物介绍' :
-                     page.category === 'music' ? '音乐作品' :
-                     page.category === 'album' ? '专辑一览' :
-                     page.category === 'timeline' ? '时间轴' :
-                     page.category === 'event' ? '活动记录' : page.category}
-                  </span>
-                </div>
-                <h3 className="text-2xl font-serif font-bold mb-4 group-hover:text-brand-olive transition-colors">{page.title}</h3>
-                <p className="text-gray-400 text-sm line-clamp-2 mb-6 italic leading-relaxed">
-                  {page.content.replace(/[#*`]/g, '').substring(0, 100)}...
-                </p>
-                <div className="flex items-center justify-between text-gray-400 text-xs">
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1"><Clock size={12} /> {formatDate(page.updatedAt, 'yyyy-MM-dd')}</span>
-                    <span className="flex items-center gap-1"><Heart size={12} /> {page.likesCount || 0}</span>
-                    <span className="flex items-center gap-1"><ThumbsDown size={12} /> {page.dislikesCount || 0}</span>
-                  </div>
-                  <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
-                </div>
+                {viewMode === 'list' ? (
+                  <>
+                    <div className="w-24 h-24 bg-brand-cream/50 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Book size={32} className="text-brand-olive/40" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        {page.isPinned && (
+                          <span className="flex items-center gap-1 px-2 py-0.5 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded">
+                            <Pin size={8} /> 已置顶
+                          </span>
+                        )}
+                        <span className="px-2 py-0.5 bg-brand-cream text-brand-olive text-[10px] font-bold uppercase tracking-wider rounded">
+                          {page.category === 'biography' ? '人物介绍' :
+                           page.category === 'music' ? '音乐作品' :
+                           page.category === 'album' ? '专辑一览' :
+                           page.category === 'timeline' ? '时间轴' :
+                           page.category === 'event' ? '活动记录' : page.category}
+                        </span>
+                      </div>
+                      <h3 className="text-lg font-serif font-bold mb-1 group-hover:text-brand-olive transition-colors truncate">{page.title}</h3>
+                      <p className="text-gray-400 text-sm line-clamp-2 italic">
+                        {page.content.replace(/[#*`]/g, '').substring(0, 100)}
+                      </p>
+                      <p className="text-gray-300 text-xs mt-1">
+                        {page.content.replace(/[#*`]/g, '').substring(0, 50)}...
+                      </p>
+                      <div className="flex items-center gap-3 text-gray-400 text-xs mt-2">
+                        <span className="flex items-center gap-1"><Clock size={10} /> {formatDate(page.updatedAt, 'yyyy-MM-dd')}</span>
+                        <span className="flex items-center gap-1"><Heart size={10} /> {page.likesCount || 0}</span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 mb-4">
+                      {page.isPinned && (
+                        <span className="flex items-center gap-1 px-2 py-1 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded">
+                          <Pin size={10} /> 已置顶
+                        </span>
+                      )}
+                      <span className="px-2 py-1 bg-brand-cream text-brand-olive text-[10px] font-bold uppercase tracking-wider rounded">
+                        {page.category === 'biography' ? '人物介绍' :
+                         page.category === 'music' ? '音乐作品' :
+                         page.category === 'album' ? '专辑一览' :
+                         page.category === 'timeline' ? '时间轴' :
+                         page.category === 'event' ? '活动记录' : page.category}
+                      </span>
+                    </div>
+                    <h3 className="text-2xl font-serif font-bold mb-4 group-hover:text-brand-olive transition-colors">{page.title}</h3>
+                    <p className="text-gray-400 text-sm line-clamp-2 mb-6 italic leading-relaxed">
+                      {page.content.replace(/[#*`]/g, '').substring(0, 100)}...
+                    </p>
+                    <div className="flex items-center justify-between text-gray-400 text-xs">
+                      <div className="flex items-center gap-3">
+                        <span className="flex items-center gap-1"><Clock size={12} /> {formatDate(page.updatedAt, 'yyyy-MM-dd')}</span>
+                        <span className="flex items-center gap-1"><Heart size={12} /> {page.likesCount || 0}</span>
+                        <span className="flex items-center gap-1"><ThumbsDown size={12} /> {page.dislikesCount || 0}</span>
+                      </div>
+                      <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </>
+                )}
               </Link>
               <button
                 onClick={(event) => handleCopyWikiLink(event, page.slug)}
-                className="absolute bottom-5 right-5 p-2 rounded-full border border-gray-100 bg-white/90 text-gray-400 shadow-sm opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:text-brand-olive hover:border-brand-olive/30 transition-all"
+                className={clsx(
+                  'p-2 rounded-full border bg-white/90 text-gray-400 shadow-sm hover:text-brand-olive hover:border-brand-olive/30 transition-all',
+                  viewMode === 'list' ? 'absolute top-4 right-4' : 'absolute bottom-5 right-5 sm:opacity-0 sm:group-hover:opacity-100'
+                )}
                 title="复制内链"
                 aria-label="复制百科内链"
               >
@@ -420,7 +498,18 @@ const WikiList = () => {
               </button>
             </div>
           ))}
-        </div>
+          </div>
+          {totalWikiPages > 1 && (
+            <Pagination
+              page={page}
+              totalPages={totalWikiPages}
+              onPageChange={handlePageChange}
+              pageSize={pageSize}
+              onPageSizeChange={handlePageSizeChange}
+              showPageSizeSelector
+            />
+          )}
+        </>
       ) : (
         <div className="bg-white p-20 rounded-[40px] border border-gray-100 text-center">
           <Book size={48} className="mx-auto text-gray-200 mb-6" />
@@ -623,9 +712,9 @@ const WikiPageView = () => {
             <span className="text-gray-300">/</span>
             <span className="text-gray-400 text-sm flex items-center gap-1"><Clock size={14} /> 最后更新: {formatDate(page.updatedAt, 'yyyy-MM-dd HH:mm')}</span>
           </div>
-          <div className="flex justify-between items-start gap-4">
-            <h1 className="text-5xl sm:text-6xl font-serif font-bold text-brand-olive leading-tight">{page.title}</h1>
-            <div className="flex gap-2">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <h1 className="min-w-0 flex-1 text-5xl sm:text-6xl font-serif font-bold text-brand-olive leading-tight">{page.title}</h1>
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
               <button
                 onClick={handleToggleFavorite}
                 disabled={!user || favoriting}
@@ -1600,45 +1689,6 @@ const WikiEditor = () => {
     bidirectional: false,
   });
 
-  type RelationSearchSuggestion = {
-    type: 'keyword' | 'wiki' | 'post' | 'music' | 'album';
-    text: string;
-    subtext?: string;
-    id?: string;
-  };
-
-  const [relationSearchResults, setRelationSearchResults] = useState<RelationSearchSuggestion[]>([]);
-  const [relationSearchLoading, setRelationSearchLoading] = useState(false);
-  const [showRelationDropdown, setShowRelationDropdown] = useState(false);
-  const [relationSelectedIndex, setRelationSelectedIndex] = useState(-1);
-  const relationSearchRef = useRef<HTMLDivElement>(null);
-  const relationSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const searchWikiRelations = useCallback((q: string) => {
-    if (relationSearchTimeoutRef.current) {
-      clearTimeout(relationSearchTimeoutRef.current);
-    }
-    if (!q || q.length < 2) {
-      setRelationSearchResults([]);
-      setShowRelationDropdown(false);
-      return;
-    }
-    relationSearchTimeoutRef.current = setTimeout(async () => {
-      setRelationSearchLoading(true);
-      try {
-        const data = await apiGet<{ suggestions: RelationSearchSuggestion[] }>('/api/search/suggest', { q });
-        const wikiResults = data.suggestions?.filter(s => s.type === 'wiki') || [];
-        setRelationSearchResults(wikiResults);
-        setShowRelationDropdown(wikiResults.length > 0);
-        setRelationSelectedIndex(-1);
-      } catch (e) {
-        console.error("Relation search error:", e);
-      } finally {
-        setRelationSearchLoading(false);
-      }
-    }, 300);
-  }, []);
-
   useEffect(() => {
     if (!isNew) {
       const fetchPage = async () => {
@@ -1662,16 +1712,6 @@ const WikiEditor = () => {
       fetchPage();
     }
   }, [slug, isNew]);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (relationSearchRef.current && !relationSearchRef.current.contains(e.target as Node)) {
-        setShowRelationDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const handleLocationChange = (locationName: string, locationCode: string) => {
     setFormData({ ...formData, locationName, locationCode });
@@ -1952,66 +1992,13 @@ const WikiEditor = () => {
                 <option value="timeline_relation">时间线关联</option>
                 <option value="custom">自定义关系</option>
               </select>
-              <div ref={relationSearchRef} className="relative flex-1">
-                <input
-                  type="text"
-                  value={newRelation.targetSlug}
-                  onChange={e => {
-                    setNewRelation({ ...newRelation, targetSlug: e.target.value });
-                    searchWikiRelations(e.target.value);
-                  }}
-                  placeholder="目标页面标识 (slug)"
-                  className="w-full px-4 py-2 bg-white rounded-xl border border-gray-200 text-sm"
-                  onKeyDown={(e) => {
-                    if (!showRelationDropdown) return;
-                    if (e.key === 'ArrowDown') {
-                      e.preventDefault();
-                      setRelationSelectedIndex(prev => Math.min(prev + 1, relationSearchResults.length - 1));
-                    } else if (e.key === 'ArrowUp') {
-                      e.preventDefault();
-                      setRelationSelectedIndex(prev => Math.max(prev - 1, -1));
-                    } else if (e.key === 'Enter' && relationSelectedIndex >= 0) {
-                      e.preventDefault();
-                      const selected = relationSearchResults[relationSelectedIndex];
-                      setNewRelation({ ...newRelation, targetSlug: selected.id || '' });
-                      setShowRelationDropdown(false);
-                    } else if (e.key === 'Escape') {
-                      setShowRelationDropdown(false);
-                    }
-                  }}
-                />
-                <AnimatePresence>
-                  {showRelationDropdown && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -4 }}
-                      className="absolute z-50 mt-1 w-full bg-white rounded-xl border border-gray-200 shadow-lg max-h-60 overflow-auto"
-                    >
-                      {relationSearchLoading ? (
-                        <div className="px-4 py-2 text-sm text-gray-500">搜索中...</div>
-                      ) : relationSearchResults.length === 0 ? (
-                        <div className="px-4 py-2 text-sm text-gray-500">未找到相关页面</div>
-                      ) : (
-                        relationSearchResults.map((result, idx) => (
-                          <div
-                            key={result.id}
-                            className={`px-4 py-2 cursor-pointer ${idx === relationSelectedIndex ? 'bg-brand-primary/10' : 'hover:bg-gray-50'}`}
-                            onClick={() => {
-                              setNewRelation({ ...newRelation, targetSlug: result.id || '' });
-                              setShowRelationDropdown(false);
-                            }}
-                            onMouseEnter={() => setRelationSelectedIndex(idx)}
-                          >
-                            <div className="text-sm font-medium">{result.text}</div>
-                            <div className="text-xs text-gray-500 truncate">{result.subtext}</div>
-                          </div>
-                        ))
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+              <input
+                type="text"
+                value={newRelation.targetSlug}
+                onChange={e => setNewRelation({ ...newRelation, targetSlug: e.target.value })}
+                placeholder="目标页面标识 (slug)"
+                className="flex-1 px-4 py-2 bg-white rounded-xl border border-gray-200 text-sm"
+              />
               <input
                 type="text"
                 value={newRelation.label || ''}

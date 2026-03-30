@@ -126,6 +126,7 @@ model User {
   bannedAt      DateTime?
   level         Int            @default(1)
   bio           String
+  preferences   Json?          @default("{}")
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   posts         Post[]         @relation("UserPosts")

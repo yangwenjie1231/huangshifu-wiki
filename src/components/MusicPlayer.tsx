@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Volume2, Music as MusicIcon, List, Disc } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState, useEffect } from 'react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, Music as MusicIcon, Disc } from 'lucide-react';
+import { motion } from 'motion/react';
 import { useMusic } from '../context/MusicContext';
 import { clsx } from 'clsx';
 
@@ -15,7 +15,10 @@ interface Song {
 }
 
 export const MusicPlayer = ({ songId }: { songId: string }) => {
-  const { currentSong, setCurrentSong, isPlaying, setIsPlaying, playNext, playPrevious } = useMusic();
+  const { 
+    currentSong, setCurrentSong, isPlaying, setIsPlaying, playNext, playPrevious,
+    currentTime, duration, volume, isMuted, seekTo, setVolume, toggleMute
+  } = useMusic();
   const [song, setSong] = useState<Song | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -50,6 +53,17 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
 
   const handlePlayNext = () => {
     playNext();
+  };
+
+  const formatTime = (time: number) => {
+    const mins = Math.floor(time / 60);
+    const secs = Math.floor(time % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const time = parseFloat(e.target.value);
+    seekTo(time);
   };
 
   if (loading) return <div className="p-8 text-center animate-pulse">加载音乐中...</div>;
@@ -88,11 +102,28 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
           </div>
         </div>
 
-        <div className="flex-grow text-center md:text-left">
-          <h3 className="text-3xl font-serif font-bold text-gray-900 mb-1">{song.title}</h3>
-          <p className="text-brand-primary font-bold mb-4">{song.artist} — {song.album}</p>
+        <div className="flex-grow text-center md:text-left w-full">
+          <div className="flex justify-between items-start mb-2">
+            <div>
+              <h3 className="text-3xl font-serif font-bold text-gray-900 mb-1">{song.title}</h3>
+              <p className="text-brand-primary font-bold">{song.artist} — {song.album}</p>
+            </div>
+            <div className="text-sm font-bold text-gray-400 flex-shrink-0 ml-4">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </div>
+          </div>
           
-          <div className="flex items-center gap-4 mb-6">
+          <input 
+            type="range"
+            min="0"
+            max={duration || 0}
+            value={currentTime}
+            onChange={handleProgressChange}
+            disabled={!duration}
+            className="w-full h-1.5 bg-gray-100 rounded-full appearance-none cursor-pointer accent-[#FFD700] mb-6"
+          />
+          
+          <div className="flex items-center justify-center md:justify-start gap-4 mb-6">
             <button onClick={handlePlayPrevious} className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
               <SkipBack size={24} />
             </button>
@@ -105,6 +136,27 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
             <button onClick={handlePlayNext} className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
               <SkipForward size={24} />
             </button>
+            
+            <div className="flex items-center gap-2 ml-auto">
+              <button
+                onClick={toggleMute}
+                className="p-2 text-gray-400 hover:text-gray-900 transition-colors"
+              >
+                <Volume2 size={20} />
+              </button>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={isMuted ? 0 : volume}
+                onChange={(e) => setVolume(parseFloat(e.target.value))}
+                className="w-20 h-1 bg-gray-100 rounded-full appearance-none cursor-pointer accent-[#FFD700]"
+              />
+              <span className="text-xs text-gray-400 w-8 text-right">
+                {Math.round((isMuted ? 0 : volume) * 100)}%
+              </span>
+            </div>
           </div>
         </div>
       </div>
