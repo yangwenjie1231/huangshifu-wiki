@@ -37,3 +37,24 @@
 .animate-spin-slow {
   animation: spin-slow 8s linear infinite;
 }
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  background: #FFD700;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid #FFD700;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: #FFD700;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid #FFD700;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
