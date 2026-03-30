@@ -1,19 +1,21 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Volume2, Disc, X, Music as MusicIcon, ChevronUp, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useMusic } from '../context/MusicContext';
 import { clsx } from 'clsx';
 
 export const GlobalMusicPlayer = () => {
-  const { currentSong, setCurrentSong, isPlaying, setIsPlaying, playNext, playPrevious } = useMusic();
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const { 
+    currentSong, setCurrentSong, isPlaying, setIsPlaying, playNext, playPrevious,
+    currentTime: contextCurrentTime, duration: contextDuration, volume: contextVolume, isMuted: contextIsMuted,
+    seekTo, setVolume: contextSetVolume, toggleMute: contextToggleMute, setDuration: contextSetDuration
+  } = useMusic();
   const [isExpanded, setIsExpanded] = useState(false);
   const [resolvedPlayUrl, setResolvedPlayUrl] = useState('');
   const [resolvingPlayUrl, setResolvingPlayUrl] = useState(false);
   const [playUrlError, setPlayUrlError] = useState('');
-  const [volume, setVolume] = useState(1);
-  const [isMuted, setIsMuted] = useState(false);
+  const [volumeSliderExpanded, setVolumeSliderExpanded] = useState(false);
+  const volumeHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
@@ -59,9 +61,10 @@ export const GlobalMusicPlayer = () => {
   }, [currentSong]);
 
   useEffect(() => {
-    setCurrentTime(0);
-    setDuration(0);
-  }, [resolvedPlayUrl]);
+    if (!audioRef.current) return;
+    audioRef.current.currentTime = 0;
+    seekTo(0);
+  }, [resolvedPlayUrl, seekTo]);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -78,9 +81,29 @@ export const GlobalMusicPlayer = () => {
 
   useEffect(() => {
     if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 0 : volume;
+      audioRef.current.volume = contextIsMuted ? 0 : contextVolume;
     }
-  }, [volume, isMuted]);
+  }, [contextVolume, contextIsMuted]);
+
+  useEffect(() => {
+    if (audioRef.current && audioRef.current.currentTime !== contextCurrentTime) {
+      audioRef.current.currentTime = contextCurrentTime;
+    }
+  }, [contextCurrentTime]);
+
+  const handleVolumeMouseEnter = () => {
+    if (volumeHideTimeoutRef.current) {
+      clearTimeout(volumeHideTimeoutRef.current);
+      volumeHideTimeoutRef.current = null;
+    }
+    setVolumeSliderExpanded(true);
+  };
+
+  const handleVolumeMouseLeave = () => {
+    volumeHideTimeoutRef.current = setTimeout(() => {
+      setVolumeSliderExpanded(false);
+    }, 1000);
+  };
 
   const togglePlay = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -97,17 +120,17 @@ export const GlobalMusicPlayer = () => {
     playNext();
   };
 
-  const onTimeUpdate = () => {
+  const onTimeUpdate = useCallback(() => {
     if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime);
+      seekTo(audioRef.current.currentTime);
     }
-  };
+  }, [seekTo]);
 
-  const onLoadedMetadata = () => {
-    if (audioRef.current) {
-      setDuration(audioRef.current.duration);
+  const onLoadedMetadata = useCallback(() => {
+    if (audioRef.current && audioRef.current.duration) {
+      contextSetDuration(audioRef.current.duration);
     }
-  };
+  }, [contextSetDuration]);
 
   const formatTime = (time: number) => {
     const mins = Math.floor(time / 60);
@@ -115,13 +138,13 @@ export const GlobalMusicPlayer = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProgressChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const time = parseFloat(e.target.value);
     if (audioRef.current) {
       audioRef.current.currentTime = time;
-      setCurrentTime(time);
+      seekTo(time);
     }
-  };
+  }, [seekTo]);
 
   if (!currentSong) return null;
 
@@ -138,10 +161,19 @@ export const GlobalMusicPlayer = () => {
         {/* Progress Bar (Mini) */}
         {!isExpanded && (
           <div className="absolute top-0 left-0 right-0 h-1 bg-gray-100">
-            <motion.div 
-              className="h-full bg-brand-primary"
+            <input
+              type="range"
+              min="0"
+              max={contextDuration || 0}
+              value={contextCurrentTime}
+              onChange={handleProgressChange}
+              disabled={!contextDuration || resolvingPlayUrl}
+              className="absolute top-0 left-0 w-full h-1 appearance-none cursor-pointer accent-[#FFD700] bg-transparent"
+            />
+            <motion.div
+              className="h-full bg-brand-primary pointer-events-none"
               initial={{ width: 0 }}
-              animate={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+              animate={{ width: `${contextDuration > 0 ? (contextCurrentTime / contextDuration) * 100 : 0}%` }}
             />
           </div>
         )}
@@ -191,17 +223,42 @@ export const GlobalMusicPlayer = () => {
             </button>
 
             <div className="hidden lg:flex items-center gap-2 text-xs font-bold text-gray-400 w-24 justify-end">
-              <span>{formatTime(currentTime)}</span>
+              <span>{formatTime(contextCurrentTime)}</span>
               <span>/</span>
-              <span>{formatTime(duration)}</span>
+              <span>{formatTime(contextDuration)}</span>
             </div>
 
-            <button
-              onClick={() => setIsMuted(!isMuted)}
-              className="p-2 text-gray-400 hover:text-gray-900 transition-colors"
-            >
-              <Volume2 size={20} />
-            </button>
+            <div className="relative" onMouseEnter={handleVolumeMouseEnter} onMouseLeave={handleVolumeMouseLeave}>
+              <button
+                onClick={contextToggleMute}
+                className="p-2 text-gray-400 hover:text-gray-900 transition-colors"
+              >
+                <Volume2 size={20} />
+              </button>
+              <AnimatePresence>
+                {volumeSliderExpanded && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-white rounded-xl shadow-lg border border-gray-100 flex items-center gap-2"
+                  >
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={contextIsMuted ? 0 : contextVolume}
+                      onChange={(e) => contextSetVolume(parseFloat(e.target.value))}
+                      className="w-20 h-1 bg-gray-100 rounded-full appearance-none cursor-pointer accent-[#FFD700]"
+                    />
+                    <span className="text-xs text-gray-400 w-6 text-right">
+                      {Math.round((contextIsMuted ? 0 : contextVolume) * 100)}
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             <button 
               onClick={() => setCurrentSong(null)}
@@ -231,18 +288,18 @@ export const GlobalMusicPlayer = () => {
                       <p className="text-brand-primary font-bold">{currentSong.artist} — {currentSong.album}</p>
                     </div>
                     <div className="text-sm font-bold text-gray-400">
-                      {formatTime(currentTime)} / {formatTime(duration)}
+                      {formatTime(contextCurrentTime)} / {formatTime(contextDuration)}
                     </div>
                   </div>
                   
                   <input 
                     type="range"
                     min="0"
-                    max={duration || 0}
-                    value={currentTime}
+                    max={contextDuration || 0}
+                    value={contextCurrentTime}
                     onChange={handleProgressChange}
-                    disabled={!duration || resolvingPlayUrl}
-                    className="w-full h-1.5 bg-gray-100 rounded-full appearance-none cursor-pointer accent-brand-primary mb-6"
+                    disabled={!contextDuration || resolvingPlayUrl}
+                    className="w-full h-1.5 bg-gray-100 rounded-full appearance-none cursor-pointer accent-[#FFD700] mb-6"
                   />
 
                   {playUrlError ? (
@@ -266,7 +323,7 @@ export const GlobalMusicPlayer = () => {
 
                   <div className="flex items-center gap-4 mt-4">
                     <button
-                      onClick={() => setIsMuted(!isMuted)}
+                      onClick={contextToggleMute}
                       className="text-gray-400 hover:text-gray-900 transition-colors"
                     >
                       <Volume2 size={20} />
@@ -276,14 +333,11 @@ export const GlobalMusicPlayer = () => {
                       min="0"
                       max="1"
                       step="0.01"
-                      value={isMuted ? 0 : volume}
-                      onChange={(e) => {
-                        setVolume(parseFloat(e.target.value));
-                        if (isMuted) setIsMuted(false);
-                      }}
-                      className="flex-grow h-1.5 bg-gray-100 rounded-full appearance-none cursor-pointer accent-brand-primary"
+                      value={contextIsMuted ? 0 : contextVolume}
+                      onChange={(e) => contextSetVolume(parseFloat(e.target.value))}
+                      className="flex-grow h-1.5 bg-gray-100 rounded-full appearance-none cursor-pointer accent-[#FFD700]"
                     />
-                    <span className="text-xs text-gray-400 w-8">{Math.round((isMuted ? 0 : volume) * 100)}%</span>
+                    <span className="text-xs text-gray-400 w-8">{Math.round((contextIsMuted ? 0 : contextVolume) * 100)}%</span>
                   </div>
                 </div>
               </div>

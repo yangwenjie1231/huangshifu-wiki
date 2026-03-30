@@ -24,6 +24,14 @@ interface MusicContextType {
   playSongAtIndex: (index: number) => void;
   playNext: () => void;
   playPrevious: () => void;
+  currentTime: number;
+  duration: number;
+  setDuration: (duration: number) => void;
+  volume: number;
+  isMuted: boolean;
+  seekTo: (time: number) => void;
+  setVolume: (volume: number) => void;
+  toggleMute: () => void;
 }
 
 const MusicContext = createContext<MusicContextType | undefined>(undefined);
@@ -33,6 +41,10 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [playlist, setPlaylistState] = useState<Song[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolumeState] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
 
   const setPlaylist = useCallback((songs: Song[]) => {
     setPlaylistState(songs);
@@ -128,6 +140,21 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
     playSongAtIndex(currentIndex - 1);
   }, [currentIndex, playSongAtIndex, playlist.length]);
 
+  const seekTo = useCallback((time: number) => {
+    setCurrentTime(time);
+  }, []);
+
+  const setVolume = useCallback((v: number) => {
+    setVolumeState(v);
+    if (isMuted && v > 0) {
+      setIsMuted(false);
+    }
+  }, [isMuted]);
+
+  const toggleMute = useCallback(() => {
+    setIsMuted((prev) => !prev);
+  }, []);
+
   const value = useMemo(
     () => ({
       currentSong,
@@ -141,6 +168,14 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
       playSongAtIndex,
       playNext,
       playPrevious,
+      currentTime,
+      duration,
+      setDuration,
+      volume,
+      isMuted,
+      seekTo,
+      setVolume,
+      toggleMute,
     }),
     [
       currentSong,
@@ -153,6 +188,13 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
       playSongAtIndex,
       playNext,
       playPrevious,
+      currentTime,
+      duration,
+      volume,
+      isMuted,
+      seekTo,
+      setVolume,
+      toggleMute,
     ],
   );
 
