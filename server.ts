@@ -5604,8 +5604,10 @@ app.post('/api/wiki/:slug/revisions', requireAuth, requireActiveUser, async (req
 app.get('/api/posts', async (req: AuthenticatedRequest, res) => {
   try {
     const section = typeof req.query.section === 'string' ? req.query.section : 'all';
-    const limit = Number(req.query.limit) || 100;
+    const limit = Number(req.query.limit) || 20;
+    const page = Number(req.query.page) || 1;
     const sort = parsePostSort(req.query.sort);
+    const skip = (page - 1) * limit;
     const visibilityWhere = buildPostVisibilityWhere(req.authUser);
     const where = {
       ...(section !== 'all' ? { section } : {}),
@@ -5621,11 +5623,15 @@ app.get('/api/posts', async (req: AuthenticatedRequest, res) => {
       orderBy = [{ isPinned: 'desc' }, { updatedAt: 'desc' }];
     }
 
-    const posts = await prisma.post.findMany({
-      where,
-      orderBy,
-      take: Math.min(limit, 200),
-    });
+    const [posts, total] = await Promise.all([
+      prisma.post.findMany({
+        where,
+        orderBy,
+        take: Math.min(limit, 200),
+        skip,
+      }),
+      prisma.post.count({ where }),
+    ]);
 
     if (sort !== 'latest' && posts.length) {
       const updates = posts
@@ -5675,6 +5681,10 @@ app.get('/api/posts', async (req: AuthenticatedRequest, res) => {
         likedByMe: likedPostSet.has(post.id),
         favoritedByMe: favoritedPostSet.has(post.id),
       })),
+      total,
+      totalPages: Math.ceil(total / limit),
+      page,
+      limit,
     });
   } catch (error) {
     console.error('Fetch posts error:', error);
