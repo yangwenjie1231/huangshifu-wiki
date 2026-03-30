@@ -3003,19 +3003,29 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.patch('/api/users/me', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
-    const { displayName, bio, photoURL } = req.body as {
+    const { displayName, bio, photoURL, preferences } = req.body as {
       displayName?: string;
       bio?: string;
       photoURL?: string;
+      preferences?: Record<string, unknown>;
     };
+
+    const updateData: Record<string, unknown> = {};
+    if (typeof displayName === 'string') updateData.displayName = displayName;
+    if (typeof bio === 'string') updateData.bio = bio;
+    if (typeof photoURL === 'string') updateData.photoURL = photoURL;
+    if (typeof preferences === 'object' && preferences !== null) {
+      const currentUser = await prisma.user.findUnique({
+        where: { uid: req.authUser!.uid },
+        select: { preferences: true },
+      });
+      const currentPrefs = (currentUser?.preferences as Record<string, unknown>) || {};
+      updateData.preferences = { ...currentPrefs, ...preferences };
+    }
 
     const user = await prisma.user.update({
       where: { uid: req.authUser!.uid },
-      data: {
-        displayName: typeof displayName === 'string' ? displayName : undefined,
-        bio: typeof bio === 'string' ? bio : undefined,
-        photoURL: typeof photoURL === 'string' ? photoURL : undefined,
-      },
+      data: updateData,
     });
 
     res.json({ user: userToApiUser(user) });
@@ -12553,6 +12563,14 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 async function startServer() {
+  app.use((_req, res, next) => {
+    res.setHeader(
+      'Content-Security-Policy',
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com; worker-src 'self' blob:; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net https://picsum.photos; style-src 'self' 'unsafe-inline';"
+    );
+    next();
+  });
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },

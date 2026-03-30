@@ -49,6 +49,20 @@ Run all commands from repo root.
 
 - `npm run clean`
 
+### Database (Prisma)
+
+- `npm run db:generate` - Generate Prisma client
+- `npm run db:migrate` - Run database migrations
+- `npm run db:push` - Push schema to database (development)
+- `npm run db:seed` - Seed the database
+- `npm run db:deploy` - Deploy migrations in production
+
+### Additional Scripts
+
+- `npm run embeddings:sync` - Sync image embeddings
+- `npm run embeddings:enqueue` - Enqueue embedding jobs only
+- `npm run regions:import` - Import regions data
+
 ### Tests
 
 - `npm test` or `npm run test:unit` - Run all tests once with Vitest.

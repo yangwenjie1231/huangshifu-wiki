@@ -623,7 +623,7 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 
 | 表名 | 说明 |
 |------|------|
-| `User` | 用户账号 |
+| `User` | 用户账号（包含 `preferences` JSON 字段存储视图偏好） |
 | `Post` | 论坛帖子 |
 | `WikiPage` | Wiki 页面 |
 | `Gallery` | 图集 |
@@ -639,6 +639,17 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 ---
 
 ## 附录：更新日志
+
+### v5.x
+
+- **新增用户视图偏好设置**：用户可以选择四种内容展示模式（大图标、中图标、小图标、列表），偏好设置存储在 `User.preferences` 字段（JSON 类型），支持以下页面：
+  - 百科页面（Wiki）
+  - 图集馆（Gallery）
+  - 音乐页面（Music）
+  - 搜索结果（Search）
+- **API 变更**：`PATCH /api/users/me` 新增支持 `preferences` 字段，可更新用户偏好设置
+- **数据库变更**：`User` 表新增 `preferences Json? @default("{}")` 字段
+- **部署注意**：更新代码后需执行 `npm run db:generate` 和 `npm run db:deploy` 以应用新的 Prisma schema
 
 ### v4.x
 

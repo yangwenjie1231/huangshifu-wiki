@@ -7,7 +7,10 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import { customSchema, isTrustedIframeDomain } from '../lib/htmlSanitizer';
-import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar, Link2, GitBranch, Network, MapPin, Heart, ThumbsDown, Pin } from 'lucide-react';
+import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar, Link2, GitBranch, Network, MapPin, Heart, ThumbsDown, Pin, Image as ImageIcon } from 'lucide-react';
+import { useUserPreferences } from '../context/UserPreferencesContext';
+import { ViewModeSelector } from '../components/ViewModeSelector';
+import { VIEW_MODE_CONFIG } from '../lib/viewModes';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
@@ -294,6 +297,8 @@ const WikiList = () => {
   const [loading, setLoading] = useState(true);
   const { user, isBanned } = useAuth();
   const { show } = useToast();
+  const { preferences, setViewMode } = useUserPreferences();
+  const viewMode = preferences.viewMode;
 
   useEffect(() => {
     const fetchPages = async () => {
@@ -333,6 +338,7 @@ const WikiList = () => {
           <p className="text-gray-500 italic">诗扶百科 · 记录每一个动人瞬间</p>
         </div>
         <div className="flex items-center gap-4">
+          <ViewModeSelector value={viewMode} onChange={setViewMode} />
           <Link to="/wiki/timeline" className="px-6 py-3 bg-brand-cream text-brand-olive rounded-full font-medium hover:bg-brand-olive hover:text-white transition-all flex items-center gap-2 shadow-sm">
             <Calendar size={18} /> 时间轴视图
           </Link>
@@ -367,52 +373,98 @@ const WikiList = () => {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
           {[1, 2, 3, 4, 5, 6].map(i => (
-            <div key={i} className="h-48 bg-white rounded-[32px] animate-pulse border border-gray-100"></div>
+            <div key={i} className={clsx(
+              viewMode === 'list' ? 'h-24' : VIEW_MODE_CONFIG[viewMode].cardHeight,
+              'bg-white rounded-[32px] animate-pulse border border-gray-100'
+            )}></div>
           ))}
         </div>
       ) : pages.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
           {pages.map((page) => (
-            <div key={page.id} className="relative group">
+            <div key={page.id} className={clsx('relative group', viewMode === 'list' && 'flex')}>
               <Link 
                 to={`/wiki/${page.slug}`}
                 className={clsx(
-                  'block bg-white p-8 rounded-[32px] border hover:border-brand-olive/20 hover:shadow-xl transition-all',
-                  page.isPinned ? 'border-l-4 border-l-brand-olive' : 'border-gray-100'
+                  viewMode === 'list' 
+                    ? 'flex gap-4 p-4 bg-white rounded-xl border hover:border-brand-olive/20 hover:shadow-lg transition-all w-full' 
+                    : 'block bg-white p-8 rounded-[32px] border hover:border-brand-olive/20 hover:shadow-xl transition-all',
+                  page.isPinned && viewMode !== 'list' ? 'border-l-4 border-l-brand-olive' : 'border-gray-100',
+                  page.isPinned && viewMode === 'list' && 'border-l-4 border-l-brand-olive'
                 )}
               >
-                <div className="flex items-center gap-2 mb-4">
-                  {page.isPinned && (
-                    <span className="flex items-center gap-1 px-2 py-1 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded">
-                      <Pin size={10} /> 已置顶
-                    </span>
-                  )}
-                  <span className="px-2 py-1 bg-brand-cream text-brand-olive text-[10px] font-bold uppercase tracking-wider rounded">
-                    {page.category === 'biography' ? '人物介绍' :
-                     page.category === 'music' ? '音乐作品' :
-                     page.category === 'album' ? '专辑一览' :
-                     page.category === 'timeline' ? '时间轴' :
-                     page.category === 'event' ? '活动记录' : page.category}
-                  </span>
-                </div>
-                <h3 className="text-2xl font-serif font-bold mb-4 group-hover:text-brand-olive transition-colors">{page.title}</h3>
-                <p className="text-gray-400 text-sm line-clamp-2 mb-6 italic leading-relaxed">
-                  {page.content.replace(/[#*`]/g, '').substring(0, 100)}...
-                </p>
-                <div className="flex items-center justify-between text-gray-400 text-xs">
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1"><Clock size={12} /> {formatDate(page.updatedAt, 'yyyy-MM-dd')}</span>
-                    <span className="flex items-center gap-1"><Heart size={12} /> {page.likesCount || 0}</span>
-                    <span className="flex items-center gap-1"><ThumbsDown size={12} /> {page.dislikesCount || 0}</span>
-                  </div>
-                  <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
-                </div>
+                {viewMode === 'list' ? (
+                  <>
+                    <div className="w-24 h-24 bg-brand-cream/50 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Book size={32} className="text-brand-olive/40" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        {page.isPinned && (
+                          <span className="flex items-center gap-1 px-2 py-0.5 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded">
+                            <Pin size={8} /> 已置顶
+                          </span>
+                        )}
+                        <span className="px-2 py-0.5 bg-brand-cream text-brand-olive text-[10px] font-bold uppercase tracking-wider rounded">
+                          {page.category === 'biography' ? '人物介绍' :
+                           page.category === 'music' ? '音乐作品' :
+                           page.category === 'album' ? '专辑一览' :
+                           page.category === 'timeline' ? '时间轴' :
+                           page.category === 'event' ? '活动记录' : page.category}
+                        </span>
+                      </div>
+                      <h3 className="text-lg font-serif font-bold mb-1 group-hover:text-brand-olive transition-colors truncate">{page.title}</h3>
+                      <p className="text-gray-400 text-sm line-clamp-2 italic">
+                        {page.content.replace(/[#*`]/g, '').substring(0, 100)}
+                      </p>
+                      <p className="text-gray-300 text-xs mt-1">
+                        {page.content.replace(/[#*`]/g, '').substring(0, 50)}...
+                      </p>
+                      <div className="flex items-center gap-3 text-gray-400 text-xs mt-2">
+                        <span className="flex items-center gap-1"><Clock size={10} /> {formatDate(page.updatedAt, 'yyyy-MM-dd')}</span>
+                        <span className="flex items-center gap-1"><Heart size={10} /> {page.likesCount || 0}</span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 mb-4">
+                      {page.isPinned && (
+                        <span className="flex items-center gap-1 px-2 py-1 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded">
+                          <Pin size={10} /> 已置顶
+                        </span>
+                      )}
+                      <span className="px-2 py-1 bg-brand-cream text-brand-olive text-[10px] font-bold uppercase tracking-wider rounded">
+                        {page.category === 'biography' ? '人物介绍' :
+                         page.category === 'music' ? '音乐作品' :
+                         page.category === 'album' ? '专辑一览' :
+                         page.category === 'timeline' ? '时间轴' :
+                         page.category === 'event' ? '活动记录' : page.category}
+                      </span>
+                    </div>
+                    <h3 className="text-2xl font-serif font-bold mb-4 group-hover:text-brand-olive transition-colors">{page.title}</h3>
+                    <p className="text-gray-400 text-sm line-clamp-2 mb-6 italic leading-relaxed">
+                      {page.content.replace(/[#*`]/g, '').substring(0, 100)}...
+                    </p>
+                    <div className="flex items-center justify-between text-gray-400 text-xs">
+                      <div className="flex items-center gap-3">
+                        <span className="flex items-center gap-1"><Clock size={12} /> {formatDate(page.updatedAt, 'yyyy-MM-dd')}</span>
+                        <span className="flex items-center gap-1"><Heart size={12} /> {page.likesCount || 0}</span>
+                        <span className="flex items-center gap-1"><ThumbsDown size={12} /> {page.dislikesCount || 0}</span>
+                      </div>
+                      <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </>
+                )}
               </Link>
               <button
                 onClick={(event) => handleCopyWikiLink(event, page.slug)}
-                className="absolute bottom-5 right-5 p-2 rounded-full border border-gray-100 bg-white/90 text-gray-400 shadow-sm opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:text-brand-olive hover:border-brand-olive/30 transition-all"
+                className={clsx(
+                  'p-2 rounded-full border bg-white/90 text-gray-400 shadow-sm hover:text-brand-olive hover:border-brand-olive/30 transition-all',
+                  viewMode === 'list' ? 'absolute top-4 right-4' : 'absolute bottom-5 right-5 sm:opacity-0 sm:group-hover:opacity-100'
+                )}
                 title="复制内链"
                 aria-label="复制百科内链"
               >
