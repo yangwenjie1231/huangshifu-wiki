@@ -2246,7 +2246,7 @@ function parseContentStatus(value: unknown): ContentStatus | null {
 function normalizeWikiWriteStatus(rawStatus: unknown, authUser: ApiUser) {
   const status = parseContentStatus(rawStatus);
   if (isAdminRole(authUser.role)) {
-    return status || 'published';
+    return 'published';
   }
   if (status === 'pending') return 'pending';
   if (status === 'rejected') return 'rejected';
@@ -4332,6 +4332,31 @@ app.post('/api/wiki/:slug/submit', requireAuth, requireActiveUser, async (req: A
     const isOwner = page.lastEditorUid === req.authUser!.uid;
     if (!isOwner && !isAdminRole(req.authUser!.role)) {
       res.status(403).json({ error: '无权提交该页面' });
+      return;
+    }
+
+    if (isAdminRole(req.authUser!.role)) {
+      const published = await prisma.wikiPage.update({
+        where: { slug },
+        data: {
+          status: 'published',
+          reviewNote: null,
+          reviewedBy: req.authUser!.uid,
+          reviewedAt: new Date(),
+        },
+      });
+
+      await prisma.moderationLog.create({
+        data: {
+          targetType: 'wiki',
+          targetId: slug,
+          action: 'approve',
+          operatorUid: req.authUser!.uid,
+          note: note || null,
+        },
+      });
+
+      res.json({ page: toWikiResponse(published) });
       return;
     }
 
