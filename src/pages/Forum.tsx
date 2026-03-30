@@ -13,6 +13,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../lib/apiClient';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { LocationTagInput } from '../components/LocationTagInput';
+import Pagination from '../components/Pagination';
 
 type ContentStatus = 'draft' | 'pending' | 'published' | 'rejected';
 
@@ -82,14 +83,19 @@ type CommentItem = {
   createdAt: string;
 };
 
+const DEFAULT_PAGE_SIZE = 20;
+
 const PostList = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const section = searchParams.get('section') || 'all';
   const sort = searchParams.get('sort') || 'latest';
+  const pageParam = Number(searchParams.get('page')) || 1;
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [sections, setSections] = useState<SectionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [pinning, setPinning] = useState<string | null>(null);
+  const [page, setPage] = useState(pageParam);
+  const [totalPages, setTotalPages] = useState(1);
   const { user, profile, isBanned } = useAuth();
   const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
   const { show } = useToast();
@@ -111,11 +117,14 @@ const PostList = () => {
     const fetchPosts = async () => {
       try {
         setLoading(true);
-        const data = await apiGet<{ posts: PostItem[] }>('/api/posts', {
+        const data = await apiGet<{ posts: PostItem[]; totalPages: number }>('/api/posts', {
           section,
           sort,
+          page,
+          limit: DEFAULT_PAGE_SIZE,
         });
         setPosts(data.posts || []);
+        setTotalPages(data.totalPages || 1);
       } catch (error) {
         console.error('Error fetching posts:', error);
       } finally {
@@ -124,7 +133,15 @@ const PostList = () => {
     };
 
     fetchPosts();
-  }, [section, sort]);
+  }, [section, sort, page]);
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    const params = new URLSearchParams(searchParams);
+    params.set('page', String(newPage));
+    setSearchParams(params);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const handleTogglePin = async (postId: string, currentlyPinned: boolean) => {
     if (!isAdmin || pinning) return;
@@ -225,6 +242,7 @@ const PostList = () => {
           ))}
         </div>
       ) : posts.length > 0 ? (
+        <>
         <div className="space-y-6">
           {posts.map((post) => (
             <div
@@ -305,6 +323,14 @@ const PostList = () => {
             </div>
           ))}
         </div>
+        {totalPages > 1 && (
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+          />
+        )}
+        </>
       ) : (
         <div className="bg-white p-20 rounded-[40px] border border-gray-100 text-center">
           <MessageSquare size={48} className="mx-auto text-gray-200 mb-6" />

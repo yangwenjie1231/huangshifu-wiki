@@ -5,6 +5,9 @@ import { clsx } from 'clsx';
 
 import { apiGet } from '../lib/apiClient';
 import { useAuth } from '../context/AuthContext';
+import Pagination from '../components/Pagination';
+
+const DEFAULT_PAGE_SIZE = 50;
 
 type Platform = 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo';
 
@@ -49,6 +52,8 @@ const MusicLinks = () => {
   const [filterPlatform, setFilterPlatform] = useState<Platform | 'all'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'partial' | 'unlinked'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const { isAdmin } = useAuth();
 
   useEffect(() => {
@@ -101,6 +106,26 @@ const MusicLinks = () => {
 
     return result;
   }, [songs, filterPlatform, filterStatus, searchQuery]);
+
+  const totalFilteredPages = Math.ceil(filteredSongs.length / pageSize);
+  const paginatedSongs = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredSongs.slice(start, start + pageSize);
+  }, [filteredSongs, page, pageSize]);
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setPage(1);
+  };
+
+  useEffect(() => {
+    setPage(1);
+  }, [filterPlatform, filterStatus, searchQuery]);
 
   const stats = useMemo(() => {
     const total = songs.length;
@@ -216,7 +241,7 @@ const MusicLinks = () => {
                   </td>
                 </tr>
               ) : (
-                filteredSongs.map((song) => {
+                paginatedSongs.map((song) => {
                   const linkedPlatforms = platformInfo.filter((p) => song.platformIds?.[p.key]);
                   const unlinkedPlatforms = platformInfo.filter((p) => !song.platformIds?.[p.key]);
                   return (
@@ -283,10 +308,22 @@ const MusicLinks = () => {
           </table>
         </div>
 
-        <div className="px-6 py-4 border-t border-gray-50 flex items-center justify-between">
-          <p className="text-sm text-gray-500">
-            显示 {filteredSongs.length} / {songs.length} 首歌曲
-          </p>
+        <div className="px-6 py-4 border-t border-gray-50">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-gray-500">
+              显示 {paginatedSongs.length} / {filteredSongs.length} 首歌曲（共 {songs.length} 首）
+            </p>
+          </div>
+          {totalFilteredPages > 1 && (
+            <Pagination
+              page={page}
+              totalPages={totalFilteredPages}
+              onPageChange={handlePageChange}
+              pageSize={pageSize}
+              onPageSizeChange={handlePageSizeChange}
+              showPageSizeSelector
+            />
+          )}
         </div>
       </div>
     </div>

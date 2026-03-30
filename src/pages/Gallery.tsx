@@ -1,15 +1,22 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, query, orderBy, onSnapshot, db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { Image as ImageIcon, Plus, Folder, X, Upload, Clock, User as UserIcon, Link2 } from 'lucide-react';
+import { Image as ImageIcon, Plus, Folder, X, Upload, Clock, User as UserIcon, Link2, Trash2 } from 'lucide-react';
+import { useUserPreferences } from '../context/UserPreferencesContext';
+import { ViewModeSelector } from '../components/ViewModeSelector';
+import { VIEW_MODE_CONFIG } from '../lib/viewModes';
+import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { SmartImage } from '../components/SmartImage';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
-import { apiPost, apiUpload } from '../lib/apiClient';
+import { apiDelete, apiPost, apiUpload } from '../lib/apiClient';
 import { LocationTagInput } from '../components/LocationTagInput';
+import Pagination from '../components/Pagination';
+
+const DEFAULT_PAGE_SIZE = 24;
 
 const toDateValue = (value: string | null | undefined) => {
   if (!value) return null;
@@ -57,9 +64,31 @@ type GalleryCreateResponse = {
 const GalleryList = () => {
   const [galleries, setGalleries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const { user, isBanned } = useAuth();
+  const { user, isAdmin, isBanned } = useAuth();
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [galleryToDelete, setGalleryToDelete] = useState<{ id: string; title: string } | null>(null);
+  const [deletingGalleryId, setDeletingGalleryId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const { show } = useToast();
+  const { preferences, setViewMode } = useUserPreferences();
+  const viewMode = preferences.viewMode;
+
+  const totalGalleryPages = Math.ceil(galleries.length / pageSize);
+  const paginatedGalleries = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return galleries.slice(start, start + pageSize);
+  }, [galleries, page, pageSize]);
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setPage(1);
+  };
 
   useEffect(() => {
     const q = query(collection(db, 'galleries'), orderBy('createdAt', 'desc'));
@@ -81,6 +110,35 @@ const GalleryList = () => {
     show('复制链接失败，请稍后重试', { variant: 'error' });
   };
 
+  const handleRequestDeleteGallery = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    gallery: { id: string; title?: string | null },
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setGalleryToDelete({
+      id: gallery.id,
+      title: gallery.title?.trim() || '未命名图集',
+    });
+  };
+
+  const handleConfirmDeleteGallery = async () => {
+    if (!galleryToDelete || deletingGalleryId) return;
+
+    try {
+      setDeletingGalleryId(galleryToDelete.id);
+      await apiDelete(`/api/galleries/${galleryToDelete.id}`);
+      setGalleries((prev) => prev.filter((gallery) => gallery.id !== galleryToDelete.id));
+      show('图集已删除');
+      setGalleryToDelete(null);
+    } catch (error) {
+      console.error('Delete gallery from list error:', error);
+      show('删除图集失败', { variant: 'error' });
+    } finally {
+      setDeletingGalleryId(null);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-12">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
@@ -96,48 +154,103 @@ const GalleryList = () => {
             <Plus size={18} /> 上传图集
           </button>
         )}
+        <ViewModeSelector value={viewMode} onChange={setViewMode} />
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
           {[1, 2, 3, 4, 5, 6].map(i => (
-            <div key={i} className="h-64 bg-white rounded-[32px] animate-pulse border border-gray-100"></div>
+            <div key={i} className={clsx(
+              viewMode === 'list' ? 'h-24' : VIEW_MODE_CONFIG[viewMode].cardHeight,
+              'bg-white rounded-[32px] animate-pulse border border-gray-100'
+            )}></div>
           ))}
         </div>
       ) : galleries.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {galleries.map((gallery) => (
-            <div key={gallery.id} className="relative group">
+        <>
+          <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
+            {paginatedGalleries.map((gallery) => (
+            <div key={gallery.id} className={clsx('relative group', viewMode === 'list' && 'flex')}>
               <Link
                 to={`/gallery/${gallery.id}`}
-                className="block bg-white rounded-[32px] border border-gray-100 overflow-hidden hover:shadow-xl transition-all"
+                className={clsx(
+                  viewMode === 'list'
+                    ? 'flex gap-4 p-4 bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all w-full'
+                    : 'block bg-white rounded-[32px] border border-gray-100 overflow-hidden hover:shadow-xl transition-all'
+                )}
               >
-                <div className="relative h-48 overflow-hidden">
-                  <SmartImage 
-                    src={gallery.images[0]?.url} 
-                    alt={gallery.title} 
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                  />
-                  <div className="absolute top-4 right-4 px-3 py-1 bg-black/50 backdrop-blur-md text-white text-[10px] font-bold rounded-full">
-                    {gallery.images.length} 张
-                  </div>
-                </div>
-                <div className="p-6">
-                  <h3 className="text-xl font-serif font-bold mb-2 group-hover:text-brand-olive transition-colors">{gallery.title}</h3>
-                  <div className="flex flex-wrap gap-1 mb-4">
-                    {gallery.tags?.map((tag: string) => (
-                      <span key={tag} className="text-[10px] text-brand-olive bg-brand-cream px-2 py-0.5 rounded">#{tag}</span>
-                    ))}
-                  </div>
-                  <div className="flex items-center justify-between text-gray-400 text-xs">
-                    <span className="flex items-center gap-1"><Clock size={12} /> {toDateValue(gallery.createdAt) ? format(toDateValue(gallery.createdAt)!, 'yyyy-MM-dd') : '刚刚'}</span>
-                    <span className="flex items-center gap-1"><UserIcon size={12} /> {gallery.authorUid?.substring(0, 6)}</span>
-                  </div>
-                </div>
+                {viewMode === 'list' ? (
+                  <>
+                    <div className="w-24 h-24 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                      <SmartImage 
+                        src={gallery.images[0]?.url} 
+                        alt={gallery.title} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="text-lg font-serif font-bold group-hover:text-brand-olive transition-colors truncate">{gallery.title}</h3>
+                        <span className="px-2 py-0.5 bg-black/50 backdrop-blur-md text-white text-[10px] font-bold rounded-full flex-shrink-0">
+                          {gallery.images.length} 张
+                        </span>
+                      </div>
+                      <p className="text-gray-400 text-sm line-clamp-2">
+                        {gallery.description || '暂无描述'}
+                      </p>
+                      <p className="text-gray-300 text-xs mt-1">
+                        {(gallery.description || '').substring(0, 50)}...
+                      </p>
+                      <div className="flex items-center gap-3 text-gray-400 text-xs mt-2">
+                        <span className="flex items-center gap-1"><Clock size={10} /> {toDateValue(gallery.createdAt) ? format(toDateValue(gallery.createdAt)!, 'yyyy-MM-dd') : '刚刚'}</span>
+                        <span className="flex items-center gap-1"><UserIcon size={10} /> {gallery.authorUid?.substring(0, 6)}</span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className={clsx('relative overflow-hidden', VIEW_MODE_CONFIG[viewMode].cardHeight)}>
+                      <SmartImage 
+                        src={gallery.images[0]?.url} 
+                        alt={gallery.title} 
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      />
+                      <div className="absolute top-4 right-4 px-3 py-1 bg-black/50 backdrop-blur-md text-white text-[10px] font-bold rounded-full">
+                        {gallery.images.length} 张
+                      </div>
+                    </div>
+                    <div className="p-6">
+                      <h3 className="text-xl font-serif font-bold mb-2 group-hover:text-brand-olive transition-colors">{gallery.title}</h3>
+                      <div className="flex flex-wrap gap-1 mb-4">
+                        {gallery.tags?.map((tag: string) => (
+                          <span key={tag} className="text-[10px] text-brand-olive bg-brand-cream px-2 py-0.5 rounded">#{tag}</span>
+                        ))}
+                      </div>
+                      <div className="flex items-center justify-between text-gray-400 text-xs">
+                        <span className="flex items-center gap-1"><Clock size={12} /> {toDateValue(gallery.createdAt) ? format(toDateValue(gallery.createdAt)!, 'yyyy-MM-dd') : '刚刚'}</span>
+                        <span className="flex items-center gap-1"><UserIcon size={12} /> {gallery.authorUid?.substring(0, 6)}</span>
+                      </div>
+                    </div>
+                  </>
+                )}
               </Link>
+              {isAdmin ? (
+                <button
+                  onClick={(event) => handleRequestDeleteGallery(event, gallery)}
+                  disabled={deletingGalleryId === gallery.id}
+                  className="absolute top-4 left-4 p-2 rounded-full border border-white/70 bg-white/85 text-gray-500 shadow-sm opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:text-red-500 transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                  title="删除图集"
+                  aria-label="删除图集"
+                >
+                  <Trash2 size={14} />
+                </button>
+              ) : null}
               <button
                 onClick={(event) => handleCopyGalleryLink(event, gallery.id)}
-                className="absolute bottom-4 right-4 p-2 rounded-full border border-white/70 bg-white/85 text-gray-500 shadow-sm opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:text-brand-olive transition-all"
+                className={clsx(
+                  'p-2 rounded-full border bg-white/85 text-gray-500 shadow-sm hover:text-brand-olive transition-all',
+                  viewMode === 'list' ? 'absolute top-4 right-4' : 'absolute bottom-4 right-4 sm:opacity-0 sm:group-hover:opacity-100'
+                )}
                 title="复制内链"
                 aria-label="复制图集内链"
               >
@@ -145,7 +258,18 @@ const GalleryList = () => {
               </button>
             </div>
           ))}
-        </div>
+          </div>
+          {totalGalleryPages > 1 && (
+            <Pagination
+              page={page}
+              totalPages={totalGalleryPages}
+              onPageChange={handlePageChange}
+              pageSize={pageSize}
+              onPageSizeChange={handlePageSizeChange}
+              showPageSizeSelector
+            />
+          )}
+        </>
       ) : (
         <div className="bg-white p-20 rounded-[40px] border border-gray-100 text-center">
           <ImageIcon size={48} className="mx-auto text-gray-200 mb-6" />
@@ -159,12 +283,46 @@ const GalleryList = () => {
           <UploadModal onClose={() => setIsUploadModalOpen(false)} />
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {galleryToDelete && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-[40px] p-8 max-w-md w-full shadow-2xl"
+            >
+              <h3 className="text-2xl font-serif font-bold text-gray-900 mb-4">确认删除</h3>
+              <p className="text-gray-500 mb-8">
+                您确定要删除图集《{galleryToDelete.title}》吗？此操作无法撤销。
+              </p>
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setGalleryToDelete(null)}
+                  disabled={Boolean(deletingGalleryId)}
+                  className="flex-grow px-6 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleConfirmDeleteGallery}
+                  disabled={Boolean(deletingGalleryId)}
+                  className="flex-grow px-6 py-4 bg-red-500 text-white rounded-2xl font-bold hover:bg-red-600 transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {deletingGalleryId ? '删除中...' : '确定删除'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
 
 const UploadModal = ({ onClose }: { onClose: () => void }) => {
-  const { user, isBanned } = useAuth();
+  const { user, isAdmin, isBanned } = useAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
@@ -356,6 +514,18 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
         </div>
 
         <div className="flex-grow overflow-y-auto p-8 space-y-8">
+          <div className="space-y-2">
+            <label htmlFor="gallery-create-title" className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">图集标题</label>
+            <input
+              id="gallery-create-title"
+              type="text"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder="例如：2024 Live 现场返图"
+              className="w-full px-6 py-4 bg-brand-cream rounded-2xl border-none focus:ring-2 focus:ring-brand-olive/20"
+            />
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">标签 (逗号分隔)</label>

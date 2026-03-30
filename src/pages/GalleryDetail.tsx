@@ -388,27 +388,45 @@ const GalleryDetail = () => {
             <div className="min-w-0 flex-1">
               {editing ? (
                 <div className="space-y-3 max-w-2xl">
-                  <input
-                    type="text"
-                    value={editTitle}
-                    onChange={(event) => setEditTitle(event.target.value)}
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-olive/20"
-                    placeholder="图集标题"
-                  />
-                  <textarea
-                    value={editDescription}
-                    onChange={(event) => setEditDescription(event.target.value)}
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-olive/20 resize-none"
-                    rows={3}
-                    placeholder="图集描述"
-                  />
-                  <input
-                    type="text"
-                    value={editTagsText}
-                    onChange={(event) => setEditTagsText(event.target.value)}
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-olive/20"
-                    placeholder="标签，逗号分隔"
-                  />
+                  <div className="space-y-1.5">
+                    <label htmlFor="gallery-title" className="block text-sm font-medium text-gray-600">
+                      图集标题
+                    </label>
+                    <input
+                      id="gallery-title"
+                      type="text"
+                      value={editTitle}
+                      onChange={(event) => setEditTitle(event.target.value)}
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-olive/20"
+                      placeholder="图集标题"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="gallery-description" className="block text-sm font-medium text-gray-600">
+                      图集描述
+                    </label>
+                    <textarea
+                      id="gallery-description"
+                      value={editDescription}
+                      onChange={(event) => setEditDescription(event.target.value)}
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-olive/20 resize-none"
+                      rows={3}
+                      placeholder="图集描述"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="gallery-tags" className="block text-sm font-medium text-gray-600">
+                      标签
+                    </label>
+                    <input
+                      id="gallery-tags"
+                      type="text"
+                      value={editTagsText}
+                      onChange={(event) => setEditTagsText(event.target.value)}
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-olive/20"
+                      placeholder="标签，逗号分隔"
+                    />
+                  </div>
                 </div>
               ) : (
                 <>

@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, getDocs, doc, deleteDoc, where, orderBy, db, auth } from '../firebase';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useMusic } from '../context/MusicContext';
 import { Music as MusicIcon, Search, Plus, Play, Disc, List, Trash2, Heart, ExternalLink, Sparkles, ChevronRight, Headphones, X, MessageSquare, Clock, Link2, Album, Grid3X3 } from 'lucide-react';
+import { useUserPreferences } from '../context/UserPreferencesContext';
+import { ViewModeSelector } from '../components/ViewModeSelector';
+import { VIEW_MODE_CONFIG } from '../lib/viewModes';
 import { clsx } from 'clsx';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { MusicPlayer } from '../components/MusicPlayer';
 import { MusicImportModal } from '../components/MusicImportModal';
 import { AlbumEditModal } from '../components/AlbumEditModal';
@@ -13,6 +16,9 @@ import { useToast } from '../components/Toast';
 import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { format } from 'date-fns';
+import Pagination from '../components/Pagination';
+
+const DEFAULT_PAGE_SIZE = 40;
 
 enum OperationType {
   CREATE = 'create',
@@ -155,9 +161,33 @@ const Music = () => {
   const [loadingAlbums, setLoadingAlbums] = useState(false);
   const [activeTab, setActiveTab] = useState<'music' | 'albums'>('music');
   const [selectedPlatform, setSelectedPlatform] = useState<'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo'>('netease');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const { user, isAdmin, isBanned } = useAuth();
   const { currentSong, setCurrentSong, setIsPlaying, setPlaylist, playSongAtIndex } = useMusic();
   const { show } = useToast();
+  const { preferences, setViewMode } = useUserPreferences();
+  const viewMode = preferences.viewMode;
+
+  const totalMusicPages = Math.ceil(songs.length / pageSize);
+  const paginatedSongs = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return songs.slice(start, start + pageSize);
+  }, [songs, page, pageSize]);
+
+  const handleMusicPageChange = (newPage: number) => {
+    setPage(newPage);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setPage(1);
+  };
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab]);
 
   const fetchSongs = async () => {
     setLoading(true);
@@ -610,6 +640,7 @@ const Music = () => {
                     <Plus size={14} className="inline mr-1" /> 创建专辑
                   </button>
                 )}
+                <ViewModeSelector value={viewMode} onChange={setViewMode} size="sm" />
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                   {activeTab === 'music' ? `${songs.length} 首歌曲` : `${albums.length} 张专辑`}
                 </span>
@@ -619,181 +650,214 @@ const Music = () => {
             {activeTab === 'music' ? (
               <div className="p-6 md:p-8 space-y-6">
                 {loading ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                  <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
                     {[1, 2, 3, 4, 5, 6].map(i => (
-                      <div key={i} className="rounded-3xl border border-gray-100 p-4 animate-pulse">
-                        <div className="aspect-square rounded-2xl bg-gray-100" />
-                        <div className="mt-4 h-4 bg-gray-100 rounded w-2/3" />
-                        <div className="mt-2 h-3 bg-gray-100 rounded w-1/2" />
+                      <div key={i} className={clsx(
+                        viewMode === 'list' ? 'h-20' : 'rounded-3xl border border-gray-100 p-4 animate-pulse',
+                        viewMode !== 'list' && 'bg-white'
+                      )}>
+                        <div className={clsx(viewMode === 'list' ? 'flex gap-4' : '')}>
+                          <div className={clsx(viewMode === 'list' ? 'w-16 h-16 rounded-lg bg-gray-100 flex-shrink-0' : 'aspect-square rounded-2xl bg-gray-100')} />
+                          <div className={clsx(viewMode === 'list' ? 'flex-1' : '')}>
+                            <div className={viewMode === 'list' ? 'mt-2 h-4 bg-gray-100 rounded w-1/3' : 'mt-4 h-4 bg-gray-100 rounded w-2/3'} />
+                            <div className={viewMode === 'list' ? 'mt-1 h-3 bg-gray-100 rounded w-1/4' : 'mt-2 h-3 bg-gray-100 rounded w-1/2'} />
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
                 ) : songs.length > 0 ? (
                   <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-                      {songs.map((song) => (
+                    <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
+                      {paginatedSongs.map((song) => (
                         <div
                           key={song.docId}
                           className={clsx(
-                            'rounded-3xl border transition-all p-4 group bg-white',
-                            currentSong?.docId === song.docId && !isBatchMode ? 'border-brand-primary/40 shadow-lg shadow-brand-primary/10' : 'border-gray-100 hover:border-brand-primary/30 hover:shadow-md',
+                            viewMode === 'list' 
+                              ? 'flex gap-4 p-3 rounded-xl border border-gray-100 bg-white hover:shadow-md transition-all' 
+                              : 'rounded-3xl border transition-all p-4 group bg-white',
+                            currentSong?.docId === song.docId && !isBatchMode && viewMode !== 'list' ? 'border-brand-primary/40 shadow-lg shadow-brand-primary/10' : 'border-gray-100 hover:border-brand-primary/30 hover:shadow-md',
                             isBatchMode && selectedSongs.has(song.docId) && 'border-brand-primary bg-brand-primary/5',
                           )}
                         >
-                          <div className="relative aspect-square rounded-2xl overflow-hidden bg-gray-100">
-                            <img src={song.cover} alt={song.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent opacity-90" />
-                            <div className="absolute left-3 right-3 bottom-3 flex items-center justify-between gap-2">
-                              <button
-                                onClick={() => playSong(song)}
-                                className={clsx(
-                                  'w-10 h-10 rounded-full inline-flex items-center justify-center transition-all',
-                                  isBatchMode ? 'bg-white/80 text-gray-900 hover:bg-white' : 'bg-brand-primary text-gray-900 hover:scale-105',
-                                )}
-                                title={isBatchMode ? '选择歌曲' : '播放歌曲'}
-                              >
-                                <Play size={16} className={clsx(!isBatchMode && currentSong?.docId === song.docId && 'fill-current')} />
-                              </button>
-                              <Link
-                                to={`/music/${song.docId}`}
-                                className="inline-flex items-center gap-1 text-xs px-3 py-2 rounded-full bg-black/60 text-white hover:bg-black/75 transition-colors"
-                                title="查看歌曲详情"
-                              >
-                                详情 <ChevronRight size={14} />
-                              </Link>
-                            </div>
-                          </div>
-
-                          <div className="mt-4">
-                            <Link to={`/music/${song.docId}`} className="font-bold text-gray-900 line-clamp-1 hover:text-brand-primary transition-colors" title="查看歌曲详情">
-                              {song.title}
-                            </Link>
-                            <p className="text-xs text-gray-400 mt-1 line-clamp-1">{song.artist} — {song.album}</p>
-                            {song.platformIds && (
-                              <div className="flex items-center gap-1.5 mt-2">
-                                {song.platformIds.neteaseId && (
-                                  <a
-                                    href={`https://music.163.com/song?id=${song.platformIds.neteaseId}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
-                                    title={`网易云: ${song.platformIds.neteaseId}`}
-                                  >
-                                    网易云
-                                  </a>
-                                )}
-                                {song.platformIds.tencentId && (
-                                  <a
-                                    href={`https://y.qq.com/n/ryqq/songDetail/${song.platformIds.tencentId}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
-                                    title={`QQ音乐: ${song.platformIds.tencentId}`}
-                                  >
-                                    QQ
-                                  </a>
-                                )}
-                                {song.platformIds.kugouId && (
-                                  <a
-                                    href={`https://www.kugou.com/song/#hash=${song.platformIds.kugouId}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
-                                    title={`酷狗: ${song.platformIds.kugouId}`}
-                                  >
-                                    酷狗
-                                  </a>
-                                )}
-                                {song.platformIds.baiduId && (
-                                  <a
-                                    href={`https://music.baidu.com/song/${song.platformIds.baiduId}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 hover:bg-orange-200 transition-colors"
-                                    title={`百度: ${song.platformIds.baiduId}`}
-                                  >
-                                    百度
-                                  </a>
-                                )}
-                                {song.platformIds.kuwoId && (
-                                  <a
-                                    href={`https://www.kuwo.cn/song_detail/${song.platformIds.kuwoId}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors"
-                                    title={`酷我: ${song.platformIds.kuwoId}`}
-                                  >
-                                    酷我
-                                  </a>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="mt-4 flex items-center justify-between gap-2">
-                            {isBatchMode ? (
-                              <button
-                                onClick={() => toggleSelect(song.docId)}
-                                className={clsx(
-                                  'px-3 py-1.5 rounded-full text-xs font-bold transition-all',
-                                  selectedSongs.has(song.docId) ? 'bg-brand-primary text-gray-900' : 'bg-gray-100 text-gray-500 hover:text-gray-800',
-                                )}
-                              >
-                                {selectedSongs.has(song.docId) ? '已选择' : '选择'}
-                              </button>
-                            ) : (
-                              <div className="flex items-center gap-1">
+                          {viewMode === 'list' ? (
+                            <>
+                              <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                                <img src={song.cover} alt={song.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                                 <button
-                                  onClick={() => handleToggleFavorite(song)}
-                                  disabled={favoriting === song.docId}
-                                  className={clsx(
-                                    'p-2 transition-colors',
-                                    song.favoritedByMe ? 'text-red-500' : 'text-gray-400 hover:text-red-500',
-                                    favoriting === song.docId && 'opacity-50 cursor-not-allowed',
-                                  )}
-                                  title="收藏"
+                                  onClick={() => playSong(song)}
+                                  className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
+                                  title="播放"
                                 >
-                                  <Heart size={16} />
-                                </button>
-                                <a
-                                  href={getSongExternalUrl(song)}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
-                                  title="打开原始链接"
-                                >
-                                  <ExternalLink size={16} />
-                                </a>
-                                <button
-                                  onClick={(event) => handleCopySongLink(event, song)}
-                                  className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
-                                  title="复制内链"
-                                >
-                                  <Link2 size={16} />
-                                </button>
-                                <button
-                                  onClick={() => handleShowPosts(song)}
-                                  className={clsx(
-                                    'p-2 transition-colors',
-                                    selectedSongForPosts?.docId === song.docId ? 'text-brand-primary' : 'text-gray-400 hover:text-brand-primary',
-                                  )}
-                                  title="查看乐评"
-                                >
-                                  <MessageSquare size={16} />
+                                  <Play size={16} className="text-white" />
                                 </button>
                               </div>
-                            )}
+                              <div className="flex-1 min-w-0 flex items-center">
+                                <div className="flex-1 min-w-0">
+                                  <Link to={`/music/${song.docId}`} className="font-bold text-gray-900 line-clamp-1 hover:text-brand-primary transition-colors">
+                                    {song.title}
+                                  </Link>
+                                  <p className="text-xs text-gray-400 line-clamp-1">{song.artist} — {song.album}</p>
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  {isBatchMode ? (
+                                    <button
+                                      onClick={() => toggleSelect(song.docId)}
+                                      className={clsx(
+                                        'px-3 py-1.5 rounded-full text-xs font-bold transition-all',
+                                        selectedSongs.has(song.docId) ? 'bg-brand-primary text-gray-900' : 'bg-gray-100 text-gray-500',
+                                      )}
+                                    >
+                                      {selectedSongs.has(song.docId) ? '已选择' : '选择'}
+                                    </button>
+                                  ) : (
+                                    <>
+                                      <button
+                                        onClick={() => handleToggleFavorite(song)}
+                                        disabled={favoriting === song.docId}
+                                        className={clsx(
+                                          'p-2 transition-colors',
+                                          song.favoritedByMe ? 'text-red-500' : 'text-gray-400 hover:text-red-500',
+                                        )}
+                                      >
+                                        <Heart size={14} />
+                                      </button>
+                                      <Link
+                                        to={`/music/${song.docId}`}
+                                        className="px-3 py-1.5 rounded-full bg-black/60 text-white text-xs hover:bg-black/75 transition-colors"
+                                      >
+                                        详情
+                                      </Link>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="relative aspect-square rounded-2xl overflow-hidden bg-gray-100">
+                                <img src={song.cover} alt={song.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent opacity-90" />
+                                <div className="absolute left-3 right-3 bottom-3 flex items-center justify-between gap-2">
+                                  <button
+                                    onClick={() => playSong(song)}
+                                    className={clsx(
+                                      'w-10 h-10 rounded-full inline-flex items-center justify-center transition-all',
+                                      isBatchMode ? 'bg-white/80 text-gray-900 hover:bg-white' : 'bg-brand-primary text-gray-900 hover:scale-105',
+                                    )}
+                                    title={isBatchMode ? '选择歌曲' : '播放歌曲'}
+                                  >
+                                    <Play size={16} className={clsx(!isBatchMode && currentSong?.docId === song.docId && 'fill-current')} />
+                                  </button>
+                                  <Link
+                                    to={`/music/${song.docId}`}
+                                    className="inline-flex items-center gap-1 text-xs px-3 py-2 rounded-full bg-black/60 text-white hover:bg-black/75 transition-colors"
+                                    title="查看歌曲详情"
+                                  >
+                                    详情 <ChevronRight size={14} />
+                                  </Link>
+                                </div>
+                              </div>
 
-                            {isAdmin && !isBatchMode ? (
-                              <button
-                                onClick={() => setConfirmModal({ show: true, type: 'single', id: song.docId })}
-                                className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                                title="删除歌曲"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            ) : null}
-                          </div>
+                              <div className="mt-4">
+                                <Link to={`/music/${song.docId}`} className="font-bold text-gray-900 line-clamp-1 hover:text-brand-primary transition-colors" title="查看歌曲详情">
+                                  {song.title}
+                                </Link>
+                                <p className="text-xs text-gray-400 mt-1 line-clamp-1">{song.artist} — {song.album}</p>
+                                {song.platformIds && (
+                                  <div className="flex items-center gap-1.5 mt-2">
+                                    {song.platformIds.neteaseId && (
+                                      <a
+                                        href={`https://music.163.com/song?id=${song.platformIds.neteaseId}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
+                                        title={`网易云: ${song.platformIds.neteaseId}`}
+                                      >
+                                        网易云
+                                      </a>
+                                    )}
+                                    {song.platformIds.tencentId && (
+                                      <a
+                                        href={`https://y.qq.com/n/ryqq/songDetail/${song.platformIds.tencentId}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
+                                        title={`QQ音乐: ${song.platformIds.tencentId}`}
+                                      >
+                                        QQ
+                                      </a>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="mt-4 flex items-center justify-between gap-2">
+                                {isBatchMode ? (
+                                  <button
+                                    onClick={() => toggleSelect(song.docId)}
+                                    className={clsx(
+                                      'px-3 py-1.5 rounded-full text-xs font-bold transition-all',
+                                      selectedSongs.has(song.docId) ? 'bg-brand-primary text-gray-900' : 'bg-gray-100 text-gray-500 hover:text-gray-800',
+                                    )}
+                                  >
+                                    {selectedSongs.has(song.docId) ? '已选择' : '选择'}
+                                  </button>
+                                ) : (
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => handleToggleFavorite(song)}
+                                      disabled={favoriting === song.docId}
+                                      className={clsx(
+                                        'p-2 transition-colors',
+                                        song.favoritedByMe ? 'text-red-500' : 'text-gray-400 hover:text-red-500',
+                                        favoriting === song.docId && 'opacity-50 cursor-not-allowed',
+                                      )}
+                                      title="收藏"
+                                    >
+                                      <Heart size={16} />
+                                    </button>
+                                    <a
+                                      href={getSongExternalUrl(song)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
+                                      title="打开原始链接"
+                                    >
+                                      <ExternalLink size={16} />
+                                    </a>
+                                    <button
+                                      onClick={(event) => handleCopySongLink(event, song)}
+                                      className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
+                                      title="复制内链"
+                                    >
+                                      <Link2 size={16} />
+                                    </button>
+                                    <button
+                                      onClick={() => handleShowPosts(song)}
+                                      className={clsx(
+                                        'p-2 transition-colors',
+                                        selectedSongForPosts?.docId === song.docId ? 'text-brand-primary' : 'text-gray-400 hover:text-brand-primary',
+                                      )}
+                                      title="查看乐评"
+                                    >
+                                      <MessageSquare size={16} />
+                                    </button>
+                                  </div>
+                                )}
+
+                                {isAdmin && !isBatchMode ? (
+                                  <button
+                                    onClick={() => setConfirmModal({ show: true, type: 'single', id: song.docId })}
+                                    className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                                    title="删除歌曲"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                ) : null}
+                              </div>
+                            </>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -809,70 +873,51 @@ const Music = () => {
                           <div className="p-6 bg-brand-cream/20">
                             <div className="flex items-center justify-between mb-4">
                               <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                                <MessageSquare size={18} className="text-brand-primary" />
-                                《{selectedSongForPosts.title}》的乐评
+                                <MessageSquare size={18} />
+                                相关乐评
                               </h3>
-                              <div className="flex gap-2">
-                                <Link
-                                  to={`/forum/new?musicDocId=${selectedSongForPosts.docId}&musicTitle=${encodeURIComponent(selectedSongForPosts.title)}`}
-                                  className="px-3 py-1.5 bg-brand-primary text-gray-900 rounded-full text-xs font-bold hover:scale-105 transition-all"
-                                >
-                                  发表乐评
-                                </Link>
-                                <button
-                                  onClick={() => {
-                                    setSelectedSongForPosts(null);
-                                    setSongPosts([]);
-                                  }}
-                                  className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
-                                >
-                                  <X size={16} />
-                                </button>
-                              </div>
+                              <button
+                                onClick={() => setSelectedSongForPosts(null)}
+                                className="p-2 hover:bg-black/5 rounded-full transition-colors"
+                              >
+                                <X size={16} />
+                              </button>
                             </div>
-
+                          </div>
+                          <div className="divide-y divide-gray-50">
                             {loadingPosts ? (
-                              <div className="space-y-3">
-                                {[1, 2].map(i => (
-                                  <div key={i} className="h-20 bg-white rounded-xl animate-pulse" />
-                                ))}
-                              </div>
+                              <div className="p-8 text-center text-gray-400">加载中...</div>
                             ) : songPosts.length > 0 ? (
-                              <div className="space-y-3">
-                                {songPosts.map(post => (
-                                  <Link
-                                    key={post.id}
-                                    to={`/forum/${post.id}`}
-                                    className="block bg-white p-4 rounded-xl hover:shadow-md transition-all"
-                                  >
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="px-2 py-0.5 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded">
-                                        乐评
-                                      </span>
-                                      <span className="text-[10px] text-gray-400 flex items-center gap-1">
-                                        <Clock size={10} /> {formatDate(post.updatedAt)}
-                                      </span>
-                                    </div>
-                                    <h4 className="font-bold text-gray-900 text-sm mb-1 line-clamp-1">
-                                      {post.title}
-                                    </h4>
-                                    <div className="flex items-center gap-4 text-xs text-gray-400">
-                                      <span className="flex items-center gap-1"><Heart size={12} /> {post.likesCount || 0}</span>
-                                      <span className="flex items-center gap-1"><MessageSquare size={12} /> {post.commentsCount || 0}</span>
-                                    </div>
-                                  </Link>
-                                ))}
-                              </div>
+                              songPosts.map((post) => (
+                                <div key={post.id} className="p-6 hover:bg-black/5 transition-colors">
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <span className="font-bold text-sm">{post.title}</span>
+                                    <span className="text-xs text-gray-400">by {post.authorUid?.substring(0, 6)}</span>
+                                  </div>
+                                  <p className="text-sm text-gray-600 line-clamp-2">{post.content}</p>
+                                  <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
+                                    <span className="flex items-center gap-1"><Heart size={12} /> {post.likesCount}</span>
+                                    <span className="flex items-center gap-1"><MessageSquare size={12} /> {post.commentsCount}</span>
+                                  </div>
+                                </div>
+                              ))
                             ) : (
-                              <div className="bg-white rounded-xl p-8 text-center">
-                                <MessageSquare size={32} className="mx-auto text-gray-200 mb-3" />
-                                <p className="text-gray-400 text-sm">暂无乐评，快来发表第一篇吧！</p>
-                              </div>
+                              <div className="p-8 text-center text-gray-400">暂无乐评</div>
                             )}
                           </div>
                         </motion.div>
                       )}
                     </AnimatePresence>
+                    {totalMusicPages > 1 && (
+                      <Pagination
+                        page={page}
+                        totalPages={totalMusicPages}
+                        onPageChange={handleMusicPageChange}
+                        pageSize={pageSize}
+                        onPageSizeChange={handlePageSizeChange}
+                        showPageSizeSelector
+                      />
+                    )}
                   </>
                 ) : (
                   <div className="py-20 text-center text-gray-400 italic">暂无音乐，快去添加吧</div>
@@ -881,53 +926,91 @@ const Music = () => {
             ) : (
               <div className="p-6 md:p-8">
                 {loadingAlbums ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
                     {[1, 2, 3, 4, 5, 6].map(i => (
-                      <div key={i} className="rounded-3xl border border-gray-100 p-4 animate-pulse">
-                        <div className="aspect-square rounded-2xl bg-gray-100" />
-                        <div className="mt-4 h-4 bg-gray-100 rounded w-2/3" />
-                        <div className="mt-2 h-3 bg-gray-100 rounded w-1/3" />
+                      <div key={i} className={clsx(
+                        viewMode === 'list' ? 'h-20' : 'rounded-3xl border border-gray-100 p-4 animate-pulse',
+                        viewMode !== 'list' && 'bg-white'
+                      )}>
+                        <div className={clsx(viewMode === 'list' ? 'flex gap-4' : '')}>
+                          <div className={clsx(viewMode === 'list' ? 'w-16 h-16 rounded-lg bg-gray-100 flex-shrink-0' : 'aspect-square rounded-2xl bg-gray-100')} />
+                          <div className={clsx(viewMode === 'list' ? 'flex-1' : '')}>
+                            <div className={viewMode === 'list' ? 'mt-2 h-4 bg-gray-100 rounded w-1/3' : 'mt-4 h-4 bg-gray-100 rounded w-2/3'} />
+                            <div className={viewMode === 'list' ? 'mt-1 h-3 bg-gray-100 rounded w-1/4' : 'mt-2 h-3 bg-gray-100 rounded w-1/3'} />
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
                 ) : albums.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
                     {albums.map((album) => {
                       const albumId = album.docId || album.id;
                       const trackCount = album.trackCount ?? album.tracks?.length ?? 0;
 
                       return (
-                        <div key={albumId} className="rounded-3xl border border-gray-100 p-4 hover:border-brand-primary/30 hover:shadow-md transition-all bg-white group">
-                          <Link to={`/album/${albumId}`} className="block relative aspect-square rounded-2xl overflow-hidden bg-gray-100">
-                            <img src={album.cover} alt={album.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent opacity-80" />
-                            <div className="absolute left-3 bottom-3 inline-flex items-center gap-1 text-xs text-white bg-black/60 rounded-full px-3 py-1.5">
-                              <List size={13} /> {trackCount} 首
-                            </div>
-                          </Link>
+                        <div key={albumId} className={clsx(
+                          viewMode === 'list' 
+                            ? 'flex gap-4 p-3 rounded-xl border border-gray-100 bg-white hover:shadow-md transition-all' 
+                            : 'rounded-3xl border border-gray-100 p-4 hover:border-brand-primary/30 hover:shadow-md transition-all bg-white group'
+                        )}>
+                          {viewMode === 'list' ? (
+                            <>
+                              <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                                <img src={album.cover} alt={album.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              </div>
+                              <div className="flex-1 min-w-0 flex items-center">
+                                <div className="flex-1 min-w-0">
+                                  <Link to={`/album/${albumId}`} className="font-bold text-gray-900 line-clamp-1 hover:text-brand-primary transition-colors">
+                                    {album.title}
+                                  </Link>
+                                  <p className="text-xs text-gray-400 line-clamp-1">{album.artist}</p>
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">{trackCount} 首</span>
+                                  <Link
+                                    to={`/album/${albumId}`}
+                                    className="px-3 py-1.5 rounded-full bg-brand-primary/15 text-gray-900 text-xs hover:bg-brand-primary/25 transition-colors"
+                                  >
+                                    查看
+                                  </Link>
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <Link to={`/album/${albumId}`} className="block relative aspect-square rounded-2xl overflow-hidden bg-gray-100">
+                                <img src={album.cover} alt={album.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent opacity-80" />
+                                <div className="absolute left-3 bottom-3 inline-flex items-center gap-1 text-xs text-white bg-black/60 rounded-full px-3 py-1.5">
+                                  <List size={13} /> {trackCount} 首
+                                </div>
+                              </Link>
 
-                          <div className="mt-4">
-                            <Link to={`/album/${albumId}`} className="font-bold text-gray-900 line-clamp-1 hover:text-brand-primary transition-colors">
-                              {album.title}
-                            </Link>
-                            <p className="text-xs text-gray-400 mt-1 line-clamp-1">{album.artist}</p>
-                          </div>
+                              <div className="mt-4">
+                                <Link to={`/album/${albumId}`} className="font-bold text-gray-900 line-clamp-1 hover:text-brand-primary transition-colors">
+                                  {album.title}
+                                </Link>
+                                <p className="text-xs text-gray-400 mt-1 line-clamp-1">{album.artist}</p>
+                              </div>
 
-                          <div className="mt-3 flex items-center justify-between">
-                            <Link
-                              to={`/album/${albumId}`}
-                              className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full bg-brand-primary/15 text-gray-900 hover:bg-brand-primary/25 transition-colors"
-                            >
-                              查看专辑 <ChevronRight size={14} />
-                            </Link>
-                            <button
-                              onClick={(event) => handleCopyAlbumLink(event, albumId)}
-                              className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
-                              title="复制专辑内链"
-                            >
-                              <Link2 size={16} />
-                            </button>
-                          </div>
+                              <div className="mt-3 flex items-center justify-between">
+                                <Link
+                                  to={`/album/${albumId}`}
+                                  className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full bg-brand-primary/15 text-gray-900 hover:bg-brand-primary/25 transition-colors"
+                                >
+                                  查看专辑 <ChevronRight size={14} />
+                                </Link>
+                                <button
+                                  onClick={(event) => handleCopyAlbumLink(event, albumId)}
+                                  className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
+                                  title="复制专辑内链"
+                                >
+                                  <Link2 size={16} />
+                                </button>
+                              </div>
+                            </>
+                          )}
                         </div>
                       );
                     })}
