@@ -405,6 +405,18 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
         </div>
 
         <div className="flex-grow overflow-y-auto p-8 space-y-8">
+          <div className="space-y-2">
+            <label htmlFor="gallery-create-title" className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">图集标题</label>
+            <input
+              id="gallery-create-title"
+              type="text"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder="例如：2024 Live 现场返图"
+              className="w-full px-6 py-4 bg-brand-cream rounded-2xl border-none focus:ring-2 focus:ring-brand-olive/20"
+            />
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">标签 (逗号分隔)</label>
