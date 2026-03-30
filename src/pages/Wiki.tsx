@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Routes, Route, Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, orderBy, addDoc, limit, db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
@@ -1652,45 +1652,6 @@ const WikiEditor = () => {
     bidirectional: false,
   });
 
-  type RelationSearchSuggestion = {
-    type: 'keyword' | 'wiki' | 'post' | 'music' | 'album';
-    text: string;
-    subtext?: string;
-    id?: string;
-  };
-
-  const [relationSearchResults, setRelationSearchResults] = useState<RelationSearchSuggestion[]>([]);
-  const [relationSearchLoading, setRelationSearchLoading] = useState(false);
-  const [showRelationDropdown, setShowRelationDropdown] = useState(false);
-  const [relationSelectedIndex, setRelationSelectedIndex] = useState(-1);
-  const relationSearchRef = useRef<HTMLDivElement>(null);
-  const relationSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const searchWikiRelations = useCallback((q: string) => {
-    if (relationSearchTimeoutRef.current) {
-      clearTimeout(relationSearchTimeoutRef.current);
-    }
-    if (!q || q.length < 2) {
-      setRelationSearchResults([]);
-      setShowRelationDropdown(false);
-      return;
-    }
-    relationSearchTimeoutRef.current = setTimeout(async () => {
-      setRelationSearchLoading(true);
-      try {
-        const data = await apiGet<{ suggestions: RelationSearchSuggestion[] }>('/api/search/suggest', { q });
-        const wikiResults = data.suggestions?.filter(s => s.type === 'wiki') || [];
-        setRelationSearchResults(wikiResults);
-        setShowRelationDropdown(wikiResults.length > 0);
-        setRelationSelectedIndex(-1);
-      } catch (e) {
-        console.error("Relation search error:", e);
-      } finally {
-        setRelationSearchLoading(false);
-      }
-    }, 300);
-  }, []);
-
   useEffect(() => {
     if (!isNew) {
       const fetchPage = async () => {
@@ -1714,16 +1675,6 @@ const WikiEditor = () => {
       fetchPage();
     }
   }, [slug, isNew]);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (relationSearchRef.current && !relationSearchRef.current.contains(e.target as Node)) {
-        setShowRelationDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const handleLocationChange = (locationName: string, locationCode: string) => {
     setFormData({ ...formData, locationName, locationCode });
@@ -2004,66 +1955,13 @@ const WikiEditor = () => {
                 <option value="timeline_relation">时间线关联</option>
                 <option value="custom">自定义关系</option>
               </select>
-              <div ref={relationSearchRef} className="relative flex-1">
-                <input
-                  type="text"
-                  value={newRelation.targetSlug}
-                  onChange={e => {
-                    setNewRelation({ ...newRelation, targetSlug: e.target.value });
-                    searchWikiRelations(e.target.value);
-                  }}
-                  placeholder="目标页面标识 (slug)"
-                  className="w-full px-4 py-2 bg-white rounded-xl border border-gray-200 text-sm"
-                  onKeyDown={(e) => {
-                    if (!showRelationDropdown) return;
-                    if (e.key === 'ArrowDown') {
-                      e.preventDefault();
-                      setRelationSelectedIndex(prev => Math.min(prev + 1, relationSearchResults.length - 1));
-                    } else if (e.key === 'ArrowUp') {
-                      e.preventDefault();
-                      setRelationSelectedIndex(prev => Math.max(prev - 1, -1));
-                    } else if (e.key === 'Enter' && relationSelectedIndex >= 0) {
-                      e.preventDefault();
-                      const selected = relationSearchResults[relationSelectedIndex];
-                      setNewRelation({ ...newRelation, targetSlug: selected.id || '' });
-                      setShowRelationDropdown(false);
-                    } else if (e.key === 'Escape') {
-                      setShowRelationDropdown(false);
-                    }
-                  }}
-                />
-                <AnimatePresence>
-                  {showRelationDropdown && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -4 }}
-                      className="absolute z-50 mt-1 w-full bg-white rounded-xl border border-gray-200 shadow-lg max-h-60 overflow-auto"
-                    >
-                      {relationSearchLoading ? (
-                        <div className="px-4 py-2 text-sm text-gray-500">搜索中...</div>
-                      ) : relationSearchResults.length === 0 ? (
-                        <div className="px-4 py-2 text-sm text-gray-500">未找到相关页面</div>
-                      ) : (
-                        relationSearchResults.map((result, idx) => (
-                          <div
-                            key={result.id}
-                            className={`px-4 py-2 cursor-pointer ${idx === relationSelectedIndex ? 'bg-brand-primary/10' : 'hover:bg-gray-50'}`}
-                            onClick={() => {
-                              setNewRelation({ ...newRelation, targetSlug: result.id || '' });
-                              setShowRelationDropdown(false);
-                            }}
-                            onMouseEnter={() => setRelationSelectedIndex(idx)}
-                          >
-                            <div className="text-sm font-medium">{result.text}</div>
-                            <div className="text-xs text-gray-500 truncate">{result.subtext}</div>
-                          </div>
-                        ))
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+              <input
+                type="text"
+                value={newRelation.targetSlug}
+                onChange={e => setNewRelation({ ...newRelation, targetSlug: e.target.value })}
+                placeholder="目标页面标识 (slug)"
+                className="flex-1 px-4 py-2 bg-white rounded-xl border border-gray-200 text-sm"
+              />
               <input
                 type="text"
                 value={newRelation.label || ''}

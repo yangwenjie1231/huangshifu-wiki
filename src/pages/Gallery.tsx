@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, query, orderBy, onSnapshot, db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { Image as ImageIcon, Plus, Folder, X, Upload, Clock, User as UserIcon, Link2 } from 'lucide-react';
+import { Image as ImageIcon, Plus, Folder, X, Upload, Clock, User as UserIcon, Link2, Trash2 } from 'lucide-react';
 import { useUserPreferences } from '../context/UserPreferencesContext';
 import { ViewModeSelector } from '../components/ViewModeSelector';
 import { VIEW_MODE_CONFIG } from '../lib/viewModes';
@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { SmartImage } from '../components/SmartImage';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
-import { apiPost, apiUpload } from '../lib/apiClient';
+import { apiDelete, apiPost, apiUpload } from '../lib/apiClient';
 import { LocationTagInput } from '../components/LocationTagInput';
 
 const toDateValue = (value: string | null | undefined) => {
@@ -61,8 +61,10 @@ type GalleryCreateResponse = {
 const GalleryList = () => {
   const [galleries, setGalleries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const { user, isBanned } = useAuth();
+  const { user, isAdmin, isBanned } = useAuth();
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [galleryToDelete, setGalleryToDelete] = useState<{ id: string; title: string } | null>(null);
+  const [deletingGalleryId, setDeletingGalleryId] = useState<string | null>(null);
   const { show } = useToast();
   const { preferences, setViewMode } = useUserPreferences();
   const viewMode = preferences.viewMode;
@@ -85,6 +87,35 @@ const GalleryList = () => {
       return;
     }
     show('复制链接失败，请稍后重试', { variant: 'error' });
+  };
+
+  const handleRequestDeleteGallery = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    gallery: { id: string; title?: string | null },
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setGalleryToDelete({
+      id: gallery.id,
+      title: gallery.title?.trim() || '未命名图集',
+    });
+  };
+
+  const handleConfirmDeleteGallery = async () => {
+    if (!galleryToDelete || deletingGalleryId) return;
+
+    try {
+      setDeletingGalleryId(galleryToDelete.id);
+      await apiDelete(`/api/galleries/${galleryToDelete.id}`);
+      setGalleries((prev) => prev.filter((gallery) => gallery.id !== galleryToDelete.id));
+      show('图集已删除');
+      setGalleryToDelete(null);
+    } catch (error) {
+      console.error('Delete gallery from list error:', error);
+      show('删除图集失败', { variant: 'error' });
+    } finally {
+      setDeletingGalleryId(null);
+    }
   };
 
   return (
@@ -181,6 +212,17 @@ const GalleryList = () => {
                   </>
                 )}
               </Link>
+              {isAdmin ? (
+                <button
+                  onClick={(event) => handleRequestDeleteGallery(event, gallery)}
+                  disabled={deletingGalleryId === gallery.id}
+                  className="absolute top-4 left-4 p-2 rounded-full border border-white/70 bg-white/85 text-gray-500 shadow-sm opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:text-red-500 transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                  title="删除图集"
+                  aria-label="删除图集"
+                >
+                  <Trash2 size={14} />
+                </button>
+              ) : null}
               <button
                 onClick={(event) => handleCopyGalleryLink(event, gallery.id)}
                 className={clsx(
@@ -208,12 +250,46 @@ const GalleryList = () => {
           <UploadModal onClose={() => setIsUploadModalOpen(false)} />
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {galleryToDelete && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-[40px] p-8 max-w-md w-full shadow-2xl"
+            >
+              <h3 className="text-2xl font-serif font-bold text-gray-900 mb-4">确认删除</h3>
+              <p className="text-gray-500 mb-8">
+                您确定要删除图集《{galleryToDelete.title}》吗？此操作无法撤销。
+              </p>
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setGalleryToDelete(null)}
+                  disabled={Boolean(deletingGalleryId)}
+                  className="flex-grow px-6 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleConfirmDeleteGallery}
+                  disabled={Boolean(deletingGalleryId)}
+                  className="flex-grow px-6 py-4 bg-red-500 text-white rounded-2xl font-bold hover:bg-red-600 transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {deletingGalleryId ? '删除中...' : '确定删除'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
 
 const UploadModal = ({ onClose }: { onClose: () => void }) => {
-  const { user, isBanned } = useAuth();
+  const { user, isAdmin, isBanned } = useAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
@@ -405,6 +481,18 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
         </div>
 
         <div className="flex-grow overflow-y-auto p-8 space-y-8">
+          <div className="space-y-2">
+            <label htmlFor="gallery-create-title" className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">图集标题</label>
+            <input
+              id="gallery-create-title"
+              type="text"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder="例如：2024 Live 现场返图"
+              className="w-full px-6 py-4 bg-brand-cream rounded-2xl border-none focus:ring-2 focus:ring-brand-olive/20"
+            />
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">标签 (逗号分隔)</label>

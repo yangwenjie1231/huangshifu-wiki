@@ -153,9 +153,6 @@ const Admin = () => {
       fetchReviewQueue();
       return;
     }
-    if (activeTab === 'backups' || activeTab === 'embeddings') {
-      return;
-    }
     fetchData();
   }, [activeTab, reviewFilter]);
 
