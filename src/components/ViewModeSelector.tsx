@@ -19,6 +19,7 @@ const VIEW_MODE_ICONS: Record<ViewMode, React.ReactNode> = {
 
 export const ViewModeSelector: React.FC<ViewModeSelectorProps> = ({ value, onChange, size = 'md' }) => {
   const modes: ViewMode[] = ['large', 'medium', 'small', 'list'];
+  const showLabels = size === 'md';
 
   return (
     <div className={clsx(
@@ -29,6 +30,7 @@ export const ViewModeSelector: React.FC<ViewModeSelectorProps> = ({ value, onCha
         <button
           key={mode}
           onClick={() => onChange(mode)}
+          aria-label={VIEW_MODE_LABELS[mode]}
           className={clsx(
             'rounded-full transition-all inline-flex items-center gap-1.5 font-medium',
             size === 'sm' ? 'px-2.5 py-1.5 text-xs' : 'px-3 py-2 text-sm',
@@ -39,7 +41,7 @@ export const ViewModeSelector: React.FC<ViewModeSelectorProps> = ({ value, onCha
           title={VIEW_MODE_LABELS[mode]}
         >
           {VIEW_MODE_ICONS[mode]}
-          {size === 'md' && <span>{VIEW_MODE_LABELS[mode]}</span>}
+          {showLabels && <span className="hidden sm:inline">{VIEW_MODE_LABELS[mode]}</span>}
         </button>
       ))}
     </div>

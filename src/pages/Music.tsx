@@ -442,13 +442,14 @@ const Music = () => {
                 setIsBatchMode(!isBatchMode);
                 setSelectedSongs(new Set());
               }}
+              aria-label={isBatchMode ? '退出批量' : '批量管理'}
               className={clsx(
                 "px-6 py-4 rounded-full font-bold transition-all flex items-center gap-2 shadow-xl",
                 isBatchMode ? "bg-brand-primary text-gray-900" : "bg-white text-gray-500 border border-gray-100"
               )}
             >
               <List size={20} />
-              {isBatchMode ? '退出批量' : '批量管理'}
+              <span className="hidden sm:inline">{isBatchMode ? '退出批量' : '批量管理'}</span>
             </button>
             <button
               onClick={() => {
@@ -458,10 +459,11 @@ const Music = () => {
                 }
                 setIsImportModalOpen(true);
               }}
+              aria-label="链接导入"
               className="px-8 py-4 bg-brand-primary text-gray-900 rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-xl"
             >
               <Search size={20} />
-              链接导入
+              <span className="hidden sm:inline">链接导入</span>
             </button>
             <button 
               onClick={() => {
@@ -471,17 +473,19 @@ const Music = () => {
                 }
                 setIsAdding(!isAdding);
               }}
+              aria-label={isAdding ? '取消添加' : '添加音乐'}
               className="px-8 py-4 bg-gray-900 text-white rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-xl"
             >
               {isAdding ? <X size={20} /> : <Plus size={20} />}
-              {isAdding ? '取消添加' : '添加音乐'}
+              <span className="hidden sm:inline">{isAdding ? '取消添加' : '添加音乐'}</span>
             </button>
             <Link
               to="/music/links"
+              aria-label="关联管理"
               className="px-8 py-4 bg-white text-gray-900 border border-gray-200 rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-xl"
             >
               <Link2 size={20} />
-              关联管理
+              <span className="hidden sm:inline">关联管理</span>
             </Link>
           </div>
         )}
