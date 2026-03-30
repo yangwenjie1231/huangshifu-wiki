@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Search as SearchIcon, Book, MessageSquare, Image as ImageIcon, Clock, ChevronRight, Tag, Filter, Sparkles, Calendar, Camera, Music } from 'lucide-react';
+import { useUserPreferences } from '../context/UserPreferencesContext';
+import { ViewModeSelector } from '../components/ViewModeSelector';
+import { VIEW_MODE_CONFIG } from '../lib/viewModes';
 import { format } from 'date-fns';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -35,6 +38,8 @@ const Search = () => {
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(Boolean(initialQuery));
   const [activeTab, setActiveTab] = useState<'all' | 'wiki' | 'posts' | 'galleries' | 'music' | 'albums'>('all');
+  const { preferences, setViewMode } = useUserPreferences();
+  const viewMode = preferences.viewMode;
   
   // Advanced Filters
   const [showFilters, setShowFilters] = useState(false);
@@ -309,15 +314,18 @@ const Search = () => {
                 </button>
               ))}
             </div>
-            <button 
-              onClick={() => setShowFilters(!showFilters)}
-              className={clsx(
-                "flex items-center gap-2 text-sm font-bold transition-colors",
-                showFilters ? "text-brand-olive" : "text-gray-400 hover:text-brand-olive"
-              )}
-            >
-              <Filter size={18} /> {showFilters ? '隐藏筛选' : '高级筛选'}
-            </button>
+            <div className="flex items-center gap-4">
+              <ViewModeSelector value={viewMode} onChange={setViewMode} size="sm" />
+              <button 
+                onClick={() => setShowFilters(!showFilters)}
+                className={clsx(
+                  "flex items-center gap-2 text-sm font-bold transition-colors",
+                  showFilters ? "text-brand-olive" : "text-gray-400 hover:text-brand-olive"
+                )}
+              >
+                <Filter size={18} /> {showFilters ? '隐藏筛选' : '高级筛选'}
+              </button>
+            </div>
           </div>
 
           <AnimatePresence>
@@ -484,24 +492,50 @@ const Search = () => {
                   <h2 className="text-sm font-bold text-brand-olive uppercase tracking-widest flex items-center gap-2">
                     <Book size={16} /> 百科页面
                   </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
                     {results.wiki.map(page => (
                       <Link 
                         key={page.id} 
                         to={`/wiki/${page.slug}`}
-                        className="bg-white p-6 rounded-3xl border border-gray-100 hover:border-brand-olive/20 hover:shadow-lg transition-all group"
+                        className={clsx(
+                          viewMode === 'list'
+                            ? 'flex gap-4 p-4 bg-white rounded-xl border border-gray-100 hover:border-brand-olive/20 hover:shadow-lg transition-all w-full'
+                            : 'bg-white p-6 rounded-3xl border border-gray-100 hover:border-brand-olive/20 hover:shadow-lg transition-all group'
+                        )}
                       >
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="px-2 py-0.5 bg-brand-cream text-brand-olive text-[10px] font-bold uppercase tracking-wider rounded">{page.category}</span>
-                        </div>
-                        <h3 className="text-xl font-serif font-bold mb-2 group-hover:text-brand-olive transition-colors">{page.title}</h3>
-                        <p className="text-gray-400 text-sm line-clamp-2 mb-4 italic leading-relaxed">
-                          {page.content.replace(/[#*`]/g, '').substring(0, 100)}...
-                        </p>
-                        <div className="flex items-center justify-between text-gray-400 text-[10px]">
-                          <span className="flex items-center gap-1"><Clock size={12} /> {toDateValue(page.updatedAt) ? format(toDateValue(page.updatedAt)!, 'yyyy-MM-dd') : '刚刚'}</span>
-                          <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
-                        </div>
+                        {viewMode === 'list' ? (
+                          <>
+                            <div className="w-24 h-24 bg-brand-cream/50 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <Book size={32} className="text-brand-olive/40" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="px-2 py-0.5 bg-brand-cream text-brand-olive text-[10px] font-bold uppercase tracking-wider rounded">{page.category}</span>
+                              </div>
+                              <h3 className="text-lg font-serif font-bold mb-1 group-hover:text-brand-olive transition-colors truncate">{page.title}</h3>
+                              <p className="text-gray-400 text-sm line-clamp-2 italic">
+                                {page.content.replace(/[#*`]/g, '').substring(0, 100)}
+                              </p>
+                              <p className="text-gray-300 text-xs mt-1">
+                                {page.content.replace(/[#*`]/g, '').substring(0, 50)}...
+                              </p>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-2 mb-3">
+                              <span className="px-2 py-0.5 bg-brand-cream text-brand-olive text-[10px] font-bold uppercase tracking-wider rounded">{page.category}</span>
+                            </div>
+                            <h3 className="text-xl font-serif font-bold mb-2 group-hover:text-brand-olive transition-colors">{page.title}</h3>
+                            <p className="text-gray-400 text-sm line-clamp-2 mb-4 italic leading-relaxed">
+                              {page.content.replace(/[#*`]/g, '').substring(0, 100)}...
+                            </p>
+                            <div className="flex items-center justify-between text-gray-400 text-[10px]">
+                              <span className="flex items-center gap-1"><Clock size={12} /> {toDateValue(page.updatedAt) ? format(toDateValue(page.updatedAt)!, 'yyyy-MM-dd') : '刚刚'}</span>
+                              <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                            </div>
+                          </>
+                        )}
                       </Link>
                     ))}
                   </div>
@@ -546,20 +580,42 @@ const Search = () => {
                   <h2 className="text-sm font-bold text-brand-olive uppercase tracking-widest flex items-center gap-2">
                     <ImageIcon size={16} /> 图集馆
                   </h2>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                  <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
                     {results.galleries.map(gallery => (
                       <Link 
                         key={gallery.id} 
                         to={`/gallery/${gallery.id}`}
-                        className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all group"
+                        className={clsx(
+                          viewMode === 'list'
+                            ? 'flex gap-4 p-3 bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all w-full'
+                            : 'bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all group'
+                        )}
                       >
-                        <div className="h-32 overflow-hidden">
-                          <SmartImage src={gallery.images[0]?.url} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                        </div>
-                        <div className="p-4">
-                          <h3 className="text-sm font-serif font-bold truncate group-hover:text-brand-olive transition-colors">{gallery.title}</h3>
-                          <p className="text-[10px] text-gray-400">{gallery.images.length} 张图片</p>
-                        </div>
+                        {viewMode === 'list' ? (
+                          <>
+                            <div className="w-24 h-24 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                              <SmartImage src={gallery.images[0]?.url} alt="" className="w-full h-full object-cover" />
+                            </div>
+                            <div className="flex-1 min-w-0 flex items-center">
+                              <div className="flex-1 min-w-0">
+                                <h3 className="text-sm font-serif font-bold truncate group-hover:text-brand-olive transition-colors">{gallery.title}</h3>
+                                <p className="text-xs text-gray-400">{gallery.description || '暂无描述'}</p>
+                                <p className="text-[10px] text-gray-300 mt-1">{(gallery.description || '').substring(0, 50)}...</p>
+                              </div>
+                              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full flex-shrink-0">{gallery.images.length} 张</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="h-32 overflow-hidden">
+                              <SmartImage src={gallery.images[0]?.url} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                            </div>
+                            <div className="p-4">
+                              <h3 className="text-sm font-serif font-bold truncate group-hover:text-brand-olive transition-colors">{gallery.title}</h3>
+                              <p className="text-[10px] text-gray-400">{gallery.images.length} 张图片</p>
+                            </div>
+                          </>
+                        )}
                       </Link>
                     ))}
                   </div>
@@ -576,23 +632,41 @@ const Search = () => {
                   <h2 className="text-sm font-bold text-brand-olive uppercase tracking-widest flex items-center gap-2">
                     <Music size={16} /> 音乐曲目
                   </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
                     {results.music.map(track => (
                       <Link 
                         key={track.docId} 
                         to={`/music/${track.id}`}
-                        className="bg-white p-6 rounded-3xl border border-gray-100 hover:border-pink-200 hover:shadow-lg transition-all group"
+                        className={clsx(
+                          viewMode === 'list'
+                            ? 'flex gap-4 p-4 bg-white rounded-xl border border-gray-100 hover:border-pink-200 hover:shadow-lg transition-all w-full'
+                            : 'bg-white p-6 rounded-3xl border border-gray-100 hover:border-pink-200 hover:shadow-lg transition-all group'
+                        )}
                       >
-                        <div className="flex items-center gap-4">
-                          <div className="w-16 h-16 rounded-xl overflow-hidden bg-brand-cream flex-shrink-0">
-                            <SmartImage src={track.cover} alt="" className="w-full h-full object-cover" />
+                        {viewMode === 'list' ? (
+                          <>
+                            <div className="w-16 h-16 rounded-lg overflow-hidden bg-brand-cream flex-shrink-0">
+                              <SmartImage src={track.cover} alt="" className="w-full h-full object-cover" />
+                            </div>
+                            <div className="flex-1 min-w-0 flex items-center">
+                              <div className="flex-1 min-w-0">
+                                <h3 className="text-sm font-serif font-bold truncate group-hover:text-pink-500 transition-colors">{track.title}</h3>
+                                <p className="text-xs text-gray-500 truncate">{track.artist} — {track.album}</p>
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="flex items-center gap-4">
+                            <div className="w-16 h-16 rounded-xl overflow-hidden bg-brand-cream flex-shrink-0">
+                              <SmartImage src={track.cover} alt="" className="w-full h-full object-cover" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-lg font-serif font-bold truncate group-hover:text-pink-500 transition-colors">{track.title}</h3>
+                              <p className="text-sm text-gray-500 truncate">{track.artist}</p>
+                              <p className="text-xs text-gray-400 truncate">{track.album}</p>
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-lg font-serif font-bold truncate group-hover:text-pink-500 transition-colors">{track.title}</h3>
-                            <p className="text-sm text-gray-500 truncate">{track.artist}</p>
-                            <p className="text-xs text-gray-400 truncate">{track.album}</p>
-                          </div>
-                        </div>
+                        )}
                       </Link>
                     ))}
                   </div>
@@ -609,20 +683,41 @@ const Search = () => {
                   <h2 className="text-sm font-bold text-brand-olive uppercase tracking-widest flex items-center gap-2">
                     <Music size={16} /> 音乐专辑
                   </h2>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                  <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
                     {results.albums.map(album => (
                       <Link 
                         key={album.docId} 
                         to={`/album/${album.id}`}
-                        className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all group"
+                        className={clsx(
+                          viewMode === 'list'
+                            ? 'flex gap-4 p-3 bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all w-full'
+                            : 'bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all group'
+                        )}
                       >
-                        <div className="h-40 overflow-hidden">
-                          <SmartImage src={album.cover} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                        </div>
-                        <div className="p-4">
-                          <h3 className="text-sm font-serif font-bold truncate group-hover:text-purple-500 transition-colors">{album.title}</h3>
-                          <p className="text-[10px] text-gray-400">{album.artist} · {album.tracksCount} 曲</p>
-                        </div>
+                        {viewMode === 'list' ? (
+                          <>
+                            <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                              <SmartImage src={album.cover} alt="" className="w-full h-full object-cover" />
+                            </div>
+                            <div className="flex-1 min-w-0 flex items-center">
+                              <div className="flex-1 min-w-0">
+                                <h3 className="text-sm font-serif font-bold truncate group-hover:text-purple-500 transition-colors">{album.title}</h3>
+                                <p className="text-xs text-gray-400">{album.artist}</p>
+                              </div>
+                              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full flex-shrink-0">{album.tracksCount} 曲</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="h-40 overflow-hidden">
+                              <SmartImage src={album.cover} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                            </div>
+                            <div className="p-4">
+                              <h3 className="text-sm font-serif font-bold truncate group-hover:text-purple-500 transition-colors">{album.title}</h3>
+                              <p className="text-[10px] text-gray-400">{album.artist} · {album.tracksCount} 曲</p>
+                            </div>
+                          </>
+                        )}
                       </Link>
                     ))}
                   </div>

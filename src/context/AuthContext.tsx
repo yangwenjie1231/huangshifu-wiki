@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth, onAuthStateChanged, User } from '../lib/auth';
+import { UserPreferencesProvider } from './UserPreferencesContext';
 
 interface AuthContextType {
   user: User | null;
@@ -50,7 +51,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider value={{ user, profile, loading, isAdmin, isBanned }}>
-      {children}
+      <UserPreferencesProvider>
+        {children}
+      </UserPreferencesProvider>
     </AuthContext.Provider>
   );
 };
