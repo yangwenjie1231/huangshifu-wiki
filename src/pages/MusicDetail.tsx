@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Clock, ExternalLink, Heart, Link2, MessageSquare, Play } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -19,6 +19,11 @@ type PlatformIds = {
   kugouId?: string | null;
   baiduId?: string | null;
   kuwoId?: string | null;
+};
+
+type CustomPlatformLink = {
+  label: string;
+  url: string;
 };
 
 type CustomPlatformConfig = {
@@ -43,6 +48,7 @@ type SongItem = {
   favoritedByMe?: boolean;
   platformIds?: PlatformIds;
   customPlatformIds?: Record<string, string>;
+  customPlatformLinks?: CustomPlatformLink[];
 };
 
 type SongDetailResponse = {
@@ -128,6 +134,8 @@ const MusicDetail = () => {
 
     fetchData();
   }, [songId]);
+
+  const customPlatformLinks = song?.customPlatformLinks || [];
 
   const handlePlay = () => {
     if (!song) return;
@@ -255,23 +263,39 @@ const MusicDetail = () => {
         </div>
       </section>
 
-      <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
-        <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">歌词</h2>
-        <LyricsDisplay lyric={song?.lyric || ''} />
-      </section>
-
-      {song?.description && (
+      {/* 自定义链接 - PR #70 */}
+      {customPlatformLinks.length > 0 && (
         <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
-          <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">歌曲描述</h2>
-          <div className="prose prose-sm max-w-none text-gray-600 whitespace-pre-wrap">
-            {song.description}
+          <div className="flex items-center justify-between mb-4 gap-3">
+            <h2 className="text-xl font-serif font-bold text-gray-900">更多平台</h2>
+            <span className="text-xs px-3 py-1 rounded-full bg-brand-primary/15 text-gray-700 font-semibold">
+              {customPlatformLinks.length} 个链接
+            </span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {customPlatformLinks.map((link) => (
+              <a
+                key={`${link.label}-${link.url}`}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 px-4 py-3 hover:border-brand-primary/40 hover:bg-brand-cream/20 transition-colors"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">{link.label}</p>
+                  <p className="text-xs text-gray-500 truncate">{link.url}</p>
+                </div>
+                <ExternalLink size={16} className="text-gray-400 shrink-0" />
+              </a>
+            ))}
           </div>
         </section>
       )}
 
+      {/* 预设平台 - main 分支 */}
       {customPlatforms.length > 0 && song?.customPlatformIds && Object.keys(song.customPlatformIds).length > 0 && (
         <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
-          <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">更多平台</h2>
+          <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">预设平台</h2>
           <div className="flex flex-wrap gap-2">
             {customPlatforms
               .filter(p => song.customPlatformIds?.[p.key])
@@ -295,6 +319,20 @@ const MusicDetail = () => {
                   </a>
                 );
               })}
+          </div>
+        </section>
+      )}
+
+      <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
+        <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">歌词</h2>
+        <LyricsDisplay lyric={song?.lyric || ''} />
+      </section>
+
+      {song?.description && (
+        <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
+          <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">歌曲描述</h2>
+          <div className="prose prose-sm max-w-none text-gray-600 whitespace-pre-wrap">
+            {song.description}
           </div>
         </section>
       )}

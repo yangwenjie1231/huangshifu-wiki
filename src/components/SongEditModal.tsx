@@ -32,6 +32,30 @@ type SongFormData = {
   description?: string | null;
 };
 
+type CustomPlatformLink = {
+  label: string;
+  url: string;
+};
+
+const normalizeCustomPlatformLinkUrl = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  const raw = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return '';
+    }
+    return parsed.toString();
+  } catch {
+    return '';
+  }
+};
+
 type SongItem = {
   docId: string;
   id: string;
@@ -46,6 +70,7 @@ type SongItem = {
   favoritedByMe?: boolean;
   platformIds?: PlatformIds;
   customPlatformIds?: Record<string, string>;
+  customPlatformLinks?: CustomPlatformLink[];
 };
 
 interface SongEditModalProps {
@@ -78,6 +103,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
     baiduId: song.platformIds?.baiduId || '',
     kuwoId: song.platformIds?.kuwoId || '',
   });
+  const [customPlatformLinks, setCustomPlatformLinks] = useState<CustomPlatformLink[]>(song.customPlatformLinks || []);
   const [customPlatformIds, setCustomPlatformIds] = useState<Record<string, string>>(song.customPlatformIds || {});
   const [customPlatforms, setCustomPlatforms] = useState<CustomPlatformConfig[]>([]);
   const [platformExpanded, setPlatformExpanded] = useState(false);
@@ -114,6 +140,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
         baiduId: song.platformIds?.baiduId || '',
         kuwoId: song.platformIds?.kuwoId || '',
       });
+      setCustomPlatformLinks(song.customPlatformLinks || []);
       setCustomPlatformIds(song.customPlatformIds || {});
     }
   }, [song, open]);
@@ -133,6 +160,28 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
       return;
     }
 
+    const normalizedCustomPlatformLinks = customPlatformLinks.map((link) => ({
+      label: link.label.trim(),
+      url: link.url.trim(),
+    }));
+    const hasIncompleteCustomPlatformLink = normalizedCustomPlatformLinks.some(
+      (link) => (link.label || link.url) && (!link.label || !link.url),
+    );
+
+    if (hasIncompleteCustomPlatformLink) {
+      show('自定义平台链接需要同时填写平台名称和地址', { variant: 'error' });
+      return;
+    }
+
+    const hasInvalidCustomPlatformLink = normalizedCustomPlatformLinks.some(
+      (link) => link.url && !normalizeCustomPlatformLinkUrl(link.url),
+    );
+
+    if (hasInvalidCustomPlatformLink) {
+      show('自定义平台链接地址无效，请填写正确的 http/https 链接', { variant: 'error' });
+      return;
+    }
+
     setSaving(true);
     try {
       const result = await apiPatch<{ song: SongItem; error?: string; conflict?: boolean; conflictingSong?: { docId: string; title: string; artist: string } }>(`/api/music/${song.docId}`, {
@@ -147,6 +196,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
         baiduId: platformIds.baiduId || null,
         kuwoId: platformIds.kuwoId || null,
         customPlatformIds: customPlatformIds,
+        customPlatformLinks: normalizedCustomPlatformLinks.filter((link) => link.label && link.url),
       });
       show('歌曲已更新');
       onSuccess();
@@ -165,6 +215,20 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
 
   const handlePlatformIdChange = (key: keyof PlatformIds, value: string) => {
     setPlatformIds((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleCustomPlatformLinkChange = (index: number, key: keyof CustomPlatformLink, value: string) => {
+    setCustomPlatformLinks((prev) => prev.map((item, itemIndex) => (
+      itemIndex === index ? { ...item, [key]: value } : item
+    )));
+  };
+
+  const handleAddCustomPlatformLink = () => {
+    setCustomPlatformLinks((prev) => [...prev, { label: '', url: '' }]);
+  };
+
+  const handleRemoveCustomPlatformLink = (index: number) => {
+    setCustomPlatformLinks((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
   };
 
   const handleMatchSelect = (platform: Platform, sourceId: string) => {
@@ -302,6 +366,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
               </div>
             )}
 
+            {/* 预设平台 */}
             {customPlatforms.length > 0 && (
               <>
                 <button
@@ -310,7 +375,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
                   className="w-full flex items-center justify-between p-4 rounded-2xl border border-gray-100 bg-gray-50/60 hover:bg-gray-100/60 transition-colors"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-gray-700">自定义平台</span>
+                    <span className="text-sm font-semiboldtext-gray-700">预设平台</span>
                     {Object.keys(customPlatformIds).length > 0 && (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold">
                         已添加 {Object.keys(customPlatformIds).length} 个
@@ -348,28 +413,28 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
                             className="flex-1 px-3 py-2 rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary/25 text-sm font-mono"
                           />
                           {isLinked && (
-                            <a
-                              href={buildUrl(currentId)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
-                            >
-                              <ExternalLink size={16} />
-                            </a>
-                          )}
-                          {isLinked && (
-                            <button
-                              type="button"
-                              onClick={() => setCustomPlatformIds((prev) => {
-                                const next = { ...prev };
-                                delete next[platform.key];
-                                return next;
-                              })}
-                              className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                              title="移除"
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                            <>
+                              <a
+                                href={buildUrl(currentId)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
+                              >
+                                <ExternalLink size={16} />
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => setCustomPlatformIds((prev) => {
+                                  const next = { ...prev };
+                                  delete next[platform.key];
+                                  return next;
+                                })}
+                                className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                                title="移除"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </>
                           )}
                         </div>
                       );
@@ -378,6 +443,73 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
                 )}
               </>
             )}
+
+            {/* 自定义链接 */}
+            <div className="space-y-3 rounded-2xl border border-gray-100 bg-gray-50/60 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-700">自定义平台链接</p>
+                  <p className="text-xs text-gray-500 mt-1">例如哔哩哔哩、5sing 或其他发布平台</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddCustomPlatformLink}
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-gray-200 text-xs text-gray-600 hover:text-brand-primary hover:border-brand-primary/40 transition-colors"
+                >
+                  <Plus size={14} /> 添加链接
+                </button>
+              </div>
+
+              {customPlatformLinks.length > 0 ? (
+                <div className="space-y-3">
+                  {customPlatformLinks.map((link, index) => {
+                    const previewUrl = normalizeCustomPlatformLinkUrl(link.url);
+                    return (
+                      <div key={`custom-link-${index}`} className="rounded-2xl border border-gray-200 bg-white p-3 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="text"
+                            value={link.label}
+                            onChange={(e) => handleCustomPlatformLinkChange(index, 'label', e.target.value)}
+                            placeholder="平台名称，例如 Bilibili"
+                            className="w-40 px-3 py-2 rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary/25 text-sm"
+                          />
+                          <input
+                            type="text"
+                            value={link.url}
+                            onChange={(e) => handleCustomPlatformLinkChange(index, 'url', e.target.value)}
+                            placeholder="链接地址，例如 https://www.bilibili.com/..."
+                            className="flex-1 px-3 py-2 rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary/25 text-sm"
+                          />
+                          {previewUrl ? (
+                            <a
+                              href={previewUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
+                            >
+                              <ExternalLink size={16} />
+                            </a>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCustomPlatformLink(index)}
+                            className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                            aria-label="删除链接"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-gray-200 bg-white/70 px-4 py-6 text-sm text-gray-400 text-center">
+                  暂无自定义平台链接
+                </div>
+              )}
+            </div>
 
             <div className="rounded-2xl border border-gray-100 bg-gray-50/60 p-4">
               <div className="flex items-center gap-3">
