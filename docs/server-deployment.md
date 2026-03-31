@@ -618,7 +618,7 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 
 ### 15.5 音乐播放音源架构
 
-本项目采用**客户端直连 + 服务器缓存**混合架构，针对不同平台选择最优播放方案。
+ 本项目采用**客户端直连 + 服务器缓存**混合架构，针对不同平台选择最优播放方案。
 
 **播放策略**：
 
@@ -626,6 +626,40 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 |------|----------|------|
 | 网易云音乐 | 客户端直连 | 直接构造 URL: `https://music.163.com/song/media/outer/url?id={neteaseId}.mp3` |
 | QQ/酷狗/百度/酷我 | 服务器 API | 通过 `/api/music/:docId/play-url` 获取，服务器缓存结果 |
+
+### 15.6 敏感词过滤
+
+本项目内置敏感词检测功能，用于过滤热门搜索词和辅助内容审核。
+
+**功能特性**：
+
+- **DFA 算法**：使用确定性有限自动机（DFA）实现高效敏感词匹配
+- **搜索过滤**：敏感词不会被记录到热门搜索词中
+- **审核辅助**：审核内容时自动检测敏感词并高亮显示
+- **管理工具**：提供敏感词检测面板，可手动检测任意文本
+
+**敏感词库**：
+
+敏感词库文件位于 `public/sensitive-words/words.txt`，每行一个敏感词。
+
+**下载敏感词库**：
+
+```bash
+npm run download:sensitive-words
+```
+
+该脚本从 GitHub 仓库下载最新的敏感词列表。如需使用自定义词库，请将词库文件放置于 `public/sensitive-words/words.txt`。
+
+**API 接口**：
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/api/admin/check-sensitive` | POST | 敏感词检测（需管理员权限），请求体 `{ text: string }`，返回 `{ sensitiveWords: string[] }` |
+| `/api/admin/review-queue` | GET | 审核队列返回时自动附带 `sensitiveWords` 字段 |
+
+**管理员面板**：
+
+在「审核队列」中，待审核内容会自动显示检测到的敏感词。在「敏感词检测」面板可手动输入文本进行检测。
 
 **实现逻辑**：
 
@@ -673,6 +707,14 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 ## 附录：更新日志
 
 ### v5.x
+
+- **敏感词过滤功能**：内置 DFA 算法敏感词检测，用于过滤热门搜索词和辅助内容审核
+  - 敏感词不会被记录到热门搜索
+  - 审核内容时自动检测并显示敏感词
+  - 新增「敏感词检测」管理面板
+  - 新增 `POST /api/admin/check-sensitive` API
+  - 敏感词库文件位于 `public/sensitive-words/words.txt`
+  - **部署注意**：需执行 `npm run download:sensitive-words` 下载敏感词库
 
 - **新增用户视图偏好设置**：用户可以选择四种内容展示模式（大图标、中图标、小图标、列表），偏好设置存储在 `User.preferences` 字段（JSON 类型），支持以下页面：
   - 百科页面（Wiki）

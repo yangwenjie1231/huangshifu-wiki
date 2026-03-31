@@ -10,6 +10,7 @@ import {
   Music as MusicIcon,
   Plus,
   Shield,
+  ShieldCheck,
   Trash2,
   Users,
   XCircle,
@@ -26,7 +27,7 @@ import { useToast } from '../components/Toast';
 import { EmbeddingsTab } from './Admin/EmbeddingsTab';
 import { BackupsTab } from './Admin/BackupsTab';
 
-type AdminTab = 'reviews' | 'wiki' | 'posts' | 'galleries' | 'users' | 'sections' | 'announcements' | 'music' | 'locks' | 'moderation_logs' | 'ban_logs' | 'embeddings' | 'backups';
+type AdminTab = 'reviews' | 'wiki' | 'posts' | 'galleries' | 'users' | 'sections' | 'announcements' | 'music' | 'locks' | 'moderation_logs' | 'ban_logs' | 'embeddings' | 'backups' | 'sensitive_check';
 type ReviewFilter = 'all' | 'wiki' | 'posts';
 
 type ReviewQueueBucket = {
@@ -69,6 +70,10 @@ const Admin = () => {
   const [newAnnouncement, setNewAnnouncement] = useState({ content: '', link: '', active: true });
   const { show } = useToast();
 
+  const [sensitiveCheckText, setSensitiveCheckText] = useState('');
+  const [sensitiveCheckResult, setSensitiveCheckResult] = useState<string[]>([]);
+  const [sensitiveCheckLoading, setSensitiveCheckLoading] = useState(false);
+
   const isSuperAdmin = profile?.role === 'super_admin';
 
   const tabConfig = useMemo(
@@ -86,6 +91,7 @@ const Admin = () => {
       { id: 'moderation_logs' as const, label: '操作日志', icon: FileText },
       { id: 'ban_logs' as const, label: '封禁日志', icon: Shield },
       ...(isSuperAdmin ? [{ id: 'backups' as const, label: '数据库备份', icon: Database }] : []),
+      { id: 'sensitive_check' as const, label: '敏感词检测', icon: ShieldCheck },
     ],
     [],
   );
@@ -435,6 +441,14 @@ const Admin = () => {
                       <p className="font-bold text-gray-800 mb-1">{item.title || item.slug || item.id}</p>
                       <p className="text-xs text-gray-500 line-clamp-2">{(item.content || '').replace(/[#*`]/g, '').slice(0, 160) || '无内容摘要'}</p>
                       <p className="text-[10px] text-gray-400 mt-2">更新时间：{formatDateTime(item.updatedAt)}</p>
+                      {item.sensitiveWords && item.sensitiveWords.length > 0 && (
+                        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                          <span className="text-[10px] font-bold text-red-600">检测到敏感词: </span>
+                          {item.sensitiveWords.map((w: string) => (
+                            <span key={w} className="text-[10px] text-red-500 mr-1">#{w}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -465,6 +479,52 @@ const Admin = () => {
       ) : activeTab === 'backups' ? (
         <div className="bg-white rounded-[36px] border border-gray-100 shadow-sm overflow-hidden p-6">
           <BackupsTab />
+        </div>
+      ) : activeTab === 'sensitive_check' ? (
+        <div className="bg-white rounded-[36px] border border-gray-100 shadow-sm overflow-hidden p-6">
+          <h3 className="text-lg font-bold mb-4">敏感词检测工具</h3>
+          <p className="text-sm text-gray-500 mb-4">输入文本内容进行敏感词检测</p>
+          <textarea
+            className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary outline-none"
+            rows={8}
+            placeholder="请输入要检测的文本内容..."
+            value={sensitiveCheckText}
+            onChange={(e) => setSensitiveCheckText(e.target.value)}
+          />
+          <button
+            onClick={async () => {
+              if (!sensitiveCheckText.trim()) return;
+              setSensitiveCheckLoading(true);
+              try {
+                const data = await apiPost<{ sensitiveWords: string[] }>('/api/admin/check-sensitive', { text: sensitiveCheckText });
+                setSensitiveCheckResult(data.sensitiveWords || []);
+              } catch {
+                show('检测失败', { variant: 'error' });
+              } finally {
+                setSensitiveCheckLoading(false);
+              }
+            }}
+            disabled={sensitiveCheckLoading || !sensitiveCheckText.trim()}
+            className="mt-4 px-6 py-2 bg-brand-primary text-gray-900 rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-primary/90 transition-colors"
+          >
+            {sensitiveCheckLoading ? '检测中...' : '开始检测'}
+          </button>
+          {sensitiveCheckResult.length > 0 ? (
+            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl">
+              <p className="text-sm font-bold text-red-600 mb-2">检测到 {sensitiveCheckResult.length} 个敏感词：</p>
+              <div className="flex flex-wrap gap-2">
+                {sensitiveCheckResult.map((word) => (
+                  <span key={word} className="px-3 py-1 bg-red-100 text-red-600 rounded-full text-sm font-medium">
+                    {word}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : sensitiveCheckText.trim() && !sensitiveCheckLoading ? (
+            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-xl">
+              <p className="text-sm font-bold text-green-600">未检测到敏感词</p>
+            </div>
+          ) : null}
         </div>
       ) : activeTab === 'moderation_logs' || activeTab === 'ban_logs' ? (
         <div className="bg-white rounded-[36px] border border-gray-100 shadow-sm overflow-hidden">
