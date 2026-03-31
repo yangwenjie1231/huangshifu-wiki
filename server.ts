@@ -886,6 +886,10 @@ function normalizeTagList(value: unknown) {
     .slice(0, 30);
 }
 
+function hasTag(value: unknown, tag: string) {
+  return serializeTags(value).some((item) => typeof item === 'string' && item === tag);
+}
+
 async function normalizeWikiRelationListForWrite(value: unknown, sourceSlug?: string) {
   const normalizedSourceSlug = normalizeWikiSlug(sourceSlug);
   const relations = normalizeWikiRelationList(value, normalizedSourceSlug);
@@ -3746,8 +3750,9 @@ app.post('/api/notifications/read-all', requireAuth, async (req: AuthenticatedRe
 app.get('/api/wiki', async (req: AuthenticatedRequest, res) => {
   try {
     const category = typeof req.query.category === 'string' ? req.query.category : 'all';
+    const tag = typeof req.query.tag === 'string' ? req.query.tag.trim() : '';
     const visibilityWhere = buildWikiVisibilityWhere(req.authUser);
-    const where = {
+    const where: Prisma.WikiPageWhereInput = {
       ...(category && category !== 'all' ? { category } : {}),
       ...visibilityWhere,
     };
@@ -3755,34 +3760,35 @@ app.get('/api/wiki', async (req: AuthenticatedRequest, res) => {
     const pages = await prisma.wikiPage.findMany({
       where,
       orderBy: [{ isPinned: 'desc' }, { updatedAt: 'desc' }],
-      take: 200,
     });
+    const filteredPages = tag ? pages.filter((page) => hasTag(page.tags, tag)) : pages;
+    const visiblePages = filteredPages.slice(0, 200);
 
     const favoritedWikiSet = new Set<string>();
     const likedWikiSet = new Set<string>();
     const dislikedWikiSet = new Set<string>();
 
-    if (req.authUser && pages.length) {
+    if (req.authUser && visiblePages.length) {
       const [favorites, likes, dislikes] = await Promise.all([
         prisma.favorite.findMany({
           where: {
             userUid: req.authUser.uid,
             targetType: 'wiki',
-            targetId: { in: pages.map((item) => item.slug) },
+            targetId: { in: visiblePages.map((item) => item.slug) },
           },
           select: { targetId: true },
         }),
         prisma.wikiLike.findMany({
           where: {
             userUid: req.authUser.uid,
-            pageSlug: { in: pages.map((item) => item.slug) },
+            pageSlug: { in: visiblePages.map((item) => item.slug) },
           },
           select: { pageSlug: true },
         }),
         prisma.wikiDislike.findMany({
           where: {
             userUid: req.authUser.uid,
-            pageSlug: { in: pages.map((item) => item.slug) },
+            pageSlug: { in: visiblePages.map((item) => item.slug) },
           },
           select: { pageSlug: true },
         }),
@@ -3793,7 +3799,7 @@ app.get('/api/wiki', async (req: AuthenticatedRequest, res) => {
     }
 
     res.json({
-      pages: pages.map((page) => ({
+      pages: visiblePages.map((page) => ({
         ...toWikiResponse(page),
         favoritedByMe: favoritedWikiSet.has(page.slug),
         likedByMe: likedWikiSet.has(page.slug),
