@@ -331,14 +331,14 @@ const WikiList = () => {
       setLoading(true);
       try {
         const wikiRef = collection(db, 'wiki');
-        let q;
-        if (tag) {
-          q = query(wikiRef, where('tags', 'array-contains', tag), orderBy('updatedAt', 'desc'));
-        } else if (category !== 'all') {
-          q = query(wikiRef, where('category', '==', category), orderBy('updatedAt', 'desc'));
-        } else {
-          q = query(wikiRef, orderBy('updatedAt', 'desc'));
-        }
+        const constraints = category !== 'all' && tag
+          ? [where('category', '==', category), where('tags', 'array-contains', tag), orderBy('updatedAt', 'desc')]
+          : category !== 'all'
+            ? [where('category', '==', category), orderBy('updatedAt', 'desc')]
+            : tag
+              ? [where('tags', 'array-contains', tag), orderBy('updatedAt', 'desc')]
+              : [orderBy('updatedAt', 'desc')];
+        const q = query(wikiRef, ...constraints);
         const snapshot = await getDocs(q);
         setPages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WikiItem)));
       } catch (e) {

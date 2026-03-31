@@ -1,0 +1,9 @@
+# Sensitive Words Lexicon
+# This file should contain one sensitive word per line
+# Download from: https://github.com/konsheng/Sensitive-lexicon
+# Or use your own sensitive word list
+#
+# Example format (one word per line):
+# word1
+# word2
+# 中文敏感词示例

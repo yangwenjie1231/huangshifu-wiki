@@ -46,7 +46,7 @@ type SongItem = {
 };
 
 type SongDetailResponse = {
-  song: SongItem;
+  song: SongItem & { platformIds?: PlatformIds };
 };
 
 type PostItem = {

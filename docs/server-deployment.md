@@ -683,6 +683,28 @@ npm run download:sensitive-words
 
 在「审核队列」中，待审核内容会自动显示检测到的敏感词。在「敏感词检测」面板可手动输入文本进行检测。
 
+**实现逻辑**：
+
+1. **网易云歌曲**（`primaryPlatform === 'netease'` 且存在 `neteaseId`）：
+   - 前端直接构造直链，绕过服务器
+   - 用户客户端直连网易云服务器，延迟最低
+
+2. **其他平台歌曲**：
+   - 前端请求服务器 `/api/music/:docId/play-url`
+   - 服务器优先使用缓存（默认 10 分钟 TTL）
+   - 缓存未命中时调用 Meting API 获取播放地址
+
+**优势**：
+
+- 网易云歌曲：用户端直连，绕过服务器网络瓶颈，播放延迟从 ~10s 降至 <1s
+- 其他平台：服务器缓存减少外部 API 调用，提升稳定性
+
+**环境变量**：
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `MUSIC_PLAY_URL_CACHE_TTL_SECONDS` | `600` | 播放地址缓存 TTL（秒） |
+
 ---
 
 ## 附录：主要数据库表
@@ -707,6 +729,14 @@ npm run download:sensitive-words
 ## 附录：更新日志
 
 ### v5.x
+
+- **敏感词过滤功能**：内置 DFA 算法敏感词检测，用于过滤热门搜索词和辅助内容审核
+  - 敏感词不会被记录到热门搜索
+  - 审核内容时自动检测并显示敏感词
+  - 新增「敏感词检测」管理面板
+  - 新增 `POST /api/admin/check-sensitive` API
+  - 敏感词库文件位于 `public/sensitive-words/words.txt`
+  - **部署注意**：需执行 `npm run download:sensitive-words` 下载敏感词库
 
 - **新增用户视图偏好设置**：用户可以选择四种内容展示模式（大图标、中图标、小图标、列表），偏好设置存储在 `User.preferences` 字段（JSON 类型），支持以下页面：
   - 百科页面（Wiki）
