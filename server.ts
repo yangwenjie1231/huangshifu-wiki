@@ -186,6 +186,7 @@ type MusicTrackWithRelations = {
   kugouId: string | null;
   baiduId: string | null;
   kuwoId: string | null;
+  customPlatformLinks: Prisma.JsonValue | null;
   displayAlbumMode: DisplayAlbumMode;
   manualAlbumName: string | null;
   defaultCoverSource: string | null;
@@ -242,6 +243,11 @@ const playUrlCache = new Map<string, PlayUrlCacheValue>();
 
 type AuthenticatedRequest = Request & {
   authUser?: ApiUser;
+};
+
+type SongCustomPlatformLink = {
+  label: string;
+  url: string;
 };
 
 const uploadStorage = multer.diskStorage({
@@ -1285,9 +1291,74 @@ function resolveSongCoverUrl(song: Pick<MusicTrackWithRelations, 'cover' | 'defa
   return song.cover || '';
 }
 
+function normalizeSongCustomPlatformLinkUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  const raw = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return '';
+    }
+    return parsed.toString();
+  } catch {
+    return '';
+  }
+}
+
+function normalizeSongCustomPlatformLinks(input: unknown): SongCustomPlatformLink[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const deduped = new Set<string>();
+  const links: SongCustomPlatformLink[] = [];
+
+  for (const item of input) {
+    if (!item || typeof item !== 'object') {
+      continue;
+    }
+
+    const rawLabel = typeof (item as { label?: unknown }).label === 'string'
+      ? (item as { label: string }).label.trim()
+      : '';
+    const normalizedLabel = rawLabel.slice(0, 30);
+    const rawUrl = typeof (item as { url?: unknown }).url === 'string'
+      ? (item as { url: string }).url
+      : '';
+    const normalizedUrl = normalizeSongCustomPlatformLinkUrl(rawUrl);
+
+    if (!normalizedLabel || !normalizedUrl) {
+      continue;
+    }
+
+    const key = `${normalizedLabel}::${normalizedUrl}`;
+    if (deduped.has(key)) {
+      continue;
+    }
+
+    deduped.add(key);
+    links.push({
+      label: normalizedLabel,
+      url: normalizedUrl,
+    });
+
+    if (links.length >= 10) {
+      break;
+    }
+  }
+
+  return links;
+}
+
 function toSongResponse(song: MusicTrackWithRelations, options?: { favoritedByMe?: boolean }) {
   const displayAlbum = resolveSongDisplayAlbum(song);
   const coverUrl = resolveSongCoverUrl(song);
+  const customPlatformLinks = normalizeSongCustomPlatformLinks(song.customPlatformLinks);
 
   return {
     docId: song.docId,
@@ -1307,6 +1378,7 @@ function toSongResponse(song: MusicTrackWithRelations, options?: { favoritedByMe
       baiduId: song.baiduId,
       kuwoId: song.kuwoId,
     },
+    customPlatformLinks,
     displayAlbumMode: song.displayAlbumMode,
     displayAlbum,
     manualAlbumName: song.manualAlbumName,
@@ -9177,6 +9249,9 @@ app.patch('/api/music/:docId', requireAdmin, async (req, res) => {
     if (typeof body.defaultCoverSource === 'string' || body.defaultCoverSource === null) {
       updateData.defaultCoverSource = body.defaultCoverSource;
     }
+    if (Object.prototype.hasOwnProperty.call(body, 'customPlatformLinks')) {
+      updateData.customPlatformLinks = normalizeSongCustomPlatformLinks(body.customPlatformLinks) as unknown as Prisma.InputJsonValue;
+    }
 
     const neteaseId = typeof body.neteaseId === 'string' ? body.neteaseId.trim() : '';
     const tencentId = typeof body.tencentId === 'string' ? body.tencentId.trim() : '';
@@ -11086,6 +11161,7 @@ app.get('/api/music/song/:id', async (req, res) => {
         baiduId: null,
         kuwoId: null,
       },
+      customPlatformLinks: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });

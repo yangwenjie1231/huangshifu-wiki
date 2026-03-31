@@ -616,6 +616,7 @@ model MusicTrack {
   kugouId            String?
   baiduId            String?
   kuwoId             String?
+  customPlatformLinks Json?
   displayAlbumMode   DisplayAlbumMode @default(linked)
   manualAlbumName    String?
   defaultCoverSource String?

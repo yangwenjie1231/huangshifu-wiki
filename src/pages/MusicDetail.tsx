@@ -20,6 +20,11 @@ type PlatformIds = {
   kuwoId?: string | null;
 };
 
+type CustomPlatformLink = {
+  label: string;
+  url: string;
+};
+
 type SongItem = {
   docId: string;
   id: string;
@@ -32,6 +37,7 @@ type SongItem = {
   primaryPlatform?: 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo' | null;
   favoritedByMe?: boolean;
   platformIds?: PlatformIds;
+  customPlatformLinks?: CustomPlatformLink[];
 };
 
 type SongDetailResponse = {
@@ -115,6 +121,7 @@ const MusicDetail = () => {
     if (!song?.lyric) return [];
     return song.lyric.split('\n').map((line) => line.trim()).filter(Boolean);
   }, [song?.lyric]);
+  const customPlatformLinks = song?.customPlatformLinks || [];
 
   const handlePlay = () => {
     if (!song) return;
@@ -241,6 +248,34 @@ const MusicDetail = () => {
           </div>
         </div>
       </section>
+
+      {customPlatformLinks.length > 0 && (
+        <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
+          <div className="flex items-center justify-between mb-4 gap-3">
+            <h2 className="text-xl font-serif font-bold text-gray-900">更多平台</h2>
+            <span className="text-xs px-3 py-1 rounded-full bg-brand-primary/15 text-gray-700 font-semibold">
+              {customPlatformLinks.length} 个链接
+            </span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {customPlatformLinks.map((link) => (
+              <a
+                key={`${link.label}-${link.url}`}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 px-4 py-3 hover:border-brand-primary/40 hover:bg-brand-cream/20 transition-colors"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">{link.label}</p>
+                  <p className="text-xs text-gray-500 truncate">{link.url}</p>
+                </div>
+                <ExternalLink size={16} className="text-gray-400 shrink-0" />
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
         <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">歌词</h2>

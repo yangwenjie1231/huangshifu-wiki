@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, ExternalLink, Loader2, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, ExternalLink, Loader2, Plus, Search, Trash2, X } from 'lucide-react';
 
 import { apiPatch } from '../lib/apiClient';
 import { useToast } from './Toast';
@@ -22,6 +22,30 @@ type SongFormData = {
   lyric?: string | null;
 };
 
+type CustomPlatformLink = {
+  label: string;
+  url: string;
+};
+
+const normalizeCustomPlatformLinkUrl = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  const raw = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return '';
+    }
+    return parsed.toString();
+  } catch {
+    return '';
+  }
+};
+
 type SongItem = {
   docId: string;
   id: string;
@@ -34,6 +58,7 @@ type SongItem = {
   primaryPlatform?: Platform | null;
   favoritedByMe?: boolean;
   platformIds?: PlatformIds;
+  customPlatformLinks?: CustomPlatformLink[];
 };
 
 interface SongEditModalProps {
@@ -65,6 +90,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
     baiduId: song.platformIds?.baiduId || '',
     kuwoId: song.platformIds?.kuwoId || '',
   });
+  const [customPlatformLinks, setCustomPlatformLinks] = useState<CustomPlatformLink[]>(song.customPlatformLinks || []);
   const [platformExpanded, setPlatformExpanded] = useState(false);
   const [matchingPlatform, setMatchingPlatform] = useState<Platform | null>(null);
   const [saving, setSaving] = useState(false);
@@ -85,6 +111,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
         baiduId: song.platformIds?.baiduId || '',
         kuwoId: song.platformIds?.kuwoId || '',
       });
+      setCustomPlatformLinks(song.customPlatformLinks || []);
     }
   }, [song, open]);
 
@@ -103,6 +130,28 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
       return;
     }
 
+    const normalizedCustomPlatformLinks = customPlatformLinks.map((link) => ({
+      label: link.label.trim(),
+      url: link.url.trim(),
+    }));
+    const hasIncompleteCustomPlatformLink = normalizedCustomPlatformLinks.some(
+      (link) => (link.label || link.url) && (!link.label || !link.url),
+    );
+
+    if (hasIncompleteCustomPlatformLink) {
+      show('自定义平台链接需要同时填写平台名称和地址', { variant: 'error' });
+      return;
+    }
+
+    const hasInvalidCustomPlatformLink = normalizedCustomPlatformLinks.some(
+      (link) => link.url && !normalizeCustomPlatformLinkUrl(link.url),
+    );
+
+    if (hasInvalidCustomPlatformLink) {
+      show('自定义平台链接地址无效，请填写正确的 http/https 链接', { variant: 'error' });
+      return;
+    }
+
     setSaving(true);
     try {
       const result = await apiPatch<{ song: SongItem; error?: string; conflict?: boolean; conflictingSong?: { docId: string; title: string; artist: string } }>(`/api/music/${song.docId}`, {
@@ -115,6 +164,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
         kugouId: platformIds.kugouId || null,
         baiduId: platformIds.baiduId || null,
         kuwoId: platformIds.kuwoId || null,
+        customPlatformLinks: normalizedCustomPlatformLinks.filter((link) => link.label && link.url),
       });
       show('歌曲已更新');
       onSuccess();
@@ -133,6 +183,20 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
 
   const handlePlatformIdChange = (key: keyof PlatformIds, value: string) => {
     setPlatformIds((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleCustomPlatformLinkChange = (index: number, key: keyof CustomPlatformLink, value: string) => {
+    setCustomPlatformLinks((prev) => prev.map((item, itemIndex) => (
+      itemIndex === index ? { ...item, [key]: value } : item
+    )));
+  };
+
+  const handleAddCustomPlatformLink = () => {
+    setCustomPlatformLinks((prev) => [...prev, { label: '', url: '' }]);
+  };
+
+  const handleRemoveCustomPlatformLink = (index: number) => {
+    setCustomPlatformLinks((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
   };
 
   const handleMatchSelect = (platform: Platform, sourceId: string) => {
@@ -258,6 +322,73 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
                 })}
               </div>
             )}
+
+            <div className="space-y-3 rounded-2xl border border-gray-100 bg-gray-50/60 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-700">自定义平台链接</p>
+                  <p className="text-xs text-gray-500 mt-1">例如哔哩哔哩、5sing 或其他发布平台</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddCustomPlatformLink}
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-gray-200 text-xs text-gray-600 hover:text-brand-primary hover:border-brand-primary/40 transition-colors"
+                >
+                  <Plus size={14} /> 添加链接
+                </button>
+              </div>
+
+              {customPlatformLinks.length > 0 ? (
+                <div className="space-y-3">
+                  {customPlatformLinks.map((link, index) => {
+                    const previewUrl = normalizeCustomPlatformLinkUrl(link.url);
+
+                    return (
+                      <div key={`${index}-${link.label}-${link.url}`} className="rounded-2xl border border-gray-200 bg-white p-3 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="text"
+                            value={link.label}
+                            onChange={(e) => handleCustomPlatformLinkChange(index, 'label', e.target.value)}
+                            placeholder="平台名称，例如 Bilibili"
+                            className="w-40 px-3 py-2 rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary/25 text-sm"
+                          />
+                          <input
+                            type="text"
+                            value={link.url}
+                            onChange={(e) => handleCustomPlatformLinkChange(index, 'url', e.target.value)}
+                            placeholder="链接地址，例如 https://www.bilibili.com/..."
+                            className="flex-1 px-3 py-2 rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary/25 text-sm"
+                          />
+                          {previewUrl ? (
+                            <a
+                              href={previewUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
+                            >
+                              <ExternalLink size={16} />
+                            </a>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCustomPlatformLink(index)}
+                            className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                            aria-label="删除链接"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-gray-200 bg-white/70 px-4 py-6 text-sm text-gray-400 text-center">
+                  暂无自定义平台链接
+                </div>
+              )}
+            </div>
 
             <div className="rounded-2xl border border-gray-100 bg-gray-50/60 p-4">
               <div className="flex items-center gap-3">
