@@ -80,10 +80,10 @@ export const AlbumCoverManager = ({ albumDocId, currentCover, onCoverUpdated }: 
         throw new Error((data as { error?: string })?.error || '上传失败');
       }
 
-      const uploadResult = await response.json() as { asset: { id: string; url: string } };
+      const uploadResult = await response.json() as { file: { assetId: string; url: string } };
 
       await apiPost(`/api/albums/${albumDocId}/covers`, {
-        assetId: uploadResult.asset.id,
+        assetId: uploadResult.file.assetId,
       });
 
       show('封面上传成功');
