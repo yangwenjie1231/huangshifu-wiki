@@ -98,6 +98,19 @@ type AlbumItem = {
   tracks?: unknown[];
 };
 
+const toSortableText = (value: unknown) => {
+  if (typeof value === 'string') return value;
+  if (value == null) return '';
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
+  }
+  if (typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
+    const date = value.toDate();
+    return date instanceof Date && !Number.isNaN(date.getTime()) ? date.toISOString() : '';
+  }
+  return String(value);
+};
+
 const getSongExternalUrl = (song: SongItem) => {
   const id = (song.id || '').trim();
   if (!id) {
@@ -206,17 +219,17 @@ const Music = () => {
     result.sort((a, b) => {
       if (sortBy === 'title') {
         return sortOrder === 'asc'
-          ? a.title.localeCompare(b.title, 'zh-CN')
-          : b.title.localeCompare(a.title, 'zh-CN');
+          ? toSortableText(a.title).localeCompare(toSortableText(b.title), 'zh-CN')
+          : toSortableText(b.title).localeCompare(toSortableText(a.title), 'zh-CN');
       }
       if (sortBy === 'artist') {
         return sortOrder === 'asc'
-          ? a.artist.localeCompare(b.artist, 'zh-CN')
-          : b.artist.localeCompare(a.artist, 'zh-CN');
+          ? toSortableText(a.artist).localeCompare(toSortableText(b.artist), 'zh-CN')
+          : toSortableText(b.artist).localeCompare(toSortableText(a.artist), 'zh-CN');
       }
       return sortOrder === 'asc'
-        ? (a.createdAt || '').localeCompare(b.createdAt || '')
-        : (b.createdAt || '').localeCompare(a.createdAt || '');
+        ? toSortableText(a.createdAt).localeCompare(toSortableText(b.createdAt), 'zh-CN')
+        : toSortableText(b.createdAt).localeCompare(toSortableText(a.createdAt), 'zh-CN');
     });
 
     return result;
