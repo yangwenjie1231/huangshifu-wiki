@@ -370,6 +370,14 @@ const Music = () => {
     setLoading(false);
   };
 
+  const handleToggleInstrumentals = () => {
+    if (showInstrumentals) {
+      setSelectedSongs(new Set());
+      setIsBatchMode(false);
+    }
+    setShowInstrumentals((prev) => !prev);
+  };
+
   const musicCountLabel = hiddenInstrumentalCount > 0 && !showInstrumentals
     ? `${filteredSongs.length} / ${songs.length} 首歌曲`
     : `${songs.length} 首歌曲`;
@@ -602,7 +610,7 @@ const Music = () => {
                 )}
                 {activeTab === 'music' && hiddenInstrumentalCount > 0 && (
                   <button
-                    onClick={() => setShowInstrumentals((prev) => !prev)}
+                    onClick={handleToggleInstrumentals}
                     className={clsx(
                       'px-4 py-2 rounded-full text-xs font-bold transition-colors',
                       showInstrumentals

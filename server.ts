@@ -215,7 +215,7 @@ type MusicTrackWithRelations = {
       }>;
     };
   }>;
-  instrumentalForLinks: Array<{
+  instrumentalLinks?: Array<{
     targetSongDocId: string;
   }>;
 };
@@ -1329,7 +1329,7 @@ function toSongResponse(song: MusicTrackWithRelations, options?: { favoritedByMe
       trackOrder: relation.trackOrder,
       isDisplay: relation.isDisplay,
     })),
-    isInstrumental: song.instrumentalForLinks.length > 0,
+    isInstrumental: (song.instrumentalLinks?.length || 0) > 0,
     favoritedByMe: Boolean(options?.favoritedByMe),
     createdAt: song.createdAt.toISOString(),
     updatedAt: song.updatedAt.toISOString(),
@@ -1429,7 +1429,7 @@ async function fetchSongWithRelationsByDocId(songDocId: string) {
         },
         orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
       },
-      instrumentalForLinks: {
+      instrumentalLinks: {
         select: {
           targetSongDocId: true,
         },
@@ -1897,7 +1897,7 @@ async function fetchSongsWithRelations(where?: Record<string, unknown>) {
         },
         orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
       },
-      instrumentalForLinks: {
+      instrumentalLinks: {
         select: {
           targetSongDocId: true,
         },

@@ -32,10 +32,15 @@ type SongItem = {
   primaryPlatform?: 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo' | null;
   favoritedByMe?: boolean;
   platformIds?: PlatformIds;
+  isInstrumental?: boolean;
 };
 
 type SongDetailResponse = {
   song: SongItem & { platformIds?: PlatformIds };
+};
+
+type SongListResponse = {
+  songs: SongItem[];
 };
 
 type PostItem = {
@@ -81,6 +86,11 @@ const MusicDetail = () => {
   const [loading, setLoading] = useState(true);
   const [favoriting, setFavoriting] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [allSongs, setAllSongs] = useState<SongItem[]>([]);
+  const [instrumentalForSongs, setInstrumentalForSongs] = useState<SongItem[]>([]);
+  const [relationQuery, setRelationQuery] = useState('');
+  const [relationsLoading, setRelationsLoading] = useState(false);
+  const [relationSaving, setRelationSaving] = useState<string | null>(null);
   const { user, isAdmin } = useAuth();
   const { setCurrentSong, setIsPlaying, setPlaylist } = useMusic();
   const { show } = useToast();
@@ -111,10 +121,61 @@ const MusicDetail = () => {
     fetchData();
   }, [songId]);
 
+  useEffect(() => {
+    const fetchInstrumentalManagementData = async () => {
+      if (!song?.docId || !isAdmin) {
+        setAllSongs([]);
+        setInstrumentalForSongs([]);
+        return;
+      }
+
+      setRelationsLoading(true);
+      try {
+        const [songListResult, instrumentalForResult] = await Promise.all([
+          apiGet<SongListResponse>('/api/music'),
+          apiGet<SongListResponse>(`/api/music/${song.docId}/instrumental-for`),
+        ]);
+        setAllSongs((songListResult.songs || []).filter((item) => item.docId !== song.docId));
+        setInstrumentalForSongs(instrumentalForResult.songs || []);
+      } catch (error) {
+        console.error('Fetch instrumental management data failed:', error);
+        show('加载伴奏管理信息失败，请稍后重试', { variant: 'error' });
+      } finally {
+        setRelationsLoading(false);
+      }
+    };
+
+    void fetchInstrumentalManagementData();
+  }, [isAdmin, show, song?.docId]);
+
   const lyricLines = useMemo(() => {
     if (!song?.lyric) return [];
     return song.lyric.split('\n').map((line) => line.trim()).filter(Boolean);
   }, [song?.lyric]);
+
+  const linkedTargetIds = useMemo(() => new Set(instrumentalForSongs.map((item) => item.docId)), [instrumentalForSongs]);
+
+  const relationCandidates = useMemo(() => {
+    const trimmedQuery = relationQuery.trim().toLowerCase();
+    if (!trimmedQuery) return [];
+
+    return allSongs
+      .filter((item) => {
+        if (linkedTargetIds.has(item.docId)) return false;
+        const haystack = [item.title, item.artist, item.album, item.docId].join(' ').toLowerCase();
+        return haystack.includes(trimmedQuery);
+      })
+      .slice(0, 8);
+  }, [allSongs, linkedTargetIds, relationQuery]);
+
+  const refreshInstrumentalManagementData = async (docId: string) => {
+    const [songListResult, instrumentalForResult] = await Promise.all([
+      apiGet<SongListResponse>('/api/music'),
+      apiGet<SongListResponse>(`/api/music/${docId}/instrumental-for`),
+    ]);
+    setAllSongs((songListResult.songs || []).filter((item) => item.docId !== docId));
+    setInstrumentalForSongs(instrumentalForResult.songs || []);
+  };
 
   const handlePlay = () => {
     if (!song) return;
@@ -158,6 +219,41 @@ const MusicDetail = () => {
       show('收藏操作失败，请稍后重试', { variant: 'error' });
     } finally {
       setFavoriting(false);
+    }
+  };
+
+  const handleAddInstrumentalRelation = async (targetSong: SongItem) => {
+    if (!song?.docId || relationSaving) return;
+
+    setRelationSaving(targetSong.docId);
+    try {
+      await apiPost(`/api/music/${targetSong.docId}/instrumentals`, {
+        instrumentalSongDocId: song.docId,
+      });
+      await refreshInstrumentalManagementData(song.docId);
+      setRelationQuery('');
+      show(`已将当前歌曲设为「${targetSong.title}」的伴奏`);
+    } catch (error) {
+      console.error('Create instrumental relation failed:', error);
+      show(error instanceof Error ? error.message : '设置伴奏失败，请稍后重试', { variant: 'error' });
+    } finally {
+      setRelationSaving(null);
+    }
+  };
+
+  const handleRemoveInstrumentalRelation = async (targetSong: SongItem) => {
+    if (!song?.docId || relationSaving) return;
+
+    setRelationSaving(targetSong.docId);
+    try {
+      await apiDelete(`/api/music/${targetSong.docId}/instrumentals/${song.docId}`);
+      await refreshInstrumentalManagementData(song.docId);
+      show(`已移除与「${targetSong.title}」的伴奏关联`);
+    } catch (error) {
+      console.error('Delete instrumental relation failed:', error);
+      show(error instanceof Error ? error.message : '移除伴奏关联失败，请稍后重试', { variant: 'error' });
+    } finally {
+      setRelationSaving(null);
     }
   };
 
@@ -305,6 +401,89 @@ const MusicDetail = () => {
               currentCover={song.cover}
               onCoverUpdated={(newCoverUrl) => setSong((prev) => prev ? { ...prev, cover: newCoverUrl } : prev)}
             />
+          </div>
+
+          <div className="mt-6 rounded-[28px] border border-gray-100 bg-gray-50/70 p-5 space-y-4">
+            <div>
+              <h3 className="text-base font-bold text-gray-900">伴奏管理</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                将当前歌曲设为某首原曲的伴奏。设置后，这首歌会在音乐馆中默认隐藏，仅在打开“显示伴奏”时显示。
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block text-sm font-semibold text-gray-700">查找原曲</label>
+              <input
+                type="text"
+                value={relationQuery}
+                onChange={(event) => setRelationQuery(event.target.value)}
+                placeholder="按标题、歌手、专辑或 docId 搜索"
+                className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/25"
+              />
+              {relationQuery.trim() ? (
+                relationCandidates.length > 0 ? (
+                  <div className="space-y-2">
+                    {relationCandidates.map((candidate) => (
+                      <div
+                        key={candidate.docId}
+                        className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-gray-900">{candidate.title}</p>
+                          <p className="truncate text-xs text-gray-500">{candidate.artist} · {candidate.album || '未填写专辑'}</p>
+                          <p className="mt-1 truncate text-[11px] text-gray-400">docId: {candidate.docId}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleAddInstrumentalRelation(candidate)}
+                          disabled={relationSaving === candidate.docId}
+                          className="shrink-0 rounded-full border border-gray-200 px-4 py-2 text-xs font-bold text-gray-600 transition-colors hover:border-brand-primary/40 hover:text-brand-primary disabled:opacity-50"
+                        >
+                          {relationSaving === candidate.docId ? '设置中...' : '设为当前歌曲的原曲'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400 italic">没有找到可关联的原曲。</p>
+                )
+              ) : (
+                <p className="text-sm text-gray-400 italic">输入关键词后会显示可关联的原曲候选。</p>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-gray-700">当前已关联的原曲</h4>
+              {relationsLoading ? (
+                <p className="text-sm text-gray-400 italic">加载中...</p>
+              ) : instrumentalForSongs.length > 0 ? (
+                <div className="space-y-2">
+                  {instrumentalForSongs.map((targetSong) => (
+                    <div
+                      key={targetSong.docId}
+                      className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <Link to={`/music/${targetSong.docId}`} className="truncate text-sm font-semibold text-gray-900 hover:text-brand-primary">
+                          {targetSong.title}
+                        </Link>
+                        <p className="truncate text-xs text-gray-500">{targetSong.artist} · {targetSong.album || '未填写专辑'}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveInstrumentalRelation(targetSong)}
+                        disabled={relationSaving === targetSong.docId}
+                        className="shrink-0 rounded-full border border-red-200 px-4 py-2 text-xs font-bold text-red-500 transition-colors hover:bg-red-50 disabled:opacity-50"
+                      >
+                        {relationSaving === targetSong.docId ? '移除中...' : '移除伴奏关联'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400 italic">当前歌曲还没有被设置为任何原曲的伴奏。</p>
+              )}
+            </div>
           </div>
         </section>
       )}
