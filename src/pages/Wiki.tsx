@@ -1728,13 +1728,26 @@ const WikiEditor = () => {
       show('账号已被封禁，无法编辑百科', { variant: 'error' });
       return;
     }
+
+    const trimmedTitle = formData.title.trim();
+    const trimmedContent = formData.content.trim();
+
+    if (!trimmedTitle) {
+      show('请填写标题', { variant: 'error' });
+      return;
+    }
+
+    if (status === 'pending' && !trimmedContent) {
+      show('请填写内容', { variant: 'error' });
+      return;
+    }
     
     if (formData.category === 'music' && !isAdmin) {
       show("只有管理员可以修改音乐分类的内容", { variant: 'error' });
       return;
     }
 
-    const pageSlug = (isNew ? (formData.slug || formData.title) : slug || formData.slug)
+    const pageSlug = (isNew ? (formData.slug || trimmedTitle) : slug || formData.slug)
       ?.trim()
       .toLowerCase()
       .replace(/[\\/]/g, '-')
@@ -1748,7 +1761,7 @@ const WikiEditor = () => {
     setSavingMode(status);
 
     const pageData: any = {
-      title: formData.title,
+      title: trimmedTitle,
       slug: pageSlug,
       category: formData.category,
       content: formData.content,
@@ -1819,7 +1832,7 @@ const WikiEditor = () => {
         >
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">标题</label>
+              <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">标题 <span className="text-red-500">*</span></label>
               <input 
                 type="text" 
                 required
@@ -1856,7 +1869,7 @@ const WikiEditor = () => {
 
           <div className="space-y-2">
             <div className="flex justify-between items-center">
-              <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">内容 (Markdown)</label>
+              <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">内容 (Markdown) <span className="text-red-500">*</span></label>
               <button 
                 type="button"
                 onClick={async () => {
