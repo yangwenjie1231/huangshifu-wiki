@@ -7,7 +7,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import { customSchema, isTrustedIframeDomain } from '../lib/htmlSanitizer';
-import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar, Link2, GitBranch, Network, MapPin, Heart, ThumbsDown, Pin, Image as ImageIcon } from 'lucide-react';
+import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar, Link2, GitBranch, Network, MapPin, ThumbsUp, ThumbsDown, Pin, Image as ImageIcon } from 'lucide-react';
 import { useUserPreferences } from '../context/UserPreferencesContext';
 import { ViewModeSelector } from '../components/ViewModeSelector';
 import { VIEW_MODE_CONFIG } from '../lib/viewModes';
@@ -451,7 +451,7 @@ const WikiList = () => {
                       </p>
                       <div className="flex items-center gap-3 text-gray-400 text-xs mt-2">
                         <span className="flex items-center gap-1"><Clock size={10} /> {formatDate(page.updatedAt, 'yyyy-MM-dd')}</span>
-                        <span className="flex items-center gap-1"><Heart size={10} /> {page.likesCount || 0}</span>
+                        <span className="flex items-center gap-1"><ThumbsUp size={10} /> {page.likesCount || 0}</span>
                       </div>
                     </div>
                   </>
@@ -478,7 +478,7 @@ const WikiList = () => {
                     <div className="flex items-center justify-between text-gray-400 text-xs">
                       <div className="flex items-center gap-3">
                         <span className="flex items-center gap-1"><Clock size={12} /> {formatDate(page.updatedAt, 'yyyy-MM-dd')}</span>
-                        <span className="flex items-center gap-1"><Heart size={12} /> {page.likesCount || 0}</span>
+                        <span className="flex items-center gap-1"><ThumbsUp size={12} /> {page.likesCount || 0}</span>
                         <span className="flex items-center gap-1"><ThumbsDown size={12} /> {page.dislikesCount || 0}</span>
                       </div>
                       <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
@@ -738,7 +738,7 @@ const WikiPageView = () => {
                 )}
                 title={page.likedByMe ? '取消点赞' : '点赞'}
               >
-                <Heart size={20} />
+                <ThumbsUp size={20} />
               </button>
               <button
                 onClick={handleToggleDislike}
