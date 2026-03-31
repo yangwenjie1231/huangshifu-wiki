@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Clock, ExternalLink, Heart, Link2, MessageSquare, Play } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -10,6 +10,7 @@ import { useMusic } from '../context/MusicContext';
 import { useToast } from '../components/Toast';
 import { SongCoverManager } from '../components/SongCoverManager';
 import { SongEditModal } from '../components/SongEditModal';
+import { LyricsDisplay } from '../components/LyricsDisplay';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 
 type PlatformIds = {
@@ -110,11 +111,6 @@ const MusicDetail = () => {
 
     fetchData();
   }, [songId]);
-
-  const lyricLines = useMemo(() => {
-    if (!song?.lyric) return [];
-    return song.lyric.split('\n').map((line) => line.trim()).filter(Boolean);
-  }, [song?.lyric]);
 
   const handlePlay = () => {
     if (!song) return;
@@ -244,15 +240,7 @@ const MusicDetail = () => {
 
       <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
         <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">歌词</h2>
-        {lyricLines.length > 0 ? (
-          <div className="space-y-2 text-sm text-gray-600 leading-relaxed max-h-[380px] overflow-y-auto pr-2">
-            {lyricLines.map((line, index) => (
-              <p key={`${line}-${index}`}>{line}</p>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-gray-400 italic">暂无歌词</p>
-        )}
+        <LyricsDisplay lyric={song?.lyric || ''} />
       </section>
 
       <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">

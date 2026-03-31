@@ -9257,26 +9257,30 @@ app.get('/api/music/match-suggestions', async (req: AuthenticatedRequest, res) =
       return;
     }
 
+    const cleanTitle = title.replace(/[（(].*[)）]/g, '').replace(/[【\[].*[]】\]/g, '').trim();
+    const keyword = `${cleanTitle} ${artist}`.trim();
+
     const searchResults = await searchMusicResources({
       platform: platform as MusicPlatform,
-      keyword: `${title} ${artist}`,
+      keyword,
       type: 'song',
-      limit: 10,
+      limit: 20,
     });
 
-    const normalizedTitle = title.toLowerCase().replace(/\s+/g, '');
+    const normalizedTitle = cleanTitle.toLowerCase().replace(/\s+/g, '');
     const normalizedArtist = artist.toLowerCase().replace(/\s+/g, '');
 
     const scored = searchResults
       .map((item) => {
-        const itemTitleNorm = item.title.toLowerCase().replace(/\s+/g, '');
+        const itemTitleClean = item.title.replace(/[（(].*[)）]/g, '').replace(/[【\[].*[]】\]/g, '').trim();
+        const itemTitleNorm = itemTitleClean.toLowerCase().replace(/\s+/g, '');
         const itemArtistNorm = item.artist.toLowerCase().replace(/\s+/g, '');
         const titleScore = calculateSimilarity(normalizedTitle, itemTitleNorm);
         const artistScore = calculateSimilarity(normalizedArtist, itemArtistNorm);
         const avgScore = (titleScore + artistScore) / 2;
         return { ...item, score: avgScore };
       })
-      .filter((item) => item.score >= 0.5)
+      .filter((item) => item.score >= 0.35)
       .sort((a, b) => b.score - a.score)
       .slice(0, 5);
 
@@ -9328,23 +9332,39 @@ function calculateSimilarity(a: string, b: string): number {
   if (a === b) return 1;
   if (a.length === 0 || b.length === 0) return 0;
 
-  const maxLen = Math.max(a.length, b.length);
-  if (maxLen > 50) {
-    return a.includes(b) || b.includes(a) ? 0.85 : 0;
+  // 预处理：去除特殊字符，统一空白符
+  const normalize = (s: string) => s.toLowerCase().replace(/[^\w\s\u4e00-\u9fa5]/g, '').replace(/\s+/g, ' ');
+  const na = normalize(a);
+  const nb = normalize(b);
+
+  if (na === nb) return 1;
+  if (na.includes(nb) || nb.includes(na)) return 0.85;
+
+  // 中文歌曲名相似度优化：考虑括号内的别名
+  const withoutParens = (s: string) => s.replace(/[（(].*[)）]/g, '').replace(/[【\[].*[]】\]/g, '').trim();
+  const naClean = withoutParens(na);
+  const nbClean = withoutParens(nb);
+  if (naClean && nbClean && (naClean.includes(nbClean) || nbClean.includes(naClean))) {
+    return 0.9;
   }
 
-  const d = Math.max(a.length, b.length);
+  const maxLen = Math.max(na.length, nb.length);
+  if (maxLen > 50) {
+    return na.includes(nb) || nb.includes(na) ? 0.85 : 0;
+  }
+
+  const d = Math.max(na.length, nb.length);
   let similarity = 0;
 
   if (d <= 200) {
-    similarity = levenshteinSimilarity(a, b);
+    similarity = levenshteinSimilarity(na, nb);
   } else {
-    const aSub = a.slice(0, 50);
-    const bSub = b.slice(0, 50);
+    const aSub = na.slice(0, 50);
+    const bSub = nb.slice(0, 50);
     similarity = levenshteinSimilarity(aSub, bSub);
   }
 
-  if (a.includes(b) || b.includes(a)) {
+  if (na.includes(nb) || nb.includes(na)) {
     similarity = Math.max(similarity, 0.85);
   }
 
@@ -9825,6 +9845,23 @@ app.delete('/api/music/:docId/albums/:albumDocId', requireAdmin, async (req, res
   } catch (error) {
     console.error('Delete song album relation error:', error);
     res.status(500).json({ error: '删除歌曲专辑关联失败' });
+  }
+});
+
+app.get('/api/music/instrumental-targets', async (req, res) => {
+  try {
+    const relations = await prismaAny.songInstrumentalRelation.findMany({
+      select: {
+        targetSongDocId: true,
+      },
+      distinct: ['targetSongDocId'],
+    });
+    res.json({
+      docIds: relations.map((r: any) => r.targetSongDocId),
+    });
+  } catch (error) {
+    console.error('Fetch instrumental targets error:', error);
+    res.status(500).json({ error: '获取伴奏列表失败' });
   }
 });
 
