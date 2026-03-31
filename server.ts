@@ -37,6 +37,7 @@ import {
 } from './src/server/music/metingService';
 import { registerRegionRoutes } from './src/server/location/routes';
 import { registerExifRoutes } from './src/server/location/exifRoutes';
+import { initSensitiveWords, containsSensitive, isSensitiveWord } from './src/lib/sensitiveWordFilter';
 
 dotenv.config({ path: '.env.local' });
 dotenv.config();
@@ -6828,7 +6829,7 @@ app.post('/api/admin/review/:type/:id/approve', requireAdmin, async (req: Authen
         });
       }
 
-      res.json({ item: toWikiResponse(page) });
+      res.json({ item: { ...toWikiResponse(page), sensitiveWords: containsSensitive(page.content || '') } });
       return;
     }
 
@@ -6862,7 +6863,7 @@ app.post('/api/admin/review/:type/:id/approve', requireAdmin, async (req: Authen
       });
     }
 
-    res.json({ item: toPostResponse(post) });
+    res.json({ item: { ...toPostResponse(post), sensitiveWords: containsSensitive(post.content || '') } });
   } catch (error) {
     console.error('Approve review item error:', error);
     res.status(500).json({ error: '审核通过失败' });
@@ -6914,7 +6915,7 @@ app.post('/api/admin/review/:type/:id/reject', requireAdmin, async (req: Authent
         });
       }
 
-      res.json({ item: toWikiResponse(page) });
+      res.json({ item: { ...toWikiResponse(page), sensitiveWords: containsSensitive(page.content || '') } });
       return;
     }
 
@@ -6952,6 +6953,21 @@ app.post('/api/admin/review/:type/:id/reject', requireAdmin, async (req: Authent
   } catch (error) {
     console.error('Reject review item error:', error);
     res.status(500).json({ error: '驳回失败' });
+  }
+});
+
+app.post('/api/admin/check-sensitive', requireAdmin, async (req, res) => {
+  try {
+    const { text } = req.body as { text?: string };
+    if (typeof text !== 'string') {
+      res.status(400).json({ error: 'text is required' });
+      return;
+    }
+    const sensitiveWords = containsSensitive(text);
+    res.json({ sensitiveWords });
+  } catch (error) {
+    console.error('Check sensitive words error:', error);
+    res.status(500).json({ error: '敏感词检测失败' });
   }
 });
 
@@ -10027,6 +10043,98 @@ app.delete('/api/music/:docId/instrumentals/:instrumentalSongDocId', requireAdmi
   }
 });
 
+app.get('/api/music-platforms', async (req, res) => {
+  try {
+    const platforms = await prismaAny.musicPlatformConfig.findMany({
+      orderBy: [{ isDefault: 'desc' }, { sortOrder: 'asc' }],
+    });
+    res.json({ platforms });
+  } catch (error) {
+    console.error('Fetch music platforms error:', error);
+    res.status(500).json({ error: '获取平台配置失败' });
+  }
+});
+
+app.post('/api/music-platforms', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { key, label, urlPattern, color, bgColor, isDefault, sortOrder } = req.body;
+
+    if (!key || !label || !urlPattern) {
+      res.status(400).json({ error: '缺少必要参数：key, label, urlPattern' });
+      return;
+    }
+
+    const platform = await prismaAny.musicPlatformConfig.upsert({
+      where: { key },
+      create: {
+        key,
+        label,
+        urlPattern,
+        color: color || 'gray',
+        bgColor: bgColor || 'gray-100',
+        isDefault: Boolean(isDefault),
+        sortOrder: typeof sortOrder === 'number' ? sortOrder : 0,
+      },
+      update: {
+        label,
+        urlPattern,
+        color: color || 'gray',
+        bgColor: bgColor || 'gray-100',
+        isDefault: Boolean(isDefault),
+        sortOrder: typeof sortOrder === 'number' ? sortOrder : 0,
+      },
+    });
+
+    res.status(201).json({ platform });
+  } catch (error) {
+    console.error('Create/update music platform error:', error);
+    res.status(500).json({ error: '创建/更新平台配置失败' });
+  }
+});
+
+app.delete('/api/music-platforms/:key', requireAdmin, async (req, res) => {
+  try {
+    const { key } = req.params;
+
+    await prismaAny.musicPlatformConfig.delete({
+      where: { key },
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete music platform error:', error);
+    res.status(500).json({ error: '删除平台配置失败' });
+  }
+});
+
+app.patch('/api/music/:docId/custom-platforms', requireAdmin, async (req, res) => {
+  try {
+    const docId = req.params.docId;
+    const { customPlatformIds } = req.body;
+
+    if (typeof customPlatformIds !== 'object' || customPlatformIds === null) {
+      res.status(400).json({ error: 'invalid customPlatformIds' });
+      return;
+    }
+
+    const song = await prismaAny.musicTrack.findUnique({ where: { docId } });
+    if (!song) {
+      res.status(404).json({ error: '歌曲不存在' });
+      return;
+    }
+
+    await prismaAny.musicTrack.update({
+      where: { docId },
+      data: { customPlatformIds },
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Update custom platforms error:', error);
+    res.status(500).json({ error: '更新自定义平台失败' });
+  }
+});
+
 app.get('/api/music/:docId/posts', async (req: AuthenticatedRequest, res) => {
   try {
     const docId = req.params.docId;
@@ -12822,6 +12930,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 async function startServer() {
+  await initSensitiveWords();
   app.use((_req, res, next) => {
     res.setHeader(
       'Content-Security-Policy',

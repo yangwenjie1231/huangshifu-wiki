@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Clock, ExternalLink, Heart, Link2, MessageSquare, Play } from 'lucide-react';
 import { clsx } from 'clsx';
