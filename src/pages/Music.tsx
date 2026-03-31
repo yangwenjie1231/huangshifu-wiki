@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, query, getDocs, doc, deleteDoc, where, orderBy, db, auth } from '../firebase';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useMusic } from '../context/MusicContext';
@@ -19,34 +18,6 @@ import { format } from 'date-fns';
 import Pagination from '../components/Pagination';
 
 const DEFAULT_PAGE_SIZE = 40;
-
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
-}
 
 type PlatformIds = {
   neteaseId?: string | null;
@@ -69,6 +40,7 @@ type SongItem = {
   favoritedByMe?: boolean;
   platformIds?: PlatformIds;
   createdAt?: string;
+  isInstrumental?: boolean;
 };
 
 type PostItem = {
@@ -133,29 +105,6 @@ const getSongExternalUrl = (song: SongItem) => {
   return `https://music.163.com/song?id=${id}`;
 };
 
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
-    operationType,
-    path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
-
 const Music = () => {
   const [songs, setSongs] = useState<SongItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -187,28 +136,11 @@ const Music = () => {
   const { preferences, setViewMode } = useUserPreferences();
   const viewMode = preferences.viewMode;
 
-  const fetchInstrumentalTargets = async () => {
-    try {
-      const data = await apiGet<{ docIds: string[] }>('/api/music/instrumental-targets');
-      return new Set(data.docIds || []);
-    } catch {
-      return new Set<string>();
-    }
-  };
-
-  const [instrumentalTargetDocIds, setInstrumentalTargetDocIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (activeTab === 'music') {
-      fetchInstrumentalTargets().then(setInstrumentalTargetDocIds);
-    }
-  }, [activeTab]);
-
   const displaySongs = useMemo(() => {
     let result = [...songs];
 
     if (!showAccompaniments) {
-      result = result.filter(song => !instrumentalTargetDocIds.has(song.docId));
+      result = result.filter((song) => !song.isInstrumental);
     }
 
     if (filterPlatform !== 'all') {
@@ -233,13 +165,14 @@ const Music = () => {
     });
 
     return result;
-  }, [songs, showAccompaniments, instrumentalTargetDocIds, filterPlatform, sortBy, sortOrder]);
+  }, [songs, showAccompaniments, filterPlatform, sortBy, sortOrder]);
 
   const totalMusicPages = Math.ceil(displaySongs.length / pageSize);
   const paginatedSongs = useMemo(() => {
     const start = (page - 1) * pageSize;
     return displaySongs.slice(start, start + pageSize);
   }, [displaySongs, page, pageSize]);
+  const hiddenAccompanimentCount = songs.filter((song) => song.isInstrumental).length;
 
   const handleMusicPageChange = (newPage: number) => {
     setPage(newPage);
@@ -251,24 +184,37 @@ const Music = () => {
     setPage(1);
   };
 
+  const handleToggleAccompaniments = () => {
+    if (showAccompaniments) {
+      setSelectedSongs(new Set());
+      setIsBatchMode(false);
+    }
+    setShowAccompaniments((prev) => !prev);
+  };
+
+  const musicCountLabel = hiddenAccompanimentCount > 0 && !showAccompaniments
+    ? `${displaySongs.length} / ${songs.length} 首歌曲`
+    : `${songs.length} 首歌曲`;
+
   useEffect(() => {
     setPage(1);
-  }, [activeTab]);
+  }, [activeTab, showAccompaniments]);
 
   const fetchSongs = async () => {
     setLoading(true);
-    const path = 'music';
     try {
-      const q = query(collection(db, path), orderBy('createdAt', 'desc'));
-      const snapshot = await getDocs(q);
-      const fetchedSongs = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id })) as SongItem[];
-      setSongs(fetchedSongs);
-      setPlaylist(fetchedSongs);
-    } catch (e) {
-      handleFirestoreError(e, OperationType.GET, path);
+      const data = await apiGet<{ songs: SongItem[] }>('/api/music');
+      setSongs(data.songs || []);
+    } catch (error) {
+      console.error('Fetch songs error:', error);
+      setSongs([]);
     }
     setLoading(false);
   };
+
+  useEffect(() => {
+    setPlaylist(displaySongs);
+  }, [displaySongs, setPlaylist]);
 
   useEffect(() => {
     fetchSongs();
@@ -339,12 +285,7 @@ const Music = () => {
 
     for (const id of ids) {
       try {
-        // Check if song already exists
-        const path = 'music';
-        const q = query(collection(db, path), where('id', '==', id));
-        const snapshot = await getDocs(q);
-        
-        if (!snapshot.empty) {
+        if (songs.some((song) => song.id === id)) {
           skippedCount++;
           continue;
         }
@@ -374,7 +315,7 @@ const Music = () => {
       toggleSelect(song.docId);
       return;
     }
-    const index = songs.findIndex((item) => item.docId === song.docId);
+    const index = displaySongs.findIndex((item) => item.docId === song.docId);
     if (index >= 0) {
       playSongAtIndex(index);
       return;
@@ -404,12 +345,11 @@ const Music = () => {
   };
 
   const handleDeleteSong = async (songId: string) => {
-    const path = 'music';
     try {
       if (currentSong?.docId === songId) {
         setCurrentSong(null);
       }
-      await deleteDoc(doc(db, path, songId));
+      await apiDelete(`/api/music/${songId}`);
       fetchSongs();
       setConfirmModal({ show: false, type: 'single' });
     } catch (e) {
@@ -459,13 +399,12 @@ const Music = () => {
     if (selectedSongs.size === 0) return;
 
     setLoading(true);
-    const path = 'music';
     let successCount = 0;
     let failCount = 0;
 
     for (const docId of Array.from(selectedSongs)) {
       try {
-        await deleteDoc(doc(db, path, docId));
+        await apiDelete(`/api/music/${docId}`);
         successCount++;
       } catch (e) {
         console.error(`Error deleting ${docId}:`, e);
@@ -710,6 +649,19 @@ const Music = () => {
                     <Plus size={14} className="inline mr-1" /> 创建专辑
                   </button>
                 )}
+                {activeTab === 'music' && hiddenAccompanimentCount > 0 && (
+                  <button
+                    onClick={handleToggleAccompaniments}
+                    className={clsx(
+                      'px-4 py-2 rounded-full text-xs font-bold transition-colors',
+                      showAccompaniments
+                        ? 'bg-brand-primary/20 text-gray-900 hover:bg-brand-primary/30'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                    )}
+                  >
+                    {showAccompaniments ? '隐藏伴奏' : `显示伴奏 ${hiddenAccompanimentCount}`}
+                  </button>
+                )}
                 <ViewModeSelector value={viewMode} onChange={setViewMode} size="sm" />
                 {activeTab === 'music' && (
                   <>
@@ -747,19 +699,10 @@ const Music = () => {
                       <option value="baidu">百度</option>
                       <option value="kuwo">酷我</option>
                     </select>
-                    <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={showAccompaniments}
-                        onChange={(e) => setShowAccompaniments(e.target.checked)}
-                        className="w-3.5 h-3.5 rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
-                      />
-                      <span>显示伴奏</span>
-                    </label>
                   </>
                 )}
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                  {activeTab === 'music' ? `${displaySongs.length} 首歌曲` : `${albums.length} 张专辑`}
+                  {activeTab === 'music' ? musicCountLabel : `${albums.length} 张专辑`}
                 </span>
               </div>
             </div>
@@ -1048,7 +991,11 @@ const Music = () => {
                     )}
                   </>
                 ) : (
-                  <div className="py-20 text-center text-gray-400 italic">暂无音乐，快去添加吧</div>
+                  <div className="py-20 text-center text-gray-400 italic">
+                    {songs.length > 0 && hiddenAccompanimentCount > 0 && !showAccompaniments
+                      ? '当前仅显示非伴奏歌曲，打开“显示伴奏”即可查看全部。'
+                      : '暂无音乐，快去添加吧'}
+                  </div>
                 )}
               </div>
             ) : (

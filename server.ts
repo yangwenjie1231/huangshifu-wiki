@@ -215,6 +215,9 @@ type MusicTrackWithRelations = {
       }>;
     };
   }>;
+  instrumentalLinks?: Array<{
+    targetSongDocId: string;
+  }>;
 };
 
 interface PlayUrlCacheValue {
@@ -1326,6 +1329,7 @@ function toSongResponse(song: MusicTrackWithRelations, options?: { favoritedByMe
       trackOrder: relation.trackOrder,
       isDisplay: relation.isDisplay,
     })),
+    isInstrumental: (song.instrumentalLinks?.length || 0) > 0,
     favoritedByMe: Boolean(options?.favoritedByMe),
     createdAt: song.createdAt.toISOString(),
     updatedAt: song.updatedAt.toISOString(),
@@ -1424,6 +1428,11 @@ async function fetchSongWithRelationsByDocId(songDocId: string) {
           },
         },
         orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
+      },
+      instrumentalLinks: {
+        select: {
+          targetSongDocId: true,
+        },
       },
     },
   });
@@ -1887,6 +1896,11 @@ async function fetchSongsWithRelations(where?: Record<string, unknown>) {
           },
         },
         orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
+      },
+      instrumentalLinks: {
+        select: {
+          targetSongDocId: true,
+        },
       },
     },
     orderBy: { createdAt: 'desc' },
@@ -9845,23 +9859,6 @@ app.delete('/api/music/:docId/albums/:albumDocId', requireAdmin, async (req, res
   } catch (error) {
     console.error('Delete song album relation error:', error);
     res.status(500).json({ error: '删除歌曲专辑关联失败' });
-  }
-});
-
-app.get('/api/music/instrumental-targets', async (req, res) => {
-  try {
-    const relations = await prismaAny.songInstrumentalRelation.findMany({
-      select: {
-        targetSongDocId: true,
-      },
-      distinct: ['targetSongDocId'],
-    });
-    res.json({
-      docIds: relations.map((r: any) => r.targetSongDocId),
-    });
-  } catch (error) {
-    console.error('Fetch instrumental targets error:', error);
-    res.status(500).json({ error: '获取伴奏列表失败' });
   }
 });
 
