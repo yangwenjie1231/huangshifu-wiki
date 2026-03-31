@@ -68,7 +68,7 @@ type SongItem = {
   lyric?: string | null;
   favoritedByMe?: boolean;
   platformIds?: PlatformIds;
-  createdAt?: string;
+  createdAt?: string | { toDate?: () => Date; toMillis?: () => number } | null;
 };
 
 type PostItem = {
@@ -118,6 +118,21 @@ const getSongExternalUrl = (song: SongItem) => {
     return `https://music.91q.com/#/song/${id}`;
   }
   return `https://music.163.com/song?id=${id}`;
+};
+
+const toSortableTimestamp = (value: SongItem['createdAt']) => {
+  if (!value) return 0;
+  if (typeof value === 'string') {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+  }
+  if (typeof value.toMillis === 'function') {
+    return value.toMillis();
+  }
+  if (typeof value.toDate === 'function') {
+    return value.toDate().getTime();
+  }
+  return 0;
 };
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
@@ -214,9 +229,9 @@ const Music = () => {
           ? a.artist.localeCompare(b.artist, 'zh-CN')
           : b.artist.localeCompare(a.artist, 'zh-CN');
       }
-      return sortOrder === 'asc'
-        ? (a.createdAt || '').localeCompare(b.createdAt || '')
-        : (b.createdAt || '').localeCompare(a.createdAt || '');
+      const left = toSortableTimestamp(a.createdAt);
+      const right = toSortableTimestamp(b.createdAt);
+      return sortOrder === 'asc' ? left - right : right - left;
     });
 
     return result;
