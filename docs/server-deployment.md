@@ -597,7 +597,26 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 | 微博视频 | weibo.com / www.weibo.com |
 | Vimeo | vimeo.com / player.vimeo.com |
 
-### 15.4 音乐播放音源优先级
+### 15.4 Content Security Policy 与高德地图
+
+本项目配置了严格的 CSP（Content Security Policy）头部，以防止 XSS 和注入攻击。
+
+**高德地图 JS API 白名单**（必须包含以下域名才能正常使用地图功能）：
+
+| 域名 | 用途 |
+|------|------|
+| `webapi.amap.com` | 高德 Web API 主域名 |
+| `jsapi.amap.com` | 高德 JS API 域名 |
+| `jsapi-service.amap.com` | 高德 JS API 服务域名 |
+| `restapi.amap.com` | 高德 REST API 域名 |
+| `mapplugin.amap.com` | 高德地图插件域名 |
+
+**说明**：
+- CSP 配置位于 `server.ts` 中，共三处：开发环境中间件（line 51）、生产环境 `startServer` 函数（line 12777）、生产环境最终配置（line 12799）
+- `script-src` 和 `connect-src` 指令都需要包含上述所有高德域名
+- 如果地图功能无法加载（脚本被阻塞），请检查所有三处 CSP 配置是否一致
+
+### 15.5 音乐播放音源优先级
 
 所有歌曲优先使用网易云音乐（NetEase Cloud Music）作为播放音源。
 
