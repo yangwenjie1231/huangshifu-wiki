@@ -7,7 +7,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import { customSchema, isTrustedIframeDomain } from '../lib/htmlSanitizer';
-import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar, Link2, GitBranch, Network, MapPin, Heart, ThumbsDown, Pin, Image as ImageIcon } from 'lucide-react';
+import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar, Link2, GitBranch, Network, MapPin, Heart, ThumbsDown, ThumbsUp, Pin, Image as ImageIcon } from 'lucide-react';
 import { useUserPreferences } from '../context/UserPreferencesContext';
 import { ViewModeSelector } from '../components/ViewModeSelector';
 import { VIEW_MODE_CONFIG } from '../lib/viewModes';
@@ -296,6 +296,7 @@ const WikiMarkdown = ({ content }: { content: string }) => {
 const WikiList = () => {
   const [searchParams] = useSearchParams();
   const category = searchParams.get('category') || 'all';
+  const tag = searchParams.get('tag');
   const [pages, setPages] = useState<WikiItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -323,16 +324,20 @@ const WikiList = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [category]);
+  }, [category, tag]);
 
   useEffect(() => {
     const fetchPages = async () => {
       setLoading(true);
       try {
         const wikiRef = collection(db, 'wiki');
-        let q = query(wikiRef, orderBy('updatedAt', 'desc'));
-        if (category !== 'all') {
+        let q;
+        if (tag) {
+          q = query(wikiRef, where('tags', 'array-contains', tag), orderBy('updatedAt', 'desc'));
+        } else if (category !== 'all') {
           q = query(wikiRef, where('category', '==', category), orderBy('updatedAt', 'desc'));
+        } else {
+          q = query(wikiRef, orderBy('updatedAt', 'desc'));
         }
         const snapshot = await getDocs(q);
         setPages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WikiItem)));
@@ -342,7 +347,7 @@ const WikiList = () => {
       setLoading(false);
     };
     fetchPages();
-  }, [category]);
+  }, [category, tag]);
 
   const handleCopyWikiLink = async (event: React.MouseEvent<HTMLButtonElement>, slug: string) => {
     event.preventDefault();
@@ -738,7 +743,7 @@ const WikiPageView = () => {
                 )}
                 title={page.likedByMe ? '取消点赞' : '点赞'}
               >
-                <Heart size={20} />
+                <ThumbsUp size={20} />
               </button>
               <button
                 onClick={handleToggleDislike}
@@ -944,7 +949,11 @@ const WikiPageView = () => {
             <div className="flex items-center gap-2 text-gray-400 text-sm italic">
               <Tag size={14} />
               {page.tags?.map((tag: string) => (
-                <span key={tag} className="hover:text-brand-olive cursor-pointer px-2 py-0.5 bg-brand-cream/30 rounded-full text-[10px] font-bold uppercase tracking-wider">#{tag}</span>
+                <span
+                  key={tag}
+                  onClick={() => navigate(`/wiki?tag=${encodeURIComponent(tag)}`)}
+                  className="hover:text-brand-olive cursor-pointer px-2 py-0.5 bg-brand-cream/30 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                >#{tag}</span>
               ))}
             </div>
             {page.locationName && (
@@ -1219,7 +1228,7 @@ const WikiBranchWorkspace = () => {
           <div className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">标题</label>
+<label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">标题 <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   value={title}
@@ -1228,7 +1237,7 @@ const WikiBranchWorkspace = () => {
                 />
               </div>
               <div>
-                <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">分类</label>
+<label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">分类 <span className="text-red-500">*</span></label>
                 <select
                   value={category}
                   onChange={(event) => setCategory(event.target.value)}
@@ -1783,6 +1792,19 @@ const WikiEditor = () => {
       return;
     }
 
+    if (!formData.title.trim()) {
+      show("请填写标题（*为必填项）", { variant: 'error' });
+      return;
+    }
+    if (!formData.category) {
+      show("请选择分类（*为必填项）", { variant: 'error' });
+      return;
+    }
+    if (!formData.content.trim()) {
+      show("请填写内容（*为必填项）", { variant: 'error' });
+      return;
+    }
+
     const pageSlug = (isNew ? (formData.slug || formData.title) : slug || formData.slug)
       ?.trim()
       .toLowerCase()
@@ -1821,10 +1843,18 @@ const WikiEditor = () => {
       if (isNew) {
         const existingSnap = await getDoc(docRef);
         if (existingSnap.exists()) {
-          await updateDoc(docRef, pageData);
-        } else {
-          await setDoc(docRef, pageData);
+          show("该页面标识已存在，请修改标题后重试", { variant: 'error' });
+          setSavingMode(null);
+          return;
         }
+        const titleQuery = query(collection(db, 'wiki'), where('title', '==', formData.title.trim()));
+        const titleSnap = await getDocs(titleQuery);
+        if (!titleSnap.empty) {
+          show("该标题的百科已存在，请修改标题或编辑已有页面", { variant: 'error' });
+          setSavingMode(null);
+          return;
+        }
+        await setDoc(docRef, pageData);
       } else {
         await updateDoc(docRef, pageData);
       }
@@ -1905,7 +1935,7 @@ const WikiEditor = () => {
 
           <div className="space-y-2">
             <div className="flex justify-between items-center">
-              <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">内容 (Markdown)</label>
+              <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">内容 (Markdown) <span className="text-red-500">*</span></label>
               <button 
                 type="button"
                 onClick={async () => {

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Routes, Route, Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ReactMarkdown from 'react-markdown';
-import { MessageSquare, Heart, ThumbsDown, Share2, Plus, Clock, User as UserIcon, ArrowLeft, Save, X, Send, Edit3, Pin, Link2 } from 'lucide-react';
+import { MessageSquare, Heart, ThumbsDown, Share2, Plus, Clock, User as UserIcon, ArrowLeft, Save, X, Send, Edit3, Pin, Link2, Tag } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import MdEditor from 'react-markdown-editor-lite';
@@ -565,7 +565,17 @@ const PostDetail = () => {
               <span className="text-xs text-red-500">驳回原因：{post.reviewNote}</span>
             ) : null}
           </div>
-          <div className="flex items-center gap-3">
+          {post.tags && post.tags.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap mt-3">
+              <Tag size={14} className="text-gray-400" />
+              {post.tags.map((tag: string) => (
+                <span key={tag} className="px-2 py-0.5 bg-brand-cream/50 rounded-full text-[10px] font-bold uppercase tracking-wider text-gray-600">
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-3 mt-4">
             <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden">
               <UserIcon size={20} className="m-auto text-gray-400" />
             </div>

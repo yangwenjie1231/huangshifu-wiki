@@ -76,8 +76,31 @@ export const SongCoverManager = ({ songDocId, currentCover, onCoverUpdated }: So
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error((data as { error?: string })?.error || '上传失败');
+        let errorMessage = '上传失败';
+        const contentType = response.headers.get('content-type');
+
+        if (contentType?.includes('application/json')) {
+          try {
+            const data = await response.json();
+            errorMessage = (data as { error?: string })?.error || errorMessage;
+          } catch {
+            // JSON parse failed, use default errorMessage
+          }
+        } else {
+          // Non-JSON response (likely HTML error page)
+          const text = await response.text().catch(() => '');
+          console.error('Upload error response:', text.slice(0, 500));
+          if (response.status === 413) {
+            errorMessage = '文件过大，请选择更小的图片';
+          } else if (response.status === 401) {
+            errorMessage = '请先登录';
+          } else if (response.status === 403) {
+            errorMessage = '没有上传权限';
+          } else if (response.status === 400) {
+            errorMessage = '图片格式不支持或文件损坏';
+          }
+        }
+        throw new Error(errorMessage);
       }
 
       const uploadResult = await response.json() as { asset: { id: string; url: string } };
