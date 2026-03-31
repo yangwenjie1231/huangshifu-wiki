@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, ExternalLink, Loader2, Search, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ChevronDown, ChevronUp, ExternalLink, Loader2, Plus, Search, Trash2, X } from 'lucide-react';
+import { clsx } from 'clsx';
 
-import { apiPatch } from '../lib/apiClient';
+import { apiGet, apiPatch } from '../lib/apiClient';
 import { useToast } from './Toast';
 import { MatchSuggestionModal } from './MatchSuggestionModal';
 
@@ -15,11 +16,20 @@ type PlatformIds = {
   kuwoId?: string | null;
 };
 
+type CustomPlatformConfig = {
+  key: string;
+  label: string;
+  urlPattern: string;
+  color: string;
+  bgColor: string;
+};
+
 type SongFormData = {
   title: string;
   artist: string;
   album: string;
   lyric?: string | null;
+  description?: string | null;
 };
 
 type SongItem = {
@@ -31,9 +41,11 @@ type SongItem = {
   cover: string;
   audioUrl: string;
   lyric?: string | null;
+  description?: string | null;
   primaryPlatform?: Platform | null;
   favoritedByMe?: boolean;
   platformIds?: PlatformIds;
+  customPlatformIds?: Record<string, string>;
 };
 
 interface SongEditModalProps {
@@ -57,6 +69,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
     artist: song.artist || '',
     album: song.album || '',
     lyric: song.lyric || '',
+    description: song.description || '',
   });
   const [platformIds, setPlatformIds] = useState<PlatformIds>({
     neteaseId: song.platformIds?.neteaseId || '',
@@ -65,18 +78,34 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
     baiduId: song.platformIds?.baiduId || '',
     kuwoId: song.platformIds?.kuwoId || '',
   });
+  const [customPlatformIds, setCustomPlatformIds] = useState<Record<string, string>>(song.customPlatformIds || {});
+  const [customPlatforms, setCustomPlatforms] = useState<CustomPlatformConfig[]>([]);
   const [platformExpanded, setPlatformExpanded] = useState(false);
+  const [customPlatformExpanded, setCustomPlatformExpanded] = useState(false);
   const [matchingPlatform, setMatchingPlatform] = useState<Platform | null>(null);
   const [saving, setSaving] = useState(false);
   const { show } = useToast();
 
-  React.useEffect(() => {
+  useEffect(() => {
+    if (open) {
+      apiGet<{ platforms: CustomPlatformConfig[] }>('/api/music-platforms')
+        .then(data => {
+          setCustomPlatforms(data.platforms || []);
+        })
+        .catch(() => {
+          setCustomPlatforms([]);
+        });
+    }
+  }, [open]);
+
+  useEffect(() => {
     if (song) {
       setFormData({
         title: song.title || '',
         artist: song.artist || '',
         album: song.album || '',
         lyric: song.lyric || '',
+        description: song.description || '',
       });
       setPlatformIds({
         neteaseId: song.platformIds?.neteaseId || '',
@@ -85,6 +114,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
         baiduId: song.platformIds?.baiduId || '',
         kuwoId: song.platformIds?.kuwoId || '',
       });
+      setCustomPlatformIds(song.customPlatformIds || {});
     }
   }, [song, open]);
 
@@ -110,11 +140,13 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
         artist: formData.artist.trim(),
         album: formData.album.trim(),
         lyric: formData.lyric?.trim() || null,
+        description: formData.description?.trim() || null,
         neteaseId: platformIds.neteaseId || null,
         tencentId: platformIds.tencentId || null,
         kugouId: platformIds.kugouId || null,
         baiduId: platformIds.baiduId || null,
         kuwoId: platformIds.kuwoId || null,
+        customPlatformIds: customPlatformIds,
       });
       show('歌曲已更新');
       onSuccess();
@@ -204,6 +236,17 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
               />
             </div>
 
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-700">歌曲描述</label>
+              <textarea
+                value={formData.description || ''}
+                onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                placeholder="创作者的话、创作背景等（可选，支持 Markdown）"
+                rows={3}
+                className="w-full px-4 py-3 rounded-2xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary/25 resize-none text-sm"
+              />
+            </div>
+
             <button
               type="button"
               onClick={() => setPlatformExpanded((prev) => !prev)}
@@ -257,6 +300,83 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
                   );
                 })}
               </div>
+            )}
+
+            {customPlatforms.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setCustomPlatformExpanded((prev) => !prev)}
+                  className="w-full flex items-center justify-between p-4 rounded-2xl border border-gray-100 bg-gray-50/60 hover:bg-gray-100/60 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-gray-700">自定义平台</span>
+                    {Object.keys(customPlatformIds).length > 0 && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold">
+                        已添加 {Object.keys(customPlatformIds).length} 个
+                      </span>
+                    )}
+                  </div>
+                  {customPlatformExpanded ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+                </button>
+
+                {customPlatformExpanded && (
+                  <div className="space-y-3">
+                    {customPlatforms.map((platform) => {
+                      const currentId = customPlatformIds[platform.key] || '';
+                      const isLinked = Boolean(currentId);
+                      const buildUrl = (id: string) => {
+                        return platform.urlPattern.replace('{id}', id);
+                      };
+                      return (
+                        <div key={platform.key} className="flex items-center gap-3">
+                          <span className={clsx(
+                            'w-20 text-xs px-2 py-1 rounded-full text-center shrink-0',
+                            platform.bgColor,
+                            platform.color
+                          )}>
+                            {platform.label}
+                          </span>
+                          <input
+                            type="text"
+                            value={currentId}
+                            onChange={(e) => setCustomPlatformIds((prev) => ({
+                              ...prev,
+                              [platform.key]: e.target.value,
+                            }))}
+                            placeholder={isLinked ? '已添加' : '输入平台ID'}
+                            className="flex-1 px-3 py-2 rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary/25 text-sm font-mono"
+                          />
+                          {isLinked && (
+                            <a
+                              href={buildUrl(currentId)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
+                            >
+                              <ExternalLink size={16} />
+                            </a>
+                          )}
+                          {isLinked && (
+                            <button
+                              type="button"
+                              onClick={() => setCustomPlatformIds((prev) => {
+                                const next = { ...prev };
+                                delete next[platform.key];
+                                return next;
+                              })}
+                              className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                              title="移除"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
 
             <div className="rounded-2xl border border-gray-100 bg-gray-50/60 p-4">

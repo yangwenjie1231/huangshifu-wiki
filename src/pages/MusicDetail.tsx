@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Clock, ExternalLink, Heart, Link2, MessageSquare, Play } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -21,6 +21,14 @@ type PlatformIds = {
   kuwoId?: string | null;
 };
 
+type CustomPlatformConfig = {
+  key: string;
+  label: string;
+  urlPattern: string;
+  color: string;
+  bgColor: string;
+};
+
 type SongItem = {
   docId: string;
   id: string;
@@ -30,9 +38,11 @@ type SongItem = {
   cover: string;
   audioUrl: string;
   lyric?: string | null;
+  description?: string | null;
   primaryPlatform?: 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo' | null;
   favoritedByMe?: boolean;
   platformIds?: PlatformIds;
+  customPlatformIds?: Record<string, string>;
 };
 
 type SongDetailResponse = {
@@ -82,9 +92,16 @@ const MusicDetail = () => {
   const [loading, setLoading] = useState(true);
   const [favoriting, setFavoriting] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [customPlatforms, setCustomPlatforms] = useState<CustomPlatformConfig[]>([]);
   const { user, isAdmin } = useAuth();
   const { setCurrentSong, setIsPlaying, setPlaylist } = useMusic();
   const { show } = useToast();
+
+  useEffect(() => {
+    apiGet<{ platforms: CustomPlatformConfig[] }>('/api/music-platforms')
+      .then(data => setCustomPlatforms(data.platforms || []))
+      .catch(() => setCustomPlatforms([]));
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -242,6 +259,45 @@ const MusicDetail = () => {
         <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">歌词</h2>
         <LyricsDisplay lyric={song?.lyric || ''} />
       </section>
+
+      {song?.description && (
+        <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
+          <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">歌曲描述</h2>
+          <div className="prose prose-sm max-w-none text-gray-600 whitespace-pre-wrap">
+            {song.description}
+          </div>
+        </section>
+      )}
+
+      {customPlatforms.length > 0 && song?.customPlatformIds && Object.keys(song.customPlatformIds).length > 0 && (
+        <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
+          <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">更多平台</h2>
+          <div className="flex flex-wrap gap-2">
+            {customPlatforms
+              .filter(p => song.customPlatformIds?.[p.key])
+              .map(platform => {
+                const id = song.customPlatformIds![platform.key];
+                const url = platform.urlPattern.replace('{id}', id);
+                return (
+                  <a
+                    key={platform.key}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={clsx(
+                      'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all hover:scale-105',
+                      platform.bgColor,
+                      platform.color
+                    )}
+                  >
+                    {platform.label}
+                    <ExternalLink size={12} />
+                  </a>
+                );
+              })}
+          </div>
+        </section>
+      )}
 
       <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
         <div className="flex items-center justify-between mb-4">

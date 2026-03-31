@@ -6831,9 +6831,9 @@ app.post('/api/admin/review/:type/:id/approve', requireAdmin, async (req: Authen
           targetType: 'wiki',
           targetId,
           title: page.title,
-          note: note || null,
-        });
-      }
+        note: note || null,
+      });
+    }
 
       res.json({ item: { ...toWikiResponse(page), sensitiveWords: containsSensitive(page.content || '') } });
       return;
