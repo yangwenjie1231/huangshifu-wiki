@@ -1744,6 +1744,14 @@ const WikiEditor = () => {
       show("请先填写标题以生成页面标识", { variant: 'error' });
       return;
     }
+
+    if (isNew) {
+      const existingSnap = await getDoc(doc(db, 'wiki', pageSlug));
+      if (existingSnap.exists()) {
+        show('同名页面已存在，请修改标题后重试', { variant: 'error' });
+        return;
+      }
+    }
     
     setSavingMode(status);
 
@@ -1770,12 +1778,7 @@ const WikiEditor = () => {
     try {
       const docRef = doc(db, 'wiki', pageSlug!);
       if (isNew) {
-        const existingSnap = await getDoc(docRef);
-        if (existingSnap.exists()) {
-          await updateDoc(docRef, pageData);
-        } else {
-          await setDoc(docRef, pageData);
-        }
+        await setDoc(docRef, pageData);
       } else {
         await updateDoc(docRef, pageData);
       }
