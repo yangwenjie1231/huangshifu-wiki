@@ -944,7 +944,13 @@ const WikiPageView = () => {
             <div className="flex items-center gap-2 text-gray-400 text-sm italic">
               <Tag size={14} />
               {page.tags?.map((tag: string) => (
-                <span key={tag} className="hover:text-brand-olive cursor-pointer px-2 py-0.5 bg-brand-cream/30 rounded-full text-[10px] font-bold uppercase tracking-wider">#{tag}</span>
+                <Link
+                  key={tag}
+                  to={`/search?tags=${encodeURIComponent(tag)}`}
+                  className="hover:text-brand-olive px-2 py-0.5 bg-brand-cream/30 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                >
+                  #{tag}
+                </Link>
               ))}
             </div>
             {page.locationName && (

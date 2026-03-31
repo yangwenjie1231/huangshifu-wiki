@@ -23,10 +23,25 @@ type SearchSuggestion = {
   id?: string;
 };
 
+type SearchFilters = {
+  selectedTags: string[];
+  dateRange: { start: string; end: string };
+  contentType: 'all' | 'wiki' | 'posts' | 'galleries' | 'music' | 'albums';
+  semanticImageSearch: boolean;
+};
+
+const parseTagsParam = (value: string | null) =>
+  (value || '')
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+
 const Search = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const initialQuery = searchParams.get('q') || '';
+  const tagsParam = searchParams.get('tags');
+  const initialTags = parseTagsParam(tagsParam);
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [results, setResults] = useState<{
     wiki: any[];
@@ -43,7 +58,7 @@ const Search = () => {
   
   // Advanced Filters
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>(initialTags);
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
   const [contentType, setContentType] = useState<'all' | 'wiki' | 'posts' | 'galleries' | 'music' | 'albums'>('all');
   const [semanticImageSearch, setSemanticImageSearch] = useState(false);
@@ -74,10 +89,25 @@ const Search = () => {
   }, []);
 
   useEffect(() => {
-    if (initialQuery) {
-      handleSearch(initialQuery);
+    setSearchQuery(initialQuery);
+    setSelectedTags(initialTags);
+
+    if (!initialQuery && initialTags.length === 0) {
+      setHasSearched(false);
+      return;
     }
-  }, [initialQuery]);
+
+    void handleSearch(
+      initialQuery,
+      {
+        selectedTags: initialTags,
+        dateRange: { start: '', end: '' },
+        contentType: 'all',
+        semanticImageSearch: false,
+      },
+      false,
+    );
+  }, [initialQuery, tagsParam]);
 
   const fetchSuggestions = useCallback(async (q: string) => {
     if (!q || q.length < 2) {
@@ -104,15 +134,25 @@ const Search = () => {
     suggestTimeoutRef.current = setTimeout(() => fetchSuggestions(val), 300);
   };
 
-  const handleSearch = async (q: string, filtersOverride?: any) => {
+  const handleSearch = async (q: string, filtersOverride?: SearchFilters, syncUrl = true) => {
     setLoading(true);
     setHasSearched(true);
     setShowSuggest(false);
-    const currentQuery = q || searchQuery;
-    setSearchParams({ q: currentQuery });
-    setSearchQuery(currentQuery);
-
+    const currentQuery = q;
     const filters = filtersOverride || { selectedTags, dateRange, contentType, semanticImageSearch };
+
+    if (syncUrl) {
+      const nextParams = new URLSearchParams();
+      if (currentQuery) {
+        nextParams.set('q', currentQuery);
+      }
+      if (filters.selectedTags.length > 0) {
+        nextParams.set('tags', filters.selectedTags.join(','));
+      }
+      setSearchParams(nextParams);
+    }
+
+    setSearchQuery(currentQuery);
 
     try {
       const typeMap: Record<string, string> = {
@@ -127,6 +167,7 @@ const Search = () => {
       const data = await apiGet<{ wiki: any[]; posts: any[]; galleries: any[]; music: any[]; albums: any[] }>('/api/search', {
         q: currentQuery,
         type: apiType,
+        ...(filters.selectedTags.length ? { tags: filters.selectedTags.join(',') } : {}),
         ...(filters.dateRange.start ? { startDate: filters.dateRange.start } : {}),
         ...(filters.dateRange.end ? { endDate: filters.dateRange.end } : {}),
       });
