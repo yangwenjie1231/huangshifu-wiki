@@ -4,6 +4,16 @@ import { motion } from 'motion/react';
 import { useMusic } from '../context/MusicContext';
 import { clsx } from 'clsx';
 
+type MusicPlatform = 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo';
+
+type PlatformIds = {
+  neteaseId?: string | null;
+  tencentId?: string | null;
+  kugouId?: string | null;
+  baiduId?: string | null;
+  kuwoId?: string | null;
+};
+
 interface Song {
   id: string;
   title: string;
@@ -12,6 +22,8 @@ interface Song {
   cover: string;
   audioUrl: string;
   lyric?: string;
+  primaryPlatform?: MusicPlatform | null;
+  platformIds?: PlatformIds;
 }
 
 export const MusicPlayer = ({ songId }: { songId: string }) => {

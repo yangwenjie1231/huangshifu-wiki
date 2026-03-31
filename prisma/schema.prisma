@@ -702,6 +702,23 @@ model SongInstrumentalRelation {
   @@index([targetSongDocId])
 }
 
+model MusicPlatformConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  label       String
+  urlPattern  String
+  color       String   @default("gray")
+  bgColor     String   @default("gray-100")
+  isDefault   Boolean  @default(false)
+  isEnabled   Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([key])
+  @@index([sortOrder])
+}
+
 model ImageMap {
   id         String   @id
   md5        String   @unique

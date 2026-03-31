@@ -10,6 +10,14 @@ import { useToast } from '../components/Toast';
 import { AlbumCoverManager } from '../components/AlbumCoverManager';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 
+type PlatformIds = {
+  neteaseId?: string | null;
+  tencentId?: string | null;
+  kugouId?: string | null;
+  baiduId?: string | null;
+  kuwoId?: string | null;
+};
+
 type SongItem = {
   docId: string;
   id: string;
@@ -22,6 +30,8 @@ type SongItem = {
   lyric?: string | null;
   favoritedByMe?: boolean;
   trackOrder?: number;
+  primaryPlatform?: 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo' | null;
+  platformIds?: PlatformIds;
 };
 
 type AlbumResponse = {

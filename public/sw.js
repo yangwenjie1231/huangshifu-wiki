@@ -1,4 +1,4 @@
-const CACHE_NAME = 'huangshifu-wiki-v2';
+const CACHE_NAME = 'huangshifu-wiki-v1';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

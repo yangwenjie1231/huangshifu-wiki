@@ -616,25 +616,72 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 - `script-src` 和 `connect-src` 指令都需要包含上述所有高德域名
 - 如果地图功能无法加载（脚本被阻塞），请检查所有三处 CSP 配置是否一致
 
-### 15.5 音乐播放音源优先级
+### 15.5 音乐播放音源架构
 
-所有歌曲优先使用网易云音乐（NetEase Cloud Music）作为播放音源。
+ 本项目采用**客户端直连 + 服务器缓存**混合架构，针对不同平台选择最优播放方案。
 
-**实现机制**：
+**播放策略**：
 
-| 优先级 | 平台 | 音频 URL 格式 |
-|--------|------|---------------|
-| 1（最高）| 网易云音乐 | `https://music.163.com/song/media/outer/url?id={id}.mp3` |
-| 2 | QQ 音乐 | 通过 Meting API 解析 |
-| 3 | 酷狗音乐 | 通过 Meting API 解析 |
-| 4 | 百度音乐 | 通过 Meting API 解析 |
-| 5 | 酷我音乐 | 通过 Meting API 解析 |
+| 平台 | 播放方式 | 说明 |
+|------|----------|------|
+| 网易云音乐 | 客户端直连 | 直接构造 URL: `https://music.163.com/song/media/outer/url?id={neteaseId}.mp3` |
+| QQ/酷狗/百度/酷我 | 服务器 API | 通过 `/api/music/:docId/play-url` 获取，服务器缓存结果 |
 
-**说明**：
+### 15.6 敏感词过滤
 
-- 当歌曲存在网易云音乐 ID（`neteaseId`）时，直接构造网易云音乐直链作为播放地址
-- 无网易云音乐 ID 时，依次尝试其他平台
-- 直链方式绕过 Meting API，播放更稳定
+本项目内置敏感词检测功能，用于过滤热门搜索词和辅助内容审核。
+
+**功能特性**：
+
+- **DFA 算法**：使用确定性有限自动机（DFA）实现高效敏感词匹配
+- **搜索过滤**：敏感词不会被记录到热门搜索词中
+- **审核辅助**：审核内容时自动检测敏感词并高亮显示
+- **管理工具**：提供敏感词检测面板，可手动检测任意文本
+
+**敏感词库**：
+
+敏感词库文件位于 `public/sensitive-words/words.txt`，每行一个敏感词。
+
+**下载敏感词库**：
+
+```bash
+npm run download:sensitive-words
+```
+
+该脚本从 GitHub 仓库下载最新的敏感词列表。如需使用自定义词库，请将词库文件放置于 `public/sensitive-words/words.txt`。
+
+**API 接口**：
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/api/admin/check-sensitive` | POST | 敏感词检测（需管理员权限），请求体 `{ text: string }`，返回 `{ sensitiveWords: string[] }` |
+| `/api/admin/review-queue` | GET | 审核队列返回时自动附带 `sensitiveWords` 字段 |
+
+**管理员面板**：
+
+在「审核队列」中，待审核内容会自动显示检测到的敏感词。在「敏感词检测」面板可手动输入文本进行检测。
+
+**实现逻辑**：
+
+1. **网易云歌曲**（`primaryPlatform === 'netease'` 且存在 `neteaseId`）：
+   - 前端直接构造直链，绕过服务器
+   - 用户客户端直连网易云服务器，延迟最低
+
+2. **其他平台歌曲**：
+   - 前端请求服务器 `/api/music/:docId/play-url`
+   - 服务器优先使用缓存（默认 10 分钟 TTL）
+   - 缓存未命中时调用 Meting API 获取播放地址
+
+**优势**：
+
+- 网易云歌曲：用户端直连，绕过服务器网络瓶颈，播放延迟从 ~10s 降至 <1s
+- 其他平台：服务器缓存减少外部 API 调用，提升稳定性
+
+**环境变量**：
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `MUSIC_PLAY_URL_CACHE_TTL_SECONDS` | `600` | 播放地址缓存 TTL（秒） |
 
 ---
 
@@ -660,6 +707,14 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 ## 附录：更新日志
 
 ### v5.x
+
+- **敏感词过滤功能**：内置 DFA 算法敏感词检测，用于过滤热门搜索词和辅助内容审核
+  - 敏感词不会被记录到热门搜索
+  - 审核内容时自动检测并显示敏感词
+  - 新增「敏感词检测」管理面板
+  - 新增 `POST /api/admin/check-sensitive` API
+  - 敏感词库文件位于 `public/sensitive-words/words.txt`
+  - **部署注意**：需执行 `npm run download:sensitive-words` 下载敏感词库
 
 - **新增用户视图偏好设置**：用户可以选择四种内容展示模式（大图标、中图标、小图标、列表），偏好设置存储在 `User.preferences` 字段（JSON 类型），支持以下页面：
   - 百科页面（Wiki）
