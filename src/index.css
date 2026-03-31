@@ -58,3 +58,35 @@ input[type="range"]::-moz-range-thumb {
   border: 2px solid #FFD700;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+.pb-safe-inset {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);
+}
+
+.tabs-safe {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 64px);
+}
+
+html {
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+}
+
+body {
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+}
+
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .md\\:pb-safe-desktop {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

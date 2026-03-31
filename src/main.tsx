@@ -10,6 +10,12 @@ if (globalThis.crypto && typeof globalThis.crypto.randomUUID !== 'function') {
   globalThis.crypto.randomUUID = randomId as Crypto['randomUUID'];
 }
 
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>

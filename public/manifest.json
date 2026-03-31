@@ -1,0 +1,20 @@
+{
+  "name": "黄诗扶Wiki",
+  "short_name": "黄诗扶Wiki",
+  "description": "黄诗扶百科网站",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FDFDF7",
+  "theme_color": "#FFD700",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["entertainment", "music"],
+  "lang": "zh-CN"
+}
