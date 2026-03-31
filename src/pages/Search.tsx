@@ -89,8 +89,12 @@ const Search = () => {
   }, []);
 
   useEffect(() => {
+    const nextDateRange = { start: '', end: '' };
     setSearchQuery(initialQuery);
     setSelectedTags(initialTags);
+    setDateRange(nextDateRange);
+    setContentType('all');
+    setSemanticImageSearch(false);
 
     if (!initialQuery && initialTags.length === 0) {
       setHasSearched(false);
@@ -101,7 +105,7 @@ const Search = () => {
       initialQuery,
       {
         selectedTags: initialTags,
-        dateRange: { start: '', end: '' },
+        dateRange: nextDateRange,
         contentType: 'all',
         semanticImageSearch: false,
       },
@@ -197,7 +201,8 @@ const Search = () => {
       }
 
       const filterFn = (item: any) => {
-        const matchesTags = filters.selectedTags.length === 0 || filters.selectedTags.every(tag => (item.tags || []).includes(tag));
+        const itemTags = Array.isArray(item.tags) ? item.tags : [];
+        const matchesTags = filters.selectedTags.length === 0 || filters.selectedTags.every(tag => itemTags.includes(tag));
         return matchesTags;
       };
 
@@ -205,8 +210,8 @@ const Search = () => {
         wiki: allResults.wiki.filter(filterFn),
         posts: allResults.posts.filter(filterFn),
         galleries: allResults.galleries.filter(filterFn),
-        music: allResults.music || [],
-        albums: allResults.albums || [],
+        music: allResults.music.filter(filterFn),
+        albums: allResults.albums.filter(filterFn),
       });
     } catch (e) {
       console.error("Search error:", e);
