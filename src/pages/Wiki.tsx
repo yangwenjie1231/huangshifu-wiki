@@ -1798,7 +1798,7 @@ const WikiEditor = () => {
       await addDoc(revisionsRef, {
         id: randomId(),
         pageSlug,
-        title: formData.title,
+        title: trimmedTitle,
         content: formData.content,
         editorUid: user.uid,
         editorName: profile?.displayName || user.displayName || '匿名用户',
@@ -1824,6 +1824,7 @@ const WikiEditor = () => {
         </div>
 
         <form
+          noValidate
           onSubmit={(e) => {
             e.preventDefault();
             handleSubmit('pending');
@@ -1835,7 +1836,6 @@ const WikiEditor = () => {
               <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">标题 <span className="text-red-500">*</span></label>
               <input 
                 type="text" 
-                required
                 value={formData.title}
                 onChange={e => setFormData({...formData, title: e.target.value})}
                 placeholder="例如：黄诗扶"
