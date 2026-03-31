@@ -344,7 +344,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
                     const previewUrl = normalizeCustomPlatformLinkUrl(link.url);
 
                     return (
-                      <div key={`${index}-${link.label}-${link.url}`} className="rounded-2xl border border-gray-200 bg-white p-3 space-y-3">
+                      <div key={`custom-link-${index}`} className="rounded-2xl border border-gray-200 bg-white p-3 space-y-3">
                         <div className="flex items-center gap-3">
                           <input
                             type="text"
