@@ -4,6 +4,8 @@ import { ArrowLeft, Clock, ExternalLink, Heart, Link2, MessageSquare, Play } fro
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 
 import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
@@ -12,6 +14,7 @@ import { useMusic } from '../context/MusicContext';
 import { useToast } from '../components/Toast';
 import { SongCoverManager } from '../components/SongCoverManager';
 import { SongEditModal } from '../components/SongEditModal';
+import { customSchema, isTrustedIframeDomain } from '../lib/htmlSanitizer';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 
 type PlatformIds = {
@@ -75,6 +78,58 @@ const formatDate = (value: string | null | undefined) => {
   if (!value) return '刚刚';
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? '刚刚' : format(parsed, 'yyyy-MM-dd');
+};
+
+const SongDescriptionMarkdown = ({ content }: { content: string }) => {
+  const processedContent = content.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_match, p1, p2) => {
+    const display = p1.trim();
+    const slug = p2 ? p2.trim() : p1.trim();
+    return `[${display}](/wiki/${slug})`;
+  });
+
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeRaw, [rehypeSanitize, customSchema]]}
+      components={{
+        iframe: ({ src, width, height, ...props }: React.IframeHTMLAttributes<HTMLIFrameElement>) => {
+          if (!isTrustedIframeDomain(src)) {
+            return null;
+          }
+          return (
+            <iframe
+              src={src}
+              width={width || '100%'}
+              height={height || '400px'}
+              {...props}
+            />
+          );
+        },
+        a: ({ href, children, ...props }) => {
+          if (href && href.startsWith('/wiki/')) {
+            return (
+              <Link to={href} className="text-brand-primary hover:underline" {...props}>
+                {children}
+              </Link>
+            );
+          }
+          return (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand-primary hover:underline"
+              {...props}
+            >
+              {children}
+            </a>
+          );
+        },
+      }}
+    >
+      {processedContent}
+    </ReactMarkdown>
+  );
 };
 
 const MusicDetail = () => {
@@ -249,9 +304,7 @@ const MusicDetail = () => {
         <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
           <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">歌曲描述</h2>
           <div className="prose prose-stone max-w-none text-sm text-gray-600">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {song.description}
-            </ReactMarkdown>
+            <SongDescriptionMarkdown content={song.description} />
           </div>
         </section>
       ) : null}
