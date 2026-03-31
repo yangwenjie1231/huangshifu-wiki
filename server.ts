@@ -7673,12 +7673,35 @@ app.patch('/api/galleries/:id', requireAuth, requireActiveUser, async (req: Auth
     const description = typeof req.body?.description === 'string' ? req.body.description.trim() : undefined;
     const tags = req.body?.tags !== undefined ? normalizeTagList(req.body.tags) : undefined;
     const locationCode = req.body?.locationCode !== undefined ? (typeof req.body.locationCode === 'string' && req.body.locationCode.length > 0 ? req.body.locationCode : null) : undefined;
+    const published = req.body?.published !== undefined ? parseBoolean(req.body.published, false) : undefined;
+    const imagesRaw = Array.isArray(req.body?.images) ? req.body.images : undefined;
+    const imageInstructions = imagesRaw?.map((item) => {
+      if (!item || typeof item !== 'object') {
+        return null;
+      }
+      const parsed = item as Record<string, unknown>;
+      const imageId = typeof parsed.imageId === 'string'
+        ? parsed.imageId.trim()
+        : '';
+      const assetId = typeof parsed.assetId === 'string'
+        ? parsed.assetId.trim()
+        : '';
+      if (imageId && !assetId) {
+        return { kind: 'existing' as const, imageId };
+      }
+      if (assetId && !imageId) {
+        return { kind: 'asset' as const, assetId };
+      }
+      return null;
+    }) ?? undefined;
 
     const data: {
       title?: string;
       description?: string;
       tags?: string[];
       locationCode?: string | null;
+      published?: boolean;
+      publishedAt?: Date | null;
     } = {};
 
     if (title !== undefined && title.length > 0) {
@@ -7693,28 +7716,185 @@ app.patch('/api/galleries/:id', requireAuth, requireActiveUser, async (req: Auth
     if (locationCode !== undefined) {
       data.locationCode = locationCode;
     }
+    if (published !== undefined) {
+      data.published = published;
+      data.publishedAt = published ? new Date() : null;
+    }
 
-    if (!Object.keys(data).length) {
+    if (imageInstructions !== undefined) {
+      if (!imageInstructions.length || imageInstructions.some((item) => !item)) {
+        res.status(400).json({ error: '图片保存数据无效' });
+        return;
+      }
+    }
+
+    if (!Object.keys(data).length && imageInstructions === undefined) {
       res.status(400).json({ error: '没有可更新的字段' });
       return;
     }
 
-    const updated = await prisma.gallery.update({
-      where: { id: req.params.id },
-      data,
-      include: {
-        images: {
-          include: {
-            asset: true,
+    const newImageIds: string[] = [];
+    const removedImages: Array<{ id: string; assetId: string | null; url: string }> = [];
+
+    const updated = await prisma.$transaction(async (tx) => {
+      if (Object.keys(data).length) {
+        await tx.gallery.update({
+          where: { id: req.params.id },
+          data,
+        });
+      }
+
+      if (imageInstructions !== undefined) {
+        const validatedInstructions = imageInstructions.filter(
+          (item): item is { kind: 'existing'; imageId: string } | { kind: 'asset'; assetId: string } => Boolean(item),
+        );
+        if (validatedInstructions.length !== imageInstructions.length) {
+          throw new Error('图片保存数据无效');
+        }
+
+        const existingImages = await tx.galleryImage.findMany({
+          where: { galleryId: req.params.id },
+          select: {
+            id: true,
+            assetId: true,
+            url: true,
           },
-          orderBy: { sortOrder: 'asc' },
+        });
+
+        const existingImageMap = new Map(existingImages.map((item) => [item.id, item]));
+        const existingIdsInPayload = validatedInstructions
+          .filter((item): item is { kind: 'existing'; imageId: string } => item?.kind === 'existing')
+          .map((item) => item.imageId);
+        if (new Set(existingIdsInPayload).size !== existingIdsInPayload.length) {
+          throw new Error('排序列表包含重复图片');
+        }
+        if (existingIdsInPayload.some((imageId) => !existingImageMap.has(imageId))) {
+          throw new Error('排序列表包含无效图片');
+        }
+
+        const assetIdsInPayload = validatedInstructions
+          .filter((item): item is { kind: 'asset'; assetId: string } => item?.kind === 'asset')
+          .map((item) => item.assetId);
+        if (new Set(assetIdsInPayload).size !== assetIdsInPayload.length) {
+          throw new Error('图片列表包含重复资源');
+        }
+
+        const assets: Array<{ id: string; publicUrl: string; fileName: string | null }> = assetIdsInPayload.length
+          ? await tx.mediaAsset.findMany({
+              select: {
+                id: true,
+                publicUrl: true,
+                fileName: true,
+              },
+              where: {
+                id: { in: assetIdsInPayload },
+                ownerUid: req.authUser!.uid,
+                status: 'ready',
+              },
+            })
+          : [];
+        if (assets.length !== assetIdsInPayload.length) {
+          throw new Error('图片列表包含无效或无权限的资源');
+        }
+        const assetMap = new Map(assets.map((asset) => [asset.id, asset]));
+
+        const keptIds = new Set(existingIdsInPayload);
+        removedImages.push(...existingImages.filter((item) => !keptIds.has(item.id)));
+        if (removedImages.length === existingImages.length && assetIdsInPayload.length === 0) {
+          throw new Error('图集至少需要保留一张图片');
+        }
+
+        if (removedImages.length) {
+          await tx.galleryImage.deleteMany({
+            where: { id: { in: removedImages.map((item) => item.id) } },
+          });
+        }
+
+        for (const [index, instruction] of validatedInstructions.entries()) {
+          if (instruction.kind === 'existing') {
+            await tx.galleryImage.update({
+              where: { id: instruction.imageId },
+              data: { sortOrder: index },
+            });
+            continue;
+          }
+
+          const asset = assetMap.get(instruction.assetId);
+          if (!asset) {
+            throw new Error('图片列表包含无效或无权限的资源');
+          }
+          const created = await tx.galleryImage.create({
+            data: {
+              galleryId: req.params.id,
+              assetId: asset.id,
+              url: asset.publicUrl,
+              name: asset.fileName || `image-${index + 1}`,
+              sortOrder: index,
+            },
+            select: { id: true },
+          });
+          newImageIds.push(created.id);
+        }
+      }
+
+      return tx.gallery.findUnique({
+        where: { id: req.params.id },
+        include: {
+          images: {
+            include: {
+              asset: true,
+            },
+            orderBy: { sortOrder: 'asc' },
+          },
         },
-      },
+      });
     });
+
+    if (!updated) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    for (const image of removedImages) {
+      if (image.assetId) {
+        const linked = await prisma.galleryImage.count({ where: { assetId: image.assetId } });
+        if (linked === 0) {
+          const asset = await prisma.mediaAsset.findUnique({ where: { id: image.assetId } });
+          if (asset) {
+            await safeDeleteUploadFileByStorageKey(asset.storageKey);
+            await prisma.mediaAsset.update({
+              where: { id: asset.id },
+              data: { status: 'deleted' },
+            });
+          }
+        }
+      } else {
+        await safeDeleteUploadFileByUrl(image.url);
+      }
+    }
+
+    if (newImageIds.length) {
+      try {
+        await enqueueGalleryImageEmbeddings(prisma, newImageIds);
+      } catch (error) {
+        console.error('Enqueue gallery image embeddings error:', error);
+      }
+    }
 
     res.json({ gallery: toGalleryResponse(updated) });
   } catch (error) {
     console.error('Update gallery error:', error);
+    const message = error instanceof Error ? error.message : '更新图集失败';
+    if (
+      message === '排序列表包含重复图片'
+      || message === '排序列表包含无效图片'
+      || message === '图片列表包含重复资源'
+      || message === '图片列表包含无效或无权限的资源'
+      || message === '图集至少需要保留一张图片'
+    ) {
+      res.status(400).json({ error: message });
+      return;
+    }
     res.status(500).json({ error: '更新图集失败' });
   }
 });

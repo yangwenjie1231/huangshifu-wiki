@@ -442,13 +442,14 @@ const Music = () => {
                 setIsBatchMode(!isBatchMode);
                 setSelectedSongs(new Set());
               }}
+              aria-label={isBatchMode ? '退出批量' : '批量管理'}
               className={clsx(
                 "px-6 py-4 rounded-full font-bold transition-all flex items-center gap-2 shadow-xl",
                 isBatchMode ? "bg-brand-primary text-gray-900" : "bg-white text-gray-500 border border-gray-100"
               )}
             >
               <List size={20} />
-              {isBatchMode ? '退出批量' : '批量管理'}
+              <span className="hidden sm:inline">{isBatchMode ? '退出批量' : '批量管理'}</span>
             </button>
             <button
               onClick={() => {
@@ -458,10 +459,11 @@ const Music = () => {
                 }
                 setIsImportModalOpen(true);
               }}
+              aria-label="链接导入"
               className="px-8 py-4 bg-brand-primary text-gray-900 rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-xl"
             >
               <Search size={20} />
-              链接导入
+              <span className="hidden sm:inline">链接导入</span>
             </button>
             <button 
               onClick={() => {
@@ -471,17 +473,19 @@ const Music = () => {
                 }
                 setIsAdding(!isAdding);
               }}
+              aria-label={isAdding ? '取消添加' : '添加音乐'}
               className="px-8 py-4 bg-gray-900 text-white rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-xl"
             >
               {isAdding ? <X size={20} /> : <Plus size={20} />}
-              {isAdding ? '取消添加' : '添加音乐'}
+              <span className="hidden sm:inline">{isAdding ? '取消添加' : '添加音乐'}</span>
             </button>
             <Link
               to="/music/links"
+              aria-label="关联管理"
               className="px-8 py-4 bg-white text-gray-900 border border-gray-200 rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-xl"
             >
               <Link2 size={20} />
-              关联管理
+              <span className="hidden sm:inline">关联管理</span>
             </Link>
           </div>
         )}
@@ -792,7 +796,14 @@ const Music = () => {
                                 )}
                               </div>
 
-                              <div className="mt-4 flex items-center justify-between gap-2">
+                              <div
+                                className={clsx(
+                                  'mt-4 gap-2',
+                                  viewMode === 'small'
+                                    ? 'flex flex-col items-stretch'
+                                    : 'flex items-center justify-between',
+                                )}
+                              >
                                 {isBatchMode ? (
                                   <button
                                     onClick={() => toggleSelect(song.docId)}
@@ -804,7 +815,7 @@ const Music = () => {
                                     {selectedSongs.has(song.docId) ? '已选择' : '选择'}
                                   </button>
                                 ) : (
-                                  <div className="flex items-center gap-1">
+                                  <div className="flex flex-wrap items-center gap-1">
                                     <button
                                       onClick={() => handleToggleFavorite(song)}
                                       disabled={favoriting === song.docId}
@@ -849,7 +860,10 @@ const Music = () => {
                                 {isAdmin && !isBatchMode ? (
                                   <button
                                     onClick={() => setConfirmModal({ show: true, type: 'single', id: song.docId })}
-                                    className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                                    className={clsx(
+                                      'p-2 text-gray-400 hover:text-red-500 transition-colors',
+                                      viewMode === 'small' && 'self-end',
+                                    )}
                                     title="删除歌曲"
                                   >
                                     <Trash2 size={16} />

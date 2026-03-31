@@ -365,7 +365,8 @@ const WikiList = () => {
         <div className="flex items-center gap-4">
           <ViewModeSelector value={viewMode} onChange={setViewMode} />
           <Link to="/wiki/timeline" className="px-6 py-3 bg-brand-cream text-brand-olive rounded-full font-medium hover:bg-brand-olive hover:text-white transition-all flex items-center gap-2 shadow-sm">
-            <Calendar size={18} /> 时间轴视图
+            <Calendar size={18} />
+            <span className="hidden sm:inline">时间轴视图</span>
           </Link>
           {user && !isBanned && (
             <Link to="/wiki/new" className="px-6 py-3 bg-brand-olive text-white rounded-full font-medium hover:bg-brand-olive/90 transition-all flex items-center gap-2 shadow-md">
