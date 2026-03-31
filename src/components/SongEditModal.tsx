@@ -20,6 +20,7 @@ type SongFormData = {
   artist: string;
   album: string;
   lyric?: string | null;
+  description?: string | null;
 };
 
 type SongItem = {
@@ -31,6 +32,7 @@ type SongItem = {
   cover: string;
   audioUrl: string;
   lyric?: string | null;
+  description?: string | null;
   primaryPlatform?: Platform | null;
   favoritedByMe?: boolean;
   platformIds?: PlatformIds;
@@ -57,6 +59,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
     artist: song.artist || '',
     album: song.album || '',
     lyric: song.lyric || '',
+    description: song.description || '',
   });
   const [platformIds, setPlatformIds] = useState<PlatformIds>({
     neteaseId: song.platformIds?.neteaseId || '',
@@ -77,6 +80,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
         artist: song.artist || '',
         album: song.album || '',
         lyric: song.lyric || '',
+        description: song.description || '',
       });
       setPlatformIds({
         neteaseId: song.platformIds?.neteaseId || '',
@@ -110,6 +114,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
         artist: formData.artist.trim(),
         album: formData.album.trim(),
         lyric: formData.lyric?.trim() || null,
+        description: formData.description?.trim() || null,
         neteaseId: platformIds.neteaseId || null,
         tencentId: platformIds.tencentId || null,
         kugouId: platformIds.kugouId || null,
@@ -190,6 +195,17 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
                 onChange={(e) => setFormData((prev) => ({ ...prev, album: e.target.value }))}
                 placeholder="所属专辑（可选）"
                 className="w-full px-4 py-3 rounded-2xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary/25"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-700">描述 (Markdown)</label>
+              <textarea
+                value={formData.description || ''}
+                onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                placeholder="创作背景、作者的话或其他补充说明（可选）"
+                rows={5}
+                className="w-full px-4 py-3 rounded-2xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary/25 resize-none text-sm"
               />
             </div>
 

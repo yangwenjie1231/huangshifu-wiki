@@ -3,6 +3,8 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Clock, ExternalLink, Heart, Link2, MessageSquare, Play } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
 import { useAuth } from '../context/AuthContext';
@@ -29,6 +31,7 @@ type SongItem = {
   cover: string;
   audioUrl: string;
   lyric?: string | null;
+  description?: string | null;
   primaryPlatform?: 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo' | null;
   favoritedByMe?: boolean;
   platformIds?: PlatformIds;
@@ -241,6 +244,17 @@ const MusicDetail = () => {
           </div>
         </div>
       </section>
+
+      {song.description ? (
+        <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
+          <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">歌曲描述</h2>
+          <div className="prose prose-stone max-w-none text-sm text-gray-600">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {song.description}
+            </ReactMarkdown>
+          </div>
+        </section>
+      ) : null}
 
       <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
         <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">歌词</h2>

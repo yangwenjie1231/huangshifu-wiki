@@ -179,6 +179,7 @@ type MusicTrackWithRelations = {
   cover: string;
   audioUrl: string;
   lyric: string | null;
+  description: string | null;
   primaryPlatform: MusicPlatform;
   enabledPlatform: MusicPlatform | null;
   neteaseId: string | null;
@@ -1298,6 +1299,7 @@ function toSongResponse(song: MusicTrackWithRelations, options?: { favoritedByMe
     cover: coverUrl,
     audioUrl: song.audioUrl,
     lyric: song.lyric,
+    description: song.description,
     primaryPlatform: song.primaryPlatform,
     enabledPlatform: song.enabledPlatform,
     platformIds: {
@@ -9158,6 +9160,7 @@ app.patch('/api/music/:docId', requireAdmin, async (req, res) => {
     if (typeof body.cover === 'string') updateData.cover = body.cover.trim();
     if (typeof body.audioUrl === 'string') updateData.audioUrl = body.audioUrl.trim();
     if (typeof body.lyric === 'string' || body.lyric === null) updateData.lyric = body.lyric;
+    if (typeof body.description === 'string' || body.description === null) updateData.description = body.description;
 
     const primaryPlatform = parseMusicPlatform(body.primaryPlatform);
     if (primaryPlatform) updateData.primaryPlatform = primaryPlatform;
