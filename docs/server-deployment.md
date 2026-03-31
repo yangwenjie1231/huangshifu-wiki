@@ -616,25 +616,38 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 - `script-src` 和 `connect-src` 指令都需要包含上述所有高德域名
 - 如果地图功能无法加载（脚本被阻塞），请检查所有三处 CSP 配置是否一致
 
-### 15.5 音乐播放音源优先级
+### 15.5 音乐播放音源架构
 
-所有歌曲优先使用网易云音乐（NetEase Cloud Music）作为播放音源。
+本项目采用**客户端直连 + 服务器缓存**混合架构，针对不同平台选择最优播放方案。
 
-**实现机制**：
+**播放策略**：
 
-| 优先级 | 平台 | 音频 URL 格式 |
-|--------|------|---------------|
-| 1（最高）| 网易云音乐 | `https://music.163.com/song/media/outer/url?id={id}.mp3` |
-| 2 | QQ 音乐 | 通过 Meting API 解析 |
-| 3 | 酷狗音乐 | 通过 Meting API 解析 |
-| 4 | 百度音乐 | 通过 Meting API 解析 |
-| 5 | 酷我音乐 | 通过 Meting API 解析 |
+| 平台 | 播放方式 | 说明 |
+|------|----------|------|
+| 网易云音乐 | 客户端直连 | 直接构造 URL: `https://music.163.com/song/media/outer/url?id={neteaseId}.mp3` |
+| QQ/酷狗/百度/酷我 | 服务器 API | 通过 `/api/music/:docId/play-url` 获取，服务器缓存结果 |
 
-**说明**：
+**实现逻辑**：
 
-- 当歌曲存在网易云音乐 ID（`neteaseId`）时，直接构造网易云音乐直链作为播放地址
-- 无网易云音乐 ID 时，依次尝试其他平台
-- 直链方式绕过 Meting API，播放更稳定
+1. **网易云歌曲**（`primaryPlatform === 'netease'` 且存在 `neteaseId`）：
+   - 前端直接构造直链，绕过服务器
+   - 用户客户端直连网易云服务器，延迟最低
+
+2. **其他平台歌曲**：
+   - 前端请求服务器 `/api/music/:docId/play-url`
+   - 服务器优先使用缓存（默认 10 分钟 TTL）
+   - 缓存未命中时调用 Meting API 获取播放地址
+
+**优势**：
+
+- 网易云歌曲：用户端直连，绕过服务器网络瓶颈，播放延迟从 ~10s 降至 <1s
+- 其他平台：服务器缓存减少外部 API 调用，提升稳定性
+
+**环境变量**：
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `MUSIC_PLAY_URL_CACHE_TTL_SECONDS` | `600` | 播放地址缓存 TTL（秒） |
 
 ---
 
