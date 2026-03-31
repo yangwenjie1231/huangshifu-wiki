@@ -37,7 +37,6 @@ import {
 } from './src/server/music/metingService';
 import { registerRegionRoutes } from './src/server/location/routes';
 import { registerExifRoutes } from './src/server/location/exifRoutes';
-import { initSensitiveWords, containsSensitive, isSensitiveWord } from './src/lib/sensitiveWordFilter';
 
 dotenv.config({ path: '.env.local' });
 dotenv.config();
@@ -6825,11 +6824,11 @@ app.post('/api/admin/review/:type/:id/approve', requireAdmin, async (req: Authen
           targetType: 'wiki',
           targetId,
           title: page.title,
-          note: note || null,
-        });
-      }
+        note: note || null,
+      });
+    }
 
-      res.json({ item: { ...toWikiResponse(page), sensitiveWords: containsSensitive(page.content || '') } });
+      res.json({ item: toWikiResponse(page) });
       return;
     }
 
@@ -6863,7 +6862,7 @@ app.post('/api/admin/review/:type/:id/approve', requireAdmin, async (req: Authen
       });
     }
 
-    res.json({ item: { ...toPostResponse(post), sensitiveWords: containsSensitive(post.content || '') } });
+    res.json({ item: toPostResponse(post) });
   } catch (error) {
     console.error('Approve review item error:', error);
     res.status(500).json({ error: '审核通过失败' });
@@ -6915,7 +6914,7 @@ app.post('/api/admin/review/:type/:id/reject', requireAdmin, async (req: Authent
         });
       }
 
-      res.json({ item: { ...toWikiResponse(page), sensitiveWords: containsSensitive(page.content || '') } });
+      res.json({ item: toWikiResponse(page) });
       return;
     }
 
@@ -6953,21 +6952,6 @@ app.post('/api/admin/review/:type/:id/reject', requireAdmin, async (req: Authent
   } catch (error) {
     console.error('Reject review item error:', error);
     res.status(500).json({ error: '驳回失败' });
-  }
-});
-
-app.post('/api/admin/check-sensitive', requireAdmin, async (req, res) => {
-  try {
-    const { text } = req.body as { text?: string };
-    if (typeof text !== 'string') {
-      res.status(400).json({ error: 'text is required' });
-      return;
-    }
-    const sensitiveWords = containsSensitive(text);
-    res.json({ sensitiveWords });
-  } catch (error) {
-    console.error('Check sensitive words error:', error);
-    res.status(500).json({ error: '敏感词检测失败' });
   }
 });
 
@@ -12930,7 +12914,6 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 async function startServer() {
-  await initSensitiveWords();
   app.use((_req, res, next) => {
     res.setHeader(
       'Content-Security-Policy',
