@@ -609,6 +609,7 @@ model MusicTrack {
   cover     String   @default("")
   audioUrl  String   @default("")
   lyric     String?
+  description String?
   primaryPlatform    MusicPlatform   @default(netease)
   enabledPlatform    MusicPlatform?
   neteaseId          String?
