@@ -7,7 +7,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import { customSchema, isTrustedIframeDomain } from '../lib/htmlSanitizer';
-import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar, Link2, GitBranch, Network, MapPin, Heart, ThumbsDown, Pin, Image as ImageIcon } from 'lucide-react';
+import { Book, Edit3, Plus, ChevronRight, Search, Tag, Clock, User as UserIcon, ArrowLeft, Save, X, Sparkles, History, Calendar, Link2, GitBranch, Network, MapPin, Heart, ThumbsDown, ThumbsUp, Pin, Image as ImageIcon } from 'lucide-react';
 import { useUserPreferences } from '../context/UserPreferencesContext';
 import { ViewModeSelector } from '../components/ViewModeSelector';
 import { VIEW_MODE_CONFIG } from '../lib/viewModes';
@@ -296,6 +296,7 @@ const WikiMarkdown = ({ content }: { content: string }) => {
 const WikiList = () => {
   const [searchParams] = useSearchParams();
   const category = searchParams.get('category') || 'all';
+  const tag = searchParams.get('tag');
   const [pages, setPages] = useState<WikiItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -323,17 +324,21 @@ const WikiList = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [category]);
+  }, [category, tag]);
 
   useEffect(() => {
     const fetchPages = async () => {
       setLoading(true);
       try {
         const wikiRef = collection(db, 'wiki');
-        let q = query(wikiRef, orderBy('updatedAt', 'desc'));
-        if (category !== 'all') {
-          q = query(wikiRef, where('category', '==', category), orderBy('updatedAt', 'desc'));
-        }
+        const constraints = category !== 'all' && tag
+          ? [where('category', '==', category), where('tags', 'array-contains', tag), orderBy('updatedAt', 'desc')]
+          : category !== 'all'
+            ? [where('category', '==', category), orderBy('updatedAt', 'desc')]
+            : tag
+              ? [where('tags', 'array-contains', tag), orderBy('updatedAt', 'desc')]
+              : [orderBy('updatedAt', 'desc')];
+        const q = query(wikiRef, ...constraints);
         const snapshot = await getDocs(q);
         setPages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WikiItem)));
       } catch (e) {
@@ -342,7 +347,7 @@ const WikiList = () => {
       setLoading(false);
     };
     fetchPages();
-  }, [category]);
+  }, [category, tag]);
 
   const handleCopyWikiLink = async (event: React.MouseEvent<HTMLButtonElement>, slug: string) => {
     event.preventDefault();
@@ -738,7 +743,7 @@ const WikiPageView = () => {
                 )}
                 title={page.likedByMe ? '取消点赞' : '点赞'}
               >
-                <Heart size={20} />
+                <ThumbsUp size={20} />
               </button>
               <button
                 onClick={handleToggleDislike}
@@ -944,7 +949,11 @@ const WikiPageView = () => {
             <div className="flex items-center gap-2 text-gray-400 text-sm italic">
               <Tag size={14} />
               {page.tags?.map((tag: string) => (
-                <span key={tag} className="hover:text-brand-olive cursor-pointer px-2 py-0.5 bg-brand-cream/30 rounded-full text-[10px] font-bold uppercase tracking-wider">#{tag}</span>
+                <span
+                  key={tag}
+                  onClick={() => navigate(`/wiki?tag=${encodeURIComponent(tag)}`)}
+                  className="hover:text-brand-olive cursor-pointer px-2 py-0.5 bg-brand-cream/30 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                >#{tag}</span>
               ))}
             </div>
             {page.locationName && (
@@ -1219,7 +1228,7 @@ const WikiBranchWorkspace = () => {
           <div className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">标题</label>
+<label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">标题 <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   value={title}
@@ -1228,7 +1237,7 @@ const WikiBranchWorkspace = () => {
                 />
               </div>
               <div>
-                <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">分类</label>
+<label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">分类 <span className="text-red-500">*</span></label>
                 <select
                   value={category}
                   onChange={(event) => setCategory(event.target.value)}
@@ -1690,6 +1699,55 @@ const WikiEditor = () => {
     bidirectional: false,
   });
 
+  type RelationSearchSuggestion = {
+    type: 'keyword' | 'wiki' | 'post' | 'music' | 'album';
+    text: string;
+    subtext?: string;
+    id?: string;
+  };
+
+  const [relationSearchResults, setRelationSearchResults] = useState<RelationSearchSuggestion[]>([]);
+  const [relationSearchLoading, setRelationSearchLoading] = useState(false);
+  const [showRelationDropdown, setShowRelationDropdown] = useState(false);
+  const [relationSelectedIndex, setRelationSelectedIndex] = useState(-1);
+  const relationSearchRef = useRef<HTMLDivElement>(null);
+  const relationSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const searchWikiRelations = useCallback((q: string) => {
+    if (relationSearchTimeoutRef.current) {
+      clearTimeout(relationSearchTimeoutRef.current);
+    }
+    if (!q || q.length < 2) {
+      setRelationSearchResults([]);
+      setShowRelationDropdown(false);
+      return;
+    }
+    relationSearchTimeoutRef.current = setTimeout(async () => {
+      setRelationSearchLoading(true);
+      try {
+        const data = await apiGet<{ suggestions: RelationSearchSuggestion[] }>('/api/search/suggest', { q });
+        const wikiResults = data.suggestions?.filter(s => s.type === 'wiki') || [];
+        setRelationSearchResults(wikiResults);
+        setShowRelationDropdown(wikiResults.length > 0);
+        setRelationSelectedIndex(-1);
+      } catch (e) {
+        console.error("Relation search error:", e);
+      } finally {
+        setRelationSearchLoading(false);
+      }
+    }, 300);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (relationSearchRef.current && !relationSearchRef.current.contains(e.target as Node)) {
+        setShowRelationDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   useEffect(() => {
     if (!isNew) {
       const fetchPage = async () => {
@@ -1734,6 +1792,19 @@ const WikiEditor = () => {
       return;
     }
 
+    if (!formData.title.trim()) {
+      show("请填写标题（*为必填项）", { variant: 'error' });
+      return;
+    }
+    if (!formData.category) {
+      show("请选择分类（*为必填项）", { variant: 'error' });
+      return;
+    }
+    if (!formData.content.trim()) {
+      show("请填写内容（*为必填项）", { variant: 'error' });
+      return;
+    }
+
     const pageSlug = (isNew ? (formData.slug || formData.title) : slug || formData.slug)
       ?.trim()
       .toLowerCase()
@@ -1772,10 +1843,18 @@ const WikiEditor = () => {
       if (isNew) {
         const existingSnap = await getDoc(docRef);
         if (existingSnap.exists()) {
-          await updateDoc(docRef, pageData);
-        } else {
-          await setDoc(docRef, pageData);
+          show("该页面标识已存在，请修改标题后重试", { variant: 'error' });
+          setSavingMode(null);
+          return;
         }
+        const titleQuery = query(collection(db, 'wiki'), where('title', '==', formData.title.trim()));
+        const titleSnap = await getDocs(titleQuery);
+        if (!titleSnap.empty) {
+          show("该标题的百科已存在，请修改标题或编辑已有页面", { variant: 'error' });
+          setSavingMode(null);
+          return;
+        }
+        await setDoc(docRef, pageData);
       } else {
         await updateDoc(docRef, pageData);
       }
@@ -1856,7 +1935,7 @@ const WikiEditor = () => {
 
           <div className="space-y-2">
             <div className="flex justify-between items-center">
-              <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">内容 (Markdown)</label>
+              <label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">内容 (Markdown) <span className="text-red-500">*</span></label>
               <button 
                 type="button"
                 onClick={async () => {
@@ -1993,13 +2072,66 @@ const WikiEditor = () => {
                 <option value="timeline_relation">时间线关联</option>
                 <option value="custom">自定义关系</option>
               </select>
-              <input
-                type="text"
-                value={newRelation.targetSlug}
-                onChange={e => setNewRelation({ ...newRelation, targetSlug: e.target.value })}
-                placeholder="目标页面标识 (slug)"
-                className="flex-1 px-4 py-2 bg-white rounded-xl border border-gray-200 text-sm"
-              />
+              <div ref={relationSearchRef} className="relative flex-1">
+                <input
+                  type="text"
+                  value={newRelation.targetSlug}
+                  onChange={e => {
+                    setNewRelation({ ...newRelation, targetSlug: e.target.value });
+                    searchWikiRelations(e.target.value);
+                  }}
+                  placeholder="目标页面标识 (slug)"
+                  className="w-full px-4 py-2 bg-white rounded-xl border border-gray-200 text-sm"
+                  onKeyDown={(e) => {
+                    if (!showRelationDropdown) return;
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setRelationSelectedIndex(prev => Math.min(prev + 1, relationSearchResults.length - 1));
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setRelationSelectedIndex(prev => Math.max(prev - 1, -1));
+                    } else if (e.key === 'Enter' && relationSelectedIndex >= 0) {
+                      e.preventDefault();
+                      const selected = relationSearchResults[relationSelectedIndex];
+                      setNewRelation({ ...newRelation, targetSlug: selected.id || '' });
+                      setShowRelationDropdown(false);
+                    } else if (e.key === 'Escape') {
+                      setShowRelationDropdown(false);
+                    }
+                  }}
+                />
+                <AnimatePresence>
+                  {showRelationDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      className="absolute z-50 mt-1 w-full bg-white rounded-xl border border-gray-200 shadow-lg max-h-60 overflow-auto"
+                    >
+                      {relationSearchLoading ? (
+                        <div className="px-4 py-2 text-sm text-gray-500">搜索中...</div>
+                      ) : relationSearchResults.length === 0 ? (
+                        <div className="px-4 py-2 text-sm text-gray-500">未找到相关页面</div>
+                      ) : (
+                        relationSearchResults.map((result, idx) => (
+                          <div
+                            key={result.id}
+                            className={`px-4 py-2 cursor-pointer ${idx === relationSelectedIndex ? 'bg-brand-primary/10' : 'hover:bg-gray-50'}`}
+                            onClick={() => {
+                              setNewRelation({ ...newRelation, targetSlug: result.id || '' });
+                              setShowRelationDropdown(false);
+                            }}
+                            onMouseEnter={() => setRelationSelectedIndex(idx)}
+                          >
+                            <div className="text-sm font-medium">{result.text}</div>
+                            <div className="text-xs text-gray-500 truncate">{result.subtext}</div>
+                          </div>
+                        ))
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
               <input
                 type="text"
                 value={newRelation.label || ''}

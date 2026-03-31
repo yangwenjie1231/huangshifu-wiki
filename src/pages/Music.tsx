@@ -68,6 +68,7 @@ type SongItem = {
   lyric?: string | null;
   favoritedByMe?: boolean;
   platformIds?: PlatformIds;
+  createdAt?: string | { toDate?: () => Date; toMillis?: () => number } | null;
 };
 
 type PostItem = {
@@ -119,6 +120,21 @@ const getSongExternalUrl = (song: SongItem) => {
   return `https://music.163.com/song?id=${id}`;
 };
 
+const toSortableTimestamp = (value: SongItem['createdAt']) => {
+  if (!value) return 0;
+  if (typeof value === 'string') {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+  }
+  if (typeof value.toMillis === 'function') {
+    return value.toMillis();
+  }
+  if (typeof value.toDate === 'function') {
+    return value.toDate().getTime();
+  }
+  return 0;
+};
+
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
@@ -163,17 +179,69 @@ const Music = () => {
   const [selectedPlatform, setSelectedPlatform] = useState<'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo'>('netease');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [showAccompaniments, setShowAccompaniments] = useState(false);
+  const [sortBy, setSortBy] = useState<'createdAt' | 'title' | 'artist'>('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [filterPlatform, setFilterPlatform] = useState<'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo' | 'all'>('all');
   const { user, isAdmin, isBanned } = useAuth();
   const { currentSong, setCurrentSong, setIsPlaying, setPlaylist, playSongAtIndex } = useMusic();
   const { show } = useToast();
   const { preferences, setViewMode } = useUserPreferences();
   const viewMode = preferences.viewMode;
 
-  const totalMusicPages = Math.ceil(songs.length / pageSize);
+  const fetchInstrumentalTargets = async () => {
+    try {
+      const data = await apiGet<{ docIds: string[] }>('/api/music/instrumental-targets');
+      return new Set(data.docIds || []);
+    } catch {
+      return new Set<string>();
+    }
+  };
+
+  const [instrumentalTargetDocIds, setInstrumentalTargetDocIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (activeTab === 'music') {
+      fetchInstrumentalTargets().then(setInstrumentalTargetDocIds);
+    }
+  }, [activeTab]);
+
+  const displaySongs = useMemo(() => {
+    let result = [...songs];
+
+    if (!showAccompaniments) {
+      result = result.filter(song => !instrumentalTargetDocIds.has(song.docId));
+    }
+
+    if (filterPlatform !== 'all') {
+      const fieldKey = `${filterPlatform}Id` as keyof PlatformIds;
+      result = result.filter(song => song.platformIds?.[fieldKey]);
+    }
+
+    result.sort((a, b) => {
+      if (sortBy === 'title') {
+        return sortOrder === 'asc'
+          ? a.title.localeCompare(b.title, 'zh-CN')
+          : b.title.localeCompare(a.title, 'zh-CN');
+      }
+      if (sortBy === 'artist') {
+        return sortOrder === 'asc'
+          ? a.artist.localeCompare(b.artist, 'zh-CN')
+          : b.artist.localeCompare(a.artist, 'zh-CN');
+      }
+      const left = toSortableTimestamp(a.createdAt);
+      const right = toSortableTimestamp(b.createdAt);
+      return sortOrder === 'asc' ? left - right : right - left;
+    });
+
+    return result;
+  }, [songs, showAccompaniments, instrumentalTargetDocIds, filterPlatform, sortBy, sortOrder]);
+
+  const totalMusicPages = Math.ceil(displaySongs.length / pageSize);
   const paginatedSongs = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return songs.slice(start, start + pageSize);
-  }, [songs, page, pageSize]);
+    return displaySongs.slice(start, start + pageSize);
+  }, [displaySongs, page, pageSize]);
 
   const handleMusicPageChange = (newPage: number) => {
     setPage(newPage);
@@ -645,8 +713,55 @@ const Music = () => {
                   </button>
                 )}
                 <ViewModeSelector value={viewMode} onChange={setViewMode} size="sm" />
+                {activeTab === 'music' && (
+                  <>
+                    <select
+                      value={sortBy}
+                      onChange={(e) => {
+                        setSortBy(e.target.value as typeof sortBy);
+                        setPage(1);
+                      }}
+                      className="px-2 py-1.5 rounded-lg border border-gray-200 text-xs bg-white"
+                    >
+                      <option value="createdAt">按添加时间</option>
+                      <option value="title">按歌名</option>
+                      <option value="artist">按歌手</option>
+                    </select>
+                    <button
+                      onClick={() => setSortOrder(o => o === 'asc' ? 'desc' : 'asc')}
+                      className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500"
+                      title={sortOrder === 'asc' ? '升序' : '降序'}
+                    >
+                      {sortOrder === 'desc' ? '↓' : '↑'}
+                    </button>
+                    <select
+                      value={filterPlatform}
+                      onChange={(e) => {
+                        setFilterPlatform(e.target.value as typeof filterPlatform);
+                        setPage(1);
+                      }}
+                      className="px-2 py-1.5 rounded-lg border border-gray-200 text-xs bg-white"
+                    >
+                      <option value="all">全部平台</option>
+                      <option value="netease">网易云</option>
+                      <option value="tencent">QQ音乐</option>
+                      <option value="kugou">酷狗</option>
+                      <option value="baidu">百度</option>
+                      <option value="kuwo">酷我</option>
+                    </select>
+                    <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={showAccompaniments}
+                        onChange={(e) => setShowAccompaniments(e.target.checked)}
+                        className="w-3.5 h-3.5 rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
+                      />
+                      <span>显示伴奏</span>
+                    </label>
+                  </>
+                )}
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                  {activeTab === 'music' ? `${songs.length} 首歌曲` : `${albums.length} 张专辑`}
+                  {activeTab === 'music' ? `${displaySongs.length} 首歌曲` : `${albums.length} 张专辑`}
                 </span>
               </div>
             </div>
@@ -798,9 +913,9 @@ const Music = () => {
 
                               <div
                                 className={clsx(
-                                  'mt-4 gap-2',
+                                  'mt-4',
                                   viewMode === 'small'
-                                    ? 'flex flex-col items-stretch'
+                                    ? 'flex items-center justify-between'
                                     : 'flex items-center justify-between',
                                 )}
                               >
@@ -815,12 +930,15 @@ const Music = () => {
                                     {selectedSongs.has(song.docId) ? '已选择' : '选择'}
                                   </button>
                                 ) : (
-                                  <div className="flex flex-wrap items-center gap-1">
+                                  <div className={clsx(
+                                    'flex items-center gap-1',
+                                    viewMode === 'small' ? 'overflow-hidden' : 'flex-wrap'
+                                  )}>
                                     <button
                                       onClick={() => handleToggleFavorite(song)}
                                       disabled={favoriting === song.docId}
                                       className={clsx(
-                                        'p-2 transition-colors',
+                                        'p-2 transition-colors shrink-0',
                                         song.favoritedByMe ? 'text-red-500' : 'text-gray-400 hover:text-red-500',
                                         favoriting === song.docId && 'opacity-50 cursor-not-allowed',
                                       )}
@@ -832,14 +950,14 @@ const Music = () => {
                                       href={getSongExternalUrl(song)}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
+                                      className="p-2 text-gray-400 hover:text-brand-primary transition-colors shrink-0"
                                       title="打开原始链接"
                                     >
                                       <ExternalLink size={16} />
                                     </a>
                                     <button
                                       onClick={(event) => handleCopySongLink(event, song)}
-                                      className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
+                                      className="p-2 text-gray-400 hover:text-brand-primary transition-colors shrink-0"
                                       title="复制内链"
                                     >
                                       <Link2 size={16} />
@@ -847,7 +965,8 @@ const Music = () => {
                                     <button
                                       onClick={() => handleShowPosts(song)}
                                       className={clsx(
-                                        'p-2 transition-colors',
+                                        'p-2 transition-colors shrink-0',
+                                        viewMode === 'small' ? 'hidden sm:inline-flex' : 'inline-flex',
                                         selectedSongForPosts?.docId === song.docId ? 'text-brand-primary' : 'text-gray-400 hover:text-brand-primary',
                                       )}
                                       title="查看乐评"
@@ -860,10 +979,7 @@ const Music = () => {
                                 {isAdmin && !isBatchMode ? (
                                   <button
                                     onClick={() => setConfirmModal({ show: true, type: 'single', id: song.docId })}
-                                    className={clsx(
-                                      'p-2 text-gray-400 hover:text-red-500 transition-colors',
-                                      viewMode === 'small' && 'self-end',
-                                    )}
+                                    className="p-2 text-gray-400 hover:text-red-500 transition-colors shrink-0"
                                     title="删除歌曲"
                                   >
                                     <Trash2 size={16} />

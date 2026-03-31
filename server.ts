@@ -37,6 +37,7 @@ import {
 } from './src/server/music/metingService';
 import { registerRegionRoutes } from './src/server/location/routes';
 import { registerExifRoutes } from './src/server/location/exifRoutes';
+import { initSensitiveWords, containsSensitive, isSensitiveWord } from './src/lib/sensitiveWordFilter';
 
 dotenv.config({ path: '.env.local' });
 dotenv.config();
@@ -51,7 +52,7 @@ app.set('trust proxy', 1);
 app.use((req: Request, res: Response, next: NextFunction) => {
   res.setHeader(
     'Content-Security-Policy',
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://o4.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com; worker-src 'self' blob:; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://picsum.photos; style-src 'self' 'unsafe-inline';"
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com https://mapplugin.amap.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://o4.amap.com https://mapplugin.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com; worker-src 'self' blob:; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://picsum.photos; style-src 'self' 'unsafe-inline';"
   );
   next();
 });
@@ -215,6 +216,9 @@ type MusicTrackWithRelations = {
         isDefault: boolean;
       }>;
     };
+  }>;
+  instrumentalLinks?: Array<{
+    targetSongDocId: string;
   }>;
 };
 
@@ -889,6 +893,10 @@ function normalizeTagList(value: unknown) {
     .slice(0, 30);
 }
 
+function hasTag(value: unknown, tag: string) {
+  return serializeTags(value).some((item) => typeof item === 'string' && item === tag);
+}
+
 async function normalizeWikiRelationListForWrite(value: unknown, sourceSlug?: string) {
   const normalizedSourceSlug = normalizeWikiSlug(sourceSlug);
   const relations = normalizeWikiRelationList(value, normalizedSourceSlug);
@@ -1398,6 +1406,7 @@ function toSongResponse(song: MusicTrackWithRelations, options?: { favoritedByMe
       trackOrder: relation.trackOrder,
       isDisplay: relation.isDisplay,
     })),
+    isInstrumental: (song.instrumentalLinks?.length || 0) > 0,
     favoritedByMe: Boolean(options?.favoritedByMe),
     createdAt: song.createdAt.toISOString(),
     updatedAt: song.updatedAt.toISOString(),
@@ -1496,6 +1505,11 @@ async function fetchSongWithRelationsByDocId(songDocId: string) {
           },
         },
         orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
+      },
+      instrumentalLinks: {
+        select: {
+          targetSongDocId: true,
+        },
       },
     },
   });
@@ -1959,6 +1973,11 @@ async function fetchSongsWithRelations(where?: Record<string, unknown>) {
           },
         },
         orderBy: [{ discNumber: 'asc' }, { trackOrder: 'asc' }],
+      },
+      instrumentalLinks: {
+        select: {
+          targetSongDocId: true,
+        },
       },
     },
     orderBy: { createdAt: 'desc' },
@@ -3804,8 +3823,9 @@ app.post('/api/notifications/read-all', requireAuth, async (req: AuthenticatedRe
 app.get('/api/wiki', async (req: AuthenticatedRequest, res) => {
   try {
     const category = typeof req.query.category === 'string' ? req.query.category : 'all';
+    const tag = typeof req.query.tag === 'string' ? req.query.tag.trim() : '';
     const visibilityWhere = buildWikiVisibilityWhere(req.authUser);
-    const where = {
+    const where: Prisma.WikiPageWhereInput = {
       ...(category && category !== 'all' ? { category } : {}),
       ...visibilityWhere,
     };
@@ -3813,34 +3833,35 @@ app.get('/api/wiki', async (req: AuthenticatedRequest, res) => {
     const pages = await prisma.wikiPage.findMany({
       where,
       orderBy: [{ isPinned: 'desc' }, { updatedAt: 'desc' }],
-      take: 200,
     });
+    const filteredPages = tag ? pages.filter((page) => hasTag(page.tags, tag)) : pages;
+    const visiblePages = filteredPages.slice(0, 200);
 
     const favoritedWikiSet = new Set<string>();
     const likedWikiSet = new Set<string>();
     const dislikedWikiSet = new Set<string>();
 
-    if (req.authUser && pages.length) {
+    if (req.authUser && visiblePages.length) {
       const [favorites, likes, dislikes] = await Promise.all([
         prisma.favorite.findMany({
           where: {
             userUid: req.authUser.uid,
             targetType: 'wiki',
-            targetId: { in: pages.map((item) => item.slug) },
+            targetId: { in: visiblePages.map((item) => item.slug) },
           },
           select: { targetId: true },
         }),
         prisma.wikiLike.findMany({
           where: {
             userUid: req.authUser.uid,
-            pageSlug: { in: pages.map((item) => item.slug) },
+            pageSlug: { in: visiblePages.map((item) => item.slug) },
           },
           select: { pageSlug: true },
         }),
         prisma.wikiDislike.findMany({
           where: {
             userUid: req.authUser.uid,
-            pageSlug: { in: pages.map((item) => item.slug) },
+            pageSlug: { in: visiblePages.map((item) => item.slug) },
           },
           select: { pageSlug: true },
         }),
@@ -3851,7 +3872,7 @@ app.get('/api/wiki', async (req: AuthenticatedRequest, res) => {
     }
 
     res.json({
-      pages: pages.map((page) => ({
+      pages: visiblePages.map((page) => ({
         ...toWikiResponse(page),
         favoritedByMe: favoritedWikiSet.has(page.slug),
         likedByMe: likedWikiSet.has(page.slug),
@@ -6882,11 +6903,11 @@ app.post('/api/admin/review/:type/:id/approve', requireAdmin, async (req: Authen
           targetType: 'wiki',
           targetId,
           title: page.title,
-          note: note || null,
-        });
-      }
+        note: note || null,
+      });
+    }
 
-      res.json({ item: toWikiResponse(page) });
+      res.json({ item: { ...toWikiResponse(page), sensitiveWords: containsSensitive(page.content || '') } });
       return;
     }
 
@@ -6920,7 +6941,7 @@ app.post('/api/admin/review/:type/:id/approve', requireAdmin, async (req: Authen
       });
     }
 
-    res.json({ item: toPostResponse(post) });
+    res.json({ item: { ...toPostResponse(post), sensitiveWords: containsSensitive(post.content || '') } });
   } catch (error) {
     console.error('Approve review item error:', error);
     res.status(500).json({ error: '审核通过失败' });
@@ -6972,7 +6993,7 @@ app.post('/api/admin/review/:type/:id/reject', requireAdmin, async (req: Authent
         });
       }
 
-      res.json({ item: toWikiResponse(page) });
+      res.json({ item: { ...toWikiResponse(page), sensitiveWords: containsSensitive(page.content || '') } });
       return;
     }
 
@@ -7010,6 +7031,21 @@ app.post('/api/admin/review/:type/:id/reject', requireAdmin, async (req: Authent
   } catch (error) {
     console.error('Reject review item error:', error);
     res.status(500).json({ error: '驳回失败' });
+  }
+});
+
+app.post('/api/admin/check-sensitive', requireAdmin, async (req, res) => {
+  try {
+    const { text } = req.body as { text?: string };
+    if (typeof text !== 'string') {
+      res.status(400).json({ error: 'text is required' });
+      return;
+    }
+    const sensitiveWords = containsSensitive(text);
+    res.json({ sensitiveWords });
+  } catch (error) {
+    console.error('Check sensitive words error:', error);
+    res.status(500).json({ error: '敏感词检测失败' });
   }
 });
 
@@ -9332,26 +9368,30 @@ app.get('/api/music/match-suggestions', async (req: AuthenticatedRequest, res) =
       return;
     }
 
+    const cleanTitle = title.replace(/[（(].*[)）]/g, '').replace(/[【\[].*[]】\]/g, '').trim();
+    const keyword = `${cleanTitle} ${artist}`.trim();
+
     const searchResults = await searchMusicResources({
       platform: platform as MusicPlatform,
-      keyword: `${title} ${artist}`,
+      keyword,
       type: 'song',
-      limit: 10,
+      limit: 20,
     });
 
-    const normalizedTitle = title.toLowerCase().replace(/\s+/g, '');
+    const normalizedTitle = cleanTitle.toLowerCase().replace(/\s+/g, '');
     const normalizedArtist = artist.toLowerCase().replace(/\s+/g, '');
 
     const scored = searchResults
       .map((item) => {
-        const itemTitleNorm = item.title.toLowerCase().replace(/\s+/g, '');
+        const itemTitleClean = item.title.replace(/[（(].*[)）]/g, '').replace(/[【\[].*[]】\]/g, '').trim();
+        const itemTitleNorm = itemTitleClean.toLowerCase().replace(/\s+/g, '');
         const itemArtistNorm = item.artist.toLowerCase().replace(/\s+/g, '');
         const titleScore = calculateSimilarity(normalizedTitle, itemTitleNorm);
         const artistScore = calculateSimilarity(normalizedArtist, itemArtistNorm);
         const avgScore = (titleScore + artistScore) / 2;
         return { ...item, score: avgScore };
       })
-      .filter((item) => item.score >= 0.5)
+      .filter((item) => item.score >= 0.35)
       .sort((a, b) => b.score - a.score)
       .slice(0, 5);
 
@@ -9403,23 +9443,39 @@ function calculateSimilarity(a: string, b: string): number {
   if (a === b) return 1;
   if (a.length === 0 || b.length === 0) return 0;
 
-  const maxLen = Math.max(a.length, b.length);
-  if (maxLen > 50) {
-    return a.includes(b) || b.includes(a) ? 0.85 : 0;
+  // 预处理：去除特殊字符，统一空白符
+  const normalize = (s: string) => s.toLowerCase().replace(/[^\w\s\u4e00-\u9fa5]/g, '').replace(/\s+/g, ' ');
+  const na = normalize(a);
+  const nb = normalize(b);
+
+  if (na === nb) return 1;
+  if (na.includes(nb) || nb.includes(na)) return 0.85;
+
+  // 中文歌曲名相似度优化：考虑括号内的别名
+  const withoutParens = (s: string) => s.replace(/[（(].*[)）]/g, '').replace(/[【\[].*[]】\]/g, '').trim();
+  const naClean = withoutParens(na);
+  const nbClean = withoutParens(nb);
+  if (naClean && nbClean && (naClean.includes(nbClean) || nbClean.includes(naClean))) {
+    return 0.9;
   }
 
-  const d = Math.max(a.length, b.length);
+  const maxLen = Math.max(na.length, nb.length);
+  if (maxLen > 50) {
+    return na.includes(nb) || nb.includes(na) ? 0.85 : 0;
+  }
+
+  const d = Math.max(na.length, nb.length);
   let similarity = 0;
 
   if (d <= 200) {
-    similarity = levenshteinSimilarity(a, b);
+    similarity = levenshteinSimilarity(na, nb);
   } else {
-    const aSub = a.slice(0, 50);
-    const bSub = b.slice(0, 50);
+    const aSub = na.slice(0, 50);
+    const bSub = nb.slice(0, 50);
     similarity = levenshteinSimilarity(aSub, bSub);
   }
 
-  if (a.includes(b) || b.includes(a)) {
+  if (na.includes(nb) || nb.includes(na)) {
     similarity = Math.max(similarity, 0.85);
   }
 
@@ -9903,6 +9959,23 @@ app.delete('/api/music/:docId/albums/:albumDocId', requireAdmin, async (req, res
   }
 });
 
+app.get('/api/music/instrumental-targets', async (req, res) => {
+  try {
+    const relations = await prismaAny.songInstrumentalRelation.findMany({
+      select: {
+        targetSongDocId: true,
+      },
+      distinct: ['targetSongDocId'],
+    });
+    res.json({
+      docIds: relations.map((r: any) => r.targetSongDocId),
+    });
+  } catch (error) {
+    console.error('Fetch instrumental targets error:', error);
+    res.status(500).json({ error: '获取伴奏列表失败' });
+  }
+});
+
 app.get('/api/music/:docId/instrumentals', async (req, res) => {
   try {
     const docId = req.params.docId;
@@ -10048,6 +10121,98 @@ app.delete('/api/music/:docId/instrumentals/:instrumentalSongDocId', requireAdmi
   } catch (error) {
     console.error('Delete instrumental relation error:', error);
     res.status(500).json({ error: '删除伴奏关联失败' });
+  }
+});
+
+app.get('/api/music-platforms', async (req, res) => {
+  try {
+    const platforms = await prismaAny.musicPlatformConfig.findMany({
+      orderBy: [{ isDefault: 'desc' }, { sortOrder: 'asc' }],
+    });
+    res.json({ platforms });
+  } catch (error) {
+    console.error('Fetch music platforms error:', error);
+    res.status(500).json({ error: '获取平台配置失败' });
+  }
+});
+
+app.post('/api/music-platforms', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { key, label, urlPattern, color, bgColor, isDefault, sortOrder } = req.body;
+
+    if (!key || !label || !urlPattern) {
+      res.status(400).json({ error: '缺少必要参数：key, label, urlPattern' });
+      return;
+    }
+
+    const platform = await prismaAny.musicPlatformConfig.upsert({
+      where: { key },
+      create: {
+        key,
+        label,
+        urlPattern,
+        color: color || 'gray',
+        bgColor: bgColor || 'gray-100',
+        isDefault: Boolean(isDefault),
+        sortOrder: typeof sortOrder === 'number' ? sortOrder : 0,
+      },
+      update: {
+        label,
+        urlPattern,
+        color: color || 'gray',
+        bgColor: bgColor || 'gray-100',
+        isDefault: Boolean(isDefault),
+        sortOrder: typeof sortOrder === 'number' ? sortOrder : 0,
+      },
+    });
+
+    res.status(201).json({ platform });
+  } catch (error) {
+    console.error('Create/update music platform error:', error);
+    res.status(500).json({ error: '创建/更新平台配置失败' });
+  }
+});
+
+app.delete('/api/music-platforms/:key', requireAdmin, async (req, res) => {
+  try {
+    const { key } = req.params;
+
+    await prismaAny.musicPlatformConfig.delete({
+      where: { key },
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete music platform error:', error);
+    res.status(500).json({ error: '删除平台配置失败' });
+  }
+});
+
+app.patch('/api/music/:docId/custom-platforms', requireAdmin, async (req, res) => {
+  try {
+    const docId = req.params.docId;
+    const { customPlatformIds } = req.body;
+
+    if (typeof customPlatformIds !== 'object' || customPlatformIds === null) {
+      res.status(400).json({ error: 'invalid customPlatformIds' });
+      return;
+    }
+
+    const song = await prismaAny.musicTrack.findUnique({ where: { docId } });
+    if (!song) {
+      res.status(404).json({ error: '歌曲不存在' });
+      return;
+    }
+
+    await prismaAny.musicTrack.update({
+      where: { docId },
+      data: { customPlatformIds },
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Update custom platforms error:', error);
+    res.status(500).json({ error: '更新自定义平台失败' });
   }
 });
 
@@ -12184,6 +12349,249 @@ app.patch('/api/admin/batch/songs/display-info', requireAdmin, async (req, res) 
   }
 });
 
+app.post('/api/admin/backup/create', requireSuperAdmin, async (req, res) => {
+  try {
+    const { password } = req.body as { password?: string };
+
+    if (!BACKUP_PASSWORD) {
+      res.status(500).json({ error: '未配置 BACKUP_PASSWORD 环境变量' });
+      return;
+    }
+
+    if (!password || !verifyBackupPassword(password)) {
+      res.status(401).json({ error: '备份密码错误' });
+      return;
+    }
+
+    const dbConfig = parseDatabaseUrl(process.env.DATABASE_URL || '');
+    if (!dbConfig) {
+      res.status(500).json({ error: 'DATABASE_URL 格式无效' });
+      return;
+    }
+
+    const timestamp = new Date().toISOString().replace(/:/g, '-').replace('T', '_').slice(0, 19);
+    const sqlFilename = `backup_${timestamp}.sql`;
+    const sqlFilePath = path.join(backupsDir, sqlFilename);
+    const zipFilename = `backup_${timestamp}.zip`;
+    const zipFilePath = path.join(backupsDir, zipFilename);
+
+    const pgDumpArgs = [
+      '-h', dbConfig.host,
+      '-p', dbConfig.port,
+      '-U', dbConfig.user,
+      '-d', dbConfig.database,
+      '--no-owner',
+      '--no-privileges',
+      '--exclude-table-data=ImageEmbedding',
+      '--exclude-table-data=_prisma_migrations',
+      '-f', sqlFilePath,
+    ];
+
+    const pgDumpEnv = { ...process.env, PGPASSWORD: dbConfig.password };
+
+    await execFileAsync('pg_dump', pgDumpArgs, { env: pgDumpEnv, timeout: 300000 });
+
+    const sqlContent = fs.readFileSync(sqlFilePath);
+    fs.unlinkSync(sqlFilePath);
+
+    const encryptedContent = encryptBuffer(sqlContent, password);
+
+    await new Promise<void>((resolve, reject) => {
+      const output = fs.createWriteStream(zipFilePath);
+      const archive = archiver('zip', { zlib: { level: 9 } });
+
+      output.on('close', () => resolve());
+      archive.on('error', (err) => reject(err));
+
+      archive.pipe(output);
+      archive.append(encryptedContent, { name: sqlFilename });
+      archive.finalize();
+    });
+
+    const stat = fs.statSync(zipFilePath);
+
+    await cleanupOldBackups();
+
+    res.json({
+      backup: {
+        filename: zipFilename,
+        size: stat.size,
+        sizeFormatted: formatFileSize(stat.size),
+        createdAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error('Create backup error:', error);
+    res.status(500).json({ error: '创建备份失败: ' + (error instanceof Error ? error.message : String(error)) });
+  }
+});
+
+app.get('/api/admin/backup/list', requireSuperAdmin, async (_req, res) => {
+  try {
+    const files = fs.readdirSync(backupsDir)
+      .filter((f) => f.startsWith('backup_') && f.endsWith('.zip'))
+      .map((f) => {
+        const filePath = path.join(backupsDir, f);
+        const stat = fs.statSync(filePath);
+        return {
+          filename: f,
+          size: stat.size,
+          sizeFormatted: formatFileSize(stat.size),
+          createdAt: stat.mtime.toISOString(),
+        };
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    res.json({ backups: files });
+  } catch (error) {
+    console.error('List backups error:', error);
+    res.status(500).json({ error: '获取备份列表失败' });
+  }
+});
+
+app.get('/api/admin/backup/:filename/download', requireSuperAdmin, async (req, res) => {
+  try {
+    const filename = req.params.filename;
+
+    if (!sanitizeFilename(filename)) {
+      res.status(400).json({ error: '无效的文件名' });
+      return;
+    }
+
+    const filePath = path.join(backupsDir, filename);
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ error: '备份文件不存在' });
+      return;
+    }
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+  } catch (error) {
+    console.error('Download backup error:', error);
+    res.status(500).json({ error: '下载备份失败' });
+  }
+});
+
+app.post('/api/admin/backup/restore', requireSuperAdmin, uploadBackup.single('file'), async (req, res) => {
+  try {
+    const { password } = req.body as { password?: string };
+    const file = req.file;
+
+    if (!BACKUP_PASSWORD) {
+      res.status(500).json({ error: '未配置 BACKUP_PASSWORD 环境变量' });
+      return;
+    }
+
+    if (!password || !verifyBackupPassword(password)) {
+      res.status(401).json({ error: '备份密码错误' });
+      return;
+    }
+
+    if (!file) {
+      res.status(400).json({ error: '请上传备份文件' });
+      return;
+    }
+
+    const dbConfig = parseDatabaseUrl(process.env.DATABASE_URL || '');
+    if (!dbConfig) {
+      res.status(500).json({ error: 'DATABASE_URL 格式无效' });
+      return;
+    }
+
+    const AdmZip = (await import('adm-zip')).default;
+    const zip = new AdmZip(file.path);
+    const zipEntries = zip.getEntries();
+
+    const sqlEntry = zipEntries.find((e) => e.entryName.endsWith('.sql'));
+    if (!sqlEntry) {
+      fs.unlinkSync(file.path);
+      res.status(400).json({ error: '备份文件中未找到 SQL 数据' });
+      return;
+    }
+
+    const encryptedContent = sqlEntry.getData();
+
+    let sqlContent: Buffer;
+    try {
+      sqlContent = decryptBuffer(encryptedContent, password);
+    } catch {
+      fs.unlinkSync(file.path);
+      res.status(401).json({ error: '备份密码错误或文件已损坏' });
+      return;
+    }
+
+    const sqlContentStr = sqlContent.toString('utf-8');
+    if (!sqlContentStr.includes('PostgreSQL database dump') && !sqlContentStr.includes('pg_dump')) {
+      fs.unlinkSync(file.path);
+      res.status(400).json({ error: '备份文件格式无效' });
+      return;
+    }
+
+    const tempSqlPath = path.join(backupsDir, `restore_${Date.now()}.sql`);
+    fs.writeFileSync(tempSqlPath, sqlContent);
+
+    try {
+      const psqlArgs = [
+        '-h', dbConfig.host,
+        '-p', dbConfig.port,
+        '-U', dbConfig.user,
+        '-d', dbConfig.database,
+        '-f', tempSqlPath,
+      ];
+      const psqlEnv = { ...process.env, PGPASSWORD: dbConfig.password };
+
+      await execFileAsync('psql', psqlArgs, { env: psqlEnv, timeout: 600000 });
+    } finally {
+      fs.unlinkSync(tempSqlPath);
+      fs.unlinkSync(file.path);
+    }
+
+    res.json({ success: true, message: '数据库恢复成功' });
+  } catch (error) {
+    console.error('Restore backup error:', error);
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    res.status(500).json({ error: '恢复数据库失败: ' + (error instanceof Error ? error.message : String(error)) });
+  }
+});
+
+app.delete('/api/admin/backup/:filename', requireSuperAdmin, async (req, res) => {
+  try {
+    const { password } = req.query as { password?: string };
+    const filename = req.params.filename;
+
+    if (!BACKUP_PASSWORD) {
+      res.status(500).json({ error: '未配置 BACKUP_PASSWORD 环境变量' });
+      return;
+    }
+
+    if (!password || !verifyBackupPassword(password)) {
+      res.status(401).json({ error: '备份密码错误' });
+      return;
+    }
+
+    if (!sanitizeFilename(filename)) {
+      res.status(400).json({ error: '无效的文件名' });
+      return;
+    }
+
+    const filePath = path.join(backupsDir, filename);
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ error: '备份文件不存在' });
+      return;
+    }
+
+    fs.unlinkSync(filePath);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete backup error:', error);
+    res.status(500).json({ error: '删除备份失败' });
+  }
+});
+
 app.get('/api/admin/:tab', requireAdmin, async (req, res) => {
   try {
     const tab = req.params.tab;
@@ -12584,249 +12992,6 @@ function decryptBuffer(buffer: Buffer, password: string): Buffer {
   return Buffer.concat([decipher.update(encrypted), decipher.final()]);
 }
 
-app.post('/api/admin/backup/create', requireSuperAdmin, async (req, res) => {
-  try {
-    const { password } = req.body as { password?: string };
-
-    if (!BACKUP_PASSWORD) {
-      res.status(500).json({ error: '未配置 BACKUP_PASSWORD 环境变量' });
-      return;
-    }
-
-    if (!password || !verifyBackupPassword(password)) {
-      res.status(401).json({ error: '备份密码错误' });
-      return;
-    }
-
-    const dbConfig = parseDatabaseUrl(process.env.DATABASE_URL || '');
-    if (!dbConfig) {
-      res.status(500).json({ error: 'DATABASE_URL 格式无效' });
-      return;
-    }
-
-    const timestamp = new Date().toISOString().replace(/:/g, '-').replace('T', '_').slice(0, 19);
-    const sqlFilename = `backup_${timestamp}.sql`;
-    const sqlFilePath = path.join(backupsDir, sqlFilename);
-    const zipFilename = `backup_${timestamp}.zip`;
-    const zipFilePath = path.join(backupsDir, zipFilename);
-
-    const pgDumpArgs = [
-      '-h', dbConfig.host,
-      '-p', dbConfig.port,
-      '-U', dbConfig.user,
-      '-d', dbConfig.database,
-      '--no-owner',
-      '--no-privileges',
-      '--exclude-table-data=ImageEmbedding',
-      '--exclude-table-data=_prisma_migrations',
-      '-f', sqlFilePath,
-    ];
-
-    const pgDumpEnv = { ...process.env, PGPASSWORD: dbConfig.password };
-
-    await execFileAsync('pg_dump', pgDumpArgs, { env: pgDumpEnv, timeout: 300000 });
-
-    const sqlContent = fs.readFileSync(sqlFilePath);
-    fs.unlinkSync(sqlFilePath);
-
-    const encryptedContent = encryptBuffer(sqlContent, password);
-
-    await new Promise<void>((resolve, reject) => {
-      const output = fs.createWriteStream(zipFilePath);
-      const archive = archiver('zip', { zlib: { level: 9 } });
-
-      output.on('close', () => resolve());
-      archive.on('error', (err) => reject(err));
-
-      archive.pipe(output);
-      archive.append(encryptedContent, { name: sqlFilename });
-      archive.finalize();
-    });
-
-    const stat = fs.statSync(zipFilePath);
-
-    await cleanupOldBackups();
-
-    res.json({
-      backup: {
-        filename: zipFilename,
-        size: stat.size,
-        sizeFormatted: formatFileSize(stat.size),
-        createdAt: new Date().toISOString(),
-      },
-    });
-  } catch (error) {
-    console.error('Create backup error:', error);
-    res.status(500).json({ error: '创建备份失败: ' + (error instanceof Error ? error.message : String(error)) });
-  }
-});
-
-app.get('/api/admin/backup/list', requireSuperAdmin, async (_req, res) => {
-  try {
-    const files = fs.readdirSync(backupsDir)
-      .filter((f) => f.startsWith('backup_') && f.endsWith('.zip'))
-      .map((f) => {
-        const filePath = path.join(backupsDir, f);
-        const stat = fs.statSync(filePath);
-        return {
-          filename: f,
-          size: stat.size,
-          sizeFormatted: formatFileSize(stat.size),
-          createdAt: stat.mtime.toISOString(),
-        };
-      })
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    res.json({ backups: files });
-  } catch (error) {
-    console.error('List backups error:', error);
-    res.status(500).json({ error: '获取备份列表失败' });
-  }
-});
-
-app.get('/api/admin/backup/:filename/download', requireSuperAdmin, async (req, res) => {
-  try {
-    const filename = req.params.filename;
-
-    if (!sanitizeFilename(filename)) {
-      res.status(400).json({ error: '无效的文件名' });
-      return;
-    }
-
-    const filePath = path.join(backupsDir, filename);
-    if (!fs.existsSync(filePath)) {
-      res.status(404).json({ error: '备份文件不存在' });
-      return;
-    }
-
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    const fileStream = fs.createReadStream(filePath);
-    fileStream.pipe(res);
-  } catch (error) {
-    console.error('Download backup error:', error);
-    res.status(500).json({ error: '下载备份失败' });
-  }
-});
-
-app.post('/api/admin/backup/restore', requireSuperAdmin, uploadBackup.single('file'), async (req, res) => {
-  try {
-    const { password } = req.body as { password?: string };
-    const file = req.file;
-
-    if (!BACKUP_PASSWORD) {
-      res.status(500).json({ error: '未配置 BACKUP_PASSWORD 环境变量' });
-      return;
-    }
-
-    if (!password || !verifyBackupPassword(password)) {
-      res.status(401).json({ error: '备份密码错误' });
-      return;
-    }
-
-    if (!file) {
-      res.status(400).json({ error: '请上传备份文件' });
-      return;
-    }
-
-    const dbConfig = parseDatabaseUrl(process.env.DATABASE_URL || '');
-    if (!dbConfig) {
-      res.status(500).json({ error: 'DATABASE_URL 格式无效' });
-      return;
-    }
-
-    const AdmZip = (await import('adm-zip')).default;
-    const zip = new AdmZip(file.path);
-    const zipEntries = zip.getEntries();
-
-    const sqlEntry = zipEntries.find((e) => e.entryName.endsWith('.sql'));
-    if (!sqlEntry) {
-      fs.unlinkSync(file.path);
-      res.status(400).json({ error: '备份文件中未找到 SQL 数据' });
-      return;
-    }
-
-    const encryptedContent = sqlEntry.getData();
-
-    let sqlContent: Buffer;
-    try {
-      sqlContent = decryptBuffer(encryptedContent, password);
-    } catch {
-      fs.unlinkSync(file.path);
-      res.status(401).json({ error: '备份密码错误或文件已损坏' });
-      return;
-    }
-
-    const sqlContentStr = sqlContent.toString('utf-8');
-    if (!sqlContentStr.includes('PostgreSQL database dump') && !sqlContentStr.includes('pg_dump')) {
-      fs.unlinkSync(file.path);
-      res.status(400).json({ error: '备份文件格式无效' });
-      return;
-    }
-
-    const tempSqlPath = path.join(backupsDir, `restore_${Date.now()}.sql`);
-    fs.writeFileSync(tempSqlPath, sqlContent);
-
-    try {
-      const psqlArgs = [
-        '-h', dbConfig.host,
-        '-p', dbConfig.port,
-        '-U', dbConfig.user,
-        '-d', dbConfig.database,
-        '-f', tempSqlPath,
-      ];
-      const psqlEnv = { ...process.env, PGPASSWORD: dbConfig.password };
-
-      await execFileAsync('psql', psqlArgs, { env: psqlEnv, timeout: 600000 });
-    } finally {
-      fs.unlinkSync(tempSqlPath);
-      fs.unlinkSync(file.path);
-    }
-
-    res.json({ success: true, message: '数据库恢复成功' });
-  } catch (error) {
-    console.error('Restore backup error:', error);
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-    res.status(500).json({ error: '恢复数据库失败: ' + (error instanceof Error ? error.message : String(error)) });
-  }
-});
-
-app.delete('/api/admin/backup/:filename', requireSuperAdmin, async (req, res) => {
-  try {
-    const { password } = req.query as { password?: string };
-    const filename = req.params.filename;
-
-    if (!BACKUP_PASSWORD) {
-      res.status(500).json({ error: '未配置 BACKUP_PASSWORD 环境变量' });
-      return;
-    }
-
-    if (!password || !verifyBackupPassword(password)) {
-      res.status(401).json({ error: '备份密码错误' });
-      return;
-    }
-
-    if (!sanitizeFilename(filename)) {
-      res.status(400).json({ error: '无效的文件名' });
-      return;
-    }
-
-    const filePath = path.join(backupsDir, filename);
-    if (!fs.existsSync(filePath)) {
-      res.status(404).json({ error: '备份文件不存在' });
-      return;
-    }
-
-    fs.unlinkSync(filePath);
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Delete backup error:', error);
-    res.status(500).json({ error: '删除备份失败' });
-  }
-});
-
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
@@ -12847,10 +13012,11 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 async function startServer() {
+  await initSensitiveWords();
   app.use((_req, res, next) => {
     res.setHeader(
       'Content-Security-Policy',
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://o4.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com; worker-src 'self' blob:; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net https://picsum.photos; style-src 'self' 'unsafe-inline';"
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com https://mapplugin.amap.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://o4.amap.com https://mapplugin.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com; worker-src 'self' blob:; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net https://picsum.photos; style-src 'self' 'unsafe-inline';"
     );
     next();
   });
@@ -12872,7 +13038,7 @@ async function startServer() {
   app.use((_req, res, next) => {
     res.setHeader(
       'Content-Security-Policy',
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://picsum.photos; style-src 'self' 'unsafe-inline';"
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com https://mapplugin.amap.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://o4.amap.com https://mapplugin.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com; worker-src 'self' blob:; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://picsum.photos; style-src 'self' 'unsafe-inline';"
     );
     next();
   });

@@ -35,6 +35,15 @@ export const GlobalMusicPlayer = () => {
         return;
       }
 
+      const neteaseId = currentSong.platformIds?.neteaseId;
+      if (currentSong.primaryPlatform === 'netease' && neteaseId) {
+        const directUrl = `https://music.163.com/song/media/outer/url?id=${neteaseId}.mp3`;
+        setResolvedPlayUrl(directUrl);
+        setResolvingPlayUrl(false);
+        setPlayUrlError('');
+        return;
+      }
+
       setResolvingPlayUrl(true);
       setPlayUrlError('');
 

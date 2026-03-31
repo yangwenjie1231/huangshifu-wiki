@@ -10,6 +10,7 @@ import { useMusic } from '../context/MusicContext';
 import { useToast } from '../components/Toast';
 import { SongCoverManager } from '../components/SongCoverManager';
 import { SongEditModal } from '../components/SongEditModal';
+import { LyricsDisplay } from '../components/LyricsDisplay';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 
 type PlatformIds = {
@@ -25,6 +26,14 @@ type CustomPlatformLink = {
   url: string;
 };
 
+type CustomPlatformConfig = {
+  key: string;
+  label: string;
+  urlPattern: string;
+  color: string;
+  bgColor: string;
+};
+
 type SongItem = {
   docId: string;
   id: string;
@@ -34,9 +43,11 @@ type SongItem = {
   cover: string;
   audioUrl: string;
   lyric?: string | null;
+  description?: string | null;
   primaryPlatform?: 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo' | null;
   favoritedByMe?: boolean;
   platformIds?: PlatformIds;
+  customPlatformIds?: Record<string, string>;
   customPlatformLinks?: CustomPlatformLink[];
 };
 
@@ -87,9 +98,16 @@ const MusicDetail = () => {
   const [loading, setLoading] = useState(true);
   const [favoriting, setFavoriting] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [customPlatforms, setCustomPlatforms] = useState<CustomPlatformConfig[]>([]);
   const { user, isAdmin } = useAuth();
   const { setCurrentSong, setIsPlaying, setPlaylist } = useMusic();
   const { show } = useToast();
+
+  useEffect(() => {
+    apiGet<{ platforms: CustomPlatformConfig[] }>('/api/music-platforms')
+      .then(data => setCustomPlatforms(data.platforms || []))
+      .catch(() => setCustomPlatforms([]));
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -117,10 +135,6 @@ const MusicDetail = () => {
     fetchData();
   }, [songId]);
 
-  const lyricLines = useMemo(() => {
-    if (!song?.lyric) return [];
-    return song.lyric.split('\n').map((line) => line.trim()).filter(Boolean);
-  }, [song?.lyric]);
   const customPlatformLinks = song?.customPlatformLinks || [];
 
   const handlePlay = () => {
@@ -249,6 +263,7 @@ const MusicDetail = () => {
         </div>
       </section>
 
+      {/* 自定义链接 - PR #70 */}
       {customPlatformLinks.length > 0 && (
         <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
           <div className="flex items-center justify-between mb-4 gap-3">
@@ -277,18 +292,50 @@ const MusicDetail = () => {
         </section>
       )}
 
+      {/* 预设平台 - main 分支 */}
+      {customPlatforms.length > 0 && song?.customPlatformIds && Object.keys(song.customPlatformIds).length > 0 && (
+        <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
+          <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">预设平台</h2>
+          <div className="flex flex-wrap gap-2">
+            {customPlatforms
+              .filter(p => song.customPlatformIds?.[p.key])
+              .map(platform => {
+                const id = song.customPlatformIds![platform.key];
+                const url = platform.urlPattern.replace('{id}', id);
+                return (
+                  <a
+                    key={platform.key}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={clsx(
+                      'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all hover:scale-105',
+                      platform.bgColor,
+                      platform.color
+                    )}
+                  >
+                    {platform.label}
+                    <ExternalLink size={12} />
+                  </a>
+                );
+              })}
+          </div>
+        </section>
+      )}
+
       <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
         <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">歌词</h2>
-        {lyricLines.length > 0 ? (
-          <div className="space-y-2 text-sm text-gray-600 leading-relaxed max-h-[380px] overflow-y-auto pr-2">
-            {lyricLines.map((line, index) => (
-              <p key={`${line}-${index}`}>{line}</p>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-gray-400 italic">暂无歌词</p>
-        )}
+        <LyricsDisplay lyric={song?.lyric || ''} />
       </section>
+
+      {song?.description && (
+        <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
+          <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">歌曲描述</h2>
+          <div className="prose prose-sm max-w-none text-gray-600 whitespace-pre-wrap">
+            {song.description}
+          </div>
+        </section>
+      )}
 
       <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
         <div className="flex items-center justify-between mb-4">

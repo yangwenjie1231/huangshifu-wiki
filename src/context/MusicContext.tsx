@@ -1,5 +1,15 @@
 import React, { createContext, useCallback, useContext, useMemo, useState, ReactNode } from 'react';
 
+type MusicPlatform = 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo';
+
+interface PlatformIds {
+  neteaseId?: string | null;
+  tencentId?: string | null;
+  kugouId?: string | null;
+  baiduId?: string | null;
+  kuwoId?: string | null;
+}
+
 interface Song {
   id: string;
   docId?: string;
@@ -10,6 +20,8 @@ interface Song {
   audioUrl: string;
   playUrl?: string;
   lyric?: string | null;
+  primaryPlatform?: MusicPlatform | null;
+  platformIds?: PlatformIds;
 }
 
 interface MusicContextType {

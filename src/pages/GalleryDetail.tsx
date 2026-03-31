@@ -18,6 +18,7 @@ import { format } from 'date-fns';
 import { clsx } from 'clsx';
 import { useAuth } from '../context/AuthContext';
 import { SmartImage } from '../components/SmartImage';
+import { Lightbox } from '../components/Lightbox';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/apiClient';
@@ -133,6 +134,8 @@ const GalleryDetail = () => {
   const [gallery, setGallery] = useState<GalleryItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<GalleryDraft | null>(null);
@@ -202,6 +205,11 @@ const GalleryDetail = () => {
   const handleNext = () => {
     if (!images.length) return;
     setActiveIndex((prev) => (prev + 1) % images.length);
+  };
+
+  const handleOpenLightbox = (index: number) => {
+    setLightboxIndex(index);
+    setLightboxOpen(true);
   };
 
   const handleCopyLink = async () => {
@@ -534,7 +542,13 @@ const GalleryDetail = () => {
         <div className="relative bg-black/5">
           <div className="aspect-[16/9] max-h-[70vh]">
             {activeImage ? (
-              <SmartImage src={activeImage.url} alt={activeImage.name || gallery.title} className="w-full h-full object-contain bg-black/80" />
+              editing ? (
+                <SmartImage src={activeImage.url} alt={activeImage.name || gallery.title} className="w-full h-full object-contain bg-black/80" />
+              ) : (
+                <button onClick={() => handleOpenLightbox(activeIndex)} className="w-full h-full">
+                  <SmartImage src={activeImage.url} alt={activeImage.name || gallery.title} className="w-full h-full object-contain bg-black/80" />
+                </button>
+              )
             ) : (
               <div className="w-full h-full bg-gray-100" />
             )}
@@ -727,6 +741,14 @@ const GalleryDetail = () => {
         </button>
       </div>
       </div>
+
+      {lightboxOpen && (
+        <Lightbox
+          images={images.map((img) => ({ id: img.clientId || img.id, url: img.url, name: img.name }))}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
     </div>
   );
 };

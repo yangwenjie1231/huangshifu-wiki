@@ -158,11 +158,19 @@ const toSnapshotDoc = (item: any, root?: string): SnapshotDocument => {
   };
 };
 
-const findWhereEq = (constraints: QueryConstraint[], fieldPath: string) => {
+const findWhereValue = (constraints: QueryConstraint[], fieldPath: string, opStr: string) => {
   const found = constraints.find(
-    (constraint) => constraint.kind === 'where' && constraint.fieldPath === fieldPath && constraint.opStr === '==',
+    (constraint) => constraint.kind === 'where' && constraint.fieldPath === fieldPath && constraint.opStr === opStr,
   ) as WhereConstraint | undefined;
   return found?.value;
+};
+
+const findWhereEq = (constraints: QueryConstraint[], fieldPath: string) => {
+  return findWhereValue(constraints, fieldPath, '==');
+};
+
+const findWhereArrayContains = (constraints: QueryConstraint[], fieldPath: string) => {
+  return findWhereValue(constraints, fieldPath, 'array-contains');
 };
 
 const findOrderBy = (constraints: QueryConstraint[]) => {
@@ -194,6 +202,22 @@ const applyConstraints = (items: any[], constraints: QueryConstraint[]) => {
           return String(value) === String(constraint.value);
         }
         return value === constraint.value;
+      });
+    }
+
+    if (constraint.kind === 'where' && constraint.opStr === 'array-contains') {
+      output = output.filter((item) => {
+        const value = (item as Record<string, unknown>)[constraint.fieldPath];
+        if (!Array.isArray(value)) {
+          return false;
+        }
+
+        return value.some((entry) => {
+          if (typeof entry === 'string' || typeof constraint.value === 'string') {
+            return String(entry) === String(constraint.value);
+          }
+          return entry === constraint.value;
+        });
       });
     }
   }
@@ -248,8 +272,10 @@ const fetchCollectionItems = async (collectionRef: CollectionReference, constrai
     }
 
     const category = findWhereEq(constraints, 'category');
+    const tag = findWhereArrayContains(constraints, 'tags');
     const data = await apiGet<{ pages: any[] }>('/api/wiki', {
       category: typeof category === 'string' ? category : 'all',
+      tag: typeof tag === 'string' ? tag : undefined,
     });
     return data.pages || [];
   }
