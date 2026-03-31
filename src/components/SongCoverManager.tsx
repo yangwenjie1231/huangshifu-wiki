@@ -103,10 +103,10 @@ export const SongCoverManager = ({ songDocId, currentCover, onCoverUpdated }: So
         throw new Error(errorMessage);
       }
 
-      const uploadResult = await response.json() as { asset: { id: string; url: string } };
+      const uploadResult = await response.json() as { file: { assetId: string; url: string } };
 
       await apiPost(`/api/music/${songDocId}/covers`, {
-        assetId: uploadResult.asset.id,
+        assetId: uploadResult.file.assetId,
       });
 
       show('封面上传成功');
