@@ -15,6 +15,8 @@
 | AI 集成 | Gemini（`@google/genai`） |
 | ORM | Prisma（SQLite 用于本地开发，PostgreSQL 用于生产） |
 
+> 数据访问说明：当前前端业务页面（Wiki/Forum/Gallery/Admin/Music）已统一走 REST API（`/api/*`）+ Prisma，`src/lib/firebaseCompat/` 仅作为历史兼容层保留备用，不作为主路径。
+
 ## 快速开始（无旧数据迁移场景）
 
 ```bash
@@ -358,6 +360,9 @@ USE_PM2=0 ./scripts/deploy.sh         # 不使用 PM2
 - [ ] 管理员账号可进入后台
 - [ ] 图集上传可写入 `uploads/`
 - [ ] 数据可写入 PostgreSQL
+- [ ] Wiki 列表/详情/编辑通过 REST API 正常读写（`/api/wiki*`）
+- [ ] Gallery 列表通过 REST API 正常加载（`/api/galleries`）
+- [ ] Music 列表与删除通过 REST API 正常工作（`/api/music*`）
 
 ---
 
@@ -729,6 +734,12 @@ npm run download:sensitive-words
 ## 附录：更新日志
 
 ### v5.x
+
+- **统一前端数据访问到 REST API**：Wiki / Gallery / Music 页面不再依赖 Firebase 风格查询调用，统一改为 `apiGet/apiPost/apiPut/apiDelete`
+  - Wiki 列表、编辑、历史、时间轴改为直接请求 `/api/wiki*`
+  - Gallery 列表移除兼容层 `onSnapshot` 轮询，改为页面加载时 REST 拉取
+  - Music 列表、去重检查、删除改为直接请求 `/api/music*`
+  - `src/lib/firebaseCompat/` 保留为备用兼容层（非主路径）
 
 - **敏感词过滤功能**：内置 DFA 算法敏感词检测，用于过滤热门搜索词和辅助内容审核
   - 敏感词不会被记录到热门搜索

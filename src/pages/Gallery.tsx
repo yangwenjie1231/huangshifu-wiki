@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, query, orderBy, onSnapshot, db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Image as ImageIcon, Plus, Folder, X, Upload, Clock, User as UserIcon, Link2, Trash2 } from 'lucide-react';
 import { useUserPreferences } from '../context/UserPreferencesContext';
@@ -12,7 +11,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { SmartImage } from '../components/SmartImage';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
-import { apiDelete, apiPost, apiUpload } from '../lib/apiClient';
+import { apiDelete, apiGet, apiPost, apiUpload } from '../lib/apiClient';
 import { LocationTagInput } from '../components/LocationTagInput';
 import Pagination from '../components/Pagination';
 
@@ -91,12 +90,20 @@ const GalleryList = () => {
   };
 
   useEffect(() => {
-    const q = query(collection(db, 'galleries'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setGalleries(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLoading(false);
-    });
-    return () => unsubscribe();
+    const fetchGalleries = async () => {
+      setLoading(true);
+      try {
+        const data = await apiGet<{ galleries: any[] }>('/api/galleries');
+        setGalleries(data.galleries || []);
+      } catch (error) {
+        console.error('Fetch galleries error:', error);
+        setGalleries([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchGalleries();
   }, []);
 
   const handleCopyGalleryLink = async (event: React.MouseEvent<HTMLButtonElement>, galleryId: string) => {

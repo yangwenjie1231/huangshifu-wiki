@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { Routes, Route, Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, orderBy, addDoc, limit, db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -18,7 +17,7 @@ import { summarizeWikiContent, generateWikiIntro } from '../services/aiService';
 import { uploadImageToCDNs, getImageUrl } from '../services/imageService';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
-import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
+import { apiDelete, apiGet, apiPost, apiPut } from '../lib/apiClient';
 import { randomId } from '../lib/randomId';
 import MdEditor from 'react-markdown-editor-lite';
 import MarkdownIt from 'markdown-it';
@@ -330,17 +329,11 @@ const WikiList = () => {
     const fetchPages = async () => {
       setLoading(true);
       try {
-        const wikiRef = collection(db, 'wiki');
-        const constraints = category !== 'all' && tag
-          ? [where('category', '==', category), where('tags', 'array-contains', tag), orderBy('updatedAt', 'desc')]
-          : category !== 'all'
-            ? [where('category', '==', category), orderBy('updatedAt', 'desc')]
-            : tag
-              ? [where('tags', 'array-contains', tag), orderBy('updatedAt', 'desc')]
-              : [orderBy('updatedAt', 'desc')];
-        const q = query(wikiRef, ...constraints);
-        const snapshot = await getDocs(q);
-        setPages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WikiItem)));
+        const data = await apiGet<{ pages: WikiItem[] }>('/api/wiki', {
+          category: category !== 'all' ? category : undefined,
+          tag: tag || undefined,
+        });
+        setPages(data.pages || []);
       } catch (e) {
         console.error("Error fetching wiki pages:", e);
       }
@@ -1751,10 +1744,9 @@ const WikiEditor = () => {
   useEffect(() => {
     if (!isNew) {
       const fetchPage = async () => {
-        const docRef = doc(db, 'wiki', slug!);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
+        try {
+          const response = await apiGet<{ page: WikiItem }>(`/api/wiki/${slug}`);
+          const data = response.page;
           setFormData({
             title: data.title,
             slug: data.slug,
@@ -1766,6 +1758,8 @@ const WikiEditor = () => {
             locationCode: data.locationCode || '',
             locationName: data.locationName || '',
           });
+        } catch (error) {
+          console.error('Error fetching wiki page for edit:', error);
         }
       };
       fetchPage();
@@ -1831,44 +1825,44 @@ const WikiEditor = () => {
       status,
       lastEditorUid: user.uid,
       lastEditorName: profile?.displayName || user.displayName || '匿名用户',
-      updatedAt: serverTimestamp(),
     };
 
-    if (isNew) {
-      pageData.createdAt = serverTimestamp();
-    }
-
     try {
-      const docRef = doc(db, 'wiki', pageSlug!);
       if (isNew) {
-        const existingSnap = await getDoc(docRef);
-        if (existingSnap.exists()) {
+        try {
+          await apiGet<{ page: WikiItem }>(`/api/wiki/${pageSlug}`);
           show("该页面标识已存在，请修改标题后重试", { variant: 'error' });
           setSavingMode(null);
           return;
+        } catch {
+          // continue when page does not exist
         }
-        const titleQuery = query(collection(db, 'wiki'), where('title', '==', formData.title.trim()));
-        const titleSnap = await getDocs(titleQuery);
-        if (!titleSnap.empty) {
+
+        const existingByTitle = await apiGet<{ pages: WikiItem[] }>('/api/wiki', {
+          category: 'all',
+        });
+        const duplicatedTitle = (existingByTitle.pages || []).some(
+          (item) => item.title.trim() === formData.title.trim(),
+        );
+
+        if (duplicatedTitle) {
           show("该标题的百科已存在，请修改标题或编辑已有页面", { variant: 'error' });
           setSavingMode(null);
           return;
         }
-        await setDoc(docRef, pageData);
+
+        await apiPost('/api/wiki', pageData);
       } else {
-        await updateDoc(docRef, pageData);
+        await apiPut(`/api/wiki/${pageSlug}`, pageData);
       }
 
-      // Save Revision
-      const revisionsRef = collection(db, 'wiki', pageSlug!, 'revisions');
-      await addDoc(revisionsRef, {
+      await apiPost(`/api/wiki/${pageSlug}/revisions`, {
         id: randomId(),
         pageSlug,
         title: formData.title,
         content: formData.content,
         editorUid: user.uid,
         editorName: profile?.displayName || user.displayName || '匿名用户',
-        createdAt: serverTimestamp()
       });
 
       navigate(`/wiki/${pageSlug}`);
@@ -2187,10 +2181,8 @@ const WikiHistory = () => {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const revisionsRef = collection(db, 'wiki', slug!, 'revisions');
-        const q = query(revisionsRef, orderBy('createdAt', 'desc'));
-        const snapshot = await getDocs(q);
-        setRevisions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const data = await apiGet<{ revisions: any[] }>(`/api/wiki/${slug}/history`);
+        setRevisions(data.revisions || []);
       } catch (e) {
         console.error("Error fetching history:", e);
       }
@@ -2322,14 +2314,8 @@ const WikiTimeline = () => {
   useEffect(() => {
     const fetchEvents = async () => {
       try {
-        const wikiRef = collection(db, 'wiki');
-        // Fetch pages that have an eventDate
-        const q = query(wikiRef, orderBy('eventDate', 'asc'));
-        const snapshot = await getDocs(q);
-        const allEvents = snapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() } as WikiItem))
-          .filter((p) => p.eventDate); // Ensure they have a date
-        setEvents(allEvents);
+        const data = await apiGet<{ events: WikiItem[] }>('/api/wiki/timeline');
+        setEvents((data.events || []).filter((p) => p.eventDate));
       } catch (e) {
         console.error("Error fetching timeline events:", e);
       }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, query, getDocs, doc, deleteDoc, where, orderBy, db, auth } from '../firebase';
+import { auth } from '../firebase';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useMusic } from '../context/MusicContext';
@@ -68,7 +68,7 @@ type SongItem = {
   lyric?: string | null;
   favoritedByMe?: boolean;
   platformIds?: PlatformIds;
-  createdAt?: string | { toDate?: () => Date; toMillis?: () => number } | null;
+  createdAt?: string;
 };
 
 type PostItem = {
@@ -118,21 +118,6 @@ const getSongExternalUrl = (song: SongItem) => {
     return `https://music.91q.com/#/song/${id}`;
   }
   return `https://music.163.com/song?id=${id}`;
-};
-
-const toSortableTimestamp = (value: SongItem['createdAt']) => {
-  if (!value) return 0;
-  if (typeof value === 'string') {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
-  }
-  if (typeof value.toMillis === 'function') {
-    return value.toMillis();
-  }
-  if (typeof value.toDate === 'function') {
-    return value.toDate().getTime();
-  }
-  return 0;
 };
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
@@ -229,9 +214,9 @@ const Music = () => {
           ? a.artist.localeCompare(b.artist, 'zh-CN')
           : b.artist.localeCompare(a.artist, 'zh-CN');
       }
-      const left = toSortableTimestamp(a.createdAt);
-      const right = toSortableTimestamp(b.createdAt);
-      return sortOrder === 'asc' ? left - right : right - left;
+      return sortOrder === 'asc'
+        ? (a.createdAt || '').localeCompare(b.createdAt || '')
+        : (b.createdAt || '').localeCompare(a.createdAt || '');
     });
 
     return result;
@@ -259,15 +244,13 @@ const Music = () => {
 
   const fetchSongs = async () => {
     setLoading(true);
-    const path = 'music';
     try {
-      const q = query(collection(db, path), orderBy('createdAt', 'desc'));
-      const snapshot = await getDocs(q);
-      const fetchedSongs = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id })) as SongItem[];
+      const data = await apiGet<{ songs: SongItem[] }>('/api/music');
+      const fetchedSongs = data.songs || [];
       setSongs(fetchedSongs);
       setPlaylist(fetchedSongs);
     } catch (e) {
-      handleFirestoreError(e, OperationType.GET, path);
+      handleFirestoreError(e, OperationType.GET, '/api/music');
     }
     setLoading(false);
   };
@@ -338,21 +321,18 @@ const Music = () => {
     setLoading(true);
     let addedCount = 0;
     let skippedCount = 0;
+    const existingSongs = new Set(songs.map((song) => String(song.id).trim()));
 
     for (const id of ids) {
       try {
-        // Check if song already exists
-        const path = 'music';
-        const q = query(collection(db, path), where('id', '==', id));
-        const snapshot = await getDocs(q);
-        
-        if (!snapshot.empty) {
+        if (existingSongs.has(id)) {
           skippedCount++;
           continue;
         }
 
         try {
           await apiPost<{ song: any }>(`/api/music/from-${selectedPlatform}`, { id });
+          existingSongs.add(id);
           addedCount++;
         } catch (error) {
           console.error(`Failed to add metadata for ID: ${id}`, error);
@@ -406,12 +386,11 @@ const Music = () => {
   };
 
   const handleDeleteSong = async (songId: string) => {
-    const path = 'music';
     try {
       if (currentSong?.docId === songId) {
         setCurrentSong(null);
       }
-      await deleteDoc(doc(db, path, songId));
+      await apiDelete(`/api/music/${songId}`);
       fetchSongs();
       setConfirmModal({ show: false, type: 'single' });
     } catch (e) {
@@ -461,13 +440,12 @@ const Music = () => {
     if (selectedSongs.size === 0) return;
 
     setLoading(true);
-    const path = 'music';
     let successCount = 0;
     let failCount = 0;
 
     for (const docId of Array.from(selectedSongs)) {
       try {
-        await deleteDoc(doc(db, path, docId));
+        await apiDelete(`/api/music/${docId}`);
         successCount++;
       } catch (e) {
         console.error(`Error deleting ${docId}:`, e);
