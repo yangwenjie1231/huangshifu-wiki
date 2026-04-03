@@ -6,18 +6,9 @@ import { clsx } from 'clsx';
 import { apiGet } from '../lib/apiClient';
 import { useAuth } from '../context/AuthContext';
 import Pagination from '../components/Pagination';
+import { Platform, PlatformIds } from '../types/PlatformIds';
 
 const DEFAULT_PAGE_SIZE = 50;
-
-type Platform = 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo';
-
-type PlatformIds = {
-  neteaseId?: string | null;
-  tencentId?: string | null;
-  kugouId?: string | null;
-  baiduId?: string | null;
-  kuwoId?: string | null;
-};
 
 type SongItem = {
   docId: string;

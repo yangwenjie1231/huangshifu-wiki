@@ -9,14 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
 import { AlbumCoverManager } from '../components/AlbumCoverManager';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
-
-type PlatformIds = {
-  neteaseId?: string | null;
-  tencentId?: string | null;
-  kugouId?: string | null;
-  baiduId?: string | null;
-  kuwoId?: string | null;
-};
+import { Platform, PlatformIds } from '../types/PlatformIds';
 
 type SongItem = {
   docId: string;
@@ -30,7 +23,7 @@ type SongItem = {
   lyric?: string | null;
   favoritedByMe?: boolean;
   trackOrder?: number;
-  primaryPlatform?: 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo' | null;
+  primaryPlatform?: Platform | null;
   platformIds?: PlatformIds;
 };
 
