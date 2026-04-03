@@ -2750,7 +2750,8 @@ function toPostResponse(post: {
 
 function toCommentResponse(comment: {
   id: string;
-  postId: string;
+  postId?: string | null;
+  galleryId?: string | null;
   authorUid: string;
   authorName: string;
   authorPhoto: string | null;
@@ -2772,6 +2773,7 @@ function toGalleryResponse(gallery: {
   authorName: string;
   tags: unknown;
   locationCode?: string | null;
+  copyright?: string | null;
   published: boolean;
   publishedAt: Date | null;
   createdAt: Date;
@@ -2802,6 +2804,7 @@ function toGalleryResponse(gallery: {
     tags: serializeTags(gallery.tags),
     locationCode: gallery.locationCode || null,
     locationName: gallery.location?.fullName || null,
+    copyright: gallery.copyright || null,
     published: gallery.published,
     publishedAt: gallery.publishedAt ? gallery.publishedAt.toISOString() : null,
     createdAt: gallery.createdAt.toISOString(),
@@ -7781,6 +7784,7 @@ app.patch('/api/galleries/:id', requireAuth, requireActiveUser, async (req: Auth
     const description = typeof req.body?.description === 'string' ? req.body.description.trim() : undefined;
     const tags = req.body?.tags !== undefined ? normalizeTagList(req.body.tags) : undefined;
     const locationCode = req.body?.locationCode !== undefined ? (typeof req.body.locationCode === 'string' && req.body.locationCode.length > 0 ? req.body.locationCode : null) : undefined;
+    const copyright = req.body?.copyright !== undefined ? (typeof req.body.copyright === 'string' ? req.body.copyright.trim() : null) : undefined;
     const published = req.body?.published !== undefined ? parseBoolean(req.body.published, false) : undefined;
     const imagesRaw = Array.isArray(req.body?.images) ? req.body.images : undefined;
     const imageInstructions = imagesRaw?.map((item) => {
@@ -7808,6 +7812,7 @@ app.patch('/api/galleries/:id', requireAuth, requireActiveUser, async (req: Auth
       description?: string;
       tags?: string[];
       locationCode?: string | null;
+      copyright?: string | null;
       published?: boolean;
       publishedAt?: Date | null;
     } = {};
@@ -7823,6 +7828,9 @@ app.patch('/api/galleries/:id', requireAuth, requireActiveUser, async (req: Auth
     }
     if (locationCode !== undefined) {
       data.locationCode = locationCode;
+    }
+    if (copyright !== undefined) {
+      data.copyright = copyright;
     }
     if (published !== undefined) {
       data.published = published;
@@ -8601,6 +8609,105 @@ app.get('/api/admin/ban_logs', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Fetch ban logs error:', error);
     res.status(500).json({ error: '获取封禁日志失败' });
+  }
+});
+
+app.get('/api/galleries/:id/comments', async (req: AuthenticatedRequest, res) => {
+  try {
+    const gallery = await prisma.gallery.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        published: true,
+        authorUid: true,
+      },
+    });
+
+    if (!gallery) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    if (!canViewGallery(gallery, req.authUser)) {
+      res.status(403).json({ error: '该图集尚未发布' });
+      return;
+    }
+
+    const comments = await prisma.postComment.findMany({
+      where: { galleryId: req.params.id },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    res.json({ comments: comments.map(toCommentResponse) });
+  } catch (error) {
+    console.error('Fetch gallery comments error:', error);
+    res.status(500).json({ error: '获取图集评论失败' });
+  }
+});
+
+app.post('/api/galleries/:id/comments', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { content, parentId } = req.body as {
+      content?: string;
+      parentId?: string | null;
+    };
+
+    if (!content || !content.trim()) {
+      res.status(400).json({ error: '评论内容不能为空' });
+      return;
+    }
+
+    const gallery = await prisma.gallery.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        published: true,
+        authorUid: true,
+      },
+    });
+
+    if (!gallery || !canViewGallery(gallery, req.authUser)) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    if (!gallery.published) {
+      res.status(403).json({ error: '仅已发布内容可评论' });
+      return;
+    }
+
+    let replyTargetUid: string | null = null;
+    if (parentId) {
+      const parent = await prisma.postComment.findUnique({
+        where: { id: parentId },
+        select: {
+          id: true,
+          galleryId: true,
+          authorUid: true,
+        },
+      });
+      if (!parent || parent.galleryId !== req.params.id) {
+        res.status(400).json({ error: '回复目标不存在' });
+        return;
+      }
+      replyTargetUid = parent.authorUid;
+    }
+
+    const comment = await prisma.postComment.create({
+      data: {
+        galleryId: req.params.id,
+        authorUid: req.authUser!.uid,
+        authorName: req.authUser!.displayName,
+        authorPhoto: req.authUser!.photoURL,
+        content,
+        parentId: parentId || null,
+      },
+    });
+
+    res.status(201).json({ comment: toCommentResponse(comment) });
+  } catch (error) {
+    console.error('Create gallery comment error:', error);
+    res.status(500).json({ error: '发表评论失败' });
   }
 });
 
