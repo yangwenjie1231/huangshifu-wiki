@@ -9,12 +9,7 @@ import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SmartImage } from '../components/SmartImage';
 import { apiGet, apiUpload } from '../lib/apiClient';
-
-const toDateValue = (value: string | null | undefined) => {
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
+import { toDateValue } from '../lib/dateUtils';
 
 type SearchSuggestion = {
   type: 'keyword' | 'wiki' | 'post' | 'music' | 'album';

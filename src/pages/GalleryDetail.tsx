@@ -22,6 +22,8 @@ import { Lightbox } from '../components/Lightbox';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/apiClient';
+import { splitTagsInput } from '../lib/contentUtils';
+import { formatDateTime, toDateValue } from '../lib/dateUtils';
 
 type GalleryImage = {
   id: string;
@@ -84,23 +86,6 @@ type CommentItem = {
   parentId: string | null;
   createdAt: string;
 };
-
-const toDateValue = (value: string | null | undefined) => {
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
-
-const formatDateTime = (value: string | null | undefined, fallback = '刚刚') => {
-  const parsed = toDateValue(value);
-  return parsed ? format(parsed, 'yyyy-MM-dd HH:mm') : fallback;
-};
-
-const splitTagsInput = (value: string) =>
-  value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
 
 const toEditableImage = (image: GalleryImage): EditableGalleryImage => ({
   ...image,

@@ -12,13 +12,14 @@ import { useUserPreferences } from '../context/UserPreferencesContext';
 import { ViewModeSelector } from '../components/ViewModeSelector';
 import { VIEW_MODE_CONFIG } from '../lib/viewModes';
 import { clsx } from 'clsx';
-import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { summarizeWikiContent, generateWikiIntro } from '../services/aiService';
 import { uploadImageToCDNs, getImageUrl } from '../services/imageService';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
+import { ContentStatus, getStatusText, splitTagsInput } from '../lib/contentUtils';
+import { formatDate, toDateValue } from '../lib/dateUtils';
 import { randomId } from '../lib/randomId';
 import MdEditor from 'react-markdown-editor-lite';
 import MarkdownIt from 'markdown-it';
@@ -35,17 +36,6 @@ const mdParser = new MarkdownIt({
   linkify: true,
   typographer: true
 });
-
-const toDateValue = (value: string | null | undefined) => {
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
-
-const formatDate = (value: string | null | undefined, pattern: string) => {
-  const parsed = toDateValue(value);
-  return parsed ? format(parsed, pattern) : '刚刚';
-};
 
 type WikiRelationType = 'related_person' | 'work_relation' | 'timeline_relation' | 'custom';
 
@@ -71,14 +61,6 @@ const RELATION_TYPE_LABELS: Record<WikiRelationType, string> = {
   timeline_relation: '时间线关联',
   custom: '自定义关系',
 };
-
-const splitTagsInput = (value: string) =>
-  value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-type ContentStatus = 'draft' | 'pending' | 'published' | 'rejected';
 
 type WikiItem = {
   id: string;
@@ -195,13 +177,6 @@ type WikiPrDiffResponse = {
       eventDate: string | null;
     };
   };
-};
-
-const getStatusText = (status?: ContentStatus) => {
-  if (status === 'pending') return '待审核';
-  if (status === 'rejected') return '已驳回';
-  if (status === 'draft') return '草稿';
-  return '已发布';
 };
 
 const getBranchStatusText = (status: WikiBranchStatus) => {

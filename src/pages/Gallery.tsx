@@ -13,16 +13,11 @@ import { SmartImage } from '../components/SmartImage';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { apiDelete, apiPost, apiUpload } from '../lib/apiClient';
+import { toDateValue } from '../lib/dateUtils';
 import { LocationTagInput } from '../components/LocationTagInput';
 import Pagination from '../components/Pagination';
 
 const DEFAULT_PAGE_SIZE = 24;
-
-const toDateValue = (value: string | null | undefined) => {
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
 
 type UploadSessionResponse = {
   session: {

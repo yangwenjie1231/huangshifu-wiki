@@ -4,12 +4,7 @@ import { Link } from 'react-router-dom';
 import { Book, MessageSquare, Music, Calendar, ArrowRight, Clock, Heart } from 'lucide-react';
 import { format } from 'date-fns';
 import { apiGet } from '../lib/apiClient';
-
-const toDateValue = (value: string | null | undefined) => {
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
+import { toDateValue } from '../lib/dateUtils';
 
 type HomeFeedResponse = {
   announcements: Array<{ id: string; content: string; link?: string; createdAt: string }>;
