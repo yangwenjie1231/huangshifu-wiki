@@ -17,6 +17,7 @@ import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { format } from 'date-fns';
 import Pagination from '../components/Pagination';
+import { PlatformIds } from '../types/PlatformIds';
 
 const DEFAULT_PAGE_SIZE = 40;
 
@@ -47,14 +48,6 @@ interface FirestoreErrorInfo {
     }[];
   }
 }
-
-type PlatformIds = {
-  neteaseId?: string | null;
-  tencentId?: string | null;
-  kugouId?: string | null;
-  baiduId?: string | null;
-  kuwoId?: string | null;
-};
 
 type SongItem = {
   docId: string;

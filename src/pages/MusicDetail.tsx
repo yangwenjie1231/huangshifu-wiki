@@ -12,14 +12,7 @@ import { SongCoverManager } from '../components/SongCoverManager';
 import { SongEditModal } from '../components/SongEditModal';
 import { LyricsDisplay } from '../components/LyricsDisplay';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
-
-type PlatformIds = {
-  neteaseId?: string | null;
-  tencentId?: string | null;
-  kugouId?: string | null;
-  baiduId?: string | null;
-  kuwoId?: string | null;
-};
+import { Platform, PlatformIds } from '../types/PlatformIds';
 
 type CustomPlatformLink = {
   label: string;
@@ -44,7 +37,7 @@ type SongItem = {
   audioUrl: string;
   lyric?: string | null;
   description?: string | null;
-  primaryPlatform?: 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo' | null;
+  primaryPlatform?: Platform | null;
   favoritedByMe?: boolean;
   platformIds?: PlatformIds;
   customPlatformIds?: Record<string, string>;

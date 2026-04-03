@@ -1,3 +1,5 @@
+import { formatTime as formatDuration } from './formatUtils';
+
 export interface LRCLine {
   time: number;
   text: string;
@@ -74,9 +76,7 @@ export function parseLRC(lrc: string): LRCData {
 }
 
 export function formatTime(seconds: number): string {
-  const min = Math.floor(seconds / 60);
-  const sec = Math.floor(seconds % 60);
-  return `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+  return formatDuration(seconds).padStart(5, '0');
 }
 
 export function isLRCFormat(lrc: string): boolean {

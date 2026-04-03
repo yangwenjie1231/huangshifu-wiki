@@ -19,10 +19,10 @@ import {
   Cpu,
   Database,
 } from 'lucide-react';
-import { format } from 'date-fns';
 import { clsx } from 'clsx';
 import { useAuth } from '../context/AuthContext';
 import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/apiClient';
+import { formatDateTime, toDateValue } from '../lib/dateUtils';
 import { useToast } from '../components/Toast';
 import { EmbeddingsTab } from './Admin/EmbeddingsTab';
 import { BackupsTab } from './Admin/BackupsTab';
@@ -43,17 +43,6 @@ type EditLockItem = {
   username: string;
   createdAt: string;
   expiresAt: string;
-};
-
-const toDateValue = (value: string | null | undefined) => {
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
-
-const formatDateTime = (value: string | null | undefined, fallback = 'N/A') => {
-  const parsed = toDateValue(value);
-  return parsed ? format(parsed, 'yyyy-MM-dd HH:mm') : fallback;
 };
 
 const Admin = () => {
@@ -440,7 +429,7 @@ const Admin = () => {
                       </div>
                       <p className="font-bold text-gray-800 mb-1">{item.title || item.slug || item.id}</p>
                       <p className="text-xs text-gray-500 line-clamp-2">{(item.content || '').replace(/[#*`]/g, '').slice(0, 160) || '无内容摘要'}</p>
-                      <p className="text-[10px] text-gray-400 mt-2">更新时间：{formatDateTime(item.updatedAt)}</p>
+                      <p className="text-[10px] text-gray-400 mt-2">更新时间：{formatDateTime(item.updatedAt, 'N/A')}</p>
                       {item.sensitiveWords && item.sensitiveWords.length > 0 && (
                         <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
                           <span className="text-[10px] font-bold text-red-600">检测到敏感词: </span>
@@ -552,7 +541,7 @@ const Admin = () => {
                   data.map((item) => (
                     <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">
-                        {formatDateTime(item.createdAt)}
+                        {formatDateTime(item.createdAt, 'N/A')}
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <span className="font-bold text-brand-olive">{item.operatorName || item.operatorUid}</span>
@@ -701,7 +690,7 @@ const Admin = () => {
                               </span>
                             ) : activeTab === 'locks' ? (
                               <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700">
-                                到期: {formatDateTime(item.expiresAt)}
+                                到期: {formatDateTime(item.expiresAt, 'N/A')}
                               </span>
                             ) : (
                               <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-brand-cream text-brand-olive">

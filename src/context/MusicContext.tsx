@@ -1,14 +1,5 @@
 import React, { createContext, useCallback, useContext, useMemo, useState, ReactNode } from 'react';
-
-type MusicPlatform = 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo';
-
-interface PlatformIds {
-  neteaseId?: string | null;
-  tencentId?: string | null;
-  kugouId?: string | null;
-  baiduId?: string | null;
-  kuwoId?: string | null;
-}
+import { Platform, PlatformIds } from '../types/PlatformIds';
 
 interface Song {
   id: string;
@@ -20,7 +11,7 @@ interface Song {
   audioUrl: string;
   playUrl?: string;
   lyric?: string | null;
-  primaryPlatform?: MusicPlatform | null;
+  primaryPlatform?: Platform | null;
   platformIds?: PlatformIds;
 }
 

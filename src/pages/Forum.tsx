@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import ReactMarkdown from 'react-markdown';
 import { MessageSquare, Heart, ThumbsDown, Share2, Plus, Clock, User as UserIcon, ArrowLeft, Save, X, Send, Edit3, Pin, Link2, Tag } from 'lucide-react';
 import { clsx } from 'clsx';
-import { format } from 'date-fns';
 import MdEditor from 'react-markdown-editor-lite';
 import MarkdownIt from 'markdown-it';
 import 'react-markdown-editor-lite/lib/index.css';
@@ -12,34 +11,16 @@ import { uploadImageToCDNs, getImageUrl } from '../services/imageService';
 import { apiDelete, apiGet, apiPost, apiPut } from '../lib/apiClient';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
+import { ContentStatus, getStatusText } from '../lib/contentUtils';
+import { formatDate, toDateValue } from '../lib/dateUtils';
 import { LocationTagInput } from '../components/LocationTagInput';
 import Pagination from '../components/Pagination';
-
-type ContentStatus = 'draft' | 'pending' | 'published' | 'rejected';
 
 const mdParser = new MarkdownIt({
   html: true,
   linkify: true,
   typographer: true,
 });
-
-const toDateValue = (value: string | null | undefined) => {
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
-
-const formatDate = (value: string | null | undefined, pattern: string) => {
-  const parsed = toDateValue(value);
-  return parsed ? format(parsed, pattern) : '刚刚';
-};
-
-const getStatusText = (status?: ContentStatus) => {
-  if (status === 'pending') return '待审核';
-  if (status === 'rejected') return '已驳回';
-  if (status === 'draft') return '草稿';
-  return '已发布';
-};
 
 type PostItem = {
   id: string;

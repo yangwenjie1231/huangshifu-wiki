@@ -514,6 +514,25 @@ pm2 save
 npx prisma migrate status
 ```
 
+### 13.1 发布前代码质量验证（建议）
+
+在服务器更新代码后、重启 PM2 前，建议先执行：
+
+```bash
+cd /root/huangshifu-wiki
+npm run lint
+npm test
+npm run build
+```
+
+说明：
+
+- `npm run lint`：执行 TypeScript 类型检查（`tsc --noEmit`）
+- `npm test`：执行 Vitest 单元测试
+- `npm run build`：验证生产构建可通过
+
+若三项全部通过，再执行 `pm2 restart huangshifu-wiki --update-env`。
+
 ---
 
 ## 14. 数据库备份
@@ -735,6 +754,13 @@ npm run download:sensitive-words
 ## 附录：更新日志
 
 ### v6.x
+
+- **P0 代码复用重构**：抽取重复工具函数与类型定义，减少重复代码并降低维护成本
+  - 新增 `src/lib/formatUtils.ts`：统一音乐时长格式化
+  - 新增 `src/lib/dateUtils.ts`：统一日期解析与格式化
+  - 新增 `src/lib/contentUtils.ts`：统一状态文案与标签输入处理
+  - 新增 `src/types/PlatformIds.ts`：统一音乐平台 ID 类型
+  - **部署影响**：无数据库迁移，无新增环境变量，仅需常规 `npm run build` 后重启服务
 
 - **图集评论功能**：图集现在支持评论功能，用户可以对已发布的图集发表评论和回复
   - 新增 `GET /api/galleries/:id/comments` API 获取图集评论

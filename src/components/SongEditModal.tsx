@@ -3,18 +3,9 @@ import { ChevronDown, ChevronUp, ExternalLink, Loader2, Plus, Search, Trash2, X 
 import { clsx } from 'clsx';
 
 import { apiGet, apiPatch } from '../lib/apiClient';
+import { Platform, PlatformIds } from '../types/PlatformIds';
 import { useToast } from './Toast';
 import { MatchSuggestionModal } from './MatchSuggestionModal';
-
-type Platform = 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo';
-
-type PlatformIds = {
-  neteaseId?: string | null;
-  tencentId?: string | null;
-  kugouId?: string | null;
-  baiduId?: string | null;
-  kuwoId?: string | null;
-};
 
 type CustomPlatformConfig = {
   key: string;

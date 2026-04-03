@@ -3,6 +3,7 @@ import { Play, Pause, SkipBack, SkipForward, Volume2, Disc, X, Music as MusicIco
 import { motion, AnimatePresence } from 'motion/react';
 import { useMusic } from '../context/MusicContext';
 import { clsx } from 'clsx';
+import { formatTime } from '../lib/formatUtils';
 
 export const GlobalMusicPlayer = () => {
   const { 
@@ -140,12 +141,6 @@ export const GlobalMusicPlayer = () => {
       contextSetDuration(audioRef.current.duration);
     }
   }, [contextSetDuration]);
-
-  const formatTime = (time: number) => {
-    const mins = Math.floor(time / 60);
-    const secs = Math.floor(time % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
 
   const handleProgressChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const time = parseFloat(e.target.value);
