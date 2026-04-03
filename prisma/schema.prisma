@@ -219,7 +219,7 @@ model Post {
   albumRef      Album?        @relation(fields: [albumDocId], references: [docId], onDelete: SetNull)
   author        User          @relation("UserPosts", fields: [authorUid], references: [uid], onDelete: Cascade)
   location      Region?       @relation(fields: [locationCode], references: [code])
-  comments      PostComment[]
+  comments      PostComment[] @relation("PostComments")
   likes         PostLike[]
   dislikes      PostDislike[]
 
@@ -234,17 +234,20 @@ model Post {
 
 model PostComment {
   id         String   @id @default(cuid())
-  postId     String
+  postId     String?
+  galleryId  String?
   authorUid  String
   authorName String
   authorPhoto String?
   content    String
   parentId   String?
   createdAt  DateTime @default(now())
-  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  post       Post?    @relation("PostComments", fields: [postId], references: [id], onDelete: Cascade)
+  gallery    Gallery? @relation("GalleryComments", fields: [galleryId], references: [id], onDelete: Cascade)
   author     User     @relation("UserComments", fields: [authorUid], references: [uid], onDelete: Cascade)
 
   @@index([postId, createdAt])
+  @@index([galleryId, createdAt])
   @@index([parentId])
 }
 
@@ -480,13 +483,15 @@ model Gallery {
   authorName String
   tags       Json?
   locationCode  String?
+  copyright  String?
   published  Boolean        @default(false)
   publishedAt DateTime?
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
   author     User           @relation("UserGalleries", fields: [authorUid], references: [uid], onDelete: Cascade)
-  location  Region?        @relation(fields: [locationCode], references: [code])
+  location   Region?        @relation(fields: [locationCode], references: [code])
   images     GalleryImage[]
+  comments   PostComment[]  @relation("GalleryComments")
 
   @@index([createdAt])
   @@index([published, updatedAt])

@@ -39,6 +39,7 @@ type GalleryItem = {
   authorUid: string;
   authorName: string;
   tags: string[];
+  copyright?: string | null;
   published: boolean;
   publishedAt: string | null;
   createdAt: string;
@@ -56,6 +57,7 @@ type GalleryDraft = {
   title: string;
   description: string;
   tagsText: string;
+  copyrightText: string;
   published: boolean;
   images: EditableGalleryImage[];
 };
@@ -70,6 +72,17 @@ type UploadFileResponse = {
   asset: {
     id: string;
   };
+};
+
+type CommentItem = {
+  id: string;
+  galleryId: string | null;
+  authorUid: string;
+  authorName: string;
+  authorPhoto: string | null;
+  content: string;
+  parentId: string | null;
+  createdAt: string;
 };
 
 const toDateValue = (value: string | null | undefined) => {
@@ -118,6 +131,7 @@ const createDraftFromGallery = (item: GalleryItem): GalleryDraft => ({
   title: item.title || '',
   description: item.description || '',
   tagsText: (item.tags || []).join(', '),
+  copyrightText: item.copyright || '',
   published: item.published,
   images: item.images.map(toEditableImage),
 });
@@ -143,6 +157,11 @@ const GalleryDetail = () => {
   const [uploading, setUploading] = useState(false);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [pageDragDepth, setPageDragDepth] = useState(0);
+
+  const [comments, setComments] = useState<CommentItem[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [replyTo, setReplyTo] = useState<CommentItem | null>(null);
+  const [submittingComment, setSubmittingComment] = useState(false);
 
   const addImagesInputRef = useRef<HTMLInputElement>(null);
   const draftRef = useRef<GalleryDraft | null>(null);
@@ -181,6 +200,22 @@ const GalleryDetail = () => {
   useEffect(() => {
     fetchGallery();
   }, [galleryId]);
+
+  const fetchComments = async () => {
+    if (!galleryId) return;
+    try {
+      const data = await apiGet<{ comments: CommentItem[] }>(`/api/galleries/${galleryId}/comments`);
+      setComments(data.comments || []);
+    } catch (error) {
+      console.error('Fetch gallery comments error:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (gallery?.published && galleryId) {
+      fetchComments();
+    }
+  }, [gallery?.published, galleryId]);
 
   useEffect(() => () => {
     if (draftRef.current) {
@@ -279,6 +314,7 @@ const GalleryDetail = () => {
         title: currentDraft.title,
         description: currentDraft.description,
         tags: splitTagsInput(currentDraft.tagsText),
+        copyright: currentDraft.copyrightText.trim() || null,
         published: currentDraft.published,
         images: currentDraft.images.map((image) => (
           image.isPending
@@ -310,6 +346,39 @@ const GalleryDetail = () => {
         published: !prev.published,
       };
     });
+  };
+
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!galleryId || !user || !newComment.trim()) return;
+    if (isBanned) {
+      show('账号已被封禁，无法评论', { variant: 'error' });
+      return;
+    }
+    if (!gallery?.published) {
+      show('仅已发布内容可评论', { variant: 'error' });
+      return;
+    }
+
+    try {
+      setSubmittingComment(true);
+      const data = await apiPost<{ comment: CommentItem }>(`/api/galleries/${galleryId}/comments`, {
+        content: newComment,
+        parentId: replyTo?.id || null,
+      });
+
+      if (data.comment) {
+        setComments((prev) => [...prev, data.comment]);
+      }
+
+      setNewComment('');
+      setReplyTo(null);
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      show('发表评论失败，请稍后重试', { variant: 'error' });
+    } finally {
+      setSubmittingComment(false);
+    }
   };
 
   const uploadFileToSession = async (sessionId: string, file: File) => {
@@ -609,11 +678,27 @@ const GalleryDetail = () => {
                         placeholder="标签，逗号分隔"
                       />
                   </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="gallery-copyright" className="block text-sm font-medium text-gray-600">
+                      版权标识
+                    </label>
+                      <input
+                        id="gallery-copyright"
+                        type="text"
+                        value={draft.copyrightText}
+                        onChange={(event) => applyDraft((prev) => prev ? { ...prev, copyrightText: event.target.value } : prev)}
+                        className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-olive/20"
+                        placeholder="版权信息，如：© 2024 作者名"
+                      />
+                  </div>
                 </div>
               ) : (
                 <>
                   <h1 className="text-3xl sm:text-4xl font-serif font-bold text-gray-900 mb-2">{gallery.title}</h1>
                   <p className="text-gray-500 leading-relaxed">{gallery.description || '暂无描述'}</p>
+                  {gallery.copyright && (
+                    <p className="text-xs text-gray-400 mt-1">{gallery.copyright}</p>
+                  )}
                 </>
               )}
             </div>
@@ -731,6 +816,126 @@ const GalleryDetail = () => {
                 <Plus size={20} />
               </button>
             ) : null}
+          </div>
+        </section>
+      )}
+
+      {gallery.published && (
+        <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8">
+          <h2 className="text-lg font-bold text-gray-800 mb-6">评论</h2>
+
+          {user && !isBanned && (
+            <form onSubmit={handleAddComment} className="mb-8">
+              {replyTo && (
+                <div className="flex items-center gap-2 mb-2 text-xs text-gray-500">
+                  <span>回复给 {replyTo.authorName}</span>
+                  <button
+                    type="button"
+                    onClick={() => setReplyTo(null)}
+                    className="text-brand-primary hover:underline"
+                  >
+                    取消
+                  </button>
+                </div>
+              )}
+              <div className="flex gap-3">
+                <div className="w-10 h-10 rounded-full bg-gray-100 flex-shrink-0 overflow-hidden">
+                  <img
+                    src={user.photoURL || `https://picsum.photos/seed/${user.uid}/100/100`}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+                <div className="flex-grow">
+                  <textarea
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder="写下你的评论..."
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-olive/20 resize-none"
+                    rows={3}
+                  />
+                  <div className="flex justify-end mt-2">
+                    <button
+                      type="submit"
+                      disabled={!newComment.trim() || submittingComment}
+                      className="px-4 py-2 bg-brand-primary text-gray-900 text-sm font-bold rounded-full hover:bg-brand-olive disabled:opacity-50"
+                    >
+                      {submittingComment ? '发送中...' : '发送'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </form>
+          )}
+
+          {user && isBanned && (
+            <p className="text-center text-gray-400 italic mb-8">账号已被封禁，无法评论</p>
+          )}
+
+          {!user && (
+            <p className="text-center text-gray-400 italic mb-8">登录后可参与评论</p>
+          )}
+
+          <div className="space-y-6">
+            {comments.length > 0 ? comments.filter((c) => !c.parentId).map((comment) => (
+              <div key={comment.id} className="space-y-4">
+                <div className="flex gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gray-100 flex-shrink-0 overflow-hidden">
+                    <img
+                      src={comment.authorPhoto || `https://picsum.photos/seed/${comment.authorUid}/100/100`}
+                      alt=""
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                  <div className="flex-grow">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-bold text-gray-700">{comment.authorName || '匿名用户'}</span>
+                      <span className="text-[10px] text-gray-400">{formatDateTime(comment.createdAt)}</span>
+                    </div>
+                    <p className="text-gray-600 text-sm leading-relaxed mb-2">{comment.content}</p>
+                    {user && !isBanned && (
+                      <button
+                        onClick={() => {
+                          setReplyTo(comment);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className="text-[10px] font-bold text-brand-primary hover:underline"
+                      >
+                        回复
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {comments.filter((c) => c.parentId === comment.id).length > 0 && (
+                  <div className="ml-14 space-y-4 border-l-2 border-brand-primary/20 pl-6">
+                    {comments.filter((c) => c.parentId === comment.id).map((reply) => (
+                      <div key={reply.id} className="flex gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gray-100 flex-shrink-0 overflow-hidden">
+                          <img
+                            src={reply.authorPhoto || `https://picsum.photos/seed/${reply.authorUid}/100/100`}
+                            alt=""
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                        <div className="flex-grow">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-bold text-gray-700">{reply.authorName || '匿名用户'}</span>
+                            <span className="text-[10px] text-gray-400">{formatDateTime(reply.createdAt)}</span>
+                          </div>
+                          <p className="text-gray-600 text-xs leading-relaxed">{reply.content}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )) : (
+              <p className="text-center text-gray-400 italic py-8">暂无评论，快来抢沙发吧！</p>
+            )}
           </div>
         </section>
       )}

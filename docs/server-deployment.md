@@ -718,8 +718,9 @@ npm run download:sensitive-words
 |------|------|
 | `User` | 用户账号（包含 `preferences` JSON 字段存储视图偏好） |
 | `Post` | 论坛帖子 |
+| `PostComment` | 评论（支持关联 `Post` 或 `Gallery`） |
 | `WikiPage` | Wiki 页面 |
-| `Gallery` | 图集 |
+| `Gallery` | 图集（支持版权标识 `copyright` 字段） |
 | `MusicTrack` | 音乐曲目 |
 | `Album` | 专辑 |
 | `MediaAsset` | 媒体资产 |
@@ -732,6 +733,20 @@ npm run download:sensitive-words
 ---
 
 ## 附录：更新日志
+
+### v6.x
+
+- **图集评论功能**：图集现在支持评论功能，用户可以对已发布的图集发表评论和回复
+  - 新增 `GET /api/galleries/:id/comments` API 获取图集评论
+  - 新增 `POST /api/galleries/:id/comments` API 发表评论
+  - **数据库变更**：`PostComment` 表新增 `galleryId String?` 可选字段，支持关联图集
+
+- **图集版权标识**：图集现在支持设置版权标识信息
+  - `PATCH /api/galleries/:id` API 新增支持 `copyright` 字段
+  - **数据库变更**：`Gallery` 表新增 `copyright String?` 可选字段
+  - 图集作者和管理员可以在编辑图集时设置版权信息
+
+- **部署注意**：更新代码后需执行 `npm run db:generate` 和 `npm run db:push`（开发环境）或 `npm run db:deploy`（生产环境）以应用新的 Prisma schema
 
 ### v5.x
 
