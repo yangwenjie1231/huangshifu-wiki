@@ -7,7 +7,7 @@ import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
 import { useMusic } from '../context/MusicContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
-import { AlbumCoverManager } from '../components/AlbumCoverManager';
+import { CoverManager } from '../components/CoverManager';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { Platform, PlatformIds } from '../types/PlatformIds';
 
@@ -230,8 +230,9 @@ const AlbumDetail = () => {
       {isAdmin && albumId && (
         <section className="mt-6 bg-white rounded-[32px] border border-gray-100 p-6 md:p-8 shadow-sm">
           <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">管理功能</h2>
-          <AlbumCoverManager
-            albumDocId={albumId}
+          <CoverManager
+            entity="album"
+            docId={albumId}
             currentCover={album.cover}
             onCoverUpdated={(newCoverUrl) => setAlbum((prev) => prev ? { ...prev, cover: newCoverUrl } : prev)}
           />

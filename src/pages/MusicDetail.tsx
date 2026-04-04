@@ -8,7 +8,7 @@ import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
 import { useAuth } from '../context/AuthContext';
 import { useMusic } from '../context/MusicContext';
 import { useToast } from '../components/Toast';
-import { SongCoverManager } from '../components/SongCoverManager';
+import { CoverManager } from '../components/CoverManager';
 import { SongEditModal } from '../components/SongEditModal';
 import { LyricsDisplay } from '../components/LyricsDisplay';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
@@ -375,8 +375,9 @@ const MusicDetail = () => {
             >
               编辑歌曲
             </button>
-            <SongCoverManager
-              songDocId={song.docId}
+            <CoverManager
+              entity="song"
+              docId={song.docId}
               currentCover={song.cover}
               onCoverUpdated={(newCoverUrl) => setSong((prev) => prev ? { ...prev, cover: newCoverUrl } : prev)}
             />

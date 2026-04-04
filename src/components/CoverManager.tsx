@@ -1,9 +1,11 @@
 import React from 'react';
-import { Loader2, Trash2, Star, Upload, X } from 'lucide-react';
+import { Loader2, Star, Trash2, Upload, X } from 'lucide-react';
 import { clsx } from 'clsx';
 
 import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/apiClient';
 import { useToast } from './Toast';
+
+type CoverManagerEntity = 'song' | 'album';
 
 type CoverItem = {
   id: string;
@@ -16,13 +18,33 @@ type CoversResponse = {
   covers: CoverItem[];
 };
 
-interface AlbumCoverManagerProps {
-  albumDocId: string;
+interface CoverManagerProps {
+  entity: CoverManagerEntity;
+  docId: string;
   currentCover: string;
   onCoverUpdated?: (newCoverUrl: string) => void;
 }
 
-export const AlbumCoverManager = ({ albumDocId, currentCover, onCoverUpdated }: AlbumCoverManagerProps) => {
+const ENTITY_CONFIG: Record<CoverManagerEntity, {
+  apiBasePath: '/api/music' | '/api/albums';
+  title: string;
+  description: string;
+  syncConfirmText?: string;
+}> = {
+  song: {
+    apiBasePath: '/api/music',
+    title: '歌曲封面管理',
+    description: '上传、设置默认封面或删除现有封面',
+  },
+  album: {
+    apiBasePath: '/api/albums',
+    title: '专辑封面管理',
+    description: '上传、管理专辑封面或将封面同步到歌曲',
+    syncConfirmText: '确定要将此封面同步到专辑内的所有歌曲吗？',
+  },
+};
+
+export const CoverManager = ({ entity, docId, currentCover, onCoverUpdated }: CoverManagerProps) => {
   const [covers, setCovers] = React.useState<CoverItem[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [uploading, setUploading] = React.useState(false);
@@ -32,23 +54,25 @@ export const AlbumCoverManager = ({ albumDocId, currentCover, onCoverUpdated }: 
   const { show } = useToast();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  const config = ENTITY_CONFIG[entity];
+
   const fetchCovers = React.useCallback(async () => {
     setLoading(true);
     try {
-      const response = await apiGet<CoversResponse>(`/api/albums/${albumDocId}/covers`);
+      const response = await apiGet<CoversResponse>(`${config.apiBasePath}/${docId}/covers`);
       setCovers(response.covers || []);
     } catch (error) {
-      console.error('Fetch album covers failed:', error);
+      console.error('Fetch covers failed:', error);
     } finally {
       setLoading(false);
     }
-  }, [albumDocId]);
+  }, [config.apiBasePath, docId]);
 
   React.useEffect(() => {
     if (isOpen) {
       fetchCovers();
     }
-  }, [isOpen, fetchCovers]);
+  }, [fetchCovers, isOpen]);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -69,27 +93,48 @@ export const AlbumCoverManager = ({ albumDocId, currentCover, onCoverUpdated }: 
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`/api/uploads`, {
+      const response = await fetch('/api/uploads', {
         method: 'POST',
         credentials: 'include',
         body: formData,
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error((data as { error?: string })?.error || '上传失败');
+        let errorMessage = '上传失败';
+        const contentType = response.headers.get('content-type');
+
+        if (contentType?.includes('application/json')) {
+          try {
+            const data = await response.json();
+            errorMessage = (data as { error?: string })?.error || errorMessage;
+          } catch {
+            // keep default errorMessage
+          }
+        } else {
+          const text = await response.text().catch(() => '');
+          console.error('Upload error response:', text.slice(0, 500));
+          if (response.status === 413) {
+            errorMessage = '文件过大，请选择更小的图片';
+          } else if (response.status === 401) {
+            errorMessage = '请先登录';
+          } else if (response.status === 403) {
+            errorMessage = '没有上传权限';
+          } else if (response.status === 400) {
+            errorMessage = '图片格式不支持或文件损坏';
+          }
+        }
+        throw new Error(errorMessage);
       }
 
       const uploadResult = await response.json() as { file: { assetId: string; url: string } };
-
-      await apiPost(`/api/albums/${albumDocId}/covers`, {
+      await apiPost(`${config.apiBasePath}/${docId}/covers`, {
         assetId: uploadResult.file.assetId,
       });
 
       show('封面上传成功');
       fetchCovers();
     } catch (error) {
-      console.error('Upload album cover failed:', error);
+      console.error('Upload cover failed:', error);
       show(error instanceof Error ? error.message : '上传封面失败', { variant: 'error' });
     } finally {
       setUploading(false);
@@ -102,20 +147,20 @@ export const AlbumCoverManager = ({ albumDocId, currentCover, onCoverUpdated }: 
   const handleSetDefault = async (coverId: string) => {
     setSettingDefault(coverId);
     try {
-      await apiPatch(`/api/albums/${albumDocId}/covers/${coverId}/default`);
+      await apiPatch(`${config.apiBasePath}/${docId}/covers/${coverId}/default`);
       setCovers((prev) =>
-        prev.map((c) => ({
-          ...c,
-          isDefault: c.id === coverId,
+        prev.map((cover) => ({
+          ...cover,
+          isDefault: cover.id === coverId,
         })),
       );
-      const newDefaultCover = covers.find((c) => c.id === coverId);
+      const newDefaultCover = covers.find((cover) => cover.id === coverId);
       if (newDefaultCover && onCoverUpdated) {
         onCoverUpdated(newDefaultCover.url);
       }
       show('默认封面已更新');
     } catch (error) {
-      console.error('Set default album cover failed:', error);
+      console.error('Set default cover failed:', error);
       show('设置默认封面失败', { variant: 'error' });
     } finally {
       setSettingDefault(null);
@@ -127,11 +172,11 @@ export const AlbumCoverManager = ({ albumDocId, currentCover, onCoverUpdated }: 
 
     setDeleting(coverId);
     try {
-      await apiDelete(`/api/albums/${albumDocId}/covers/${coverId}`);
-      setCovers((prev) => prev.filter((c) => c.id !== coverId));
+      await apiDelete(`${config.apiBasePath}/${docId}/covers/${coverId}`);
+      setCovers((prev) => prev.filter((cover) => cover.id !== coverId));
       show('封面已删除');
     } catch (error) {
-      console.error('Delete album cover failed:', error);
+      console.error('Delete cover failed:', error);
       show('删除封面失败', { variant: 'error' });
     } finally {
       setDeleting(null);
@@ -139,10 +184,11 @@ export const AlbumCoverManager = ({ albumDocId, currentCover, onCoverUpdated }: 
   };
 
   const handleSyncToSongs = async () => {
-    if (!window.confirm('确定要将此封面同步到专辑内的所有歌曲吗？')) return;
+    if (entity !== 'album') return;
+    if (!window.confirm(config.syncConfirmText || '确定要同步封面吗？')) return;
 
     try {
-      await apiPost(`/api/albums/${albumDocId}/sync-covers-to-songs`);
+      await apiPost(`${config.apiBasePath}/${docId}/sync-covers-to-songs`);
       show('封面已同步到专辑内歌曲');
     } catch (error) {
       console.error('Sync covers to songs failed:', error);
@@ -166,8 +212,8 @@ export const AlbumCoverManager = ({ albumDocId, currentCover, onCoverUpdated }: 
       <div className="w-full max-w-2xl max-h-[90vh] overflow-hidden bg-white rounded-[36px] shadow-2xl border border-gray-100 flex flex-col">
         <header className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
           <div>
-            <h3 className="text-2xl font-serif font-bold text-gray-900">专辑封面管理</h3>
-            <p className="text-xs text-gray-500 mt-1">上传、管理专辑封面或将封面同步到歌曲</p>
+            <h3 className="text-2xl font-serif font-bold text-gray-900">{config.title}</h3>
+            <p className="text-xs text-gray-500 mt-1">{config.description}</p>
           </div>
           <button
             onClick={() => setIsOpen(false)}
@@ -193,22 +239,34 @@ export const AlbumCoverManager = ({ albumDocId, currentCover, onCoverUpdated }: 
               onChange={handleFileSelect}
               className="hidden"
             />
-            <div className="flex gap-3">
+
+            {entity === 'album' ? (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="flex-1 px-5 py-3 rounded-2xl bg-gray-900 text-white font-semibold hover:bg-gray-800 disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                >
+                  {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                  {uploading ? '上传中...' : '上传新封面'}
+                </button>
+                <button
+                  onClick={handleSyncToSongs}
+                  className="px-5 py-3 rounded-2xl border border-gray-300 text-gray-700 font-semibold hover:bg-white"
+                >
+                  同步到歌曲
+                </button>
+              </div>
+            ) : (
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
-                className="flex-1 px-5 py-3 rounded-2xl bg-gray-900 text-white font-semibold hover:bg-gray-800 disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                className="w-full px-5 py-3 rounded-2xl bg-gray-900 text-white font-semibold hover:bg-gray-800 disabled:opacity-50 inline-flex items-center justify-center gap-2"
               >
                 {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
                 {uploading ? '上传中...' : '上传新封面'}
               </button>
-              <button
-                onClick={handleSyncToSongs}
-                className="px-5 py-3 rounded-2xl border border-gray-300 text-gray-700 font-semibold hover:bg-white"
-              >
-                同步到歌曲
-              </button>
-            </div>
+            )}
           </div>
 
           {loading ? (
