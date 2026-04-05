@@ -1,4 +1,4 @@
-import { collection, doc, setDoc, getDoc, addDoc, serverTimestamp, query, where, getDocs, db } from '../firebase';
+import { apiGet, apiPost } from '../lib/apiClient';
 import SparkMD5 from 'spark-md5';
 
 export interface ImageMap {
@@ -41,13 +41,12 @@ export const uploadImageToCDNs = async (file: File): Promise<string> => {
   const md5 = await calculateMD5(file);
 
   // 2. Check if image with same MD5 already exists
-  const imageMapsRef = collection(db, 'imageMaps');
-  const q = query(imageMapsRef, where('md5', '==', md5));
-  const snapshot = await getDocs(q);
+  const listResponse = await apiGet<{ items: ImageMap[] }>('/api/image-maps', { md5 });
+  const existingItems = listResponse.items || [];
 
-  if (!snapshot.empty) {
+  if (existingItems.length > 0) {
     // Image already exists, return the existing ID
-    return snapshot.docs[0].id;
+    return existingItems[0].id;
   }
 
   // 3. Simulate local upload (using URL.createObjectURL for demo, in real app use Firebase Storage)
@@ -67,11 +66,18 @@ export const uploadImageToCDNs = async (file: File): Promise<string> => {
     weiboUrl,
     smmsUrl,
     superbedUrl,
-    createdAt: serverTimestamp()
+    createdAt: new Date().toISOString(),
   };
 
-  // 5. Store mapping in Firestore
-  await setDoc(doc(db, 'imageMaps', imageId), imageMap as unknown as Record<string, unknown>);
+  // 5. Store mapping via API
+  await apiPost('/api/image-maps', {
+    id: imageMap.id,
+    md5: imageMap.md5,
+    localUrl: imageMap.localUrl,
+    weiboUrl: imageMap.weiboUrl,
+    smmsUrl: imageMap.smmsUrl,
+    superbedUrl: imageMap.superbedUrl,
+  });
 
   return imageId;
 };
@@ -81,17 +87,15 @@ export const uploadImageToCDNs = async (file: File): Promise<string> => {
  */
 export const getImageUrl = async (imageId: string): Promise<string[]> => {
   try {
-    const docSnap = await getDoc(doc(db, 'imageMaps', imageId));
-    if (docSnap.exists()) {
-      const data = docSnap.data() as ImageMap;
-      // Order of preference: Weibo -> SM.MS -> Superbed -> Local
-      return [
-        data.weiboUrl,
-        data.smmsUrl,
-        data.superbedUrl,
-        data.localUrl
-      ].filter(Boolean) as string[];
-    }
+    const response = await apiGet<{ item: ImageMap }>(`/api/image-maps/${imageId}`);
+    const data = response.item;
+    // Order of preference: Weibo -> SM.MS -> Superbed -> Local
+    return [
+      data.weiboUrl,
+      data.smmsUrl,
+      data.superbedUrl,
+      data.localUrl,
+    ].filter(Boolean) as string[];
   } catch (e) {
     console.error("Error fetching image map:", e);
   }
