@@ -15,7 +15,7 @@
 | AI 集成 | Gemini（`@google/genai`） |
 | ORM | Prisma（SQLite 用于本地开发，PostgreSQL 用于生产） |
 
-> 数据访问说明：当前前端业务页面（Wiki/Forum/Gallery/Admin/Music）已统一走 REST API（`/api/*`）+ Prisma，`src/lib/firebaseCompat/` 仅作为历史兼容层保留备用，不作为主路径。
+> 数据访问说明：当前前端业务页面（Wiki/Forum/Gallery/Admin/Music）统一走 REST API（`/api/*`）+ Prisma，`src/lib/firebaseCompat/` 已移除。
 
 ## 快速开始（无旧数据迁移场景）
 
@@ -363,6 +363,7 @@ USE_PM2=0 ./scripts/deploy.sh         # 不使用 PM2
 - [ ] Wiki 列表/详情/编辑通过 REST API 正常读写（`/api/wiki*`）
 - [ ] Gallery 列表通过 REST API 正常加载（`/api/galleries`）
 - [ ] Music 列表与删除通过 REST API 正常工作（`/api/music*`）
+- [ ] 图片映射查询与写入通过 REST API 正常工作（`/api/image-maps*`）
 
 ---
 
@@ -754,6 +755,11 @@ npm run download:sensitive-words
 ## 附录：更新日志
 
 ### v6.x
+
+- **移除 firebaseCompat 兼容层**：彻底删除 `src/lib/firebaseCompat/` 与 `src/firebase.ts`
+  - `imageService` 改为直接调用 `/api/image-maps`（按 MD5 查重 + upsert 映射）
+  - `Music` 页面认证引用改为 `src/lib/auth.ts`
+  - **部署影响**：无数据库迁移，无新增环境变量，仅需常规 `npm run build` 后重启服务
 
 - **P0 代码复用重构**：抽取重复工具函数与类型定义，减少重复代码并降低维护成本
   - 新增 `src/lib/formatUtils.ts`：统一音乐时长格式化
