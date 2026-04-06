@@ -173,6 +173,21 @@ EOF
 | `BACKUP_PASSWORD` | 数据库备份加密密码（必须设置，否则备份功能不可用） |
 | `BACKUP_RETAIN_COUNT` | 备份文件保留数量（默认 20），超过后自动删除最旧备份 |
 
+### 3.1 微信小程序 WebView 登录相关
+
+本仓库已提供最小化小程序壳工程：`miniprogram-webview/`。
+
+- 小程序端流程：`wx.login()` 获取 `code` → 打开 `<web-view>`。
+- WebView URL 会追加 `wx_code` 查询参数，Web 端自动调用 `POST /api/auth/wechat/login` 完成登录。
+- 生产环境必须配置：`WECHAT_MP_APPID`、`WECHAT_MP_APP_SECRET`，并确保 `WECHAT_LOGIN_MOCK=false`。
+- 小程序后台需完成：业务域名配置（HTTPS）、request 合法域名配置（后端 API 域名）。
+
+开发调试可将 `WECHAT_LOGIN_MOCK=true`，并在 Web 端直接访问：
+
+```text
+https://你的域名/?wx_code=mock:openId
+```
+
 > **注意**：修改 `VITE_*` 变量后需要重新构建前端：`npm run build`
 
 ---
@@ -364,6 +379,9 @@ USE_PM2=0 ./scripts/deploy.sh         # 不使用 PM2
 - [ ] Gallery 列表通过 REST API 正常加载（`/api/galleries`）
 - [ ] Music 列表与删除通过 REST API 正常工作（`/api/music*`）
 - [ ] 图片映射查询与写入通过 REST API 正常工作（`/api/image-maps*`）
+- [ ] 小程序 WebView 可打开首页（`miniprogram-webview`）
+- [ ] 小程序首次进入可自动登录（`wx.login code` -> `/api/auth/wechat/login`）
+- [ ] 小程序中可完成浏览 Wiki、发帖、评论闭环（`/api/mp/wiki`、`/api/mp/posts`、`/api/mp/comments`）
 
 ---
 
@@ -760,6 +778,11 @@ npm run download:sensitive-words
   - `imageService` 改为直接调用 `/api/image-maps`（按 MD5 查重 + upsert 映射）
   - `Music` 页面认证引用改为 `src/lib/auth.ts`
   - **部署影响**：无数据库迁移，无新增环境变量，仅需常规 `npm run build` 后重启服务
+- **小程序 WebView 壳工程 + Web 自动登录**：新增 `miniprogram-webview/`，并在 Web 端增加 `wx_code` 自动登录能力
+  - 新增 `src/lib/miniProgram.ts`：解析/清理 `wx_code` 及可选头像昵称参数
+  - 更新 `src/App.tsx`：在小程序 WebView 环境下自动触发 `loginWithWeChat`
+  - 新增 `miniprogram-webview/`：可直接在微信开发者工具导入运行
+  - **部署影响**：无数据库迁移；需确保生产环境微信小程序凭据已配置且业务域名已在微信后台放行
 
 - **P0 代码复用重构**：抽取重复工具函数与类型定义，减少重复代码并降低维护成本
   - 新增 `src/lib/formatUtils.ts`：统一音乐时长格式化

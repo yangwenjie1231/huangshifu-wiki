@@ -7,6 +7,8 @@ import { BottomNav } from './components/BottomNav';
 import { AnnouncementBar } from './components/AnnouncementBar';
 import { GlobalMusicPlayer } from './components/GlobalMusicPlayer';
 import { clsx } from 'clsx';
+import { loginWithWeChat } from './lib/auth';
+import { clearMiniProgramLoginParams, getMiniProgramLoginPayload, isMiniProgramWebView } from './lib/miniProgram';
 import Home from './pages/Home';
 import Wiki from './pages/Wiki';
 import Forum from './pages/Forum';
@@ -70,6 +72,25 @@ const MainLayout = () => {
 };
 
 export default function App() {
+  React.useEffect(() => {
+    if (!isMiniProgramWebView()) {
+      return;
+    }
+
+    const payload = getMiniProgramLoginPayload();
+    if (!payload) {
+      return;
+    }
+
+    clearMiniProgramLoginParams();
+    loginWithWeChat(payload.code, {
+      displayName: payload.displayName,
+      photoURL: payload.photoURL,
+    }).catch((error) => {
+      console.error('Mini program auto login error:', error);
+    });
+  }, []);
+
   return (
     <AuthProvider>
       <MusicProvider>

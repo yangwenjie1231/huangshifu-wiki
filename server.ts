@@ -48,15 +48,6 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.set('trust proxy', 1);
 
-// Content Security Policy - Allow loading Amap JS API
-app.use((req: Request, res: Response, next: NextFunction) => {
-  res.setHeader(
-    'Content-Security-Policy',
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com https://mapplugin.amap.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://o4.amap.com https://mapplugin.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com; worker-src 'self' blob:; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://picsum.photos; style-src 'self' 'unsafe-inline';"
-  );
-  next();
-});
-
 const prisma = new PrismaClient();
 const prismaAny = prisma as any;
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -339,10 +330,11 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https://*.amap.com", "https://*.gaode.com"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://webapi.amap.com"],
+      imgSrc: ["'self'", "data:", "blob:", "https://*.amap.com", "https://*.gaode.com", "http://*.music.126.net", "https://picsum.photos"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://webapi.amap.com", "https://jsapi.amap.com", "https://jsapi-service.amap.com", "https://restapi.amap.com", "https://mapplugin.amap.com"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      connectSrc: ["'self'", "https://restapi.amap.com", "https://webapi.amap.com"],
+      connectSrc: ["'self'", "https://restapi.amap.com", "https://webapi.amap.com", "https://jsapi.amap.com", "https://o4.amap.com", "https://mapplugin.amap.com", "https://jsapi-data1.amap.com", "https://jsapi-data2.amap.com", "https://jsapi-data3.amap.com", "https://jsapi-data4.amap.com", "https://jsapi-data5.amap.com"],
+      workerSrc: ["'self'", "blob:"],
       upgradeInsecureRequests: null,
       mediaSrc: ["'self'", "https://music.163.com"],
     },
@@ -9245,6 +9237,23 @@ app.get('/api/music/:docId/play-url', async (req, res) => {
   }
 });
 
+app.get('/api/music/instrumental-targets', async (req, res) => {
+  try {
+    const relations = await prismaAny.songInstrumentalRelation.findMany({
+      select: {
+        targetSongDocId: true,
+      },
+      distinct: ['targetSongDocId'],
+    });
+    res.json({
+      docIds: relations.map((r: any) => r.targetSongDocId),
+    });
+  } catch (error) {
+    console.error('Fetch instrumental targets error:', error);
+    res.status(500).json({ error: '获取伴奏列表失败' });
+  }
+});
+
 app.get('/api/music/:docId', async (req: AuthenticatedRequest, res) => {
   try {
     const identifier = req.params.docId;
@@ -10063,23 +10072,6 @@ app.delete('/api/music/:docId/albums/:albumDocId', requireAdmin, async (req, res
   } catch (error) {
     console.error('Delete song album relation error:', error);
     res.status(500).json({ error: '删除歌曲专辑关联失败' });
-  }
-});
-
-app.get('/api/music/instrumental-targets', async (req, res) => {
-  try {
-    const relations = await prismaAny.songInstrumentalRelation.findMany({
-      select: {
-        targetSongDocId: true,
-      },
-      distinct: ['targetSongDocId'],
-    });
-    res.json({
-      docIds: relations.map((r: any) => r.targetSongDocId),
-    });
-  } catch (error) {
-    console.error('Fetch instrumental targets error:', error);
-    res.status(500).json({ error: '获取伴奏列表失败' });
   }
 });
 
