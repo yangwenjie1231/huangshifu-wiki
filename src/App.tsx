@@ -58,17 +58,17 @@ const MainLayout = () => {
       <GlobalMusicPlayer />
       <BottomNav />
       <footer className={clsx(
-        "bg-brand-paper border-t border-gray-100 py-12 mt-20",
+        "bg-brand-paper border-t border-gray-100 py-8 md:py-12 mt-12 md:mt-20",
         currentSong ? "mb-36 md:mb-20" : "mb-20 md:mb-0"
       )}>
         <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="font-serif italic text-brand-olive text-lg mb-2">"诗情画意，扶摇直上"</p>
-          <p className="text-gray-400 text-sm">© 2026 诗扶小筑 - 黄诗扶粉丝Wiki与社区</p>
+          <p className="font-serif italic text-brand-olive text-base md:text-lg mb-2">"诗情画意，扶摇直上"</p>
+          <p className="text-gray-400 text-xs md:text-sm">© 2026 诗扶小筑 - 黄诗扶粉丝Wiki与社区</p>
           <a
             target="_blank"
             href="http://www.freecdn.vip/?zzwz"
             title="免费云加速（FreeCDN），为您免费提供网站加速和网站防御（DDOS、CC攻击）"
-            className="text-gray-400 text-sm hover:text-gray-600 mt-2 inline-block"
+            className="text-gray-400 text-xs md:text-sm hover:text-gray-600 mt-2 inline-block"
           >
             本站由免费云加速（FreeCDN）提供网站加速和攻击防御服务
           </a>

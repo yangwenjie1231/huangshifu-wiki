@@ -383,20 +383,20 @@ export const Navbar = () => {
             className="md:hidden bg-white border-b border-gray-100 overflow-hidden"
           >
             <div className="px-4 py-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <NavLink to="/wiki" onClick={() => setIsMenuOpen(false)} className="flex flex-col items-center gap-2 p-4 bg-brand-cream/30 rounded-2xl text-brand-olive">
+              <div className="grid grid-cols-2 gap-3">
+                <NavLink to="/wiki" onClick={() => setIsMenuOpen(false)} className="flex flex-col items-center gap-2 p-4 bg-brand-cream/30 rounded-xl text-brand-olive touch-target-lg transition-all active:scale-95">
                   <Book size={24} />
                   <span className="text-xs font-bold">百科</span>
                 </NavLink>
-                <NavLink to="/forum" onClick={() => setIsMenuOpen(false)} className="flex flex-col items-center gap-2 p-4 bg-brand-cream/30 rounded-2xl text-brand-olive">
+                <NavLink to="/forum" onClick={() => setIsMenuOpen(false)} className="flex flex-col items-center gap-2 p-4 bg-brand-cream/30 rounded-xl text-brand-olive touch-target-lg transition-all active:scale-95">
                   <MessageSquare size={24} />
                   <span className="text-xs font-bold">社区</span>
                 </NavLink>
-                <NavLink to="/gallery" onClick={() => setIsMenuOpen(false)} className="flex flex-col items-center gap-2 p-4 bg-brand-cream/30 rounded-2xl text-brand-olive">
+                <NavLink to="/gallery" onClick={() => setIsMenuOpen(false)} className="flex flex-col items-center gap-2 p-4 bg-brand-cream/30 rounded-xl text-brand-olive touch-target-lg transition-all active:scale-95">
                   <ImageIcon size={24} />
                   <span className="text-xs font-bold">图集</span>
                 </NavLink>
-                <NavLink to="/music" onClick={() => setIsMenuOpen(false)} className="flex flex-col items-center gap-2 p-4 bg-brand-cream/30 rounded-2xl text-brand-olive">
+                <NavLink to="/music" onClick={() => setIsMenuOpen(false)} className="flex flex-col items-center gap-2 p-4 bg-brand-cream/30 rounded-xl text-brand-olive touch-target-lg transition-all active:scale-95">
                   <Music size={24} />
                   <span className="text-xs font-bold">音乐</span>
                 </NavLink>
@@ -404,13 +404,13 @@ export const Navbar = () => {
 
               <div className="pt-4 border-t border-gray-100">
                 {!isAcademy && user ? (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {isBanned && (
-                      <div className="px-3 py-2 bg-red-50 text-red-600 rounded-xl text-xs">
+                      <div className="px-3 py-3 bg-red-50 text-red-600 rounded-lg text-xs">
                         账号已封禁{profile?.banReason ? `：${profile.banReason}` : ''}
                       </div>
                     )}
-                    <Link to="/profile" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-3 p-2">
+                    <Link to="/profile" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-3 p-3 touch-target-lg">
                       <img src={profile?.photoURL || user.photoURL || ''} alt="" className="w-10 h-10 rounded-full border border-gray-200" referrerPolicy="no-referrer" />
                       <div>
                         <p className="font-bold text-gray-900">{profile?.displayName || user.displayName}</p>
@@ -418,7 +418,7 @@ export const Navbar = () => {
                       </div>
                     </Link>
                     {isAdmin && (
-                      <Link to="/admin" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl text-gray-600">
+                      <Link to="/admin" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg text-gray-600 touch-target-lg">
                         <Shield size={20} />
                         <span className="text-sm font-medium">管理后台</span>
                       </Link>
@@ -427,7 +427,7 @@ export const Navbar = () => {
                       onClick={() => {
                         handleLogout();
                       }}
-                      className="w-full flex items-center gap-3 p-3 bg-red-50 text-red-500 rounded-xl"
+                      className="w-full flex items-center gap-3 p-3 bg-red-50 text-red-500 rounded-lg touch-target-lg"
                     >
                       <LogOut size={20} />
                       <span className="text-sm font-medium">退出登录</span>
@@ -439,7 +439,7 @@ export const Navbar = () => {
                       onClick={() => {
                         openAuthModal('register');
                       }}
-                      className="w-full flex items-center justify-center gap-2 py-4 bg-green-500 text-white rounded-2xl font-bold"
+                      className="w-full flex items-center justify-center gap-2 py-4 bg-green-500 text-white rounded-xl font-bold touch-target-lg active:scale-98"
                     >
                       <MessageCircle size={20} />
                       账号注册
@@ -448,7 +448,7 @@ export const Navbar = () => {
                       onClick={() => {
                         openAuthModal('login');
                       }}
-                      className="w-full flex items-center justify-center gap-2 py-4 bg-brand-olive text-white rounded-2xl font-bold"
+                      className="w-full flex items-center justify-center gap-2 py-4 bg-brand-olive text-white rounded-xl font-bold touch-target-lg active:scale-98"
                     >
                       <LogIn size={20} />
                       账号登录
