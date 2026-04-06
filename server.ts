@@ -3081,6 +3081,39 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ success: true });
 });
 
+app.get('/api/users/me', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { uid: req.authUser!.uid },
+      select: {
+        uid: true,
+        email: true,
+        displayName: true,
+        photoURL: true,
+        role: true,
+        status: true,
+        banReason: true,
+        bannedAt: true,
+        level: true,
+        bio: true,
+        preferences: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: '用户不存在' });
+      return;
+    }
+
+    res.json({ user: toUserResponse(user) });
+  } catch (error) {
+    console.error('Fetch current user error:', error);
+    res.status(500).json({ error: '获取用户信息失败' });
+  }
+});
+
 app.patch('/api/users/me', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
     const { displayName, bio, photoURL, preferences } = req.body as {
