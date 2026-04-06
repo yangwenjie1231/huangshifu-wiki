@@ -7,7 +7,7 @@ import { clsx } from 'clsx';
 import MdEditor from 'react-markdown-editor-lite';
 import MarkdownIt from 'markdown-it';
 import 'react-markdown-editor-lite/lib/index.css';
-import { uploadImageToCDNs, getImageUrl } from '../services/imageService';
+import { uploadMarkdownImage } from '../services/imageService';
 import { apiDelete, apiGet, apiPost, apiPut } from '../lib/apiClient';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
@@ -937,11 +937,7 @@ const PostEditor = () => {
                 renderHTML={(text) => mdParser.render(text)}
                 value={formData.content}
                 onChange={({ text }) => setFormData({ ...formData, content: text })}
-                onImageUpload={async (file) => {
-                  const imageId = await uploadImageToCDNs(file);
-                  const urls = await getImageUrl(imageId);
-                  return urls[0] || '';
-                }}
+                onImageUpload={uploadMarkdownImage}
                 placeholder="分享你的想法..."
                 config={{
                   view: {
