@@ -44,8 +44,9 @@ export default defineConfig({
             return 'markdown-vendor';
           }
 
-          // Motion / animation
-          if (pkg === 'motion' || pkg === 'framer-motion') {
+          // Motion / animation (motion v12 split into multiple packages)
+          if (pkg === 'motion' || pkg === 'motion-dom' || pkg === 'motion-utils'
+            || pkg === 'framer-motion') {
             return 'motion-vendor';
           }
 
