@@ -103,4 +103,16 @@ describe('apiClient', () => {
       }),
     );
   });
+
+  it('supports local markdown upload response shape', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ file: { url: '/uploads/markdown/2026/04/demo.png' } }), { status: 200 }),
+    );
+
+    const formData = new FormData();
+    formData.append('file', new Blob(['hello'], { type: 'image/png' }), 'demo.png');
+
+    const response = await apiUpload<{ file: { url: string } }>('/api/uploads', formData);
+    expect(response.file.url).toMatch(/^\/uploads\/markdown\/\d{4}\/\d{2}\//);
+  });
 });

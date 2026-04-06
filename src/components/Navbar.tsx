@@ -8,6 +8,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { login, register, logoutRequest, loginWithWeChat } from '../lib/auth';
 import { apiGet, apiPost } from '../lib/apiClient';
 import { useToast } from './Toast';
+import { useTheme } from '../context/ThemeContext';
+import { withThemeSearch } from '../lib/theme';
 
 interface NotificationItem {
   id: string;
@@ -45,6 +47,7 @@ type AuthMode = 'login' | 'register' | 'wechat';
 
 export const Navbar = () => {
   const { user, profile, isAdmin, isBanned } = useAuth();
+  const { isAcademy } = useTheme();
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [authModalOpen, setAuthModalOpen] = React.useState(false);
@@ -60,6 +63,7 @@ export const Navbar = () => {
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [notifLoading, setNotifLoading] = React.useState(false);
   const { show } = useToast();
+  const themedTo = (path: string) => withThemeSearch(path, isAcademy ? 'academy' : 'default');
 
   const fetchNotifications = React.useCallback(async () => {
     if (!user) return;
@@ -206,7 +210,7 @@ export const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
           <div className="flex items-center gap-8">
-            <Link to="/" className="flex items-center gap-2 group">
+            <Link to={themedTo('/')} className="flex items-center gap-2 group">
               <div className="w-10 h-10 rounded-full bg-brand-olive flex items-center justify-center text-white font-serif italic text-xl">
                 诗
               </div>
@@ -214,23 +218,23 @@ export const Navbar = () => {
             </Link>
             
             <div className="hidden md:flex items-center gap-6">
-              <NavLink to="/wiki" className={({ isActive }) => clsx("flex items-center gap-1.5 text-sm font-medium transition-colors", isActive ? "text-brand-olive" : "text-gray-500 hover:text-brand-olive")}>
+              <NavLink to={themedTo('/wiki')} className={({ isActive }) => clsx("flex items-center gap-1.5 text-sm font-medium transition-colors", isActive ? "text-brand-olive" : "text-gray-500 hover:text-brand-olive")}> 
                 <Book size={18} />
                 百科
               </NavLink>
-              <NavLink to="/forum" className={({ isActive }) => clsx("flex items-center gap-1.5 text-sm font-medium transition-colors", isActive ? "text-brand-olive" : "text-gray-500 hover:text-brand-olive")}>
+              <NavLink to={themedTo('/forum')} className={({ isActive }) => clsx("flex items-center gap-1.5 text-sm font-medium transition-colors", isActive ? "text-brand-olive" : "text-gray-500 hover:text-brand-olive")}> 
                 <MessageSquare size={18} />
                 社区
               </NavLink>
-              <NavLink to="/gallery" className={({ isActive }) => clsx("flex items-center gap-1.5 text-sm font-medium transition-colors", isActive ? "text-brand-olive" : "text-gray-500 hover:text-brand-olive")}>
+              <NavLink to={themedTo('/gallery')} className={({ isActive }) => clsx("flex items-center gap-1.5 text-sm font-medium transition-colors", isActive ? "text-brand-olive" : "text-gray-500 hover:text-brand-olive")}> 
                 <ImageIcon size={18} />
                 图集
               </NavLink>
-              <NavLink to="/music" className={({ isActive }) => clsx("flex items-center gap-1.5 text-sm font-medium transition-colors", isActive ? "text-brand-olive" : "text-gray-500 hover:text-brand-olive")}>
+              <NavLink to={themedTo('/music')} className={({ isActive }) => clsx("flex items-center gap-1.5 text-sm font-medium transition-colors", isActive ? "text-brand-olive" : "text-gray-500 hover:text-brand-olive")}> 
                 <Music size={18} />
                 音乐
               </NavLink>
-              <NavLink to="/search" className={({ isActive }) => clsx("flex items-center gap-1.5 text-sm font-medium transition-colors", isActive ? "text-brand-olive" : "text-gray-500 hover:text-brand-olive")}>
+              <NavLink to={themedTo('/search')} className={({ isActive }) => clsx("flex items-center gap-1.5 text-sm font-medium transition-colors", isActive ? "text-brand-olive" : "text-gray-500 hover:text-brand-olive")}> 
                 <Search size={18} />
                 搜索
               </NavLink>
@@ -246,12 +250,12 @@ export const Navbar = () => {
                       账号受限
                     </span>
                   )}
-                  {isAdmin && (
+                  {!isAcademy && isAdmin && (
                     <Link to="/admin" className="text-gray-500 hover:text-brand-olive">
                       <Shield size={20} />
                     </Link>
                   )}
-                  {user && (
+                  {!isAcademy && user && (
                     <div className="relative">
                       <button
                         onClick={() => setNotifPanelOpen(!notifPanelOpen)}
@@ -324,15 +328,20 @@ export const Navbar = () => {
                       </AnimatePresence>
                     </div>
                   )}
-                  <Link to="/profile" className="flex items-center gap-2 group">
-                    <img src={profile?.photoURL || user.photoURL || ''} alt="" className="w-8 h-8 rounded-full border border-gray-200" referrerPolicy="no-referrer" />
-                    <span className="hidden sm:inline text-sm font-medium text-gray-700 group-hover:text-brand-olive">{profile?.displayName || user.displayName}</span>
-                  </Link>
-                  <button onClick={handleLogout} className="text-gray-400 hover:text-red-500 transition-colors">
-                    <LogOut size={20} />
-                  </button>
+                  {!isAcademy && (
+                    <Link to="/profile" className="flex items-center gap-2 group">
+                      <img src={profile?.photoURL || user.photoURL || ''} alt="" className="w-8 h-8 rounded-full border border-gray-200" referrerPolicy="no-referrer" />
+                      <span className="hidden sm:inline text-sm font-medium text-gray-700 group-hover:text-brand-olive">{profile?.displayName || user.displayName}</span>
+                    </Link>
+                  )}
+                  {!isAcademy && (
+                    <button onClick={handleLogout} className="text-gray-400 hover:text-red-500 transition-colors">
+                      <LogOut size={20} />
+                    </button>
+                  )}
                 </div>
               ) : (
+                !isAcademy && (
                 <div className="flex items-center gap-2">
                   <button 
                     onClick={() => openAuthModal('register')}
@@ -349,6 +358,7 @@ export const Navbar = () => {
                     账号登录
                   </button>
                 </div>
+                )
               )}
             </div>
 
@@ -393,7 +403,7 @@ export const Navbar = () => {
               </div>
 
               <div className="pt-4 border-t border-gray-100">
-                {user ? (
+                {!isAcademy && user ? (
                   <div className="space-y-4">
                     {isBanned && (
                       <div className="px-3 py-2 bg-red-50 text-red-600 rounded-xl text-xs">
@@ -423,7 +433,7 @@ export const Navbar = () => {
                       <span className="text-sm font-medium">退出登录</span>
                     </button>
                   </div>
-                ) : (
+                ) : !isAcademy ? (
                   <div className="space-y-3">
                     <button 
                       onClick={() => {
@@ -444,14 +454,14 @@ export const Navbar = () => {
                       账号登录
                     </button>
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {typeof document !== 'undefined' && createPortal(
+      {!isAcademy && typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           {authModalOpen && (
             <motion.div

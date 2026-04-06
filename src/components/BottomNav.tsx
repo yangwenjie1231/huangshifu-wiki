@@ -2,13 +2,17 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { Music, Book, MessageSquare, Image as ImageIcon, Search, Home } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useTheme } from '../context/ThemeContext';
+import { withThemeSearch } from '../lib/theme';
 
 export const BottomNav = () => {
+  const { theme } = useTheme();
+
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-lg border-t border-gray-100 pb-safe">
       <div className="flex justify-around items-center h-16">
         <NavLink 
-          to="/" 
+          to={withThemeSearch('/', theme)} 
           className={({ isActive }) => clsx(
             "flex flex-col items-center gap-1 transition-all",
             isActive ? "text-brand-olive scale-110" : "text-gray-400"
@@ -19,7 +23,7 @@ export const BottomNav = () => {
         </NavLink>
         
         <NavLink 
-          to="/wiki" 
+          to={withThemeSearch('/wiki', theme)} 
           className={({ isActive }) => clsx(
             "flex flex-col items-center gap-1 transition-all",
             isActive ? "text-brand-olive scale-110" : "text-gray-400"
@@ -30,7 +34,7 @@ export const BottomNav = () => {
         </NavLink>
 
         <NavLink 
-          to="/forum" 
+          to={withThemeSearch('/forum', theme)} 
           className={({ isActive }) => clsx(
             "flex flex-col items-center gap-1 transition-all",
             isActive ? "text-brand-olive scale-110" : "text-gray-400"
@@ -41,7 +45,7 @@ export const BottomNav = () => {
         </NavLink>
 
         <NavLink 
-          to="/gallery" 
+          to={withThemeSearch('/gallery', theme)} 
           className={({ isActive }) => clsx(
             "flex flex-col items-center gap-1 transition-all",
             isActive ? "text-brand-olive scale-110" : "text-gray-400"
@@ -52,7 +56,7 @@ export const BottomNav = () => {
         </NavLink>
 
         <NavLink 
-          to="/music" 
+          to={withThemeSearch('/music', theme)} 
           className={({ isActive }) => clsx(
             "flex flex-col items-center gap-1 transition-all",
             isActive ? "text-brand-olive scale-110" : "text-gray-400"
@@ -63,7 +67,7 @@ export const BottomNav = () => {
         </NavLink>
 
         <NavLink 
-          to="/search" 
+          to={withThemeSearch('/search', theme)} 
           className={({ isActive }) => clsx(
             "flex flex-col items-center gap-1 transition-all",
             isActive ? "text-brand-olive scale-110" : "text-gray-400"

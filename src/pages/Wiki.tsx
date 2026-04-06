@@ -13,7 +13,7 @@ import { VIEW_MODE_CONFIG } from '../lib/viewModes';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'motion/react';
 import { summarizeWikiContent, generateWikiIntro } from '../services/aiService';
-import { uploadImageToCDNs, getImageUrl } from '../services/imageService';
+import { uploadMarkdownImage } from '../services/imageService';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { apiDelete, apiGet, apiPost, apiPut } from '../lib/apiClient';
@@ -1933,11 +1933,7 @@ const WikiEditor = () => {
                 }} 
                 value={formData.content}
                 onChange={({ text }) => setFormData({...formData, content: text})}
-                onImageUpload={async (file) => {
-                  const imageId = await uploadImageToCDNs(file);
-                  const urls = await getImageUrl(imageId);
-                  return urls[0] || '';
-                }}
+                onImageUpload={uploadMarkdownImage}
                 placeholder="在这里输入百科内容，支持 Markdown 语法..."
                 config={{
                   view: {
