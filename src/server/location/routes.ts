@@ -133,23 +133,6 @@ router.get('/path/:code', async (req, res) => {
   }
 });
 
-router.get('/:code', async (req, res) => {
-  try {
-    const { code } = req.params;
-    const region = await getRegionByCode(code);
-
-    if (!region) {
-      res.status(404).json({ error: '地区不存在' });
-      return;
-    }
-
-    res.json({ region });
-  } catch (error) {
-    console.error('Get region error:', error);
-    res.status(500).json({ error: '获取地区详情失败' });
-  }
-});
-
 router.get('/resolve', async (req, res) => {
   try {
     if (!isAmapConfigured()) {
@@ -161,6 +144,34 @@ router.get('/resolve', async (req, res) => {
     const lat = parseFloat(req.query.lat as string);
 
     if (isNaN(lng) || isNaN(lat)) {
+      res.status(400).json({ error: '无效的坐标参数' });
+      return;
+    }
+
+    const result = await resolveCoordinateToRegion(lng, lat);
+
+    if (!result) {
+      res.status(404).json({ error: '无法解析该坐标对应的行政区划' });
+      return;
+    }
+
+    res.json({ result });
+  } catch (error) {
+    console.error('Resolve coordinate error:', error);
+    res.status(500).json({ error: '解析坐标失败' });
+  }
+});
+
+router.post('/resolve', async (req, res) => {
+  try {
+    if (!isAmapConfigured()) {
+      res.status(503).json({ error: '地图服务未配置' });
+      return;
+    }
+
+    const { lng, lat } = req.body as { lng?: number; lat?: number };
+
+    if (typeof lng !== 'number' || typeof lat !== 'number' || isNaN(lng) || isNaN(lat)) {
       res.status(400).json({ error: '无效的坐标参数' });
       return;
     }
@@ -198,6 +209,23 @@ router.get('/search/address', async (req, res) => {
   } catch (error) {
     console.error('Search address error:', error);
     res.status(500).json({ error: '搜索地址失败' });
+  }
+});
+
+router.get('/:code', async (req, res) => {
+  try {
+    const { code } = req.params;
+    const region = await getRegionByCode(code);
+
+    if (!region) {
+      res.status(404).json({ error: '地区不存在' });
+      return;
+    }
+
+    res.json({ region });
+  } catch (error) {
+    console.error('Get region error:', error);
+    res.status(500).json({ error: '获取地区详情失败' });
   }
 });
 
