@@ -150,16 +150,17 @@ router.get('/:code', async (req, res) => {
   }
 });
 
-router.post('/resolve', async (req, res) => {
+router.get('/resolve', async (req, res) => {
   try {
     if (!isAmapConfigured()) {
       res.status(503).json({ error: '地图服务未配置' });
       return;
     }
 
-    const { lng, lat } = req.body as { lng?: number; lat?: number };
+    const lng = parseFloat(req.query.lng as string);
+    const lat = parseFloat(req.query.lat as string);
 
-    if (typeof lng !== 'number' || typeof lat !== 'number') {
+    if (isNaN(lng) || isNaN(lat)) {
       res.status(400).json({ error: '无效的坐标参数' });
       return;
     }

@@ -330,7 +330,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "blob:", "https://*.amap.com", "https://*.gaode.com", "http://*.music.126.net", "https://picsum.photos"],
+      imgSrc: ["'self'", "data:", "blob:", "https://*.amap.com", "http://*.amap.com", "https://*.gaode.com", "http://*.music.126.net", "https://*.music.126.net", "https://*.picsum.photos"],
       scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://webapi.amap.com", "https://jsapi.amap.com", "https://jsapi-service.amap.com", "https://restapi.amap.com", "https://mapplugin.amap.com"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       connectSrc: ["'self'", "https://restapi.amap.com", "https://webapi.amap.com", "https://jsapi.amap.com", "https://o4.amap.com", "https://mapplugin.amap.com", "https://jsapi-data1.amap.com", "https://jsapi-data2.amap.com", "https://jsapi-data3.amap.com", "https://jsapi-data4.amap.com", "https://jsapi-data5.amap.com"],
