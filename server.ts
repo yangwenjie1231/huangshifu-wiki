@@ -9274,12 +9274,12 @@ app.get('/api/music/instrumental-targets', async (req, res) => {
   try {
     const relations = await prismaAny.songInstrumentalRelation.findMany({
       select: {
-        targetSongDocId: true,
+        songDocId: true,
       },
-      distinct: ['targetSongDocId'],
+      distinct: ['songDocId'],
     });
     res.json({
-      docIds: relations.map((r: any) => r.targetSongDocId),
+      docIds: relations.map((r: any) => r.songDocId),
     });
   } catch (error) {
     console.error('Fetch instrumental targets error:', error);
