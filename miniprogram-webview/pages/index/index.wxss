@@ -1,0 +1,42 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48rpx;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, #f4efe3 0%, #ece6d8 100%);
+}
+
+.card {
+  width: 100%;
+  max-width: 640rpx;
+  background: #fffdf7;
+  border-radius: 28rpx;
+  padding: 48rpx 40rpx;
+  box-shadow: 0 20rpx 64rpx rgba(80, 58, 24, 0.12);
+}
+
+.title {
+  font-size: 44rpx;
+  color: #4e3a24;
+  font-weight: 700;
+  margin-bottom: 24rpx;
+}
+
+.desc {
+  font-size: 30rpx;
+  color: #6f5b3d;
+  line-height: 1.6;
+}
+
+.error {
+  color: #b5473b;
+}
+
+.retry {
+  margin-top: 36rpx;
+  border-radius: 20rpx;
+  background: #7a5a2d;
+  color: #ffffff;
+}

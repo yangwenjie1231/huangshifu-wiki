@@ -1,0 +1,11 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/webview/webview"
+  ],
+  "window": {
+    "navigationBarTitleText": "诗扶小筑"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}
