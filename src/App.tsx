@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { MusicProvider, useMusic } from './context/MusicContext';
@@ -10,18 +10,25 @@ import { GlobalMusicPlayer } from './components/GlobalMusicPlayer';
 import { clsx } from 'clsx';
 import { loginWithWeChat } from './lib/auth';
 import { clearMiniProgramLoginParams, getMiniProgramLoginPayload, isMiniProgramWebView } from './lib/miniProgram';
-import Home from './pages/Home';
-import Wiki from './pages/Wiki';
-import Forum from './pages/Forum';
-import Profile from './pages/Profile';
-import Gallery from './pages/Gallery';
-import GalleryDetail from './pages/GalleryDetail';
-import Music from './pages/Music';
-import AlbumDetail from './pages/AlbumDetail';
-import MusicDetail from './pages/MusicDetail';
-import MusicLinks from './pages/MusicLinks';
-import Search from './pages/Search';
-import Admin from './pages/Admin';
+
+const Home = lazy(() => import('./pages/Home'));
+const Wiki = lazy(() => import('./pages/Wiki'));
+const Forum = lazy(() => import('./pages/Forum'));
+const Profile = lazy(() => import('./pages/Profile'));
+const Gallery = lazy(() => import('./pages/Gallery'));
+const GalleryDetail = lazy(() => import('./pages/GalleryDetail'));
+const Music = lazy(() => import('./pages/Music'));
+const AlbumDetail = lazy(() => import('./pages/AlbumDetail'));
+const MusicDetail = lazy(() => import('./pages/MusicDetail'));
+const MusicLinks = lazy(() => import('./pages/MusicLinks'));
+const Search = lazy(() => import('./pages/Search'));
+const Admin = lazy(() => import('./pages/Admin'));
+
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-[60vh]">
+    <div className="w-8 h-8 border-2 border-brand-olive border-t-transparent rounded-full animate-spin" />
+  </div>
+);
 
 const MainLayout = () => {
   const { currentSong } = useMusic();
@@ -34,18 +41,18 @@ const MainLayout = () => {
         currentSong ? "pb-36 md:pb-20" : "pb-20 md:pb-0"
       )}>
         <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/wiki/*" element={<Wiki />} />
-          <Route path="/forum/*" element={<Forum />} />
-          <Route path="/gallery" element={<Gallery />} />
-          <Route path="/gallery/:galleryId" element={<GalleryDetail />} />
-          <Route path="/music" element={<Music />} />
-          <Route path="/music/:songId" element={<MusicDetail />} />
-          <Route path="/music/links" element={<MusicLinks />} />
-          <Route path="/album/:albumId" element={<AlbumDetail />} />
-          <Route path="/search" element={<Search />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/admin" element={<Admin />} />
+          <Route path="/" element={<Suspense fallback={<PageLoader />}><Home /></Suspense>} />
+          <Route path="/wiki/*" element={<Suspense fallback={<PageLoader />}><Wiki /></Suspense>} />
+          <Route path="/forum/*" element={<Suspense fallback={<PageLoader />}><Forum /></Suspense>} />
+          <Route path="/gallery" element={<Suspense fallback={<PageLoader />}><Gallery /></Suspense>} />
+          <Route path="/gallery/:galleryId" element={<Suspense fallback={<PageLoader />}><GalleryDetail /></Suspense>} />
+          <Route path="/music" element={<Suspense fallback={<PageLoader />}><Music /></Suspense>} />
+          <Route path="/music/:songId" element={<Suspense fallback={<PageLoader />}><MusicDetail /></Suspense>} />
+          <Route path="/music/links" element={<Suspense fallback={<PageLoader />}><MusicLinks /></Suspense>} />
+          <Route path="/album/:albumId" element={<Suspense fallback={<PageLoader />}><AlbumDetail /></Suspense>} />
+          <Route path="/search" element={<Suspense fallback={<PageLoader />}><Search /></Suspense>} />
+          <Route path="/profile" element={<Suspense fallback={<PageLoader />}><Profile /></Suspense>} />
+          <Route path="/admin" element={<Suspense fallback={<PageLoader />}><Admin /></Suspense>} />
         </Routes>
       </main>
       <GlobalMusicPlayer />
