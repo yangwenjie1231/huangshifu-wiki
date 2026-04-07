@@ -4,21 +4,84 @@
   --font-serif: "Times New Roman", "Noto Serif SC", "Source Han Serif SC", serif;
   --font-body: Georgia, "Noto Serif SC", "Source Han Serif SC", serif;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
-  
-  --color-brand-primary: #FFD700; /* Canola Flower Yellow */
+
+  --color-brand-primary: #FFD700;
   --color-brand-olive: #5A5A40;
-  --color-brand-cream: #FDFDF7; /* Lighter cream for yellow theme */
+  --color-brand-cream: #FDFDF7;
   --color-brand-paper: #FFFFFF;
+  --color-theme-bg: #FDFDF7;
+  --color-theme-text: #111827;
+  --color-theme-muted: #6B7280;
+  --color-theme-surface: #FFFFFF;
+  --color-theme-surface-alt: #FAF7F0;
+  --color-theme-border: #E5DED1;
+  --color-theme-accent: #5A5A40;
+  --color-theme-accent-strong: #2C1810;
+  --font-theme-main: var(--font-sans);
+  --font-theme-serif: var(--font-serif);
+  --radius-theme-card: 1.5rem;
+  --shadow-theme-card: 0 10px 30px rgba(0, 0, 0, 0.06);
+  --theme-header-image: linear-gradient(135deg, rgba(255, 215, 0, 0.12), rgba(90, 90, 64, 0.08));
+}
+
+:root,
+[data-theme="default"] {
+  color-scheme: light;
+}
+
+[data-theme="academy"] {
+  --color-brand-primary: #7B4B3A;
+  --color-brand-olive: #5D4037;
+  --color-brand-cream: #F5F1E8;
+  --color-brand-paper: #FFFDF8;
+  --color-theme-bg: #F5F1E8;
+  --color-theme-text: #2C1810;
+  --color-theme-muted: #6B5B4F;
+  --color-theme-surface: #FFFDF8;
+  --color-theme-surface-alt: #EFE7DA;
+  --color-theme-border: #D6C9B8;
+  --color-theme-accent: #5D4037;
+  --color-theme-accent-strong: #2C1810;
+  --font-theme-main: "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
+  --font-theme-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
+  --radius-theme-card: 0.25rem;
+  --shadow-theme-card: 0 0 0 1px var(--color-theme-border);
+  --theme-header-image: linear-gradient(135deg, rgba(93, 64, 55, 0.18), rgba(245, 241, 232, 0.85));
 }
 
 @layer base {
   body {
-    @apply bg-brand-cream text-gray-900 font-sans;
+    background: var(--color-theme-bg);
+    color: var(--color-theme-text);
+    font-family: var(--font-theme-main);
   }
   
   h1, h2, h3, h4, h5, h6 {
-    @apply font-serif;
+    font-family: var(--font-theme-serif);
   }
+}
+
+[data-theme="academy"] body {
+  background-image: linear-gradient(rgba(245, 241, 232, 0.85), rgba(245, 241, 232, 0.95));
+}
+
+.theme-surface {
+  background: var(--color-theme-surface);
+  border-color: var(--color-theme-border);
+  box-shadow: var(--shadow-theme-card);
+}
+
+.theme-surface-soft {
+  background: var(--color-theme-surface-alt);
+  border-color: var(--color-theme-border);
+}
+
+.theme-header-image {
+  background: var(--theme-header-image);
+}
+
+.theme-card {
+  border-radius: var(--radius-theme-card);
 }
 
 .glass {

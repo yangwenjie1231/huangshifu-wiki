@@ -38,6 +38,10 @@ import {
 import { registerRegionRoutes } from './src/server/location/routes';
 import { registerExifRoutes } from './src/server/location/exifRoutes';
 import { initSensitiveWords, containsSensitive, isSensitiveWord } from './src/lib/sensitiveWordFilter';
+import {
+  createUploadStorageInfo,
+  getStorageKeyFromFilePath,
+} from './src/server/uploadPath';
 
 dotenv.config({ path: '.env.local' });
 dotenv.config();
@@ -246,16 +250,31 @@ type SongCustomPlatformLink = {
 };
 
 const uploadStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, uploadsDir);
+  destination: (req, file, cb) => {
+    const routePath = (req.originalUrl || req.url || '').toLowerCase();
+    const namespace = routePath.includes('/api/users/me/avatar')
+      ? 'avatars'
+      : routePath.includes('/api/galleries/upload')
+        ? 'galleries'
+        : routePath.includes('/api/uploads/sessions')
+          ? 'sessions'
+          : routePath.includes('/api/uploads')
+            ? 'markdown'
+            : 'general';
+    const info = createUploadStorageInfo(uploadsDir, namespace, file.originalname);
+    (file as Express.Multer.File & { uploadInfo?: ReturnType<typeof createUploadStorageInfo> }).uploadInfo = info;
+    cb(null, info.absoluteDir);
   },
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, '_');
-    const nonce = Math.random().toString(36).slice(2, 10);
-    cb(null, `${Date.now()}_${nonce}_${base}${ext}`);
+    const info = (file as Express.Multer.File & { uploadInfo?: ReturnType<typeof createUploadStorageInfo> }).uploadInfo;
+    cb(null, info?.fileName || file.originalname);
   },
 });
+
+function getUploadFileStorageKey(file: Express.Multer.File) {
+  const storageKey = getStorageKeyFromFilePath(file.path, uploadsDir);
+  return storageKey || file.filename;
+}
 
 const upload = multer({
   storage: uploadStorage,
@@ -297,12 +316,14 @@ const uploadBackup = multer({
 
 const searchImageUpload = multer({
   storage: multer.diskStorage({
-    destination: (_req, _file, cb) => {
-      cb(null, uploadsDir);
+    destination: (_req, file, cb) => {
+      const info = createUploadStorageInfo(uploadsDir, 'search', file.originalname);
+      (file as Express.Multer.File & { uploadInfo?: ReturnType<typeof createUploadStorageInfo> }).uploadInfo = info;
+      cb(null, info.absoluteDir);
     },
-    filename: (_req, _file, cb) => {
-      const nonce = Math.random().toString(36).slice(2, 10);
-      cb(null, `search_temp_${Date.now()}_${nonce}.tmp`);
+    filename: (_req, file, cb) => {
+      const info = (file as Express.Multer.File & { uploadInfo?: ReturnType<typeof createUploadStorageInfo> }).uploadInfo;
+      cb(null, info?.fileName || file.originalname);
     },
   }),
   limits: {
@@ -1947,6 +1968,64 @@ async function createOrUpdateImportedSong(params: {
   };
 }
 
+/**
+ * 自动识别并创建伴奏关联关系
+ * 如果歌曲标题包含"伴奏"字样，自动查找对应的原曲并创建关联
+ */
+async function autoLinkInstrumental(songDocId: string, title: string, artist: string): Promise<void> {
+  // 检查标题是否包含伴奏标识
+  const instrumentalPatterns = [
+    /\(伴奏\)/,
+    /（伴奏）/,
+    /-伴奏/,
+    /\s+伴奏$/,
+    /伴奏版$/,
+    /inst\.?$/i,
+    /instrumental$/i,
+  ];
+
+  const isInstrumental = instrumentalPatterns.some(pattern => pattern.test(title));
+  if (!isInstrumental) return;
+
+  // 提取原曲标题（去掉伴奏标识）
+  let originalTitle = title
+    .replace(/\(伴奏\)/, '')
+    .replace(/（伴奏）/, '')
+    .replace(/-伴奏/, '')
+    .replace(/伴奏版$/, '')
+    .replace(/inst\.?$/i, '')
+    .replace(/instrumental$/i, '')
+    .trim();
+
+  if (!originalTitle) return;
+
+  // 查找原曲（同一艺术家）
+  const originalSong = await prismaAny.musicTrack.findFirst({
+    where: {
+      title: originalTitle,
+      artist: artist,
+      docId: { not: songDocId },
+    },
+  });
+
+  if (!originalSong) return;
+
+  // 创建关联关系（songDocId是伴奏，targetSongDocId是原曲）
+  await prismaAny.songInstrumentalRelation.upsert({
+    where: {
+      songDocId_targetSongDocId: {
+        songDocId: songDocId,
+        targetSongDocId: originalSong.docId,
+      },
+    },
+    update: {},
+    create: {
+      songDocId: songDocId,
+      targetSongDocId: originalSong.docId,
+    },
+  });
+}
+
 async function fetchSongsWithRelations(where?: Record<string, unknown>) {
   const songs = await prismaAny.musicTrack.findMany({
     where,
@@ -3169,8 +3248,8 @@ app.post('/api/users/me/avatar', requireAuth, requireActiveUser, upload.single('
     const asset = await prisma.mediaAsset.create({
       data: {
         ownerUid: req.authUser!.uid,
-        storageKey: file.filename,
-        publicUrl: buildUploadPublicUrl(file.filename),
+        storageKey: getUploadFileStorageKey(file),
+        publicUrl: buildUploadPublicUrl(getUploadFileStorageKey(file)),
         fileName: file.originalname,
         mimeType,
         sizeBytes: file.size,
@@ -7457,8 +7536,8 @@ app.post('/api/uploads', requireAuth, requireActiveUser, upload.single('file'), 
     const asset = await prisma.mediaAsset.create({
       data: {
         ownerUid: req.authUser!.uid,
-        storageKey: file.filename,
-        publicUrl: buildUploadPublicUrl(file.filename),
+        storageKey: getUploadFileStorageKey(file),
+        publicUrl: buildUploadPublicUrl(getUploadFileStorageKey(file)),
         fileName: file.originalname,
         mimeType,
         sizeBytes: file.size,
@@ -7509,8 +7588,8 @@ app.post('/api/galleries/upload', requireAuth, requireActiveUser, upload.array('
         const asset = await prisma.mediaAsset.create({
           data: {
             ownerUid: req.authUser!.uid,
-            storageKey: file.filename,
-            publicUrl: buildUploadPublicUrl(file.filename),
+            storageKey: getUploadFileStorageKey(file),
+            publicUrl: buildUploadPublicUrl(getUploadFileStorageKey(file)),
             fileName: file.originalname,
             mimeType,
             sizeBytes: file.size,
@@ -9085,6 +9164,11 @@ app.post('/api/music/from-netease', requireAdmin, async (req: AuthenticatedReque
       albumNameFallback: preview.title,
     });
 
+    // 自动识别并关联伴奏
+    if (result.created) {
+      await autoLinkInstrumental(result.song.docId, track.title || '', track.artist || '');
+    }
+
     const song = await fetchSongWithRelationsByDocId(result.song.docId);
     res.status(result.created ? 201 : 200).json({
       song: song ? toSongResponse(song) : result.song,
@@ -9119,6 +9203,11 @@ app.post('/api/music/from-qq', requireAdmin, async (req: AuthenticatedRequest, r
       albumNameFallback: preview.title,
     });
 
+    // 自动识别并关联伴奏
+    if (result.created) {
+      await autoLinkInstrumental(result.song.docId, track.title || '', track.artist || '');
+    }
+
     const song = await fetchSongWithRelationsByDocId(result.song.docId);
     res.status(result.created ? 201 : 200).json({
       song: song ? toSongResponse(song) : result.song,
@@ -9152,6 +9241,11 @@ app.post('/api/music/from-kugou', requireAdmin, async (req: AuthenticatedRequest
       userUid: req.authUser!.uid,
       albumNameFallback: preview.title,
     });
+
+    // 自动识别并关联伴奏
+    if (result.created) {
+      await autoLinkInstrumental(result.song.docId, track.title || '', track.artist || '');
+    }
 
     const song = await fetchSongWithRelationsByDocId(result.song.docId);
     res.status(result.created ? 201 : 200).json({

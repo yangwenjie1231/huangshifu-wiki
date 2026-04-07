@@ -101,3 +101,33 @@ export const getImageUrl = async (imageId: string): Promise<string[]> => {
   }
   return [];
 };
+
+/**
+ * Uploads markdown images to the local server first, and falls back to the legacy image bed flow.
+ */
+export const uploadMarkdownImage = async (file: File): Promise<string> => {
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch('/api/uploads', {
+      method: 'POST',
+      credentials: 'include',
+      body: formData,
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const url = data?.file?.url;
+      if (typeof url === 'string' && url) {
+        return url;
+      }
+    }
+  } catch (error) {
+    console.error('Local markdown image upload failed, falling back to legacy image bed:', error);
+  }
+
+  const imageId = await uploadImageToCDNs(file);
+  const urls = await getImageUrl(imageId);
+  return urls[0] || '';
+};

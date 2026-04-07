@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { MusicProvider, useMusic } from './context/MusicContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
 import { AnnouncementBar } from './components/AnnouncementBar';
@@ -24,7 +25,6 @@ import Admin from './pages/Admin';
 
 const MainLayout = () => {
   const { currentSong } = useMusic();
-
   return (
     <div className="min-h-screen flex flex-col">
       <AnnouncementBar />
@@ -73,6 +73,10 @@ const MainLayout = () => {
 
 export default function App() {
   React.useEffect(() => {
+    if (typeof document !== 'undefined' && document.documentElement.dataset.theme === 'academy') {
+      return;
+    }
+
     if (!isMiniProgramWebView()) {
       return;
     }
@@ -92,12 +96,14 @@ export default function App() {
   }, []);
 
   return (
-    <AuthProvider>
-      <MusicProvider>
-        <Router>
-          <MainLayout />
-        </Router>
-      </MusicProvider>
-    </AuthProvider>
+    <Router>
+      <ThemeProvider>
+        <AuthProvider>
+          <MusicProvider>
+            <MainLayout />
+          </MusicProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </Router>
   );
 }
