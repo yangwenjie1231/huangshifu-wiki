@@ -27,26 +27,44 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes('node_modules')) return;
 
+          // Extract the npm package name from the resolved path.
+          // Handles both scoped (@scope/pkg) and regular (pkg) packages.
           const pkgMatch = id.match(/node_modules[\/\\](@[^\/\\]+[\/\\][^\/\\]+|[^\/\\]+)/);
           const pkg = pkgMatch ? pkgMatch[1] : '';
 
-          if (pkg === 'react' || pkg === 'react-dom' || pkg === 'scheduler' || pkg === 'react-router' || pkg === 'react-router-dom') {
+          // React core + scheduler (avoids circular deps)
+          if (pkg === 'react' || pkg === 'react-dom' || pkg === 'scheduler'
+            || pkg === 'react-router' || pkg === 'react-router-dom') {
             return 'react-core';
           }
 
-          if (pkg === 'react-markdown' || pkg === 'react-markdown-editor-lite' || pkg === 'markdown-it' || pkg.startsWith('rehype-') || pkg.startsWith('remark-')) {
+          // Markdown / editor — heavy, only Wiki & Forum
+          if (pkg === 'react-markdown' || pkg === 'react-markdown-editor-lite'
+            || pkg === 'markdown-it' || pkg.startsWith('rehype-') || pkg.startsWith('remark-')) {
             return 'markdown-vendor';
           }
 
-          if (pkg === 'motion' || pkg === 'motion-dom' || pkg === 'motion-utils' || pkg === 'framer-motion') {
+          // Motion / animation (motion v12 split into multiple packages)
+          if (pkg === 'motion' || pkg === 'motion-dom' || pkg === 'motion-utils'
+            || pkg === 'framer-motion') {
             return 'motion-vendor';
           }
 
+          // Icons
           if (pkg === 'lucide-react') return 'icons-vendor';
-          if (pkg === '@google/genai') return 'ai-vendor';
-          if (pkg === 'date-fns') return 'date-vendor';
-          if (pkg === 'exifreader' || pkg === 'react-image-crop' || pkg === 'spark-md5') return 'image-vendor';
 
+          // Google GenAI — large, only Wiki AI features
+          if (pkg === '@google/genai') return 'ai-vendor';
+
+          // Date utilities
+          if (pkg === 'date-fns') return 'date-vendor';
+
+          // Image processing
+          if (pkg === 'exifreader' || pkg === 'react-image-crop' || pkg === 'spark-md5') {
+            return 'image-vendor';
+          }
+
+          // Remaining small utilities (clsx, tailwind-merge, etc.)
           return 'vendor-misc';
         },
       },

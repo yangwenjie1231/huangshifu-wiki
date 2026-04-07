@@ -154,14 +154,14 @@ const PostList = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-12">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
+    <div className="max-w-7xl mx-auto px-4 py-8 md:py-12">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-6 mb-8 md:mb-12">
         <div>
-          <h1 className="text-5xl font-serif font-bold text-gray-900 mb-2">社区论坛</h1>
+          <h1 className="text-4xl md:text-5xl font-serif font-bold text-gray-900 mb-2">社区论坛</h1>
           <p className="text-gray-500 italic">诗扶社区 · 与同好分享你的热爱</p>
         </div>
         {user && !isBanned && (
-          <Link to="/forum/new" className="px-6 py-3 bg-brand-primary text-gray-900 rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-md">
+          <Link to="/forum/new" className="px-5 py-3 bg-brand-primary text-gray-900 rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-md touch-target-lg">
             <Plus size={18} /> 发布帖子
           </Link>
         )}
@@ -217,19 +217,19 @@ const PostList = () => {
       </div>
 
       {loading ? (
-        <div className="space-y-6">
+        <div className="space-y-4 md:space-y-6">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-32 bg-white rounded-3xl animate-pulse border border-gray-100"></div>
+            <div key={i} className="h-28 md:h-32 bg-white rounded-xl md:rounded-2xl animate-pulse border border-gray-100"></div>
           ))}
         </div>
       ) : posts.length > 0 ? (
         <>
-        <div className="space-y-6">
+        <div className="space-y-4 md:space-y-6">
           {posts.map((post) => (
             <div
               key={post.id}
               className={clsx(
-                'bg-white p-8 rounded-[32px] border hover:shadow-lg transition-all group relative',
+                'bg-white p-5 md:p-8 rounded-xl md:rounded-2xl border hover:shadow-md transition-all group relative',
                 post.isPinned ? 'border-l-4 border-l-brand-primary border-gray-100' : 'border-gray-100 hover:border-brand-primary/20',
               )}
             >
@@ -515,13 +515,13 @@ const PostDetail = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-12">
-      <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-gray-400 hover:text-brand-primary mb-8 transition-colors">
+    <div className="max-w-4xl mx-auto px-4 py-8 md:py-12">
+      <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-gray-400 hover:text-brand-primary mb-6 md:mb-8 transition-colors touch-target-lg">
         <ArrowLeft size={18} /> 返回
       </button>
 
-      <article className="bg-white rounded-[40px] p-8 sm:p-12 border border-gray-100 shadow-sm mb-8">
-        <header className="mb-8 border-b border-gray-100 pb-8">
+      <article className="bg-white rounded-2xl md:rounded-3xl p-6 md:p-8 lg:p-12 border border-gray-100 shadow-sm mb-6 md:mb-8">
+        <header className="mb-6 md:mb-8 border-b border-gray-100 pb-6 md:pb-8">
           <div className="flex items-center gap-3 mb-6">
             <span className="px-3 py-1 bg-brand-primary/10 text-brand-primary text-xs font-bold uppercase tracking-widest rounded-full">
               {sections.find((s) => s.id === post.section)?.name || post.section}
@@ -638,13 +638,13 @@ const PostDetail = () => {
         </div>
       </article>
 
-      <section className="bg-white rounded-[40px] p-8 sm:p-12 border border-gray-100 shadow-sm">
-        <h3 className="text-2xl font-serif font-bold text-gray-900 mb-8">评论 ({comments.length})</h3>
+      <section className="bg-white rounded-2xl md:rounded-3xl p-6 md:p-8 lg:p-12 border border-gray-100 shadow-sm">
+        <h3 className="text-xl md:text-2xl font-serif font-bold text-gray-900 mb-6 md:mb-8">评论 ({comments.length})</h3>
 
         {user ? (
-          <form onSubmit={handleAddComment} className="mb-12">
+          <form onSubmit={handleAddComment} className="mb-8 md:mb-12">
             {replyTo && (
-              <div className="mb-4 px-4 py-2 bg-brand-primary/10 rounded-xl flex items-center justify-between">
+              <div className="mb-3 md:mb-4 px-4 py-2 bg-brand-primary/10 rounded-lg md:rounded-xl flex items-center justify-between">
                 <span className="text-xs text-brand-primary">回复 @{replyTo.authorName}</span>
                 <button onClick={() => setReplyTo(null)} className="text-gray-400 hover:text-red-500"><X size={14} /></button>
               </div>
@@ -656,24 +656,24 @@ const PostDetail = () => {
                 placeholder={replyTo ? `回复 @${replyTo.authorName}...` : '发表你的看法...'}
                 rows={3}
                 disabled={!canComment || isBanned}
-                className="w-full px-6 py-4 bg-brand-cream rounded-3xl border-none focus:ring-2 focus:ring-brand-primary/20 resize-none"
+                className="w-full px-4 md:px-6 py-3 md:py-4 bg-brand-cream rounded-xl md:rounded-2xl border-none focus:ring-2 focus:ring-brand-primary/20 resize-none text-base"
               />
               <button
                 type="submit"
                 disabled={!canComment || isBanned}
-                className="absolute bottom-4 right-4 p-3 bg-brand-primary text-gray-900 rounded-full hover:scale-105 transition-all shadow-md"
+                className="absolute bottom-3 right-3 md:bottom-4 md:right-4 p-2.5 md:p-3 bg-brand-primary text-gray-900 rounded-full hover:scale-105 transition-all shadow-md touch-target-lg"
               >
-                <Send size={18} />
+                <Send size={16} />
               </button>
             </div>
             {isBanned ? (
-              <p className="mt-3 text-xs text-red-500">账号已被封禁，无法评论</p>
+              <p className="mt-2 md:mt-3 text-xs text-red-500">账号已被封禁，无法评论</p>
             ) : !canComment ? (
-              <p className="mt-3 text-xs text-amber-600">仅已发布内容可评论</p>
+              <p className="mt-2 md:mt-3 text-xs text-amber-600">仅已发布内容可评论</p>
             ) : null}
           </form>
         ) : (
-          <div className="p-8 bg-brand-cream rounded-3xl text-center mb-12">
+          <div className="p-6 md:p-8 bg-brand-cream rounded-xl md:rounded-2xl text-center mb-8 md:mb-12">
             <p className="text-gray-500 text-sm">请先登录后发表评论</p>
           </div>
         )}
@@ -863,11 +863,11 @@ const PostEditor = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-12">
-      <div className="bg-white rounded-[40px] p-8 sm:p-12 border border-gray-100 shadow-sm">
-        <div className="flex justify-between items-center mb-12">
-          <h1 className="text-4xl font-serif font-bold text-gray-900">{isEditing ? '编辑帖子' : '发布新帖子'}</h1>
-          <button onClick={() => navigate(-1)} className="p-2 text-gray-400 hover:text-red-500">
+    <div className="max-w-4xl mx-auto px-4 py-8 md:py-12">
+      <div className="bg-white rounded-2xl md:rounded-3xl p-6 md:p-8 lg:p-12 border border-gray-100 shadow-sm">
+        <div className="flex justify-between items-center mb-8 md:mb-12">
+          <h1 className="text-3xl md:text-4xl font-serif font-bold text-gray-900">{isEditing ? '编辑帖子' : '发布新帖子'}</h1>
+          <button onClick={() => navigate(-1)} className="p-2 text-gray-400 hover:text-red-500 touch-target-lg">
             <X size={24} />
           </button>
         </div>
@@ -877,7 +877,7 @@ const PostEditor = () => {
             e.preventDefault();
             handleSubmit('pending');
           }}
-          className="space-y-8"
+          className="space-y-6 md:space-y-8"
         >
           <div className="space-y-2">
             <label className="text-xs font-bold uppercase tracking-widest text-gray-400">标题</label>
@@ -887,7 +887,7 @@ const PostEditor = () => {
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               placeholder="输入一个吸引人的标题..."
-              className="w-full px-6 py-4 bg-brand-cream rounded-2xl border-none focus:ring-2 focus:ring-brand-primary/20 font-serif text-xl"
+              className="w-full px-4 md:px-6 py-3 md:py-4 bg-brand-cream rounded-xl md:rounded-2xl border-none focus:ring-2 focus:ring-brand-primary/20 font-serif text-lg md:text-xl"
             />
           </div>
 
@@ -896,7 +896,7 @@ const PostEditor = () => {
             <select
               value={formData.section}
               onChange={(e) => setFormData({ ...formData, section: e.target.value })}
-              className="w-full px-6 py-4 bg-brand-cream rounded-2xl border-none focus:ring-2 focus:ring-brand-primary/20 font-serif text-xl appearance-none"
+              className="w-full px-4 md:px-6 py-3 md:py-4 bg-brand-cream rounded-xl md:rounded-2xl border-none focus:ring-2 focus:ring-brand-primary/20 font-serif text-lg md:text-xl appearance-none"
             >
               {sections.map((sec) => (
                 <option key={sec.id} value={sec.id}>{sec.name}</option>
@@ -911,7 +911,7 @@ const PostEditor = () => {
               value={formData.tags}
               onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
               placeholder="例如：Live, 绝色, 2024"
-              className="w-full px-6 py-4 bg-brand-cream rounded-2xl border-none focus:ring-2 focus:ring-brand-primary/20"
+              className="w-full px-4 md:px-6 py-3 md:py-4 bg-brand-cream rounded-xl md:rounded-2xl border-none focus:ring-2 focus:ring-brand-primary/20"
             />
           </div>
 
@@ -931,7 +931,7 @@ const PostEditor = () => {
 
           <div className="space-y-2">
             <label className="text-xs font-bold uppercase tracking-widest text-gray-400">内容 (Markdown)</label>
-            <div className="border border-gray-100 rounded-[32px] overflow-hidden">
+            <div className="border border-gray-100 rounded-xl md:rounded-2xl overflow-hidden">
               <MdEditor
                 style={{ height: '400px' }}
                 renderHTML={(text) => mdParser.render(text)}

@@ -22,6 +22,36 @@
   --radius-theme-card: 1.5rem;
   --shadow-theme-card: 0 10px 30px rgba(0, 0, 0, 0.06);
   --theme-header-image: linear-gradient(135deg, rgba(255, 215, 0, 0.12), rgba(90, 90, 64, 0.08));
+
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
+  --radius-3xl: 2.5rem;
+  --radius-full: 9999px;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.10);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.12);
+  --shadow-2xl: 0 24px 64px rgba(0, 0, 0, 0.16);
+  --shadow-inner: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+  
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4rem;
+
+  --transition-fast: 150ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 300ms ease;
+  --transition-spring: 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 :root,
@@ -152,4 +182,36 @@ body {
   .md\\:pb-safe-desktop {
     padding-bottom: env(safe-area-inset-bottom);
   }
+}
+
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.touch-target-lg {
+  min-height: 48px;
+  min-width: 48px;
+}
+
+.mobile-safe-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);
+}
+
+.mobile-safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+input, textarea, select {
+  font-size: 16px;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
 }
