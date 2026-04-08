@@ -380,6 +380,7 @@ USE_PM2=0 ./scripts/deploy.sh         # 不使用 PM2
 - [ ] Music 列表与删除通过 REST API 正常工作（`/api/music*`）
 - [ ] 图片映射查询与写入通过 REST API 正常工作（`/api/image-maps*`）
 - [ ] 小程序 WebView 可打开首页（`miniprogram-webview`）
+- [ ] 小程序 WebView 可打开首页（`miniprogram-webview`）
 - [ ] 小程序首次进入可自动登录（`wx.login code` -> `/api/auth/wechat/login`）
 - [ ] 小程序中可完成浏览 Wiki、发帖、评论闭环（`/api/mp/wiki`、`/api/mp/posts`、`/api/mp/comments`）
 
@@ -778,6 +779,8 @@ npm run download:sensitive-words
   - `imageService` 改为直接调用 `/api/image-maps`（按 MD5 查重 + upsert 映射）
   - `Music` 页面认证引用改为 `src/lib/auth.ts`
   - **部署影响**：无数据库迁移，无新增环境变量，仅需常规 `npm run build` 后重启服务
+
+- **小程序 WebView 壳工程 + Web 自动登录**：新增 `miniprogram-webview/`，并在 Web 端增加 `wx_code` 自动登录能力
 - **小程序 WebView 壳工程 + Web 自动登录**：新增 `miniprogram-webview/`，并在 Web 端增加 `wx_code` 自动登录能力
   - 新增 `src/lib/miniProgram.ts`：解析/清理 `wx_code` 及可选头像昵称参数
   - 更新 `src/App.tsx`：在小程序 WebView 环境下自动触发 `loginWithWeChat`

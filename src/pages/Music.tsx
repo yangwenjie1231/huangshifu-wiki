@@ -458,20 +458,20 @@ const Music = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-12">
-      <header className="mb-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+    <div className="max-w-7xl mx-auto px-4 py-8 md:py-12">
+      <header className="mb-8 md:mb-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-6">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-brand-primary text-gray-900 rounded-xl shadow-lg">
               <Headphones size={24} />
             </div>
-            <h1 className="text-5xl font-serif font-bold text-gray-900">音乐馆</h1>
+            <h1 className="text-4xl md:text-5xl font-serif font-bold text-gray-900">音乐馆</h1>
           </div>
           <p className="text-gray-500 italic">诗扶之声 · 记录每一首动人的旋律</p>
         </div>
         
         {isAdmin && (
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-3 md:gap-4">
             <button 
               onClick={() => {
                 if (isBanned) {
@@ -483,11 +483,11 @@ const Music = () => {
               }}
               aria-label={isBatchMode ? '退出批量' : '批量管理'}
               className={clsx(
-                "px-6 py-4 rounded-full font-bold transition-all flex items-center gap-2 shadow-xl",
+                "px-4 md:px-6 py-3 md:py-4 rounded-full font-bold transition-all flex items-center gap-2 shadow-lg md:shadow-xl",
                 isBatchMode ? "bg-brand-primary text-gray-900" : "bg-white text-gray-500 border border-gray-100"
               )}
             >
-              <List size={20} />
+              <List size={18} />
               <span className="hidden sm:inline">{isBatchMode ? '退出批量' : '批量管理'}</span>
             </button>
             <button
@@ -499,9 +499,9 @@ const Music = () => {
                 setIsImportModalOpen(true);
               }}
               aria-label="链接导入"
-              className="px-8 py-4 bg-brand-primary text-gray-900 rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-xl"
+              className="px-4 md:px-6 py-3 md:py-4 bg-brand-primary text-gray-900 rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-lg md:shadow-xl touch-target-lg"
             >
-              <Search size={20} />
+              <Search size={18} />
               <span className="hidden sm:inline">链接导入</span>
             </button>
             <button 
@@ -513,17 +513,17 @@ const Music = () => {
                 setIsAdding(!isAdding);
               }}
               aria-label={isAdding ? '取消添加' : '添加音乐'}
-              className="px-8 py-4 bg-gray-900 text-white rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-xl"
+              className="px-4 md:px-6 py-3 md:py-4 bg-gray-900 text-white rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-lg md:shadow-xl touch-target-lg"
             >
-              {isAdding ? <X size={20} /> : <Plus size={20} />}
+              {isAdding ? <X size={18} /> : <Plus size={18} />}
               <span className="hidden sm:inline">{isAdding ? '取消添加' : '添加音乐'}</span>
             </button>
             <Link
               to="/music/links"
               aria-label="关联管理"
-              className="px-8 py-4 bg-white text-gray-900 border border-gray-200 rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-xl"
+              className="px-4 md:px-6 py-3 md:py-4 bg-white text-gray-900 border border-gray-200 rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-lg md:shadow-xl touch-target-lg"
             >
-              <Link2 size={20} />
+              <Link2 size={18} />
               <span className="hidden sm:inline">关联管理</span>
             </Link>
           </div>
@@ -536,7 +536,7 @@ const Music = () => {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="mb-12 p-8 bg-brand-cream/30 rounded-[40px] border border-brand-primary/10"
+            className="mb-8 md:mb-12 p-5 md:p-8 bg-brand-cream/30 rounded-2xl md:rounded-3xl border border-brand-primary/10"
           >
             <h3 className="text-xl font-serif font-bold text-gray-900 mb-6 flex items-center gap-2">
               <Sparkles size={20} className="text-brand-primary" /> 输入音乐 ID 或链接 (支持批量，用空格或逗号分隔)
@@ -647,10 +647,10 @@ const Music = () => {
         )}
       </AnimatePresence>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-12">
         <div className="lg:col-span-2">
-          <div className="bg-white rounded-[40px] border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-6 md:p-8 border-b border-gray-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="bg-white rounded-2xl md:rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-4 md:p-6 lg:p-8 border-b border-gray-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="inline-flex bg-gray-100 rounded-full p-1.5">
                 <button
                   onClick={() => setActiveTab('music')}
@@ -738,18 +738,18 @@ const Music = () => {
             </div>
 
             {activeTab === 'music' ? (
-              <div className="p-6 md:p-8 space-y-6">
+              <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6">
                 {loading ? (
                   <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
                     {[1, 2, 3, 4, 5, 6].map(i => (
                       <div key={i} className={clsx(
-                        viewMode === 'list' ? 'h-20' : 'rounded-3xl border border-gray-100 p-4 animate-pulse',
+                        viewMode === 'list' ? 'h-20' : 'rounded-xl md:rounded-2xl border border-gray-100 p-3 md:p-4 animate-pulse',
                         viewMode !== 'list' && 'bg-white'
                       )}>
-                        <div className={clsx(viewMode === 'list' ? 'flex gap-4' : '')}>
-                          <div className={clsx(viewMode === 'list' ? 'w-16 h-16 rounded-lg bg-gray-100 flex-shrink-0' : 'aspect-square rounded-2xl bg-gray-100')} />
+                        <div className={clsx(viewMode === 'list' ? 'flex gap-3 md:gap-4' : '')}>
+                          <div className={clsx(viewMode === 'list' ? 'w-14 h-14 md:w-16 md:h-16 rounded-lg bg-gray-100 flex-shrink-0' : 'aspect-square rounded-xl md:rounded-2xl bg-gray-100')} />
                           <div className={clsx(viewMode === 'list' ? 'flex-1' : '')}>
-                            <div className={viewMode === 'list' ? 'mt-2 h-4 bg-gray-100 rounded w-1/3' : 'mt-4 h-4 bg-gray-100 rounded w-2/3'} />
+                            <div className={viewMode === 'list' ? 'mt-2 h-4 bg-gray-100 rounded w-1/3' : 'mt-3 md:mt-4 h-4 bg-gray-100 rounded w-2/3'} />
                             <div className={viewMode === 'list' ? 'mt-1 h-3 bg-gray-100 rounded w-1/4' : 'mt-2 h-3 bg-gray-100 rounded w-1/2'} />
                           </div>
                         </div>
@@ -764,37 +764,37 @@ const Music = () => {
                           key={song.docId}
                           className={clsx(
                             viewMode === 'list' 
-                              ? 'flex gap-4 p-3 rounded-xl border border-gray-100 bg-white hover:shadow-md transition-all' 
-                              : 'rounded-3xl border transition-all p-4 group bg-white',
+                              ? 'flex gap-3 md:gap-4 p-3 rounded-lg md:rounded-xl border border-gray-100 bg-white hover:shadow-md transition-all' 
+                              : 'rounded-xl md:rounded-2xl border transition-all p-3 md:p-4 group bg-white',
                             currentSong?.docId === song.docId && !isBatchMode && viewMode !== 'list' ? 'border-brand-primary/40 shadow-lg shadow-brand-primary/10' : 'border-gray-100 hover:border-brand-primary/30 hover:shadow-md',
                             isBatchMode && selectedSongs.has(song.docId) && 'border-brand-primary bg-brand-primary/5',
                           )}
                         >
                           {viewMode === 'list' ? (
                             <>
-                              <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                              <div className="relative w-14 h-14 md:w-16 md:h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
                                 <img src={song.cover} alt={song.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                                 <button
                                   onClick={() => playSong(song)}
                                   className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
                                   title="播放"
                                 >
-                                  <Play size={16} className="text-white" />
+                                  <Play size={14} className="text-white" />
                                 </button>
                               </div>
                               <div className="flex-1 min-w-0 flex items-center">
                                 <div className="flex-1 min-w-0">
-                                  <Link to={`/music/${song.docId}`} className="font-bold text-gray-900 line-clamp-1 hover:text-brand-primary transition-colors">
+                                  <Link to={`/music/${song.docId}`} className="font-bold text-gray-900 line-clamp-1 hover:text-brand-primary transition-colors text-sm md:text-base">
                                     {song.title}
                                   </Link>
                                   <p className="text-xs text-gray-400 line-clamp-1">{song.artist} — {song.album}</p>
                                 </div>
-                                <div className="flex items-center gap-2 flex-shrink-0">
+                                <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
                                   {isBatchMode ? (
                                     <button
                                       onClick={() => toggleSelect(song.docId)}
                                       className={clsx(
-                                        'px-3 py-1.5 rounded-full text-xs font-bold transition-all',
+                                        'px-2.5 md:px-3 py-1.5 rounded-full text-xs font-bold transition-all touch-target-lg',
                                         selectedSongs.has(song.docId) ? 'bg-brand-primary text-gray-900' : 'bg-gray-100 text-gray-500',
                                       )}
                                     >
@@ -806,7 +806,7 @@ const Music = () => {
                                         onClick={() => handleToggleFavorite(song)}
                                         disabled={favoriting === song.docId}
                                         className={clsx(
-                                          'p-2 transition-colors',
+                                          'p-1.5 md:p-2 transition-colors touch-target-lg',
                                           song.favoritedByMe ? 'text-red-500' : 'text-gray-400 hover:text-red-500',
                                         )}
                                       >
@@ -814,7 +814,7 @@ const Music = () => {
                                       </button>
                                       <Link
                                         to={`/music/${song.docId}`}
-                                        className="px-3 py-1.5 rounded-full bg-black/60 text-white text-xs hover:bg-black/75 transition-colors"
+                                        className="px-2.5 md:px-3 py-1.5 rounded-full bg-black/60 text-white text-xs hover:bg-black/75 transition-colors"
                                       >
                                         详情
                                       </Link>
@@ -825,32 +825,32 @@ const Music = () => {
                             </>
                           ) : (
                             <>
-                              <div className="relative aspect-square rounded-2xl overflow-hidden bg-gray-100">
+                              <div className="relative aspect-square rounded-xl md:rounded-2xl overflow-hidden bg-gray-100">
                                 <img src={song.cover} alt={song.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent opacity-90" />
-                                <div className="absolute left-3 right-3 bottom-3 flex items-center justify-between gap-2">
+                                <div className="absolute left-2.5 right-2.5 bottom-2.5 md:left-3 md:right-3 md:bottom-3 flex items-center justify-between gap-2">
                                   <button
                                     onClick={() => playSong(song)}
                                     className={clsx(
-                                      'w-10 h-10 rounded-full inline-flex items-center justify-center transition-all',
+                                      'w-9 h-9 md:w-10 md:h-10 rounded-full inline-flex items-center justify-center transition-all',
                                       isBatchMode ? 'bg-white/80 text-gray-900 hover:bg-white' : 'bg-brand-primary text-gray-900 hover:scale-105',
                                     )}
                                     title={isBatchMode ? '选择歌曲' : '播放歌曲'}
                                   >
-                                    <Play size={16} className={clsx(!isBatchMode && currentSong?.docId === song.docId && 'fill-current')} />
+                                    <Play size={14} className={clsx(!isBatchMode && currentSong?.docId === song.docId && 'fill-current')} />
                                   </button>
                                   <Link
                                     to={`/music/${song.docId}`}
-                                    className="inline-flex items-center gap-1 text-xs px-3 py-2 rounded-full bg-black/60 text-white hover:bg-black/75 transition-colors"
+                                    className="inline-flex items-center gap-1 text-xs px-2 py-1.5 md:px-3 md:py-2 rounded-full bg-black/60 text-white hover:bg-black/75 transition-colors"
                                     title="查看歌曲详情"
                                   >
-                                    详情 <ChevronRight size={14} />
+                                    详情 <ChevronRight size={12} />
                                   </Link>
                                 </div>
                               </div>
 
-                              <div className="mt-4">
-                                <Link to={`/music/${song.docId}`} className="font-bold text-gray-900 line-clamp-1 hover:text-brand-primary transition-colors" title="查看歌曲详情">
+                              <div className="mt-3 md:mt-4">
+                                <Link to={`/music/${song.docId}`} className="font-bold text-gray-900 line-clamp-1 hover:text-brand-primary transition-colors text-sm md:text-base" title="查看歌曲详情">
                                   {song.title}
                                 </Link>
                                 <p className="text-xs text-gray-400 mt-1 line-clamp-1">{song.artist} — {song.album}</p>
