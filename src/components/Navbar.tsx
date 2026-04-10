@@ -26,6 +26,7 @@ import { apiGet, apiPost } from "../lib/apiClient";
 import { useToast } from "./Toast";
 import { useTheme } from "../context/ThemeContext";
 import { withThemeSearch } from "../lib/theme";
+import { useI18n } from "../lib/i18n";
 
 interface NotificationItem {
 	id: string;
@@ -64,6 +65,7 @@ type AuthMode = "login" | "register" | "wechat";
 export const Navbar = () => {
 	const { user, profile, isAdmin, isBanned } = useAuth();
 	const { isAcademy, theme, toggleTheme } = useTheme();
+	const { t } = useI18n();
 	const navigate = useNavigate();
 	const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 	const [authModalOpen, setAuthModalOpen] = React.useState(false);
@@ -83,7 +85,7 @@ export const Navbar = () => {
 	const { show } = useToast();
 	const themedTo = (path: string) =>
 		withThemeSearch(path, isAcademy ? "academy" : "default");
-	const themeLabel = theme === "academy" ? "从前书院" : "诗扶小筑";
+	const themeLabel = theme === "academy" ? t('app.title') : t('app.title');
 
 	const handleThemeToggle = () => {
 		toggleTheme();
@@ -300,7 +302,7 @@ export const Navbar = () => {
 								}
 							>
 								<Book size={18} />
-								百科
+								{t('nav.wiki')}
 							</NavLink>
 							<NavLink
 								to={themedTo("/forum")}
@@ -314,7 +316,7 @@ export const Navbar = () => {
 								}
 							>
 								<MessageSquare size={18} />
-								社区
+								{t('nav.forum')}
 							</NavLink>
 							<NavLink
 								to={themedTo("/gallery")}
@@ -328,7 +330,7 @@ export const Navbar = () => {
 								}
 							>
 								<ImageIcon size={18} />
-								图集
+								{t('nav.gallery')}
 							</NavLink>
 							<NavLink
 								to={themedTo("/music")}
@@ -342,7 +344,7 @@ export const Navbar = () => {
 								}
 							>
 								<Music size={18} />
-								音乐
+								{t('nav.music')}
 							</NavLink>
 							<NavLink
 								to={themedTo("/search")}
@@ -562,37 +564,37 @@ export const Navbar = () => {
 						<div className="px-4 py-6 space-y-4">
 							<div className="grid grid-cols-2 gap-4">
 								<NavLink
-									to={themedTo("/wiki")}
-									onClick={() => setIsMenuOpen(false)}
-									className="flex flex-col items-center gap-2 p-4 bg-brand-cream/30 rounded-2xl text-brand-olive"
-								>
-									<Book size={24} />
-									<span className="text-xs font-bold">百科</span>
-								</NavLink>
-								<NavLink
-									to={themedTo("/forum")}
-									onClick={() => setIsMenuOpen(false)}
-									className="flex flex-col items-center gap-2 p-4 bg-brand-cream/30 rounded-2xl text-brand-olive"
-								>
-									<MessageSquare size={24} />
-									<span className="text-xs font-bold">社区</span>
-								</NavLink>
-								<NavLink
-									to={themedTo("/gallery")}
-									onClick={() => setIsMenuOpen(false)}
-									className="flex flex-col items-center gap-2 p-4 bg-brand-cream/30 rounded-2xl text-brand-olive"
-								>
-									<ImageIcon size={24} />
-									<span className="text-xs font-bold">图集</span>
-								</NavLink>
-								<NavLink
-									to={themedTo("/music")}
-									onClick={() => setIsMenuOpen(false)}
-									className="flex flex-col items-center gap-2 p-4 bg-brand-cream/30 rounded-2xl text-brand-olive"
-								>
-									<Music size={24} />
-									<span className="text-xs font-bold">音乐</span>
-								</NavLink>
+								to={themedTo("/wiki")}
+								onClick={() => setIsMenuOpen(false)}
+								className="flex flex-col items-center gap-2 p-4 bg-brand-cream/30 rounded-2xl text-brand-olive"
+							>
+								<Book size={24} />
+								<span className="text-xs font-bold">{t('nav.wiki')}</span>
+							</NavLink>
+							<NavLink
+								to={themedTo("/forum")}
+								onClick={() => setIsMenuOpen(false)}
+								className="flex flex-col items-center gap-2 p-4 bg-brand-cream/30 rounded-2xl text-brand-olive"
+							>
+								<MessageSquare size={24} />
+								<span className="text-xs font-bold">{t('nav.forum')}</span>
+							</NavLink>
+							<NavLink
+								to={themedTo("/gallery")}
+								onClick={() => setIsMenuOpen(false)}
+								className="flex flex-col items-center gap-2 p-4 bg-brand-cream/30 rounded-2xl text-brand-olive"
+							>
+								<ImageIcon size={24} />
+								<span className="text-xs font-bold">{t('nav.gallery')}</span>
+							</NavLink>
+							<NavLink
+								to={themedTo("/music")}
+								onClick={() => setIsMenuOpen(false)}
+								className="flex flex-col items-center gap-2 p-4 bg-brand-cream/30 rounded-2xl text-brand-olive"
+							>
+								<Music size={24} />
+								<span className="text-xs font-bold">{t('nav.music')}</span>
+							</NavLink>
 							</div>
 
 							<div className="pt-4 border-t border-gray-100">
