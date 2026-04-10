@@ -67,3 +67,28 @@ export function setThemeMetaColor(theme: ThemeName) {
 export function getThemeDisplayName(theme: ThemeName) {
   return theme === 'academy' ? '从前书院' : '诗扶小筑';
 }
+
+export function mergeThemeQueryParams(
+  search: string | URLSearchParams,
+  extra: Record<string, string>,
+  theme: ThemeName,
+): URLSearchParams {
+  const params = new URLSearchParams(search instanceof URLSearchParams ? search.toString() : search);
+  for (const [key, value] of Object.entries(extra)) {
+    params.set(key, value);
+  }
+  if (theme === 'academy') {
+    params.set(THEME_PARAM, theme);
+  } else {
+    params.delete(THEME_PARAM);
+  }
+  return params;
+}
+
+export function mergeSearchParamsWithTheme(
+  searchParams: URLSearchParams,
+  extra: Record<string, string>,
+  theme: ThemeName,
+): URLSearchParams {
+  return mergeThemeQueryParams(searchParams, extra, theme);
+}

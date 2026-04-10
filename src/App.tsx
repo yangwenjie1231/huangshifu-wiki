@@ -1,8 +1,14 @@
 import React, { Suspense, lazy } from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import {
+	BrowserRouter as Router,
+	Navigate,
+	Route,
+	Routes,
+	useLocation,
+} from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { MusicProvider, useMusic } from "./context/MusicContext";
-import { ThemeProvider } from "./context/ThemeContext";
+import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import { Navbar } from "./components/Navbar";
 import { BottomNav } from "./components/BottomNav";
 import { AnnouncementBar } from "./components/AnnouncementBar";
@@ -39,6 +45,48 @@ const PageLoader = () => (
 
 const MainLayout = () => {
 	const { currentSong } = useMusic();
+	const { isAcademy } = useTheme();
+	const location = useLocation();
+
+	if (isAcademy) {
+		const path = location.pathname;
+		const forumWritePath =
+			path === "/forum/new" || /\/forum\/[^/]+\/edit$/.test(path);
+		const wikiWritePath =
+			path === "/wiki/new" ||
+			/\/wiki\/[^/]+\/edit$/.test(path) ||
+			/\/wiki\/[^/]+\/branches/.test(path) ||
+			/\/wiki\/[^/]+\/prs/.test(path);
+		const profilePath = path === "/profile" || path.startsWith("/profile/");
+		const adminPath = path === "/admin" || path.startsWith("/admin/");
+
+		if (forumWritePath) {
+			return (
+				<Navigate
+					to={{
+						pathname: "/forum",
+						search: location.search,
+						hash: location.hash,
+					}}
+					replace
+				/>
+			);
+		}
+
+		if (wikiWritePath || profilePath || adminPath) {
+			return (
+				<Navigate
+					to={{
+						pathname: "/wiki",
+						search: location.search,
+						hash: location.hash,
+					}}
+					replace
+				/>
+			);
+		}
+	}
+
 	return (
 		<div className="min-h-screen flex flex-col">
 			<AnnouncementBar />
@@ -119,10 +167,11 @@ const MainLayout = () => {
 						"诗情画意，扶摇直上"
 					</p>
 					<p className="text-gray-400 text-sm">
-						© 2026 诗扶小筑 - 黄诗扶粉丝Wiki与社区
+						© 2026 诗扶小筑 - 黄诗扶粉丝Wiki与社区 by ywj x miaopan
 					</p>
 					<a
 						target="_blank"
+						rel="noreferrer"
 						href="http://www.freecdn.vip/?zzwz"
 						title="免费云加速（FreeCDN），为您免费提供网站加速和网站防御（DDOS、CC攻击）"
 						className="text-gray-400 text-sm hover:text-gray-600 mt-2 inline-block"
