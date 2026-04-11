@@ -1,0 +1,134 @@
+{
+  "app": {
+    "title": "黄诗扶wiki",
+    "subtitle": "诗情画意，扶摇直上"
+  },
+  "nav": {
+    "home": "首页",
+    "wiki": "百科",
+    "forum": "论坛",
+    "music": "音乐",
+    "gallery": "图集",
+    "profile": "个人中心",
+    "admin": "管理"
+  },
+  "home": {
+    "hero": {
+      "title": "欢迎来到黄诗扶wiki",
+      "subtitle": "探索诗扶的音乐世界",
+      "cta": "开始探索"
+    },
+    "sections": {
+      "music": "音乐作品",
+      "gallery": "精美图集",
+      "wiki": "百科知识",
+      "events": "演出动态"
+    }
+  },
+  "music": {
+    "title": "音乐作品",
+    "description": "诗扶之声 · 记录每一首动人的旋律",
+    "play_count": "播放量",
+    "albums": "专辑",
+    "songs": "歌曲",
+    "batchExit": "退出批量",
+    "batchManage": "批量管理",
+    "linkImport": "链接导入",
+    "cancelAdd": "取消添加",
+    "addMusic": "添加音乐",
+    "linkManage": "关联管理",
+    "inputMusicId": "输入音乐 ID 或链接 (支持批量，用空格或逗号分隔)",
+    "selectPlatform": "选择平台",
+    "platforms": {
+      "netease": "网易云音乐",
+      "tencent": "QQ音乐",
+      "kugou": "酷狗音乐",
+      "baidu": "百度音乐",
+      "kuwo": "酷我音乐",
+      "all": "全部平台"
+    },
+    "inputPlaceholder": "输入",
+    "idOrLinkList": "音乐 ID 或链接列表",
+    "processing": "正在处理...",
+    "getAndAdd": "获取并添加",
+    "tabMusic": "音乐",
+    "tabAlbums": "专辑",
+    "createAlbum": "创建专辑",
+    "sortBy": {
+      "createdAt": "按添加时间",
+      "title": "按歌名",
+      "artist": "按歌手"
+    },
+    "sortOrder": {
+      "asc": "升序",
+      "desc": "降序"
+    },
+    "showAccompaniments": "显示伴奏",
+    "unit": {
+      "song": "首歌曲",
+      "album": "张专辑"
+    },
+    "selectedCount": "已选择 {{count}} 首歌曲",
+    "cancelSelect": "取消选择",
+    "batchDelete": "批量删除",
+    "confirmDelete": "确认删除",
+    "confirmDeleteSingle": "您确定要删除这首歌曲吗？此操作无法撤销。",
+    "confirmDeleteBatch": "您确定要删除选中的 {{count}} 首歌曲吗？此操作无法撤销。",
+    "cancel": "取消",
+    "confirmDeleteButton": "确定删除",
+    "relatedPosts": "相关乐评",
+    "loading": "加载中...",
+    "noPosts": "暂无乐评",
+    "play": "播放",
+    "favorite": "收藏",
+    "detail": "详情",
+    "selectSong": "选择歌曲",
+    "playSong": "播放歌曲",
+    "viewSongDetail": "查看歌曲详情",
+    "openOriginalLink": "打开原始链接",
+    "copyInternalLink": "复制内链",
+    "viewPosts": "查看乐评",
+    "deleteSong": "删除歌曲",
+    "noMusic": "暂无音乐，快去添加吧",
+    "view": "查看",
+    "viewAlbum": "查看专辑",
+    "copyAlbumLink": "复制专辑内链",
+    "noAlbums": "暂无专辑，快去创建吧",
+    "playing": "正在播放",
+    "selectSongToPlay": "选择一首歌曲开始播放",
+    "tips": {
+      "title": "音乐小贴士",
+      "content": "您可以直接输入网易云音乐的歌曲 ID 或链接来添加音乐。系统会自动获取封面、歌词和音频地址。",
+      "learnMore": "了解更多"
+    }
+  },
+  "gallery": {
+    "title": "精美图集",
+    "photos": "照片",
+    "artworks": "二创作品"
+  },
+  "wiki": {
+    "title": "百科知识",
+    "entries": "词条",
+    "categories": "分类"
+  },
+  "forum": {
+    "title": "社区论坛",
+    "posts": "帖子",
+    "replies": "回复"
+  },
+  "profile": {
+    "title": "个人中心",
+    "my_profile": "我的资料",
+    "my_favorites": "我的收藏"
+  },
+  "admin": {
+    "title": "管理后台",
+    "users": "用户管理",
+    "content": "内容管理"
+  },
+  "footer": {
+    "copyright": "© 2026 诗扶小筑 - 黄诗扶粉丝Wiki与社区",
+    "powered_by": "本站由免费云加速（FreeCDN）提供网站加速和攻击防御服务"
+  }
+}

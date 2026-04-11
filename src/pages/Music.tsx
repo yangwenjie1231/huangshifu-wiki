@@ -18,6 +18,8 @@ import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { format } from 'date-fns';
 import Pagination from '../components/Pagination';
 import { PlatformIds } from '../types/PlatformIds';
+import { useTheme } from '../context/ThemeContext';
+import { useI18n } from '../lib/i18n';
 
 const DEFAULT_PAGE_SIZE = 40;
 
@@ -166,6 +168,7 @@ const Music = () => {
   const { show } = useToast();
   const { preferences, setViewMode } = useUserPreferences();
   const viewMode = preferences.viewMode;
+  const { t } = useI18n();
 
   const fetchInstrumentalTargets = async () => {
     try {
@@ -465,9 +468,9 @@ const Music = () => {
             <div className="p-2 bg-brand-primary text-gray-900 rounded-xl shadow-lg">
               <Headphones size={24} />
             </div>
-            <h1 className="text-4xl md:text-5xl font-serif font-bold text-gray-900">音乐馆</h1>
+            <h1 className="text-4xl md:text-5xl font-serif font-bold text-gray-900">{t('music.title')}</h1>
           </div>
-          <p className="text-gray-500 italic">诗扶之声 · 记录每一首动人的旋律</p>
+          <p className="text-gray-500 italic">{t('music.description')}</p>
         </div>
         
         {isAdmin && (
@@ -481,14 +484,14 @@ const Music = () => {
                 setIsBatchMode(!isBatchMode);
                 setSelectedSongs(new Set());
               }}
-              aria-label={isBatchMode ? '退出批量' : '批量管理'}
+              aria-label={isBatchMode ? t('music.batchExit') : t('music.batchManage')}
               className={clsx(
                 "px-4 md:px-6 py-3 md:py-4 rounded-full font-bold transition-all flex items-center gap-2 shadow-lg md:shadow-xl",
                 isBatchMode ? "bg-brand-primary text-gray-900" : "bg-white text-gray-500 border border-gray-100"
               )}
             >
               <List size={18} />
-              <span className="hidden sm:inline">{isBatchMode ? '退出批量' : '批量管理'}</span>
+              <span className="hidden sm:inline">{isBatchMode ? t('music.batchExit') : t('music.batchManage')}</span>
             </button>
             <button
               onClick={() => {
@@ -498,11 +501,11 @@ const Music = () => {
                 }
                 setIsImportModalOpen(true);
               }}
-              aria-label="链接导入"
+              aria-label={t('music.linkImport')}
               className="px-4 md:px-6 py-3 md:py-4 bg-brand-primary text-gray-900 rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-lg md:shadow-xl touch-target-lg"
             >
               <Search size={18} />
-              <span className="hidden sm:inline">链接导入</span>
+              <span className="hidden sm:inline">{t('music.linkImport')}</span>
             </button>
             <button 
               onClick={() => {
@@ -512,19 +515,19 @@ const Music = () => {
                 }
                 setIsAdding(!isAdding);
               }}
-              aria-label={isAdding ? '取消添加' : '添加音乐'}
+              aria-label={isAdding ? t('music.cancelAdd') : t('music.addMusic')}
               className="px-4 md:px-6 py-3 md:py-4 bg-gray-900 text-white rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-lg md:shadow-xl touch-target-lg"
             >
               {isAdding ? <X size={18} /> : <Plus size={18} />}
-              <span className="hidden sm:inline">{isAdding ? '取消添加' : '添加音乐'}</span>
+              <span className="hidden sm:inline">{isAdding ? t('music.cancelAdd') : t('music.addMusic')}</span>
             </button>
             <Link
               to="/music/links"
-              aria-label="关联管理"
+              aria-label={t('music.linkManage')}
               className="px-4 md:px-6 py-3 md:py-4 bg-white text-gray-900 border border-gray-200 rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-lg md:shadow-xl touch-target-lg"
             >
               <Link2 size={18} />
-              <span className="hidden sm:inline">关联管理</span>
+              <span className="hidden sm:inline">{t('music.linkManage')}</span>
             </Link>
           </div>
         )}
@@ -539,27 +542,27 @@ const Music = () => {
             className="mb-8 md:mb-12 p-5 md:p-8 bg-brand-cream/30 rounded-2xl md:rounded-3xl border border-brand-primary/10"
           >
             <h3 className="text-xl font-serif font-bold text-gray-900 mb-6 flex items-center gap-2">
-              <Sparkles size={20} className="text-brand-primary" /> 输入音乐 ID 或链接 (支持批量，用空格或逗号分隔)
+              <Sparkles size={20} className="text-brand-primary" /> {t('music.inputMusicId')}
             </h3>
             <div className="flex flex-col gap-4">
               <div className="flex items-center gap-4">
-                <label className="text-sm font-bold text-gray-600">选择平台：</label>
+                <label className="text-sm font-bold text-gray-600">{t('music.selectPlatform')}：</label>
                 <select
                   value={selectedPlatform}
                   onChange={e => setSelectedPlatform(e.target.value as typeof selectedPlatform)}
                   className="px-4 py-2 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-primary/20 shadow-sm"
                 >
-                  <option value="netease">网易云音乐</option>
-                  <option value="tencent">QQ音乐</option>
-                  <option value="kugou">酷狗音乐</option>
-                  <option value="baidu">百度音乐</option>
-                  <option value="kuwo">酷我音乐</option>
+                  <option value="netease">{t('music.platforms.netease')}</option>
+                  <option value="tencent">{t('music.platforms.tencent')}</option>
+                  <option value="kugou">{t('music.platforms.kugou')}</option>
+                  <option value="baidu">{t('music.platforms.baidu')}</option>
+                  <option value="kuwo">{t('music.platforms.kuwo')}</option>
                 </select>
               </div>
               <textarea 
                 value={searchId}
                 onChange={e => setSearchId(e.target.value)}
-                placeholder={`输入 ${selectedPlatform === 'netease' ? '网易云' : selectedPlatform === 'tencent' ? 'QQ音乐' : selectedPlatform === 'kugou' ? '酷狗' : selectedPlatform === 'baidu' ? '百度' : '酷我'} 音乐 ID 或链接列表`}
+                placeholder={`${t('music.inputPlaceholder')} ${selectedPlatform === 'netease' ? t('music.platforms.netease') : selectedPlatform === 'tencent' ? t('music.platforms.tencent') : selectedPlatform === 'kugou' ? t('music.platforms.kugou') : selectedPlatform === 'baidu' ? t('music.platforms.baidu') : t('music.platforms.kuwo')} ${t('music.idOrLinkList')}`}
                 className="w-full px-6 py-4 bg-white rounded-3xl border-none focus:ring-2 focus:ring-brand-primary/20 shadow-sm min-h-[120px]"
               />
               <div className="flex justify-end">
@@ -568,7 +571,7 @@ const Music = () => {
                   disabled={loading}
                   className="px-10 py-4 bg-brand-primary text-gray-900 rounded-3xl font-bold hover:scale-105 transition-all shadow-md disabled:opacity-50"
                 >
-                  {loading ? '正在处理...' : '获取并添加'}
+                  {loading ? t('music.processing') : t('music.getAndAdd')}
                 </button>
               </div>
             </div>
@@ -595,19 +598,19 @@ const Music = () => {
           animate={{ y: 0 }}
           className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 bg-gray-900 text-white px-8 py-4 rounded-full shadow-2xl flex items-center gap-8"
         >
-          <span className="text-sm font-bold">已选择 {selectedSongs.size} 首歌曲</span>
+          <span className="text-sm font-bold">{t('music.selectedCount', { count: selectedSongs.size })}</span>
           <div className="flex gap-4">
             <button 
               onClick={() => setSelectedSongs(new Set())}
               className="text-sm text-gray-400 hover:text-white"
             >
-              取消选择
+              {t('music.cancelSelect')}
             </button>
             <button 
               onClick={() => setConfirmModal({ show: true, type: 'batch' })}
               className="px-6 py-2 bg-red-500 text-white rounded-full text-sm font-bold hover:bg-red-600 transition-all"
             >
-              批量删除
+              {t('music.batchDelete')}
             </button>
           </div>
         </motion.div>
@@ -622,24 +625,24 @@ const Music = () => {
               exit={{ scale: 0.9, opacity: 0 }}
               className="bg-white rounded-[40px] p-8 max-w-md w-full shadow-2xl"
             >
-              <h3 className="text-2xl font-serif font-bold text-gray-900 mb-4">确认删除</h3>
+              <h3 className="text-2xl font-serif font-bold text-gray-900 mb-4">{t('music.confirmDelete')}</h3>
               <p className="text-gray-500 mb-8">
                 {confirmModal.type === 'single' 
-                  ? "您确定要删除这首歌曲吗？此操作无法撤销。" 
-                  : `您确定要删除选中的 ${selectedSongs.size} 首歌曲吗？此操作无法撤销。`}
+                  ? t('music.confirmDeleteSingle') 
+                  : t('music.confirmDeleteBatch', { count: selectedSongs.size })}
               </p>
               <div className="flex gap-4">
                 <button 
                   onClick={() => setConfirmModal({ show: false, type: 'single' })}
                   className="flex-grow px-6 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-all"
                 >
-                  取消
+                  {t('music.cancel')}
                 </button>
                 <button 
                   onClick={() => confirmModal.type === 'single' ? handleDeleteSong(confirmModal.id!) : handleBatchDelete()}
                   className="flex-grow px-6 py-4 bg-red-500 text-white rounded-2xl font-bold hover:bg-red-600 transition-all"
                 >
-                  确定删除
+                  {t('music.confirmDeleteButton')}
                 </button>
               </div>
             </motion.div>
@@ -659,7 +662,7 @@ const Music = () => {
                     activeTab === 'music' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800',
                   )}
                 >
-                  <Grid3X3 size={16} /> 音乐
+                  <Grid3X3 size={16} /> {t('music.tabMusic')}
                 </button>
                 <button
                   onClick={() => setActiveTab('albums')}
@@ -668,7 +671,7 @@ const Music = () => {
                     activeTab === 'albums' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800',
                   )}
                 >
-                  <Album size={16} /> 专辑
+                  <Album size={16} /> {t('music.tabAlbums')}
                 </button>
               </div>
               <div className="flex items-center gap-3">
@@ -680,7 +683,7 @@ const Music = () => {
                     }}
                     className="px-4 py-2 rounded-full bg-brand-primary text-gray-900 text-xs font-bold hover:scale-105 transition-all"
                   >
-                    <Plus size={14} className="inline mr-1" /> 创建专辑
+                    <Plus size={14} className="inline mr-1" /> {t('music.createAlbum')}
                   </button>
                 )}
                 <ViewModeSelector value={viewMode} onChange={setViewMode} size="sm" />
@@ -694,14 +697,14 @@ const Music = () => {
                       }}
                       className="px-2 py-1.5 rounded-lg border border-gray-200 text-xs bg-white"
                     >
-                      <option value="createdAt">按添加时间</option>
-                      <option value="title">按歌名</option>
-                      <option value="artist">按歌手</option>
+                      <option value="createdAt">{t('music.sortBy.createdAt')}</option>
+                      <option value="title">{t('music.sortBy.title')}</option>
+                      <option value="artist">{t('music.sortBy.artist')}</option>
                     </select>
                     <button
                       onClick={() => setSortOrder(o => o === 'asc' ? 'desc' : 'asc')}
                       className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500"
-                      title={sortOrder === 'asc' ? '升序' : '降序'}
+                      title={sortOrder === 'asc' ? t('music.sortOrder.asc') : t('music.sortOrder.desc')}
                     >
                       {sortOrder === 'desc' ? '↓' : '↑'}
                     </button>
@@ -713,12 +716,12 @@ const Music = () => {
                       }}
                       className="px-2 py-1.5 rounded-lg border border-gray-200 text-xs bg-white"
                     >
-                      <option value="all">全部平台</option>
-                      <option value="netease">网易云</option>
-                      <option value="tencent">QQ音乐</option>
-                      <option value="kugou">酷狗</option>
-                      <option value="baidu">百度</option>
-                      <option value="kuwo">酷我</option>
+                      <option value="all">{t('music.platforms.all')}</option>
+                      <option value="netease">{t('music.platforms.netease')}</option>
+                      <option value="tencent">{t('music.platforms.tencent')}</option>
+                      <option value="kugou">{t('music.platforms.kugou')}</option>
+                      <option value="baidu">{t('music.platforms.baidu')}</option>
+                      <option value="kuwo">{t('music.platforms.kuwo')}</option>
                     </select>
                     <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
                       <input
@@ -727,12 +730,12 @@ const Music = () => {
                         onChange={(e) => setShowAccompaniments(e.target.checked)}
                         className="w-3.5 h-3.5 rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
                       />
-                      <span>显示伴奏</span>
+                      <span>{t('music.showAccompaniments')}</span>
                     </label>
                   </>
                 )}
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                  {activeTab === 'music' ? `${displaySongs.length} 首歌曲` : `${albums.length} 张专辑`}
+                  {activeTab === 'music' ? `${displaySongs.length} ${t('music.unit.song')}` : `${albums.length} ${t('music.unit.album')}`}
                 </span>
               </div>
             </div>
@@ -777,7 +780,7 @@ const Music = () => {
                                 <button
                                   onClick={() => playSong(song)}
                                   className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
-                                  title="播放"
+                                  title={t('music.play')}
                                 >
                                   <Play size={14} className="text-white" />
                                 </button>
@@ -798,7 +801,7 @@ const Music = () => {
                                         selectedSongs.has(song.docId) ? 'bg-brand-primary text-gray-900' : 'bg-gray-100 text-gray-500',
                                       )}
                                     >
-                                      {selectedSongs.has(song.docId) ? '已选择' : '选择'}
+                                      {selectedSongs.has(song.docId) ? t('music.selected') : t('music.select')}
                                     </button>
                                   ) : (
                                     <>
@@ -809,14 +812,16 @@ const Music = () => {
                                           'p-1.5 md:p-2 transition-colors touch-target-lg',
                                           song.favoritedByMe ? 'text-red-500' : 'text-gray-400 hover:text-red-500',
                                         )}
+                                        title={t('music.favorite')}
                                       >
                                         <Heart size={14} />
                                       </button>
                                       <Link
                                         to={`/music/${song.docId}`}
                                         className="px-2.5 md:px-3 py-1.5 rounded-full bg-black/60 text-white text-xs hover:bg-black/75 transition-colors"
+                                        title={t('music.detail')}
                                       >
-                                        详情
+                                        {t('music.detail')}
                                       </Link>
                                     </>
                                   )}
@@ -835,22 +840,22 @@ const Music = () => {
                                       'w-9 h-9 md:w-10 md:h-10 rounded-full inline-flex items-center justify-center transition-all',
                                       isBatchMode ? 'bg-white/80 text-gray-900 hover:bg-white' : 'bg-brand-primary text-gray-900 hover:scale-105',
                                     )}
-                                    title={isBatchMode ? '选择歌曲' : '播放歌曲'}
+                                    title={isBatchMode ? t('music.selectSong') : t('music.playSong')}
                                   >
                                     <Play size={14} className={clsx(!isBatchMode && currentSong?.docId === song.docId && 'fill-current')} />
                                   </button>
                                   <Link
                                     to={`/music/${song.docId}`}
                                     className="inline-flex items-center gap-1 text-xs px-2 py-1.5 md:px-3 md:py-2 rounded-full bg-black/60 text-white hover:bg-black/75 transition-colors"
-                                    title="查看歌曲详情"
+                                    title={t('music.viewSongDetail')}
                                   >
-                                    详情 <ChevronRight size={12} />
+                                    {t('music.detail')} <ChevronRight size={12} />
                                   </Link>
                                 </div>
                               </div>
 
                               <div className="mt-3 md:mt-4">
-                                <Link to={`/music/${song.docId}`} className="font-bold text-gray-900 line-clamp-1 hover:text-brand-primary transition-colors text-sm md:text-base" title="查看歌曲详情">
+                                <Link to={`/music/${song.docId}`} className="font-bold text-gray-900 line-clamp-1 hover:text-brand-primary transition-colors text-sm md:text-base" title={t('music.viewSongDetail')}>
                                   {song.title}
                                 </Link>
                                 <p className="text-xs text-gray-400 mt-1 line-clamp-1">{song.artist} — {song.album}</p>
@@ -862,9 +867,9 @@ const Music = () => {
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
-                                        title={`网易云: ${song.platformIds.neteaseId}`}
+                                        title={`${t('music.platforms.netease')}: ${song.platformIds.neteaseId}`}
                                       >
-                                        网易云
+                                        {t('music.platforms.netease')}
                                       </a>
                                     )}
                                     {song.platformIds.tencentId && (
@@ -873,7 +878,7 @@ const Music = () => {
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
-                                        title={`QQ音乐: ${song.platformIds.tencentId}`}
+                                        title={`${t('music.platforms.tencent')}: ${song.platformIds.tencentId}`}
                                       >
                                         QQ
                                       </a>
@@ -898,7 +903,7 @@ const Music = () => {
                                       selectedSongs.has(song.docId) ? 'bg-brand-primary text-gray-900' : 'bg-gray-100 text-gray-500 hover:text-gray-800',
                                     )}
                                   >
-                                    {selectedSongs.has(song.docId) ? '已选择' : '选择'}
+                                    {selectedSongs.has(song.docId) ? t('music.selected') : t('music.select')}
                                   </button>
                                 ) : (
                                   <div className={clsx(
@@ -913,7 +918,7 @@ const Music = () => {
                                         song.favoritedByMe ? 'text-red-500' : 'text-gray-400 hover:text-red-500',
                                         favoriting === song.docId && 'opacity-50 cursor-not-allowed',
                                       )}
-                                      title="收藏"
+                                      title={t('music.favorite')}
                                     >
                                       <Heart size={16} />
                                     </button>
@@ -922,14 +927,14 @@ const Music = () => {
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="p-2 text-gray-400 hover:text-brand-primary transition-colors shrink-0"
-                                      title="打开原始链接"
+                                      title={t('music.openOriginalLink')}
                                     >
                                       <ExternalLink size={16} />
                                     </a>
                                     <button
                                       onClick={(event) => handleCopySongLink(event, song)}
                                       className="p-2 text-gray-400 hover:text-brand-primary transition-colors shrink-0"
-                                      title="复制内链"
+                                      title={t('music.copyInternalLink')}
                                     >
                                       <Link2 size={16} />
                                     </button>
@@ -940,7 +945,7 @@ const Music = () => {
                                         viewMode === 'small' ? 'hidden sm:inline-flex' : 'inline-flex',
                                         selectedSongForPosts?.docId === song.docId ? 'text-brand-primary' : 'text-gray-400 hover:text-brand-primary',
                                       )}
-                                      title="查看乐评"
+                                      title={t('music.viewPosts')}
                                     >
                                       <MessageSquare size={16} />
                                     </button>
@@ -951,7 +956,7 @@ const Music = () => {
                                   <button
                                     onClick={() => setConfirmModal({ show: true, type: 'single', id: song.docId })}
                                     className="p-2 text-gray-400 hover:text-red-500 transition-colors shrink-0"
-                                    title="删除歌曲"
+                                    title={t('music.deleteSong')}
                                   >
                                     <Trash2 size={16} />
                                   </button>
@@ -975,7 +980,7 @@ const Music = () => {
                             <div className="flex items-center justify-between mb-4">
                               <h3 className="font-bold text-gray-900 flex items-center gap-2">
                                 <MessageSquare size={18} />
-                                相关乐评
+                                {t('music.relatedPosts')}
                               </h3>
                               <button
                                 onClick={() => setSelectedSongForPosts(null)}
@@ -987,7 +992,7 @@ const Music = () => {
                           </div>
                           <div className="divide-y divide-gray-50">
                             {loadingPosts ? (
-                              <div className="p-8 text-center text-gray-400">加载中...</div>
+                              <div className="p-8 text-center text-gray-400">{t('music.loading')}</div>
                             ) : songPosts.length > 0 ? (
                               songPosts.map((post) => (
                                 <div key={post.id} className="p-6 hover:bg-black/5 transition-colors">
@@ -1003,7 +1008,7 @@ const Music = () => {
                                 </div>
                               ))
                             ) : (
-                              <div className="p-8 text-center text-gray-400">暂无乐评</div>
+                              <div className="p-8 text-center text-gray-400">{t('music.noPosts')}</div>
                             )}
                           </div>
                         </motion.div>
@@ -1021,7 +1026,7 @@ const Music = () => {
                     )}
                   </>
                 ) : (
-                  <div className="py-20 text-center text-gray-400 italic">暂无音乐，快去添加吧</div>
+                  <div className="py-20 text-center text-gray-400 italic">{t('music.noMusic')}</div>
                 )}
               </div>
             ) : (
@@ -1068,12 +1073,12 @@ const Music = () => {
                                   <p className="text-xs text-gray-400 line-clamp-1">{album.artist}</p>
                                 </div>
                                 <div className="flex items-center gap-2 flex-shrink-0">
-                                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">{trackCount} 首</span>
+                                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">{trackCount} {t('music.unit.song')}</span>
                                   <Link
                                     to={`/album/${albumId}`}
                                     className="px-3 py-1.5 rounded-full bg-brand-primary/15 text-gray-900 text-xs hover:bg-brand-primary/25 transition-colors"
                                   >
-                                    查看
+                                    {t('music.view')}
                                   </Link>
                                 </div>
                               </div>
@@ -1084,7 +1089,7 @@ const Music = () => {
                                 <img src={album.cover} alt={album.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent opacity-80" />
                                 <div className="absolute left-3 bottom-3 inline-flex items-center gap-1 text-xs text-white bg-black/60 rounded-full px-3 py-1.5">
-                                  <List size={13} /> {trackCount} 首
+                                  <List size={13} /> {trackCount} {t('music.unit.song')}
                                 </div>
                               </Link>
 
@@ -1100,12 +1105,12 @@ const Music = () => {
                                   to={`/album/${albumId}`}
                                   className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full bg-brand-primary/15 text-gray-900 hover:bg-brand-primary/25 transition-colors"
                                 >
-                                  查看专辑 <ChevronRight size={14} />
+                                  {t('music.viewAlbum')} <ChevronRight size={14} />
                                 </Link>
                                 <button
                                   onClick={(event) => handleCopyAlbumLink(event, albumId)}
                                   className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
-                                  title="复制专辑内链"
+                                  title={t('music.copyAlbumLink')}
                                 >
                                   <Link2 size={16} />
                                 </button>
@@ -1117,7 +1122,7 @@ const Music = () => {
                     })}
                   </div>
                 ) : (
-                  <div className="py-20 text-center text-gray-400 italic">暂无专辑，快去导入吧</div>
+                  <div className="py-20 text-center text-gray-400 italic">{t('music.noAlbums')}</div>
                 )}
               </div>
             )}
@@ -1127,7 +1132,7 @@ const Music = () => {
         <div className="lg:col-span-1">
           <div className="sticky top-24">
             <h2 className="text-2xl font-serif font-bold text-gray-900 mb-6 flex items-center gap-2">
-              <Disc size={24} className="text-brand-primary" /> 正在播放
+              <Disc size={24} className="text-brand-primary" /> {t('music.playing')}
             </h2>
             {currentSong ? (
               <MusicPlayer songId={currentSong.id} />
@@ -1136,7 +1141,7 @@ const Music = () => {
                 <div className="w-20 h-20 bg-brand-cream rounded-full flex items-center justify-center mx-auto mb-6 text-brand-primary">
                   <MusicIcon size={40} />
                 </div>
-                <p className="text-gray-400 italic">选择一首歌曲开始播放</p>
+                <p className="text-gray-400 italic">{t('music.selectSongToPlay')}</p>
               </div>
             )}
             
@@ -1144,12 +1149,12 @@ const Music = () => {
               <div className="absolute top-0 right-0 p-8 opacity-10">
                 <Sparkles size={120} />
               </div>
-              <h3 className="text-xl font-serif font-bold mb-4 relative z-10">音乐小贴士</h3>
+              <h3 className="text-xl font-serif font-bold mb-4 relative z-10">{t('music.tips.title')}</h3>
               <p className="text-gray-400 text-sm leading-relaxed relative z-10">
-                您可以直接输入网易云音乐的歌曲 ID 或链接来添加音乐。系统会自动获取封面、歌词和音频地址。
+                {t('music.tips.content')}
               </p>
               <button className="mt-6 text-brand-primary font-bold text-sm flex items-center gap-1 hover:underline relative z-10">
-                了解更多 <ChevronRight size={16} />
+                {t('music.tips.learnMore')} <ChevronRight size={16} />
               </button>
             </div>
           </div>

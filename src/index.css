@@ -1,10 +1,11 @@
 @import "tailwindcss";
 
 @theme {
-  --font-serif: "Times New Roman", "Noto Serif SC", "Source Han Serif SC", serif;
-  --font-body: Georgia, "Noto Serif SC", "Source Han Serif SC", serif;
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --font-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
+  --font-body: "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-sans: "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
 
+  /* 普通主题 - 油菜花黄色系 */
   --color-brand-primary: #FFD700;
   --color-brand-olive: #5A5A40;
   --color-brand-cream: #FDFDF7;
@@ -22,6 +23,12 @@
   --radius-theme-card: 1.5rem;
   --shadow-theme-card: 0 10px 30px rgba(0, 0, 0, 0.06);
   --theme-header-image: linear-gradient(135deg, rgba(255, 215, 0, 0.12), rgba(90, 90, 64, 0.08));
+  
+  /* 高亮文字色 - 苹果标志性渐变色彩 */
+  --color-highlight-1: rgba(255, 149, 0, 0.8);
+  --color-highlight-2: rgba(255, 99, 132, 0.8);
+  --color-highlight-3: rgba(153, 102, 255, 0.8);
+  --color-highlight-4: rgba(54, 162, 235, 0.8);
 
   --radius-xs: 0.25rem;
   --radius-sm: 0.5rem;
@@ -318,4 +325,132 @@ button:disabled {
 img {
   max-width: 100%;
   height: auto;
+}
+
+/* 玻璃质感卡片样式 */
+.liquidGlass-wrapper {
+  position: relative;
+  display: flex;
+  overflow: hidden;
+  padding: 0.6rem;
+  border-radius: 2rem;
+  cursor: pointer;
+  box-shadow: 0 6px 6px rgba(0, 0, 0, 0.2), 0 0 20px rgba(0, 0, 0, 0.1);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 2.2);
+}
+
+/* Hover效果 */
+.liquidGlass-wrapper:hover {
+  padding: 0.8rem;
+  border-radius: 2.5rem;
+}
+
+/* 扭曲层 */
+.liquidGlass-effect {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  backdrop-filter: blur(3px);
+  filter: url(#glass-distortion);
+}
+
+/* 色调层 */
+.liquidGlass-tint {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* 光泽层 */
+.liquidGlass-shine {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  box-shadow: inset 2px 2px 1px 0 rgba(255, 255, 255, 0.5), inset -1px -1px 1px 1px rgba(255, 255, 255, 0.5);
+}
+
+/* 内容层 */
+.liquidGlass-text {
+  position: relative;
+  z-index: 3;
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 2.2);
+}
+
+.liquidGlass-wrapper:hover .liquidGlass-text {
+  transform: scale(0.95);
+}
+
+/* 子项样式 */
+.menu-item {
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.8rem;
+  transition: all 0.1s ease-in;
+}
+
+.menu-item:hover {
+  background-color: rgba(255, 255, 255, 0.5);
+  box-shadow: inset -2px -2px 2px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(2px);
+}
+
+/* Bento Grid布局 */
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .bento-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .bento-item-large {
+    grid-column: span 2;
+  }
+  
+  .bento-item-tall {
+    grid-row: span 2;
+  }
+}
+
+@media (min-width: 1200px) {
+  .bento-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* 响应式调整 */
+@media (max-width: 720px) {
+  .bento-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .bento-item-large,
+  .bento-item-tall {
+    grid-column: span 1;
+    grid-row: span 1;
+  }
+}
+
+/* 高亮文字效果 */
+.text-highlight-1 {
+  color: var(--color-highlight-1);
+  text-shadow: 0 0 10px rgba(255, 149, 0, 0.3);
+}
+
+.text-highlight-2 {
+  color: var(--color-highlight-2);
+  text-shadow: 0 0 10px rgba(255, 99, 132, 0.3);
+}
+
+.text-highlight-3 {
+  color: var(--color-highlight-3);
+  text-shadow: 0 0 10px rgba(153, 102, 255, 0.3);
+}
+
+.text-highlight-4 {
+  color: var(--color-highlight-4);
+  text-shadow: 0 0 10px rgba(54, 162, 235, 0.3);
 }
