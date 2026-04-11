@@ -12,6 +12,7 @@ import {
 	Shield,
 	Sparkles,
 	ChevronRight,
+	Flame,
 } from "lucide-react";
 import { format } from "date-fns";
 import { apiGet } from "../lib/apiClient";
@@ -429,7 +430,7 @@ const Home = () => {
 						<div className="liquidGlass-text w-full p-6 sm:p-8 flex flex-col h-full">
 							<div className="flex justify-between items-end mb-6">
 								<h2 className="text-2xl font-serif font-bold text-gray-900 flex items-center gap-2">
-									🔥 热门帖子
+									<Flame size={20} className="text-orange-500" /> 热门帖子
 								</h2>
 								<Link
 									to={withThemeSearch("/forum?sort=hot", theme)}
