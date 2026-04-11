@@ -30,6 +30,33 @@
   --color-highlight-3: rgba(153, 102, 255, 0.8);
   --color-highlight-4: rgba(54, 162, 235, 0.8);
 
+  /* 苹果标志性渐变 - 蓝紫渐变 */
+  --gradient-highlight: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
+  --gradient-highlight-subtle: linear-gradient(135deg, rgba(0, 122, 255, 0.8) 0%, rgba(88, 86, 214, 0.8) 100%);
+
+  /* CTA 行动号召色 */
+  --color-cta: #22C55E;
+  --color-cta-hover: #16A34A;
+
+  /* Liquid Glass 玻璃质感核心变量 */
+  --glass-bg: rgba(255, 255, 255, 0.2);
+  --glass-bg-strong: rgba(255, 255, 255, 0.8);
+  --glass-blur: 15px;
+  --glass-saturate: 180%;
+  --glass-border: rgba(255, 255, 255, 0.2);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+
+  /* Liquid Glass 流动效果变量 */
+  --morph-duration: 400ms;
+  --morph-easing: cubic-bezier(0.175, 0.885, 0.32, 2.2);
+  --focus-scale: 1.02;
+  --hover-scale: 0.95;
+
+  /* 超大字体排版 */
+  --text-display: 4.5rem;
+  --text-hero: 3rem;
+  --text-section: 2rem;
+
   --radius-xs: 0.25rem;
   --radius-sm: 0.5rem;
   --radius-md: 0.75rem;
@@ -327,7 +354,102 @@ img {
   height: auto;
 }
 
-/* 玻璃质感卡片样式 */
+/* 超大字体排版工具类 */
+.text-display {
+  font-size: var(--text-display);
+  font-weight: 700;
+  line-height: 1.1;
+  font-family: var(--font-serif);
+}
+
+.text-hero {
+  font-size: var(--text-hero);
+  font-weight: 700;
+  line-height: 1.2;
+  font-family: var(--font-serif);
+}
+
+.text-section {
+  font-size: var(--text-section);
+  font-weight: 600;
+  line-height: 1.3;
+  font-family: var(--font-serif);
+}
+
+/* 中英文混排排版 - 中文大粗体 + 英文小字点缀 */
+.text-bilingual .chinese-text {
+  font-size: 1.25em;
+  font-weight: 700;
+  font-family: var(--font-serif);
+}
+
+.text-bilingual .english-text {
+  font-size: 0.875em;
+  font-weight: 400;
+  font-family: var(--font-sans);
+}
+
+/* 高亮渐变文字效果 */
+.text-gradient-highlight {
+  background: var(--gradient-highlight);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-highlight-subtle {
+  background: var(--gradient-highlight-subtle);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 高亮色透明度渐变工具类 */
+.bg-highlight-gradient {
+  background: var(--gradient-highlight);
+}
+
+.bg-highlight-gradient-subtle {
+  background: var(--gradient-highlight-subtle);
+}
+
+.bg-highlight-1 {
+  background: var(--color-highlight-1);
+}
+
+.bg-highlight-2 {
+  background: var(--color-highlight-2);
+}
+
+.bg-highlight-3 {
+  background: var(--color-highlight-3);
+}
+
+.bg-highlight-4 {
+  background: var(--color-highlight-4);
+}
+
+/* CTA 按钮样式 */
+.btn-cta {
+  background: var(--color-cta);
+  color: white;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  transition: all var(--transition-base);
+  cursor: pointer;
+}
+
+.btn-cta:hover {
+  background: var(--color-cta-hover);
+  transform: scale(1.02);
+}
+
+.btn-cta:active {
+  transform: scale(0.98);
+}
+
+/* 玻璃质感卡片样式 - 增强版 Liquid Glass */
 .liquidGlass-wrapper {
   position: relative;
   display: flex;
@@ -335,8 +457,74 @@ img {
   padding: 0.6rem;
   border-radius: 2rem;
   cursor: pointer;
-  box-shadow: 0 6px 6px rgba(0, 0, 0, 0.2), 0 0 20px rgba(0, 0, 0, 0.1);
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 2.2);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  transition: all var(--morph-duration) var(--morph-easing);
+}
+
+/* Light mode 增强可见性 */
+@media (prefers-color-scheme: light) {
+  .liquidGlass-wrapper {
+    background: var(--glass-bg-strong);
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+}
+
+/* Hover效果 - Morphing 动画 */
+.liquidGlass-wrapper:hover {
+  padding: 0.8rem;
+  border-radius: 2.5rem;
+  transform: scale(var(--focus-scale));
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+
+/* 扭曲层 */
+.liquidGlass-effect {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  filter: url(#glass-distortion);
+}
+
+/* 色调层 */
+.liquidGlass-tint {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* 光泽层 */
+.liquidGlass-shine {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  box-shadow: inset 2px 2px 1px 0 rgba(255, 255, 255, 0.5), inset -1px -1px 1px 1px rgba(255, 255, 255, 0.5);
+}
+
+/* 内容层 */
+.liquidGlass-text {
+  position: relative;
+  z-index: 3;
+  transition: transform var(--morph-duration) var(--morph-easing);
+}
+
+.liquidGlass-wrapper:hover .liquidGlass-text {
+  transform: scale(var(--hover-scale));
+}
+
+/* 所有可点击元素添加 cursor-pointer */
+.liquidGlass-wrapper,
+.btn-cta,
+.menu-item,
+.touch-target,
+.touch-target-lg {
+  cursor: pointer;
 }
 
 /* Hover效果 */
@@ -453,4 +641,49 @@ img {
 .text-highlight-4 {
   color: var(--color-highlight-4);
   text-shadow: 0 0 10px rgba(54, 162, 235, 0.3);
+}
+
+/* prefers-reduced-motion 支持 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .liquidGlass-wrapper,
+  .liquidGlass-wrapper:hover,
+  .liquidGlass-text,
+  .liquidGlass-wrapper:hover .liquidGlass-text {
+    transition: none;
+    transform: none;
+    animation: none;
+  }
+}
+
+/* 平滑滚动 */
+html {
+  scroll-behavior: smooth;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-theme-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-brand-olive);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-brand-primary);
 }
