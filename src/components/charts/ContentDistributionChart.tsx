@@ -16,7 +16,7 @@ export const ContentDistributionChart: React.FC<ContentDistributionChartProps> =
     color: chartTheme.color,
     tooltip: {
       ...defaultTooltipSettings,
-      trigger: 'item',
+      trigger: 'item' as const,
       formatter: '{b}: {c} ({d}%)',
     },
     legend: {

@@ -84,7 +84,7 @@ export const defaultGridSettings = {
 };
 
 export const defaultTooltipSettings = {
-  trigger: 'axis',
+  trigger: 'axis' as const,
   backgroundColor: 'rgba(255, 255, 255, 0.95)',
   borderColor: '#E5DED1',
   borderWidth: 1,
