@@ -13,3 +13,4 @@ tmp_*.ps1
 pm2_status.txt
 server_check.txt
 nul
+.trae/
