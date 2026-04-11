@@ -582,16 +582,17 @@ img {
   backdrop-filter: blur(2px);
 }
 
-/* Bento Grid布局 */
+/* Bento Grid布局 - 大间距设计 */
 .bento-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
+  gap: 3rem;
 }
 
 @media (min-width: 768px) {
   .bento-grid {
     grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
   }
   
   .bento-item-large {
@@ -606,6 +607,7 @@ img {
 @media (min-width: 1200px) {
   .bento-grid {
     grid-template-columns: repeat(3, 1fr);
+    gap: 3rem;
   }
 }
 
@@ -613,6 +615,7 @@ img {
 @media (max-width: 720px) {
   .bento-grid {
     grid-template-columns: 1fr;
+    gap: 1.5rem;
   }
   
   .bento-item-large,
