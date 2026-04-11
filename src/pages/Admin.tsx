@@ -120,6 +120,9 @@ const Admin = () => {
   };
 
   const fetchData = async () => {
+    if (activeTab === 'backups' || activeTab === 'sensitive_check') {
+      return;
+    }
     setLoading(true);
     try {
       if (activeTab === 'locks') {
