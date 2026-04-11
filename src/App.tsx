@@ -167,7 +167,7 @@ const MainLayout = () => {
 						"诗情画意，扶摇直上"
 					</p>
 					<p className="text-gray-400 text-sm">
-						© 2026 诗扶小筑 - 黄诗扶粉丝Wiki与社区
+						© 2026 诗扶小筑 - 黄诗扶粉丝Wiki与社区 by ywj x miaopan
 					</p>
 					<a
 						target="_blank"
