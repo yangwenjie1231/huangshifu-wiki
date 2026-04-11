@@ -2173,6 +2173,7 @@ const WikiEditor = () => {
 	const isNew = !slug || slug === "new";
 	const navigate = useNavigate();
 	const { user, profile, isAdmin, isBanned } = useAuth();
+	const { theme } = useTheme();
 
 	const [formData, setFormData] = useState({
 		title: "",
