@@ -12,6 +12,7 @@ import {
 	Shield,
 	Sparkles,
 	ChevronRight,
+	Flame,
 } from "lucide-react";
 import { format } from "date-fns";
 import { apiGet } from "../lib/apiClient";
@@ -19,6 +20,33 @@ import { toDateValue } from "../lib/dateUtils";
 import { useTheme } from "../context/ThemeContext";
 import { withThemeSearch } from "../lib/theme";
 import { useI18n } from "../lib/i18n";
+import { useAnimatedNumber } from "../hooks/useAnimatedNumber";
+
+interface AnimatedStatProps {
+	value: number;
+	suffix?: string;
+	label: string;
+	icon: React.ReactNode;
+}
+
+const AnimatedStat: React.FC<AnimatedStatProps> = ({ value, suffix = "", label, icon }) => {
+	const [ref, count, inView] = useAnimatedNumber<HTMLDivElement>(value);
+
+	return (
+		<div ref={ref} className="flex items-center gap-3 p-4 bg-white/20 rounded-2xl border border-white/20">
+			<div className="w-10 h-10 rounded-full bg-white/40 flex items-center justify-center text-gray-900">
+				{icon}
+			</div>
+			<div>
+				<p className="text-sm font-bold">
+					{inView ? count.toLocaleString() : 0}
+					{suffix}
+				</p>
+				<p className="text-xs text-gray-800/50">{label}</p>
+			</div>
+		</div>
+	);
+};
 
 type HomeFeedResponse = {
 	announcements: Array<{
@@ -276,7 +304,7 @@ const Home = () => {
 
 	return (
 		<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-			{/* Hero Section */}
+			{/* Hero Section - ywj 风格大字体 */}
 			<section className="relative h-[70vh] min-h-[500px] rounded-[40px] overflow-hidden mb-12 shadow-2xl">
 				<div className="absolute inset-0 bg-gradient-to-br from-brand-primary/35 via-white/20 to-black/30" />
 				<div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-12 sm:p-20">
@@ -285,9 +313,9 @@ const Home = () => {
 						animate={{ opacity: 1, y: 0 }}
 						transition={{ duration: 0.8 }}
 					>
-						<h1 className="text-white text-6xl sm:text-8xl font-serif font-bold mb-6 leading-tight">
+						<h1 className="text-white text-display sm:text-[100px] font-serif font-bold mb-6 leading-tight">
 							黄诗扶{" "}
-							<span className="text-3xl sm:text-4xl font-normal italic opacity-80 block sm:inline ml-0 sm:ml-4">
+							<span className="text-2xl sm:text-3xl font-normal english-text opacity-80 block sm:inline ml-0 sm:ml-4">
 								Huang Shifu
 							</span>
 						</h1>
@@ -402,7 +430,7 @@ const Home = () => {
 						<div className="liquidGlass-text w-full p-6 sm:p-8 flex flex-col h-full">
 							<div className="flex justify-between items-end mb-6">
 								<h2 className="text-2xl font-serif font-bold text-gray-900 flex items-center gap-2">
-									🔥 热门帖子
+									<Flame size={20} className="text-orange-500" /> 热门帖子
 								</h2>
 								<Link
 									to={withThemeSearch("/forum?sort=hot", theme)}
@@ -542,24 +570,18 @@ const Home = () => {
 							</p>
 						</div>
 						<div className="space-y-4">
-							<div className="flex items-center gap-3 p-4 bg-white/20 rounded-2xl border border-white/20">
-								<div className="w-10 h-10 rounded-full bg-white/40 flex items-center justify-center">
-									<Music size={20} />
-								</div>
-								<div>
-									<p className="text-sm font-bold">1,240+</p>
-									<p className="text-xs text-gray-800/50">收录曲目</p>
-								</div>
-							</div>
-							<div className="flex items-center gap-3 p-4 bg-white/20 rounded-2xl border border-white/20">
-								<div className="w-10 h-10 rounded-full bg-white/40 flex items-center justify-center">
-									<MessageSquare size={20} />
-								</div>
-								<div>
-									<p className="text-sm font-bold">5,600+</p>
-									<p className="text-xs text-gray-800/50">社区成员</p>
-								</div>
-							</div>
+							<AnimatedStat
+								value={1240}
+								suffix="+"
+								label="收录曲目"
+								icon={<Music size={20} />}
+							/>
+							<AnimatedStat
+								value={5600}
+								suffix="+"
+								label="社区成员"
+								icon={<MessageSquare size={20} />}
+							/>
 							<Link
 								to={withThemeSearch("/forum", theme)}
 								className="mt-4 px-6 py-3 bg-white text-brand-primary rounded-full font-bold hover:bg-white/90 transition-all text-center"
