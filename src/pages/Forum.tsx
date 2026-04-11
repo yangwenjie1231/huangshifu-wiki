@@ -174,7 +174,7 @@ const PostList = () => {
 	const handlePageChange = (newPage: number) => {
 		setPage(newPage);
 		setSearchParams(
-			mergeSearchParamsWithTheme(searchParams, { page: newPage }, theme),
+			mergeSearchParamsWithTheme(searchParams, { page: String(newPage) }, theme),
 		);
 		window.scrollTo({ top: 0, behavior: "smooth" });
 	};
