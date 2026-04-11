@@ -425,7 +425,7 @@ const Home = () => {
 													: post.section === "news"
 														? "动态资讯"
 														: post.section === "fanart"
-															? "同人创作"
+															? "二创交流"
 															: "问答区"}
 											</span>
 										</div>
@@ -491,7 +491,7 @@ const Home = () => {
 													: post.section === "news"
 														? "动态资讯"
 														: post.section === "fanart"
-															? "同人创作"
+															? "二创交流"
 															: "问答区"}
 											</span>
 											<span className="text-gray-400 text-xs flex items-center gap-1">
