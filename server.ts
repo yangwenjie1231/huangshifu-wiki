@@ -11427,13 +11427,11 @@ app.get('/api/image-maps/:id', async (req, res) => {
 
 app.post('/api/image-maps', requireAuth, requireActiveUser, async (req, res) => {
   try {
-    const { id, md5, localUrl, weiboUrl, smmsUrl, superbedUrl } = req.body as {
+    const { id, md5, localUrl, externalUrl } = req.body as {
       id?: string;
       md5?: string;
       localUrl?: string;
-      weiboUrl?: string;
-      smmsUrl?: string;
-      superbedUrl?: string;
+      externalUrl?: string;
     };
 
     if (!id || !md5 || !localUrl) {
@@ -11446,17 +11444,13 @@ app.post('/api/image-maps', requireAuth, requireActiveUser, async (req, res) => 
       update: {
         md5,
         localUrl,
-        weiboUrl: weiboUrl || null,
-        smmsUrl: smmsUrl || null,
-        superbedUrl: superbedUrl || null,
+        ...(externalUrl !== undefined && { externalUrl: externalUrl || null }),
       },
       create: {
         id,
         md5,
         localUrl,
-        weiboUrl: weiboUrl || null,
-        smmsUrl: smmsUrl || null,
-        superbedUrl: superbedUrl || null,
+        ...(externalUrl && { externalUrl }),
       },
     });
 
@@ -11469,6 +11463,232 @@ app.post('/api/image-maps', requireAuth, requireActiveUser, async (req, res) => 
   } catch (error) {
     console.error('Create image map error:', error);
     res.status(500).json({ error: '保存图片映射失败' });
+  }
+});
+
+app.patch('/api/image-maps/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { localUrl, externalUrl } = req.body as {
+      localUrl?: string | null;
+      externalUrl?: string | null;
+    };
+
+    const item = await prisma.imageMap.update({
+      where: { id: req.params.id },
+      data: {
+        ...(localUrl !== undefined && { localUrl: localUrl || null }),
+        ...(externalUrl !== undefined && { externalUrl: externalUrl || null }),
+      },
+    });
+
+    res.json({
+      item: {
+        ...item,
+        createdAt: item.createdAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error('Update image map error:', error);
+    res.status(500).json({ error: '更新图片映射失败' });
+  }
+});
+
+app.delete('/api/image-maps/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await prisma.imageMap.delete({
+      where: { id: req.params.id },
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete image map error:', error);
+    res.status(500).json({ error: '删除图片映射失败' });
+  }
+});
+
+app.get('/api/image-maps/export', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const format = (req.query.format as string) || 'json';
+    const items = await prisma.imageMap.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (format === 'csv') {
+      const headers = ['id', 'md5', 'localUrl', 'externalUrl', 'createdAt'];
+      const csvRows = [headers.join(',')];
+      
+      for (const item of items) {
+        const row = [
+          item.id,
+          item.md5,
+          `"${item.localUrl}"`,
+          `"${item.externalUrl || ''}"`,
+          item.createdAt.toISOString(),
+        ];
+        csvRows.push(row.join(','));
+      }
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="image-maps-${Date.now()}.csv"`);
+      res.send(csvRows.join('\n'));
+    } else {
+      res.json({
+        items: items.map((item) => ({
+          ...item,
+          createdAt: item.createdAt.toISOString(),
+        })),
+      });
+    }
+  } catch (error) {
+    console.error('Export image maps error:', error);
+    res.status(500).json({ error: '导出图片映射失败' });
+  }
+});
+
+app.post('/api/image-maps/import', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { items, mode } = req.body as {
+      items: Array<{
+        id?: string;
+        md5?: string;
+        localUrl?: string;
+        externalUrl?: string;
+      }>;
+      mode: 'update' | 'create' | 'upsert';
+    };
+
+    if (!Array.isArray(items) || items.length === 0) {
+      res.status(400).json({ error: '缺少导入数据' });
+      return;
+    }
+
+    const results = {
+      success: 0,
+      failed: 0,
+      errors: [] as string[],
+    };
+
+    for (const item of items) {
+      try {
+        if (mode === 'upsert' && item.md5) {
+          const existing = await prisma.imageMap.findUnique({
+            where: { md5: item.md5 },
+          });
+
+          if (existing) {
+            await prisma.imageMap.update({
+              where: { id: existing.id },
+              data: {
+                ...(item.localUrl && { localUrl: item.localUrl }),
+                ...(item.externalUrl && { externalUrl: item.externalUrl }),
+              },
+            });
+          } else if (item.id && item.localUrl) {
+            await prisma.imageMap.create({
+              data: {
+                id: item.id,
+                md5: item.md5 || crypto.randomUUID(),
+                localUrl: item.localUrl,
+                ...(item.externalUrl && { externalUrl: item.externalUrl }),
+              },
+            });
+          }
+          results.success++;
+        } else if (mode === 'update' && item.id) {
+          await prisma.imageMap.update({
+            where: { id: item.id },
+            data: {
+              ...(item.localUrl !== undefined && { localUrl: item.localUrl || null }),
+              ...(item.externalUrl !== undefined && { externalUrl: item.externalUrl || null }),
+            },
+          });
+          results.success++;
+        } else if (mode === 'create' && item.id && item.md5 && item.localUrl) {
+          await prisma.imageMap.create({
+            data: {
+              id: item.id,
+              md5: item.md5,
+              localUrl: item.localUrl,
+              ...(item.externalUrl && { externalUrl: item.externalUrl }),
+            },
+          });
+          results.success++;
+        } else {
+          results.failed++;
+          results.errors.push(`数据格式错误: ${JSON.stringify(item)}`);
+        }
+      } catch (err) {
+        results.failed++;
+        results.errors.push(`处理失败: ${JSON.stringify(item)} - ${(err as Error).message}`);
+      }
+    }
+
+    res.json(results);
+  } catch (error) {
+    console.error('Import image maps error:', error);
+    res.status(500).json({ error: '导入图片映射失败' });
+  }
+});
+
+app.get('/api/image-maps/stats', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const [total, withExternal] = await Promise.all([
+      prisma.imageMap.count(),
+      prisma.imageMap.count({ where: { externalUrl: { not: null } } }),
+    ]);
+
+    res.json({
+      total,
+      stats: {
+        local: total,
+        external: withExternal,
+      },
+    });
+  } catch (error) {
+    console.error('Get image map stats error:', error);
+    res.status(500).json({ error: '获取图片统计失败' });
+  }
+});
+
+app.get('/api/config/image-preference', async (_req, res) => {
+  try {
+    const config = await prisma.siteConfig.findUnique({
+      where: { key: 'image_preference' },
+    });
+
+    const preference = config?.value as {
+      strategy?: 'local' | 'external';
+      fallback?: boolean;
+    } || { strategy: 'local', fallback: true };
+
+    res.json(preference);
+  } catch (error) {
+    console.error('Get image preference error:', error);
+    res.status(500).json({ error: '获取图片偏好设置失败' });
+  }
+});
+
+app.patch('/api/config/image-preference', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { strategy, fallback } = req.body as {
+      strategy?: 'local' | 'external';
+      fallback?: boolean;
+    };
+
+    const value = {
+      ...(strategy && { strategy }),
+      ...(fallback !== undefined && { fallback }),
+    };
+
+    await prisma.siteConfig.upsert({
+      where: { key: 'image_preference' },
+      update: { value },
+      create: { key: 'image_preference', value },
+    });
+
+    res.json({ success: true, preference: value });
+  } catch (error) {
+    console.error('Update image preference error:', error);
+    res.status(500).json({ error: '更新图片偏好设置失败' });
   }
 });
 

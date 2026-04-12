@@ -5,15 +5,69 @@ export interface ImageMap {
   id: string;
   md5: string;
   localUrl: string;
-  weiboUrl?: string;
-  smmsUrl?: string;
-  superbedUrl?: string;
+  externalUrl?: string;
   createdAt: any;
 }
 
-/**
- * Calculates the MD5 hash of a file.
- */
+export interface ImagePreference {
+  strategy: 'local' | 'external';
+  fallback: boolean;
+}
+
+let cachedPreference: ImagePreference | null = null;
+
+export const getImagePreference = async (): Promise<ImagePreference> => {
+  if (cachedPreference) {
+    return cachedPreference;
+  }
+
+  try {
+    const response = await apiGet<ImagePreference>('/api/config/image-preference');
+    cachedPreference = response;
+    return response;
+  } catch (error) {
+    console.error('Failed to fetch image preference:', error);
+    return { strategy: 'local', fallback: true };
+  }
+};
+
+export const clearImagePreferenceCache = () => {
+  cachedPreference = null;
+};
+
+const getUrlByPreference = (map: ImageMap, preference: ImagePreference): string | null => {
+  const { strategy, fallback } = preference;
+
+  const getPrimaryUrl = () => {
+    switch (strategy) {
+      case 'external':
+        return map.externalUrl || null;
+      case 'local':
+      default:
+        return map.localUrl || null;
+    }
+  };
+
+  const primaryUrl = getPrimaryUrl();
+  if (primaryUrl) {
+    return primaryUrl;
+  }
+
+  if (!fallback) {
+    return null;
+  }
+
+  const fallbackUrls = [map.externalUrl, map.localUrl].filter(
+    Boolean,
+  ) as string[];
+
+  if (fallbackUrls.length > 0) {
+    return fallbackUrls[0];
+  }
+
+  return null;
+};
+
 const calculateMD5 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -31,80 +85,73 @@ const calculateMD5 = (file: File): Promise<string> => {
   });
 };
 
-/**
- * Uploads an image to multiple CDNs and stores the mapping in Firestore.
- * Note: In a real implementation, you would call the respective CDN APIs here.
- * For this prototype, we'll simulate the upload by generating mock CDN URLs.
- */
 export const uploadImageToCDNs = async (file: File): Promise<string> => {
-  // 1. Calculate MD5 hash
   const md5 = await calculateMD5(file);
 
-  // 2. Check if image with same MD5 already exists
   const listResponse = await apiGet<{ items: ImageMap[] }>('/api/image-maps', { md5 });
   const existingItems = listResponse.items || [];
 
   if (existingItems.length > 0) {
-    // Image already exists, return the existing ID
     return existingItems[0].id;
   }
 
-  // 3. Simulate local upload (using URL.createObjectURL for demo, in real app use Firebase Storage)
   const localUrl = URL.createObjectURL(file);
   const imageId = Math.random().toString(36).substring(7);
-
-  // 4. Simulate uploading to multiple CDNs
-  // In a real app, you'd use fetch() to call Weibo, SM.MS, and Superbed APIs.
-  const weiboUrl = `https://wx1.sinaimg.cn/large/${imageId}.jpg`;
-  const smmsUrl = `https://s2.loli.net/2024/03/23/${imageId}.jpg`;
-  const superbedUrl = `https://pic.superbed.cn/item/${imageId}.jpg`;
 
   const imageMap: ImageMap = {
     id: imageId,
     md5,
     localUrl,
-    weiboUrl,
-    smmsUrl,
-    superbedUrl,
     createdAt: new Date().toISOString(),
   };
 
-  // 5. Store mapping via API
   await apiPost('/api/image-maps', {
     id: imageMap.id,
     md5: imageMap.md5,
     localUrl: imageMap.localUrl,
-    weiboUrl: imageMap.weiboUrl,
-    smmsUrl: imageMap.smmsUrl,
-    superbedUrl: imageMap.superbedUrl,
   });
 
   return imageId;
 };
 
-/**
- * Fetches the best available URL for an image ID.
- */
 export const getImageUrl = async (imageId: string): Promise<string[]> => {
   try {
     const response = await apiGet<{ item: ImageMap }>(`/api/image-maps/${imageId}`);
     const data = response.item;
-    // Order of preference: Weibo -> SM.MS -> Superbed -> Local
-    return [
-      data.weiboUrl,
-      data.smmsUrl,
-      data.superbedUrl,
-      data.localUrl,
-    ].filter(Boolean) as string[];
+    const preference = await getImagePreference();
+
+    const primaryUrl = getUrlByPreference(data, preference);
+    if (!primaryUrl) {
+      return [];
+    }
+
+    if (!preference.fallback) {
+      return [primaryUrl];
+    }
+
+    const fallbackUrls = [data.externalUrl, data.localUrl].filter(
+      (url) => url && url !== primaryUrl,
+    ) as string[];
+
+    return [primaryUrl, ...fallbackUrls];
   } catch (e) {
     console.error("Error fetching image map:", e);
   }
   return [];
 };
 
-/**
- * Uploads markdown images to the local server first, and falls back to the legacy image bed flow.
- */
+export const getPrimaryImageUrl = async (imageId: string): Promise<string | null> => {
+  try {
+    const response = await apiGet<{ item: ImageMap }>(`/api/image-maps/${imageId}`);
+    const data = response.item;
+    const preference = await getImagePreference();
+    return getUrlByPreference(data, preference);
+  } catch (e) {
+    console.error("Error fetching primary image URL:", e);
+  }
+  return null;
+};
+
 export const uploadMarkdownImage = async (file: File): Promise<string> => {
   try {
     const formData = new FormData();
