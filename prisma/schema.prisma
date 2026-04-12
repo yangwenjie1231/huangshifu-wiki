@@ -730,10 +730,17 @@ model ImageMap {
   id         String   @id
   md5        String   @unique
   localUrl   String
-  weiboUrl   String?
-  smmsUrl    String?
-  superbedUrl String?
+  externalUrl String?
   createdAt  DateTime @default(now())
+}
+
+model SiteConfig {
+  id        String   @id @default("image_preference")
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@index([key])
 }
 
 model Notification {
