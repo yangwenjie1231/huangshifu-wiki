@@ -2215,11 +2215,40 @@ const WikiEditor = () => {
 	const relationSearchRef = useRef<HTMLDivElement>(null);
 	const relationSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-	const searchWikiRelations = useCallback((q: string) => {
+	const parseInternalLink = (input: string): { slug: string; displayText: string } | null => {
+		const match = input.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/);
+		if (match) {
+			return {
+				slug: (match[2] || match[1]).trim(),
+				displayText: match[1].trim(),
+			};
+		}
+		return null;
+	};
+
+	const handleRelationInputChange = useCallback((input: string) => {
+		const internalLink = parseInternalLink(input);
+		if (internalLink) {
+			const shouldSetLabel = !newRelation.label && internalLink.displayText !== internalLink.slug;
+			setNewRelation((prev) => ({
+				...prev,
+				targetSlug: internalLink.slug,
+				label: shouldSetLabel ? internalLink.displayText : prev.label,
+			}));
+			setRelationSearchResults([]);
+			setShowRelationDropdown(false);
+			return;
+		}
+
+		setNewRelation((prev) => ({
+			...prev,
+			targetSlug: input,
+		}));
+
 		if (relationSearchTimeoutRef.current) {
 			clearTimeout(relationSearchTimeoutRef.current);
 		}
-		if (!q || q.length < 2) {
+		if (!input || input.length < 2) {
 			setRelationSearchResults([]);
 			setShowRelationDropdown(false);
 			return;
@@ -2229,7 +2258,7 @@ const WikiEditor = () => {
 			try {
 				const data = await apiGet<{ suggestions: RelationSearchSuggestion[] }>(
 					"/api/search/suggest",
-					{ q },
+					{ q: input },
 				);
 				const wikiResults =
 					data.suggestions?.filter((s) => s.type === "wiki") || [];
@@ -2242,7 +2271,11 @@ const WikiEditor = () => {
 				setRelationSearchLoading(false);
 			}
 		}, 300);
-	}, []);
+	}, [newRelation.label]);
+
+	const searchWikiRelations = useCallback((q: string) => {
+		handleRelationInputChange(q);
+	}, [handleRelationInputChange]);
 
 	useEffect(() => {
 		const handleClickOutside = (e: MouseEvent) => {
@@ -2654,13 +2687,9 @@ const WikiEditor = () => {
 									type="text"
 									value={newRelation.targetSlug}
 									onChange={(e) => {
-										setNewRelation({
-											...newRelation,
-											targetSlug: e.target.value,
-										});
-										searchWikiRelations(e.target.value);
+										handleRelationInputChange(e.target.value);
 									}}
-									placeholder="目标页面标识 (slug)"
+									placeholder="输入 [[页面标题]] 或直接输入 slug"
 									className="w-full px-4 py-2 bg-white rounded-xl border border-gray-200 text-sm"
 									onKeyDown={(e) => {
 										if (!showRelationDropdown) return;
@@ -2699,13 +2728,16 @@ const WikiEditor = () => {
 											exit={{ opacity: 0, y: -4 }}
 											className="absolute z-50 mt-1 w-full bg-white rounded-xl border border-gray-200 shadow-lg max-h-60 overflow-auto"
 										>
+											<div className="px-3 py-2 text-xs text-gray-500 border-b border-gray-100 bg-gray-50">
+												直接输入 <code className="bg-gray-200 px-1 rounded">[[标题]]</code> 格式更快
+											</div>
 											{relationSearchLoading ? (
 												<div className="px-4 py-2 text-sm text-gray-500">
 													搜索中...
 												</div>
 											) : relationSearchResults.length === 0 ? (
 												<div className="px-4 py-2 text-sm text-gray-500">
-													未找到相关页面
+													未找到相关页面，请尝试输入 [[页面标题]]
 												</div>
 											) : (
 												relationSearchResults.map((result, idx) => (
@@ -2721,11 +2753,14 @@ const WikiEditor = () => {
 														}}
 														onMouseEnter={() => setRelationSelectedIndex(idx)}
 													>
-														<div className="text-sm font-medium">
+														<div className="text-sm font-medium text-brand-olive">
 															{result.text}
 														</div>
-														<div className="text-xs text-gray-500 truncate">
-															{result.subtext}
+														<div className="text-xs text-gray-500 truncate flex items-center gap-2">
+															<span className="bg-gray-100 px-1.5 py-0.5 rounded text-[10px]">
+																{result.id}
+															</span>
+															<span>{result.subtext}</span>
 														</div>
 													</div>
 												))

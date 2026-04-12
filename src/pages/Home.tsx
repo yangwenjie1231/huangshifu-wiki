@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
+import { HomeSkeleton } from "../components/HomeSkeleton";
 import {
 	Book,
 	MessageSquare,
@@ -300,6 +301,10 @@ const Home = () => {
 
 	if (isAcademy) {
 		return <AcademyHome />;
+	}
+
+	if (loading) {
+		return <HomeSkeleton />;
 	}
 
 	return (

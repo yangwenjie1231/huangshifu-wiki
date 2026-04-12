@@ -197,7 +197,7 @@ const AlbumDetail = () => {
                 onClick={() => handlePlay(index)}
                 className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 hover:bg-brand-olive hover:text-white transition-colors inline-flex items-center justify-center"
               >
-                <Play size={14} />
+                <Play className="text-[14px] md:text-[16px]" />
               </button>
               <span className="text-xs font-bold text-gray-300 w-4">{(track.trackOrder ?? index) + 1}</span>
               <div className="min-w-0 flex-1">

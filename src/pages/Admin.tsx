@@ -18,6 +18,7 @@ import {
   FileText,
   Cpu,
   Database,
+  Image,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuth } from '../context/AuthContext';
@@ -26,8 +27,9 @@ import { formatDateTime, toDateValue } from '../lib/dateUtils';
 import { useToast } from '../components/Toast';
 import { EmbeddingsTab } from './Admin/EmbeddingsTab';
 import { BackupsTab } from './Admin/BackupsTab';
+import { ImagesTab } from './Admin/ImagesTab';
 
-type AdminTab = 'reviews' | 'wiki' | 'posts' | 'galleries' | 'users' | 'sections' | 'announcements' | 'music' | 'locks' | 'moderation_logs' | 'ban_logs' | 'embeddings' | 'backups' | 'sensitive_check';
+type AdminTab = 'reviews' | 'wiki' | 'posts' | 'galleries' | 'users' | 'sections' | 'announcements' | 'music' | 'locks' | 'moderation_logs' | 'ban_logs' | 'embeddings' | 'backups' | 'sensitive_check' | 'images';
 type ReviewFilter = 'all' | 'wiki' | 'posts';
 
 type ReviewQueueBucket = {
@@ -471,6 +473,10 @@ const Admin = () => {
       ) : activeTab === 'backups' ? (
         <div className="bg-white rounded-[36px] border border-gray-100 shadow-sm overflow-hidden p-6">
           <BackupsTab />
+        </div>
+      ) : activeTab === 'images' ? (
+        <div className="bg-white rounded-[36px] border border-gray-100 shadow-sm overflow-hidden p-6">
+          <ImagesTab />
         </div>
       ) : activeTab === 'sensitive_check' ? (
         <div className="bg-white rounded-[36px] border border-gray-100 shadow-sm overflow-hidden p-6">
