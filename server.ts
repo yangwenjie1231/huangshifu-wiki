@@ -11458,15 +11458,22 @@ app.get('/api/image-maps/:id', async (req, res) => {
 
 app.post('/api/image-maps', requireAuth, requireActiveUser, async (req, res) => {
   try {
-    const { id, md5, localUrl, externalUrl } = req.body as {
+    const { id, md5, localUrl, externalUrl, s3Url, storageType } = req.body as {
       id?: string;
       md5?: string;
       localUrl?: string;
       externalUrl?: string;
+      s3Url?: string;
+      storageType?: 'local' | 'external' | 's3';
     };
 
-    if (!id || !md5 || !localUrl) {
+    if (!id || !md5) {
       res.status(400).json({ error: '缺少必要字段' });
+      return;
+    }
+
+    if (storageType === 's3' && !s3Url) {
+      res.status(400).json({ error: 'S3存储类型需要提供s3Url' });
       return;
     }
 
@@ -11474,14 +11481,18 @@ app.post('/api/image-maps', requireAuth, requireActiveUser, async (req, res) => 
       where: { id },
       update: {
         md5,
-        localUrl,
+        ...(localUrl !== undefined && { localUrl: localUrl || null }),
         ...(externalUrl !== undefined && { externalUrl: externalUrl || null }),
+        ...(s3Url !== undefined && { s3Url: s3Url || null }),
+        ...(storageType !== undefined && { storageType }),
       },
       create: {
         id,
         md5,
-        localUrl,
+        ...(localUrl && { localUrl }),
         ...(externalUrl && { externalUrl }),
+        ...(s3Url && { s3Url }),
+        ...(storageType && { storageType }),
       },
     });
 
@@ -11499,16 +11510,25 @@ app.post('/api/image-maps', requireAuth, requireActiveUser, async (req, res) => 
 
 app.patch('/api/image-maps/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { localUrl, externalUrl } = req.body as {
+    const { localUrl, externalUrl, s3Url, storageType } = req.body as {
       localUrl?: string | null;
       externalUrl?: string | null;
+      s3Url?: string | null;
+      storageType?: 'local' | 'external' | 's3';
     };
+
+    if (storageType === 's3' && !s3Url) {
+      res.status(400).json({ error: 'S3存储类型需要提供s3Url' });
+      return;
+    }
 
     const item = await prisma.imageMap.update({
       where: { id: req.params.id },
       data: {
         ...(localUrl !== undefined && { localUrl: localUrl || null }),
         ...(externalUrl !== undefined && { externalUrl: externalUrl || null }),
+        ...(s3Url !== undefined && { s3Url: s3Url || null }),
+        ...(storageType !== undefined && { storageType }),
       },
     });
 
@@ -11544,15 +11564,17 @@ app.get('/api/image-maps/export', requireAuth, requireAdmin, async (req, res) =>
     });
 
     if (format === 'csv') {
-      const headers = ['id', 'md5', 'localUrl', 'externalUrl', 'createdAt'];
+      const headers = ['id', 'md5', 'localUrl', 'externalUrl', 's3Url', 'storageType', 'createdAt'];
       const csvRows = [headers.join(',')];
       
       for (const item of items) {
         const row = [
           item.id,
           item.md5,
-          `"${item.localUrl}"`,
+          `"${item.localUrl || ''}"`,
           `"${item.externalUrl || ''}"`,
+          `"${item.s3Url || ''}"`,
+          `"${item.storageType || ''}"`,
           item.createdAt.toISOString(),
         ];
         csvRows.push(row.join(','));
@@ -11583,6 +11605,8 @@ app.post('/api/image-maps/import', requireAuth, requireAdmin, async (req, res) =
         md5?: string;
         localUrl?: string;
         externalUrl?: string;
+        s3Url?: string;
+        storageType?: 'local' | 'external' | 's3';
       }>;
       mode: 'update' | 'create' | 'upsert';
     };
@@ -11600,6 +11624,12 @@ app.post('/api/image-maps/import', requireAuth, requireAdmin, async (req, res) =
 
     for (const item of items) {
       try {
+        if (item.storageType === 's3' && !item.s3Url) {
+          results.failed++;
+          results.errors.push(`S3存储类型需要提供s3Url: ${JSON.stringify(item)}`);
+          continue;
+        }
+
         if (mode === 'upsert' && item.md5) {
           const existing = await prisma.imageMap.findUnique({
             where: { md5: item.md5 },
@@ -11609,17 +11639,21 @@ app.post('/api/image-maps/import', requireAuth, requireAdmin, async (req, res) =
             await prisma.imageMap.update({
               where: { id: existing.id },
               data: {
-                ...(item.localUrl && { localUrl: item.localUrl }),
-                ...(item.externalUrl && { externalUrl: item.externalUrl }),
+                ...(item.localUrl !== undefined && { localUrl: item.localUrl || null }),
+                ...(item.externalUrl !== undefined && { externalUrl: item.externalUrl || null }),
+                ...(item.s3Url !== undefined && { s3Url: item.s3Url || null }),
+                ...(item.storageType !== undefined && { storageType: item.storageType }),
               },
             });
-          } else if (item.id && item.localUrl) {
+          } else if (item.id) {
             await prisma.imageMap.create({
               data: {
                 id: item.id,
                 md5: item.md5 || crypto.randomUUID(),
-                localUrl: item.localUrl,
+                ...(item.localUrl && { localUrl: item.localUrl }),
                 ...(item.externalUrl && { externalUrl: item.externalUrl }),
+                ...(item.s3Url && { s3Url: item.s3Url }),
+                ...(item.storageType && { storageType: item.storageType }),
               },
             });
           }
@@ -11630,16 +11664,20 @@ app.post('/api/image-maps/import', requireAuth, requireAdmin, async (req, res) =
             data: {
               ...(item.localUrl !== undefined && { localUrl: item.localUrl || null }),
               ...(item.externalUrl !== undefined && { externalUrl: item.externalUrl || null }),
+              ...(item.s3Url !== undefined && { s3Url: item.s3Url || null }),
+              ...(item.storageType !== undefined && { storageType: item.storageType }),
             },
           });
           results.success++;
-        } else if (mode === 'create' && item.id && item.md5 && item.localUrl) {
+        } else if (mode === 'create' && item.id && item.md5) {
           await prisma.imageMap.create({
             data: {
               id: item.id,
               md5: item.md5,
-              localUrl: item.localUrl,
+              ...(item.localUrl && { localUrl: item.localUrl }),
               ...(item.externalUrl && { externalUrl: item.externalUrl }),
+              ...(item.s3Url && { s3Url: item.s3Url }),
+              ...(item.storageType && { storageType: item.storageType }),
             },
           });
           results.success++;
@@ -11662,16 +11700,18 @@ app.post('/api/image-maps/import', requireAuth, requireAdmin, async (req, res) =
 
 app.get('/api/image-maps/stats', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const [total, withExternal] = await Promise.all([
+    const [total, withExternal, withS3] = await Promise.all([
       prisma.imageMap.count(),
       prisma.imageMap.count({ where: { externalUrl: { not: null } } }),
+      prisma.imageMap.count({ where: { storageType: 's3' } }),
     ]);
 
     res.json({
       total,
       stats: {
-        local: total,
+        local: total - withExternal - withS3,
         external: withExternal,
+        s3: withS3,
       },
     });
   } catch (error) {
@@ -11687,7 +11727,7 @@ app.get('/api/config/image-preference', async (_req, res) => {
     });
 
     const preference = config?.value as {
-      strategy?: 'local' | 'external';
+      strategy?: 'local' | 's3' | 'external';
       fallback?: boolean;
     } || { strategy: 'local', fallback: true };
 
@@ -11701,7 +11741,7 @@ app.get('/api/config/image-preference', async (_req, res) => {
 app.patch('/api/config/image-preference', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { strategy, fallback } = req.body as {
-      strategy?: 'local' | 'external';
+      strategy?: 'local' | 's3' | 'external';
       fallback?: boolean;
     };
 
@@ -11720,6 +11760,91 @@ app.patch('/api/config/image-preference', requireAuth, requireAdmin, async (req,
   } catch (error) {
     console.error('Update image preference error:', error);
     res.status(500).json({ error: '更新图片偏好设置失败' });
+  }
+});
+
+import {
+  getPresignedUploadUrl,
+  getPresignedDownloadUrl,
+  getPresignedDeleteUrl,
+  getPublicConfig,
+  validateS3Config,
+} from './src/server/s3/s3Service';
+
+app.get('/api/s3/config', async (_req, res) => {
+  try {
+    const config = getPublicConfig();
+    res.json(config);
+  } catch (error) {
+    console.error('[S3] 获取配置失败:', error);
+    res.status(500).json({ error: '获取 S3 配置失败' });
+  }
+});
+
+app.get('/api/s3/presign-upload', requireAuth, requireActiveUser, async (req, res) => {
+  try {
+    const { filename, contentType, key, contentMd5, fileSize } = req.query as {
+      filename?: string;
+      contentType?: string;
+      key?: string;
+      contentMd5?: string;
+      fileSize?: string;
+    };
+
+    if (!filename) {
+      res.status(400).json({ error: '缺少 filename 参数' });
+      return;
+    }
+
+    const objectKey = key || filename;
+
+    const result = await getPresignedUploadUrl(objectKey, undefined, {
+      contentType: contentType || 'application/octet-stream',
+      contentMd5,
+      fileSize: fileSize ? parseInt(fileSize) : undefined,
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('[S3] 生成上传签名失败:', error);
+    const message = error instanceof Error ? error.message : '生成上传签名失败';
+    res.status(500).json({ error: message });
+  }
+});
+
+app.get('/api/s3/presign-download/:key(*)', requireAuth, async (req, res) => {
+  try {
+    const { key } = req.params;
+
+    if (!key) {
+      res.status(400).json({ error: '缺少 key 参数' });
+      return;
+    }
+
+    const url = await getPresignedDownloadUrl(key);
+    res.json({ downloadUrl: url });
+  } catch (error) {
+    console.error('[S3] 生成下载签名失败:', error);
+    const message = error instanceof Error ? error.message : '生成下载签名失败';
+    res.status(500).json({ error: message });
+  }
+});
+
+app.get('/api/s3/presign-delete/:key(*)', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { key } = req.params;
+
+    if (!key) {
+      res.status(400).json({ error: '缺少 key 参数' });
+      return;
+    }
+
+    const url = await getPresignedDeleteUrl(key);
+    res.json({ deleteUrl: url });
+  } catch (error) {
+    console.error('[S3] 生成删除签名失败:', error);
+    const message = error instanceof Error ? error.message : '生成删除签名失败';
+    res.status(500).json({ error: message });
   }
 });
 
