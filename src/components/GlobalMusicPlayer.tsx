@@ -282,16 +282,16 @@ export const GlobalMusicPlayer = () => {
               className="pb-8 pt-4 border-t border-gray-50"
             >
               <div className="flex flex-col md:flex-row gap-8 items-center">
-                <div className="w-48 h-48 rounded-3xl overflow-hidden shadow-2xl flex-shrink-0">
+                <div className="w-32 sm:w-40 md:w-48 h-32 sm:h-40 md:h-48 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl flex-shrink-0">
                   <img src={currentSong.cover} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 </div>
                 <div className="flex-grow w-full">
-                  <div className="flex justify-between items-end mb-4">
-                    <div>
-                      <h3 className="text-2xl font-serif font-bold text-gray-900">{currentSong.title}</h3>
-                      <p className="text-brand-primary font-bold">{currentSong.artist} — {currentSong.album}</p>
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2 sm:gap-4 mb-4">
+                    <div className="min-w-0">
+                      <h3 className="text-xl sm:text-2xl font-serif font-bold text-gray-900 truncate">{currentSong.title}</h3>
+                      <p className="text-sm sm:text-base text-brand-primary font-bold truncate">{currentSong.artist} — {currentSong.album}</p>
                     </div>
-                    <div className="text-sm font-bold text-gray-400">
+                    <div className="text-xs sm:text-sm font-bold text-gray-400 whitespace-nowrap">
                       {formatTime(contextCurrentTime)} / {formatTime(contextDuration)}
                     </div>
                   </div>
@@ -310,27 +310,27 @@ export const GlobalMusicPlayer = () => {
                     <p className="text-xs text-amber-600 mt-2">{playUrlError}</p>
                   ) : null}
 
-                  <div className="flex items-center justify-center md:justify-start gap-8">
+                  <div className="flex items-center justify-center sm:justify-start gap-6 sm:gap-8">
                     <button onClick={handlePlayPrevious} className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
-                      <SkipBack size={28} />
+                      <SkipBack size={24} className="sm:w-7 sm:h-7" />
                     </button>
                     <button 
                       onClick={togglePlay}
-                      className="w-16 h-16 bg-gray-900 text-white rounded-full flex items-center justify-center hover:scale-105 transition-all shadow-xl"
+                      className="w-14 h-14 sm:w-16 sm:h-16 bg-gray-900 text-white rounded-full flex items-center justify-center hover:scale-105 transition-all shadow-xl"
                     >
-                      {isPlaying ? <Pause size={32} /> : <Play size={32} className="ml-1" />}
+                      {isPlaying ? <Pause size={28} className="sm:w-8 sm:h-8" /> : <Play size={28} className="sm:w-8 sm:h-8 ml-0.5" />}
                     </button>
                     <button onClick={handlePlayNext} className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
-                      <SkipForward size={28} />
+                      <SkipForward size={24} className="sm:w-7 sm:h-7" />
                     </button>
                   </div>
 
-                  <div className="flex items-center gap-4 mt-4">
+                  <div className="flex items-center gap-2 sm:gap-4 mt-4">
                     <button
                       onClick={contextToggleMute}
-                      className="text-gray-400 hover:text-gray-900 transition-colors"
+                      className="text-gray-400 hover:text-gray-900 transition-colors p-1 sm:p-0"
                     >
-                      <Volume2 size={20} />
+                      <Volume2 size={18} className="sm:w-5 sm:h-5" />
                     </button>
                     <input
                       type="range"
@@ -339,9 +339,9 @@ export const GlobalMusicPlayer = () => {
                       step="0.01"
                       value={contextIsMuted ? 0 : contextVolume}
                       onChange={(e) => contextSetVolume(parseFloat(e.target.value))}
-                      className="flex-grow h-1.5 bg-gray-100 rounded-full appearance-none cursor-pointer accent-[#FFD700]"
+                      className="flex-grow h-1 bg-gray-100 rounded-full appearance-none cursor-pointer accent-[#FFD700]"
                     />
-                    <span className="text-xs text-gray-400 w-8">{Math.round((contextIsMuted ? 0 : contextVolume) * 100)}%</span>
+                    <span className="text-xs text-gray-400 w-8 hidden sm:inline">{Math.round((contextIsMuted ? 0 : contextVolume) * 100)}%</span>
                   </div>
                 </div>
               </div>

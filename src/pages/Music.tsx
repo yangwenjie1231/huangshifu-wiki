@@ -872,10 +872,11 @@ const Music = () => {
                                         href={`https://music.163.com/song?id=${song.platformIds.neteaseId}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
+                                        className="text-xs px-2 py-0.5 sm:px-2 sm:py-0.5 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors w-8 sm:w-auto flex items-center justify-center sm:justify-start"
                                         title={`${t('music.platforms.netease')}: ${song.platformIds.neteaseId}`}
                                       >
-                                        {t('music.platforms.netease')}
+                                        <span className="hidden sm:inline">{t('music.platforms.netease')}</span>
+                                        <span className="sm:hidden font-bold">云</span>
                                       </a>
                                     )}
                                     {song.platformIds.tencentId && (
@@ -883,10 +884,11 @@ const Music = () => {
                                         href={`https://y.qq.com/n/ryqq/songDetail/${song.platformIds.tencentId}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
+                                        className="text-xs px-2 py-0.5 sm:px-2 sm:py-0.5 rounded-full bg-green-100 text-green-700 hover:bg-green-200 transition-colors w-8 sm:w-auto flex items-center justify-center sm:justify-start"
                                         title={`${t('music.platforms.tencent')}: ${song.platformIds.tencentId}`}
                                       >
-                                        QQ
+                                        <span className="hidden sm:inline">QQ音乐</span>
+                                        <span className="sm:hidden font-bold">Q</span>
                                       </a>
                                     )}
                                   </div>
