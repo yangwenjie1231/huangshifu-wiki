@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
 	Bell,
 	CheckCheck,
@@ -144,9 +144,9 @@ const Notifications = () => {
 		: "all";
 	const page = Math.max(Number(searchParams.get("page") || "1"), 1);
 
-	const [loading, setLoading] = React.useState(false);
-	const [markingAllRead, setMarkingAllRead] = React.useState(false);
-	const [data, setData] = React.useState<NotificationsResponse>({
+	const [loading, setLoading] = useState(false);
+	const [markingAllRead, setMarkingAllRead] = useState(false);
+	const [data, setData] = useState<NotificationsResponse>({
 		notifications: [],
 		total: 0,
 		unreadCount: 0,

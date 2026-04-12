@@ -3,9 +3,8 @@ import { auth } from '../lib/auth';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useMusic } from '../context/MusicContext';
-import { Music as MusicIcon, Search, Plus, Play, Disc, List, Trash2, Heart, ExternalLink, Sparkles, ChevronRight, Headphones, X, MessageSquare, Clock, Link2, Album, Grid3X3 } from 'lucide-react';
+import { Music as MusicIcon, Search, Plus, Disc, List, Sparkles, ChevronRight, Headphones, X, Heart, MessageSquare, Link2 } from 'lucide-react';
 import { useUserPreferences } from '../context/UserPreferencesContext';
-import { ViewModeSelector } from '../components/ViewModeSelector';
 import { VIEW_MODE_CONFIG } from '../lib/viewModes';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -15,12 +14,15 @@ import { AlbumEditModal } from '../components/AlbumEditModal';
 import { useToast } from '../components/Toast';
 import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
-import { format } from 'date-fns';
 import Pagination from '../components/Pagination';
 import { PlatformIds } from '../types/PlatformIds';
-import { useTheme } from '../context/ThemeContext';
 import { useI18n } from '../lib/i18n';
 import { MusicSkeleton } from '../components/MusicSkeleton';
+import { SongCard } from '../components/Music/SongCard';
+import { AlbumCard } from '../components/Music/AlbumCard';
+import { MusicFilters } from '../components/Music/MusicFilters';
+import { BatchActions } from '../components/Music/BatchActions';
+import type { SongItem, AlbumItem, PostItem } from '../types/entities';
 
 const DEFAULT_PAGE_SIZE = 40;
 
@@ -51,70 +53,6 @@ interface FirestoreErrorInfo {
     }[];
   }
 }
-
-type SongItem = {
-  docId: string;
-  id: string;
-  title: string;
-  artist: string;
-  album: string;
-  cover: string;
-  audioUrl: string;
-  primaryPlatform?: 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo' | null;
-  lyric?: string | null;
-  favoritedByMe?: boolean;
-  platformIds?: PlatformIds;
-  createdAt?: string;
-};
-
-type PostItem = {
-  id: string;
-  title: string;
-  section: string;
-  musicDocId?: string | null;
-  albumDocId?: string | null;
-  content: string;
-  tags?: string[];
-  authorUid: string;
-  status?: string;
-  likesCount: number;
-  commentsCount: number;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type AlbumItem = {
-  docId?: string;
-  id: string;
-  title: string;
-  artist: string;
-  cover: string;
-  description?: string | null;
-  trackCount?: number;
-  tracks?: unknown[];
-};
-
-const getSongExternalUrl = (song: SongItem) => {
-  const id = (song.id || '').trim();
-  if (!id) {
-    return '#';
-  }
-
-  const platform = song.primaryPlatform || 'netease';
-  if (platform === 'tencent') {
-    return `https://y.qq.com/n/ryqq/songDetail/${id}`;
-  }
-  if (platform === 'kugou') {
-    return `https://www.kugou.com/song/#hash=${id}`;
-  }
-  if (platform === 'kuwo') {
-    return `https://www.kuwo.cn/play_detail/${id}`;
-  }
-  if (platform === 'baidu') {
-    return `https://music.91q.com/#/song/${id}`;
-  }
-  return `https://music.163.com/song?id=${id}`;
-};
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
@@ -291,12 +229,6 @@ const Music = () => {
     }
   };
 
-  const formatDate = (value: string | null | undefined) => {
-    if (!value) return '刚刚';
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? '刚刚' : format(parsed, 'yyyy-MM-dd');
-  };
-
   const handleAddSong = async () => {
     if (!searchId) return;
     if (isBanned) {
@@ -328,7 +260,7 @@ const Music = () => {
         }
 
         try {
-          await apiPost<{ song: any }>(`/api/music/from-${selectedPlatform}`, { id });
+          await apiPost<{ song: SongItem }>(`/api/music/from-${selectedPlatform}`, { id });
           existingSongs.add(id);
           addedCount++;
         } catch (error) {
@@ -597,28 +529,12 @@ const Music = () => {
         album={editingAlbum}
       />
 
-      {isBatchMode && selectedSongs.size > 0 && (
-        <motion.div 
-          initial={{ y: 100 }}
-          animate={{ y: 0 }}
-          className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 bg-gray-900 text-white px-8 py-4 rounded-full shadow-2xl flex items-center gap-8"
-        >
-          <span className="text-sm font-bold">{t('music.selectedCount', { count: selectedSongs.size })}</span>
-          <div className="flex gap-4">
-            <button 
-              onClick={() => setSelectedSongs(new Set())}
-              className="text-sm text-gray-400 hover:text-white"
-            >
-              {t('music.cancelSelect')}
-            </button>
-            <button 
-              onClick={() => setConfirmModal({ show: true, type: 'batch' })}
-              className="px-6 py-2 bg-red-500 text-white rounded-full text-sm font-bold hover:bg-red-600 transition-all"
-            >
-              {t('music.batchDelete')}
-            </button>
-          </div>
-        </motion.div>
+      {isBatchMode && (
+        <BatchActions
+          selectedCount={selectedSongs.size}
+          onCancelSelect={() => setSelectedSongs(new Set())}
+          onBatchDelete={() => setConfirmModal({ show: true, type: 'batch' })}
+        />
       )}
 
       <AnimatePresence>
@@ -658,93 +574,33 @@ const Music = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-12">
         <div className="lg:col-span-2">
           <div className="bg-white rounded-2xl md:rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-4 md:p-6 lg:p-8 border-b border-gray-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div className="inline-flex bg-gray-100 rounded-full p-1.5">
-                <button
-                  onClick={() => setActiveTab('music')}
-                  className={clsx(
-                    'px-5 py-2 rounded-full text-sm font-bold transition-all inline-flex items-center gap-2',
-                    activeTab === 'music' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800',
-                  )}
-                >
-                  <Grid3X3 size={16} /> {t('music.tabMusic')}
-                </button>
-                <button
-                  onClick={() => setActiveTab('albums')}
-                  className={clsx(
-                    'px-5 py-2 rounded-full text-sm font-bold transition-all inline-flex items-center gap-2',
-                    activeTab === 'albums' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800',
-                  )}
-                >
-                  <Album size={16} /> {t('music.tabAlbums')}
-                </button>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                {isAdmin && activeTab === 'albums' && (
-                  <button
-                    onClick={() => {
-                      setEditingAlbum(null);
-                      setIsAlbumModalOpen(true);
-                    }}
-                    className="px-4 py-2 rounded-full bg-brand-primary text-gray-900 text-xs font-bold hover:scale-105 transition-all"
-                  >
-                    <Plus size={14} className="inline mr-1" /> {t('music.createAlbum')}
-                  </button>
-                )}
-                <ViewModeSelector value={viewMode} onChange={setViewMode} size="sm" />
-                {activeTab === 'music' && (
-                  <>
-                    <select
-                      value={sortBy}
-                      onChange={(e) => {
-                        setSortBy(e.target.value as typeof sortBy);
-                        setPage(1);
-                      }}
-                      className="px-2 py-1.5 rounded-lg border border-gray-200 text-xs bg-white min-w-[100px]"
-                    >
-                      <option value="createdAt">{t('music.sortBy.createdAt')}</option>
-                      <option value="title">{t('music.sortBy.title')}</option>
-                      <option value="artist">{t('music.sortBy.artist')}</option>
-                    </select>
-                    <button
-                      onClick={() => setSortOrder(o => o === 'asc' ? 'desc' : 'asc')}
-                      className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500"
-                      title={sortOrder === 'asc' ? t('music.sortOrder.asc') : t('music.sortOrder.desc')}
-                    >
-                      {sortOrder === 'desc' ? '↓' : '↑'}
-                    </button>
-                    <select
-                      value={filterPlatform}
-                      onChange={(e) => {
-                        setFilterPlatform(e.target.value as typeof filterPlatform);
-                        setPage(1);
-                      }}
-                      className="px-2 py-1.5 rounded-lg border border-gray-200 text-xs bg-white min-w-[90px]"
-                    >
-                      <option value="all">{t('music.platforms.all')}</option>
-                      <option value="netease">{t('music.platforms.netease')}</option>
-                      <option value="tencent">{t('music.platforms.tencent')}</option>
-                      <option value="kugou">{t('music.platforms.kugou')}</option>
-                      <option value="baidu">{t('music.platforms.baidu')}</option>
-                      <option value="kuwo">{t('music.platforms.kuwo')}</option>
-                    </select>
-                    <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={showAccompaniments}
-                        onChange={(e) => setShowAccompaniments(e.target.checked)}
-                        className="w-3.5 h-3.5 rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
-                      />
-                      <span className="hidden sm:inline">{t('music.showAccompaniments')}</span>
-                      <span className="sm:hidden" title={t('music.showAccompaniments')}>🎵</span>
-                    </label>
-                  </>
-                )}
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-auto">
-                  {activeTab === 'music' ? `${displaySongs.length} ${t('music.unit.song')}` : `${albums.length} ${t('music.unit.album')}`}
-                </span>
-              </div>
-            </div>
+            <MusicFilters
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              isAdmin={isAdmin}
+              onCreateAlbum={() => {
+                setEditingAlbum(null);
+                setIsAlbumModalOpen(true);
+              }}
+              sortBy={sortBy}
+              onSortByChange={(value) => {
+                setSortBy(value);
+                setPage(1);
+              }}
+              sortOrder={sortOrder}
+              onSortOrderChange={setSortOrder}
+              filterPlatform={filterPlatform}
+              onFilterPlatformChange={(value) => {
+                setFilterPlatform(value);
+                setPage(1);
+              }}
+              showAccompaniments={showAccompaniments}
+              onShowAccompanimentsChange={setShowAccompaniments}
+              musicCount={displaySongs.length}
+              albumCount={albums.length}
+            />
 
             {activeTab === 'music' ? (
               <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6">
@@ -769,210 +625,23 @@ const Music = () => {
                   <>
                     <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
                       {paginatedSongs.map((song) => (
-                        <div
+                        <SongCard
                           key={song.docId}
-                          className={clsx(
-                            viewMode === 'list' 
-                              ? 'flex gap-3 md:gap-4 p-3 rounded-lg md:rounded-xl border border-gray-100 bg-white hover:shadow-md transition-all' 
-                              : 'rounded-xl md:rounded-2xl border transition-all p-3 md:p-4 group bg-white',
-                            currentSong?.docId === song.docId && !isBatchMode && viewMode !== 'list' ? 'border-brand-primary/40 shadow-lg shadow-brand-primary/10' : 'border-gray-100 hover:border-brand-primary/30 hover:shadow-md',
-                            isBatchMode && selectedSongs.has(song.docId) && 'border-brand-primary bg-brand-primary/5',
-                          )}
-                        >
-                          {viewMode === 'list' ? (
-                            <>
-                              <div className="relative w-14 h-14 md:w-16 md:h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
-                                <img src={song.cover} alt={song.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                                <button
-                                  onClick={() => playSong(song)}
-                                  className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
-                                  title={t('music.play')}
-                                >
-                                  <Play className="text-white text-[16px] md:text-[18px]" />
-                                </button>
-                              </div>
-                              <div className="flex-1 min-w-0 flex items-center">
-                                <div className="flex-1 min-w-0">
-                                  <Link to={`/music/${song.docId}`} className="font-bold text-gray-900 line-clamp-1 hover:text-brand-primary transition-colors text-sm md:text-base">
-                                    {song.title}
-                                  </Link>
-                                  <p className="text-xs text-gray-400 line-clamp-1">{song.artist} — {song.album}</p>
-                                </div>
-                                <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
-                                  {isBatchMode ? (
-                                    <button
-                                      onClick={() => toggleSelect(song.docId)}
-                                      className={clsx(
-                                        'px-2.5 md:px-3 py-1.5 rounded-full text-xs font-bold transition-all touch-target-lg',
-                                        selectedSongs.has(song.docId) ? 'bg-brand-primary text-gray-900' : 'bg-gray-100 text-gray-500',
-                                      )}
-                                    >
-                                      {selectedSongs.has(song.docId) ? t('music.selected') : t('music.select')}
-                                    </button>
-                                  ) : (
-                                    <>
-                                      <button
-                                        onClick={() => handleToggleFavorite(song)}
-                                        disabled={favoriting === song.docId}
-                                        className={clsx(
-                                          'p-1.5 md:p-2 transition-colors touch-target-lg',
-                                          song.favoritedByMe ? 'text-red-500' : 'text-gray-400 hover:text-red-500',
-                                        )}
-                                        title={t('music.favorite')}
-                                      >
-                                        <Heart size={14} />
-                                      </button>
-                                      <Link
-                                        to={`/music/${song.docId}`}
-                                        className="px-2.5 md:px-3 py-1.5 rounded-full bg-black/60 text-white text-xs hover:bg-black/75 transition-colors"
-                                        title={t('music.detail')}
-                                      >
-                                        {t('music.detail')}
-                                      </Link>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="relative aspect-square rounded-xl md:rounded-2xl overflow-hidden bg-gray-100">
-                                <img src={song.cover} alt={song.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent opacity-90" />
-                                <div className="absolute left-2.5 right-2.5 bottom-2.5 md:left-3 md:right-3 md:bottom-3 flex items-center justify-between gap-2">
-                                  <button
-                                    onClick={() => playSong(song)}
-                                    className={clsx(
-                                      'w-9 h-9 md:w-10 md:h-10 rounded-full inline-flex items-center justify-center transition-all',
-                                      isBatchMode ? 'bg-white/80 text-gray-900 hover:bg-white' : 'bg-brand-primary text-gray-900 hover:scale-105',
-                                    )}
-                                    title={isBatchMode ? t('music.selectSong') : t('music.playSong')}
-                                  >
-                                    <Play className={clsx('text-[14px] md:text-[16px]', !isBatchMode && currentSong?.docId === song.docId && 'fill-current')} />
-                                  </button>
-                                  <Link
-                                    to={`/music/${song.docId}`}
-                                    className="inline-flex items-center gap-1 text-xs px-2 py-1.5 md:px-3 md:py-2 rounded-full bg-black/60 text-white hover:bg-black/75 transition-colors"
-                                    title={t('music.viewSongDetail')}
-                                  >
-                                    {t('music.detail')} <ChevronRight size={12} />
-                                  </Link>
-                                </div>
-                              </div>
-
-                              <div className="mt-3 md:mt-4">
-                                <Link to={`/music/${song.docId}`} className="font-bold text-gray-900 line-clamp-1 hover:text-brand-primary transition-colors text-sm md:text-base" title={t('music.viewSongDetail')}>
-                                  {song.title}
-                                </Link>
-                                <p className="text-xs text-gray-400 mt-1 line-clamp-1">{song.artist} — {song.album}</p>
-                                {song.platformIds && (
-                                  <div className="flex items-center gap-1.5 mt-2">
-                                    {song.platformIds.neteaseId && (
-                                      <a
-                                        href={`https://music.163.com/song?id=${song.platformIds.neteaseId}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-xs px-2 py-0.5 sm:px-2 sm:py-0.5 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors w-8 sm:w-auto flex items-center justify-center sm:justify-start"
-                                        title={`${t('music.platforms.netease')}: ${song.platformIds.neteaseId}`}
-                                      >
-                                        <span className="hidden sm:inline">{t('music.platforms.netease')}</span>
-                                        <span className="sm:hidden font-bold">云</span>
-                                      </a>
-                                    )}
-                                    {song.platformIds.tencentId && (
-                                      <a
-                                        href={`https://y.qq.com/n/ryqq/songDetail/${song.platformIds.tencentId}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-xs px-2 py-0.5 sm:px-2 sm:py-0.5 rounded-full bg-green-100 text-green-700 hover:bg-green-200 transition-colors w-8 sm:w-auto flex items-center justify-center sm:justify-start"
-                                        title={`${t('music.platforms.tencent')}: ${song.platformIds.tencentId}`}
-                                      >
-                                        <span className="hidden sm:inline">QQ音乐</span>
-                                        <span className="sm:hidden font-bold">Q</span>
-                                      </a>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-
-                              <div
-                                className={clsx(
-                                  'mt-4',
-                                  viewMode === 'small'
-                                    ? 'flex items-center justify-between'
-                                    : 'flex items-center justify-between',
-                                )}
-                              >
-                                {isBatchMode ? (
-                                  <button
-                                    onClick={() => toggleSelect(song.docId)}
-                                    className={clsx(
-                                      'px-3 py-1.5 rounded-full text-xs font-bold transition-all',
-                                      selectedSongs.has(song.docId) ? 'bg-brand-primary text-gray-900' : 'bg-gray-100 text-gray-500 hover:text-gray-800',
-                                    )}
-                                  >
-                                    {selectedSongs.has(song.docId) ? t('music.selected') : t('music.select')}
-                                  </button>
-                                ) : (
-                                  <div className={clsx(
-                                    'flex items-center gap-1',
-                                    viewMode === 'small' ? 'overflow-hidden' : 'flex-wrap'
-                                  )}>
-                                    <button
-                                      onClick={() => handleToggleFavorite(song)}
-                                      disabled={favoriting === song.docId}
-                                      className={clsx(
-                                        'p-2 transition-colors shrink-0',
-                                        song.favoritedByMe ? 'text-red-500' : 'text-gray-400 hover:text-red-500',
-                                        favoriting === song.docId && 'opacity-50 cursor-not-allowed',
-                                      )}
-                                      title={t('music.favorite')}
-                                    >
-                                      <Heart size={16} />
-                                    </button>
-                                    <a
-                                      href={getSongExternalUrl(song)}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="p-2 text-gray-400 hover:text-brand-primary transition-colors shrink-0"
-                                      title={t('music.openOriginalLink')}
-                                    >
-                                      <ExternalLink size={16} />
-                                    </a>
-                                    <button
-                                      onClick={(event) => handleCopySongLink(event, song)}
-                                      className="p-2 text-gray-400 hover:text-brand-primary transition-colors shrink-0"
-                                      title={t('music.copyInternalLink')}
-                                    >
-                                      <Link2 size={16} />
-                                    </button>
-                                    <button
-                                      onClick={() => handleShowPosts(song)}
-                                      className={clsx(
-                                        'p-2 transition-colors shrink-0',
-                                        viewMode === 'small' ? 'hidden sm:inline-flex' : 'inline-flex',
-                                        selectedSongForPosts?.docId === song.docId ? 'text-brand-primary' : 'text-gray-400 hover:text-brand-primary',
-                                      )}
-                                      title={t('music.viewPosts')}
-                                    >
-                                      <MessageSquare size={16} />
-                                    </button>
-                                  </div>
-                                )}
-
-                                {isAdmin && !isBatchMode ? (
-                                  <button
-                                    onClick={() => setConfirmModal({ show: true, type: 'single', id: song.docId })}
-                                    className="p-2 text-gray-400 hover:text-red-500 transition-colors shrink-0"
-                                    title={t('music.deleteSong')}
-                                  >
-                                    <Trash2 size={16} />
-                                  </button>
-                                ) : null}
-                              </div>
-                            </>
-                          )}
-                        </div>
+                          song={song}
+                          viewMode={viewMode}
+                          isBatchMode={isBatchMode}
+                          isSelected={selectedSongs.has(song.docId)}
+                          isCurrentSong={currentSong?.docId === song.docId}
+                          isFavoriting={favoriting === song.docId}
+                          isAdmin={isAdmin}
+                          isPostsSelected={selectedSongForPosts?.docId === song.docId}
+                          onPlay={playSong}
+                          onToggleSelect={toggleSelect}
+                          onToggleFavorite={handleToggleFavorite}
+                          onCopyLink={handleCopySongLink}
+                          onDelete={(docId) => setConfirmModal({ show: true, type: 'single', id: docId })}
+                          onShowPosts={handleShowPosts}
+                        />
                       ))}
                     </div>
 
@@ -1058,76 +727,14 @@ const Music = () => {
                   </div>
                 ) : albums.length > 0 ? (
                   <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
-                    {albums.map((album) => {
-                      const albumId = album.docId || album.id;
-                      const trackCount = album.trackCount ?? album.tracks?.length ?? 0;
-
-                      return (
-                        <div key={albumId} className={clsx(
-                          viewMode === 'list' 
-                            ? 'flex gap-4 p-3 rounded-xl border border-gray-100 bg-white hover:shadow-md transition-all' 
-                            : 'rounded-3xl border border-gray-100 p-4 hover:border-brand-primary/30 hover:shadow-md transition-all bg-white group'
-                        )}>
-                          {viewMode === 'list' ? (
-                            <>
-                              <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
-                                <img src={album.cover} alt={album.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                              </div>
-                              <div className="flex-1 min-w-0 flex items-center">
-                                <div className="flex-1 min-w-0">
-                                  <Link to={`/album/${albumId}`} className="font-bold text-gray-900 line-clamp-1 hover:text-brand-primary transition-colors">
-                                    {album.title}
-                                  </Link>
-                                  <p className="text-xs text-gray-400 line-clamp-1">{album.artist}</p>
-                                </div>
-                                <div className="flex items-center gap-2 flex-shrink-0">
-                                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">{trackCount} {t('music.unit.song')}</span>
-                                  <Link
-                                    to={`/album/${albumId}`}
-                                    className="px-3 py-1.5 rounded-full bg-brand-primary/15 text-gray-900 text-xs hover:bg-brand-primary/25 transition-colors"
-                                  >
-                                    {t('music.view')}
-                                  </Link>
-                                </div>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <Link to={`/album/${albumId}`} className="block relative aspect-square rounded-2xl overflow-hidden bg-gray-100">
-                                <img src={album.cover} alt={album.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent opacity-80" />
-                                <div className="absolute left-3 bottom-3 inline-flex items-center gap-1 text-xs text-white bg-black/60 rounded-full px-3 py-1.5">
-                                  <List size={13} /> {trackCount} {t('music.unit.song')}
-                                </div>
-                              </Link>
-
-                              <div className="mt-4">
-                                <Link to={`/album/${albumId}`} className="font-bold text-gray-900 line-clamp-1 hover:text-brand-primary transition-colors">
-                                  {album.title}
-                                </Link>
-                                <p className="text-xs text-gray-400 mt-1 line-clamp-1">{album.artist}</p>
-                              </div>
-
-                              <div className="mt-3 flex items-center justify-between">
-                                <Link
-                                  to={`/album/${albumId}`}
-                                  className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full bg-brand-primary/15 text-gray-900 hover:bg-brand-primary/25 transition-colors"
-                                >
-                                  {t('music.viewAlbum')} <ChevronRight size={14} />
-                                </Link>
-                                <button
-                                  onClick={(event) => handleCopyAlbumLink(event, albumId)}
-                                  className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
-                                  title={t('music.copyAlbumLink')}
-                                >
-                                  <Link2 size={16} />
-                                </button>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {albums.map((album) => (
+                      <AlbumCard
+                        key={album.docId || album.id}
+                        album={album}
+                        viewMode={viewMode}
+                        onCopyLink={handleCopyAlbumLink}
+                      />
+                    ))}
                   </div>
                 ) : (
                   <div className="py-20 text-center text-gray-400 italic">{t('music.noAlbums')}</div>
