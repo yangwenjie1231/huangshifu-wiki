@@ -255,11 +255,13 @@
   @apply bg-black/40 backdrop-blur-md border border-white/10;
 }
 
+/* 旋转动画 - 用于加载指示器或装饰性元素 */
 @keyframes spin-slow {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
 
+/* 缓慢旋转动画类 - 8秒一圈，用于装饰性旋转元素 */
 .animate-spin-slow {
   animation: spin-slow 8s linear infinite;
 }

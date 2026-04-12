@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { HomeSkeleton } from "../components/HomeSkeleton";
+import GlassCard from "../components/GlassCard";
 import {
 	Book,
 	MessageSquare,
@@ -19,7 +20,7 @@ import { format } from "date-fns";
 import { apiGet } from "../lib/apiClient";
 import { toDateValue } from "../lib/dateUtils";
 import { useTheme } from "../context/ThemeContext";
-import { withThemeSearch } from "../lib/theme";
+import { withThemeSearch, ThemeName } from "../lib/theme";
 import { useI18n } from "../lib/i18n";
 import { useAnimatedNumber } from "../hooks/useAnimatedNumber";
 
@@ -48,6 +49,35 @@ const AnimatedStat: React.FC<AnimatedStatProps> = ({ value, suffix = "", label, 
 		</div>
 	);
 };
+
+interface CategoryCardProps {
+	cat: {
+		title: string;
+		icon: React.ReactNode;
+		desc: string;
+		link: string;
+	};
+	theme: ThemeName;
+}
+
+const CategoryCard: React.FC<CategoryCardProps> = React.memo(({ cat, theme }) => (
+	<Link
+		to={withThemeSearch(cat.link, theme)}
+		className="flex items-start gap-4 p-4 rounded-2xl hover:bg-gray-50 transition-all group"
+	>
+		<div className="text-brand-primary group-hover:scale-110 transition-transform">
+			{cat.icon}
+		</div>
+		<div>
+			<h3 className="text-xl font-serif font-bold mb-1">
+				{cat.title}
+			</h3>
+			<p className="text-gray-500 text-sm leading-relaxed">
+				{cat.desc}
+			</p>
+		</div>
+	</Link>
+));
 
 type HomeFeedResponse = {
 	announcements: Array<{
@@ -152,34 +182,29 @@ const AcademyHome = () => {
 						initial={{ opacity: 0, y: 20 }}
 						animate={{ opacity: 1, y: 0 }}
 						transition={{ delay: index * 0.1 }}
-						className={`liquidGlass-wrapper bg-white ${index === 0 ? 'bento-item-large' : ''}`}
 					>
-						<div className="liquidGlass-effect"></div>
-						<div className="liquidGlass-tint"></div>
-						<div className="liquidGlass-shine"></div>
-						<Link
-							to={withThemeSearch(item.href, "academy")}
-							className="liquidGlass-text w-full p-6 hover:-translate-y-0.5 transition-transform"
-						>
-							<h2 className="text-2xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
-								{item.title}
-							</h2>
-							<p className="text-[color:var(--color-theme-muted)] mb-4">
-								{item.subtitle}
-							</p>
-							<span className="inline-flex items-center gap-1 text-sm font-medium text-[color:var(--color-theme-accent)]">
-								前往 <ChevronRight size={14} />
-							</span>
-						</Link>
+						<GlassCard className={index === 0 ? 'bento-item-large' : ''}>
+							<Link
+								to={withThemeSearch(item.href, "academy")}
+								className="w-full p-6 hover:-translate-y-0.5 transition-transform block"
+							>
+								<h2 className="text-2xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
+									{item.title}
+								</h2>
+								<p className="text-[color:var(--color-theme-muted)] mb-4">
+									{item.subtitle}
+								</p>
+								<span className="inline-flex items-center gap-1 text-sm font-medium text-[color:var(--color-theme-accent)]">
+									前往 <ChevronRight size={14} />
+								</span>
+							</Link>
+						</GlassCard>
 					</motion.div>
 				))}
 			</section>
 
-			<section className="liquidGlass-wrapper bg-white">
-				<div className="liquidGlass-effect"></div>
-				<div className="liquidGlass-tint"></div>
-				<div className="liquidGlass-shine"></div>
-				<div className="liquidGlass-text w-full p-8 space-y-4">
+			<section>
+				<GlassCard className="w-full p-8 space-y-4">
 					<h2 className="text-2xl font-serif font-bold text-[color:var(--color-theme-accent-strong)]">
 						书院开篇
 					</h2>
@@ -207,7 +232,7 @@ const AcademyHome = () => {
 							</p>
 						</div>
 					)}
-				</div>
+				</GlassCard>
 			</section>
 
 			<section className="bento-grid">
@@ -217,12 +242,8 @@ const AcademyHome = () => {
 						initial={{ opacity: 0, y: 20 }}
 						animate={{ opacity: 1, y: 0 }}
 						transition={{ delay: index * 0.1 }}
-						className="liquidGlass-wrapper bg-white"
 					>
-						<div className="liquidGlass-effect"></div>
-						<div className="liquidGlass-tint"></div>
-						<div className="liquidGlass-shine"></div>
-						<div className="liquidGlass-text w-full p-5">
+						<GlassCard className="w-full p-5">
 							<p className="text-xs uppercase tracking-[0.2em] text-[color:var(--color-theme-muted)] mb-2">
 								{lecturer.focus}
 							</p>
@@ -232,16 +253,13 @@ const AcademyHome = () => {
 							<p className="text-sm text-[color:var(--color-theme-text)]/90 leading-relaxed">
 								{lecturer.desc}
 							</p>
-						</div>
+						</GlassCard>
 					</motion.article>
 				))}
 			</section>
 
-			<section className="liquidGlass-wrapper bg-white">
-				<div className="liquidGlass-effect"></div>
-				<div className="liquidGlass-tint"></div>
-				<div className="liquidGlass-shine"></div>
-				<div className="liquidGlass-text w-full p-6">
+			<section>
+				<GlassCard className="w-full p-6">
 					<h2 className="text-xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-4">
 						书院文案映射
 					</h2>
@@ -269,7 +287,7 @@ const AcademyHome = () => {
 							</tbody>
 						</table>
 					</div>
-				</div>
+				</GlassCard>
 			</section>
 		</div>
 	);
@@ -348,16 +366,13 @@ const Home = () => {
 			{/* Bento Grid Layout */}
 			<section className="bento-grid mb-16">
 				{/* 百科全书 */}
-				<motion.div 
-					className="bento-item-large liquidGlass-wrapper bg-white"
+				<motion.div
+					className="bento-item-large"
 					initial={{ opacity: 0, y: 20 }}
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.5 }}
 				>
-					<div className="liquidGlass-effect"></div>
-					<div className="liquidGlass-tint"></div>
-					<div className="liquidGlass-shine"></div>
-					<div className="liquidGlass-text w-full p-6 sm:p-8">
+					<GlassCard className="w-full p-6 sm:p-8">
 						<div className="flex justify-between items-end mb-8">
 							<div>
 								<h2 className="text-4xl font-serif font-bold text-gray-900 mb-2">
@@ -398,41 +413,22 @@ const Home = () => {
 									desc: "演出、直播与线下活动时间线",
 									link: "/wiki?category=event",
 								},
-							].map((cat, i) => (
-								<Link
-									key={cat.title}
-									to={withThemeSearch(cat.link, theme)}
-									className="flex items-start gap-4 p-4 rounded-2xl hover:bg-gray-50 transition-all group"
-								>
-									<div className="text-brand-primary group-hover:scale-110 transition-transform">
-										{cat.icon}
-									</div>
-									<div>
-										<h3 className="text-xl font-serif font-bold mb-1">
-											{cat.title}
-										</h3>
-										<p className="text-gray-500 text-sm leading-relaxed">
-											{cat.desc}
-										</p>
-									</div>
-								</Link>
+							].map((cat) => (
+								<CategoryCard key={cat.title} cat={cat} theme={theme} />
 							))}
 						</div>
-					</div>
+					</GlassCard>
 				</motion.div>
 
 				{/* 热门帖子 */}
 				{feed?.hotPosts && feed.hotPosts.length > 0 && (
-					<motion.div 
-						className="bento-item-tall liquidGlass-wrapper bg-white"
+					<motion.div
+						className="bento-item-tall"
 						initial={{ opacity: 0, y: 20 }}
 						animate={{ opacity: 1, y: 0 }}
 						transition={{ duration: 0.5, delay: 0.1 }}
 					>
-						<div className="liquidGlass-effect"></div>
-						<div className="liquidGlass-tint"></div>
-						<div className="liquidGlass-shine"></div>
-						<div className="liquidGlass-text w-full p-6 sm:p-8 flex flex-col h-full">
+						<GlassCard className="w-full p-6 sm:p-8 flex flex-col h-full">
 							<div className="flex justify-between items-end mb-6">
 								<h2 className="text-2xl font-serif font-bold text-gray-900 flex items-center gap-2">
 									<Flame size={20} className="text-orange-500" /> 热门帖子
@@ -476,21 +472,18 @@ const Home = () => {
 									</Link>
 								))}
 							</div>
-						</div>
+						</GlassCard>
 					</motion.div>
 				)}
 
 				{/* 社区动态 */}
-				<motion.div 
-					className="bento-item-large liquidGlass-wrapper bg-white"
+				<motion.div
+					className="bento-item-large"
 					initial={{ opacity: 0, y: 20 }}
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.5, delay: 0.2 }}
 				>
-					<div className="liquidGlass-effect"></div>
-					<div className="liquidGlass-tint"></div>
-					<div className="liquidGlass-shine"></div>
-					<div className="liquidGlass-text w-full p-6 sm:p-8">
+					<GlassCard className="w-full p-6 sm:p-8">
 						<div className="flex justify-between items-end mb-6">
 							<h2 className="text-3xl font-serif font-bold text-gray-900">
 								社区动态
@@ -554,23 +547,20 @@ const Home = () => {
 								</div>
 							)}
 						</div>
-					</div>
+					</GlassCard>
 				</motion.div>
 
 				{/* 加入我们 */}
-				<motion.div 
-					className="bento-item-tall liquidGlass-wrapper bg-gradient-to-br from-brand-primary to-brand-primary/80"
+				<motion.div
+					className="bento-item-tall"
 					initial={{ opacity: 0, y: 20 }}
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.5, delay: 0.3 }}
 				>
-					<div className="liquidGlass-effect"></div>
-					<div className="liquidGlass-tint"></div>
-					<div className="liquidGlass-shine"></div>
-					<div className="liquidGlass-text w-full p-6 sm:p-8 text-gray-900 flex flex-col justify-between h-full">
-						<div>
-							<h2 className="text-3xl font-serif font-bold mb-6">加入我们</h2>
-							<p className="text-gray-800/70 font-serif italic leading-relaxed mb-8">
+					<GlassCard className="w-full p-6 sm:p-8 text-gray-900 bg-gradient-to-br from-brand-primary to-brand-primary/80">
+						<div className="mb-8">
+							<h2 className="text-3xl font-serif font-bold mb-4">加入我们</h2>
+							<p className="text-gray-800/70 font-serif italic leading-relaxed">
 								"诗扶小筑是一个由粉丝自发维护的社区。无论你是资深乐迷，还是刚被圈粉的新人，这里都有你的位置。"
 							</p>
 						</div>
@@ -589,12 +579,12 @@ const Home = () => {
 							/>
 							<Link
 								to={withThemeSearch("/forum", theme)}
-								className="mt-4 px-6 py-3 bg-white text-brand-primary rounded-full font-bold hover:bg-white/90 transition-all text-center"
+								className="mt-4 px-6 py-3 bg-white text-brand-primary rounded-full font-bold hover:bg-white/90 transition-all text-center block"
 							>
 								立即加入
 							</Link>
 						</div>
-					</div>
+					</GlassCard>
 				</motion.div>
 			</section>
 		</div>

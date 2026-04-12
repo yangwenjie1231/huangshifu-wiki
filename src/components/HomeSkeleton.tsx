@@ -111,10 +111,10 @@ export const HomeSkeleton: React.FC = () => {
           <div className="liquidGlass-effect"></div>
           <div className="liquidGlass-tint"></div>
           <div className="liquidGlass-shine"></div>
-          <div className="liquidGlass-text w-full p-6 sm:p-8 text-gray-900 flex flex-col justify-between h-full">
-            <div>
-              <Skeleton width={150} height={36} className="mb-6 bg-white/20" />
-              <Skeleton width="100%" height={60} className="mb-4" />
+          <div className="liquidGlass-text w-full p-6 sm:p-8 text-gray-900">
+            <div className="mb-8">
+              <Skeleton width={150} height={36} className="mb-4 bg-white/20" />
+              <Skeleton width="100%" height={60} />
             </div>
             <div className="space-y-4">
               <div className="flex items-center gap-3 p-4 bg-white/20 rounded-2xl">

@@ -399,6 +399,8 @@ export const Navbar = () => {
 												type="button"
 												onClick={() => setNotifPanelOpen(!notifPanelOpen)}
 												className="relative text-gray-500 hover:text-brand-olive transition-colors"
+												aria-label={`通知${unreadCount > 0 ? `，有${unreadCount}条未读` : ""}`}
+												aria-expanded={notifPanelOpen}
 											>
 												<Bell size={20} />
 												{unreadCount > 0 && (

@@ -6,7 +6,21 @@ interface SmartImageProps {
   src?: string;
   alt?: string;
   className?: string;
+  sizes?: string;
 }
+
+const generateSrcSet = (baseUrl: string): string => {
+  const scaleFactor = window.devicePixelRatio || 1;
+  const isRetina = scaleFactor >= 2;
+
+  const url1x = baseUrl;
+  const url2x = baseUrl;
+
+  if (isRetina) {
+    return `${url1x} 1x, ${url2x} 2x`;
+  }
+  return `${url1x} 1x`;
+};
 
 /**
  * A component that tries multiple CDN URLs for an image ID.
