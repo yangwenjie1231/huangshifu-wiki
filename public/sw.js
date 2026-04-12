@@ -1,4 +1,4 @@
-const CACHE_NAME = 'huangshifu-wiki-v2';
+const CACHE_NAME = 'huangshifu-wiki-v3';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -31,6 +31,10 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
+  
+  if (!url.protocol.startsWith('http')) {
+    return;
+  }
   
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(fetch(event.request));
