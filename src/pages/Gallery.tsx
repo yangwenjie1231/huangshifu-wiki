@@ -15,6 +15,7 @@ import { apiDelete, apiGet, apiPost, apiUpload } from '../lib/apiClient';
 import { toDateValue } from '../lib/dateUtils';
 import { LocationTagInput } from '../components/LocationTagInput';
 import Pagination from '../components/Pagination';
+import { GallerySkeleton } from '../components/GallerySkeleton';
 
 const DEFAULT_PAGE_SIZE = 24;
 
@@ -140,6 +141,10 @@ const GalleryList = () => {
       setDeletingGalleryId(null);
     }
   };
+
+  if (loading) {
+    return <GallerySkeleton />;
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-12">
