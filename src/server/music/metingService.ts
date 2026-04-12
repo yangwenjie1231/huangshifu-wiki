@@ -11,6 +11,7 @@ type MetingTrackRaw = {
   url_id?: string | number;
   lyric_id?: string | number;
   source?: string;
+  type?: number;
 };
 
 export interface MusicImportTrack {
@@ -23,6 +24,7 @@ export interface MusicImportTrack {
   lyricId: string;
   cover: string;
   sourceUrl: string;
+  isInstrumental?: boolean;
 }
 
 export interface MusicResourcePreview {
@@ -161,6 +163,8 @@ function normalizeTrack(platform: MusicPlatform, track: MetingTrackRaw): MusicIm
   const urlId = normalizeId(track.url_id) || sourceId;
   const lyricId = normalizeId(track.lyric_id) || sourceId;
 
+  const isInstrumental = track.type === 1;
+
   return {
     sourceId,
     title,
@@ -171,6 +175,7 @@ function normalizeTrack(platform: MusicPlatform, track: MetingTrackRaw): MusicIm
     lyricId,
     cover: '',
     sourceUrl: buildPlatformResourceUrl(platform, 'song', sourceId),
+    isInstrumental,
   };
 }
 

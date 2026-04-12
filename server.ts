@@ -235,6 +235,7 @@ interface ImportSongInput {
   lyricId: string;
   cover: string;
   sourceUrl: string;
+  isInstrumental?: boolean;
 }
 
 const PLAY_URL_CACHE_TTL_MS = Math.max(60, Number(process.env.MUSIC_PLAY_URL_CACHE_TTL_SECONDS || 600)) * 1000;
@@ -1970,10 +1971,16 @@ async function createOrUpdateImportedSong(params: {
 
 /**
  * 自动识别并创建伴奏关联关系
- * 如果歌曲标题包含"伴奏"字样，自动查找对应的原曲并创建关联
+ * 支持两种模式:
+ * 1. 如果 isInstrumental 参数为 true(来自音乐平台的API),直接尝试关联到原曲
+ * 2. 如果 isInstrumental 为 false,通过标题关键词检测是否是伴奏
  */
-async function autoLinkInstrumental(songDocId: string, title: string, artist: string): Promise<void> {
-  // 检查标题是否包含伴奏标识
+async function autoLinkInstrumental(
+  songDocId: string,
+  title: string,
+  artist: string,
+  isInstrumentalFromAPI?: boolean,
+): Promise<void> {
   const instrumentalPatterns = [
     /\(伴奏\)/,
     /（伴奏）/,
@@ -1984,22 +1991,23 @@ async function autoLinkInstrumental(songDocId: string, title: string, artist: st
     /instrumental$/i,
   ];
 
-  const isInstrumental = instrumentalPatterns.some(pattern => pattern.test(title));
+  const isInstrumental = isInstrumentalFromAPI || instrumentalPatterns.some((pattern) => pattern.test(title));
   if (!isInstrumental) return;
 
-  // 提取原曲标题（去掉伴奏标识）
-  let originalTitle = title
-    .replace(/\(伴奏\)/, '')
-    .replace(/（伴奏）/, '')
-    .replace(/-伴奏/, '')
-    .replace(/伴奏版$/, '')
-    .replace(/inst\.?$/i, '')
-    .replace(/instrumental$/i, '')
-    .trim();
+  let originalTitle = title;
+  if (!isInstrumentalFromAPI) {
+    originalTitle = title
+      .replace(/\(伴奏\)/, '')
+      .replace(/（伴奏）/, '')
+      .replace(/-伴奏/, '')
+      .replace(/伴奏版$/, '')
+      .replace(/inst\.?$/i, '')
+      .replace(/instrumental$/i, '')
+      .trim();
+  }
 
   if (!originalTitle) return;
 
-  // 查找原曲（同一艺术家）
   const originalSong = await prismaAny.musicTrack.findFirst({
     where: {
       title: originalTitle,
@@ -2010,7 +2018,6 @@ async function autoLinkInstrumental(songDocId: string, title: string, artist: st
 
   if (!originalSong) return;
 
-  // 创建关联关系（songDocId是伴奏，targetSongDocId是原曲）
   await prismaAny.songInstrumentalRelation.upsert({
     where: {
       songDocId_targetSongDocId: {
@@ -9013,8 +9020,10 @@ app.post('/api/music/import', requireAdmin, async (req: AuthenticatedRequest, re
     let failed = 0;
     let linked = 0;
 
-    const importedSongs: Array<{ songDocId: string; trackOrder: number }> = [];
+    const importedSongs: Array<{ songDocId: string; trackOrder: number; title: string; artist: string; isInstrumental?: boolean }> = [];
     const linkedSongs: Array<{ docId: string; title: string; artist: string; platform: string }> = [];
+
+    // 第一轮：导入所有歌曲，收集信息到本地缓存
     for (let index = 0; index < tracks.length; index += 1) {
       const track = tracks[index];
       try {
@@ -9038,11 +9047,23 @@ app.post('/api/music/import', requireAdmin, async (req: AuthenticatedRequest, re
             platform: preview.platform,
           });
         }
-        importedSongs.push({ songDocId: result.song.docId, trackOrder: index });
+        // 收集歌曲信息用于后续关联（使用result.song中的信息，无需额外查询）
+        importedSongs.push({
+          songDocId: result.song.docId,
+          trackOrder: index,
+          title: result.song.title,
+          artist: result.song.artist,
+          isInstrumental: track.isInstrumental,
+        });
       } catch (error) {
         failed += 1;
         console.error('Import single song failed:', error);
       }
+    }
+
+    // 第二轮：建立伴奏关联（确保所有歌曲都已入库后再关联）
+    for (const song of importedSongs) {
+      await autoLinkInstrumental(song.songDocId, song.title, song.artist, song.isInstrumental);
     }
 
     let collection: { docId: string; title: string; resourceType: ParsedMusicResourceType } | null = null;
@@ -9166,7 +9187,7 @@ app.post('/api/music/from-netease', requireAdmin, async (req: AuthenticatedReque
 
     // 自动识别并关联伴奏
     if (result.created) {
-      await autoLinkInstrumental(result.song.docId, track.title || '', track.artist || '');
+      await autoLinkInstrumental(result.song.docId, track.title || '', track.artist || '', track.isInstrumental);
     }
 
     const song = await fetchSongWithRelationsByDocId(result.song.docId);
@@ -9205,7 +9226,7 @@ app.post('/api/music/from-qq', requireAdmin, async (req: AuthenticatedRequest, r
 
     // 自动识别并关联伴奏
     if (result.created) {
-      await autoLinkInstrumental(result.song.docId, track.title || '', track.artist || '');
+      await autoLinkInstrumental(result.song.docId, track.title || '', track.artist || '', track.isInstrumental);
     }
 
     const song = await fetchSongWithRelationsByDocId(result.song.docId);
@@ -9244,7 +9265,7 @@ app.post('/api/music/from-kugou', requireAdmin, async (req: AuthenticatedRequest
 
     // 自动识别并关联伴奏
     if (result.created) {
-      await autoLinkInstrumental(result.song.docId, track.title || '', track.artist || '');
+      await autoLinkInstrumental(result.song.docId, track.title || '', track.artist || '', track.isInstrumental);
     }
 
     const song = await fetchSongWithRelationsByDocId(result.song.docId);
@@ -9281,6 +9302,11 @@ app.post('/api/music/from-baidu', requireAdmin, async (req: AuthenticatedRequest
       albumNameFallback: preview.title,
     });
 
+    // 自动识别并关联伴奏
+    if (result.created) {
+      await autoLinkInstrumental(result.song.docId, track.title || '', track.artist || '', track.isInstrumental);
+    }
+
     const song = await fetchSongWithRelationsByDocId(result.song.docId);
     res.status(result.created ? 201 : 200).json({
       song: song ? toSongResponse(song) : result.song,
@@ -9314,6 +9340,11 @@ app.post('/api/music/from-kuwo', requireAdmin, async (req: AuthenticatedRequest,
       userUid: req.authUser!.uid,
       albumNameFallback: preview.title,
     });
+
+    // 自动识别并关联伴奏
+    if (result.created) {
+      await autoLinkInstrumental(result.song.docId, track.title || '', track.artist || '', track.isInstrumental);
+    }
 
     const song = await fetchSongWithRelationsByDocId(result.song.docId);
     res.status(result.created ? 201 : 200).json({
@@ -13242,7 +13273,7 @@ async function startServer() {
   app.use((_req, res, next) => {
     res.setHeader(
       'Content-Security-Policy',
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com https://mapplugin.amap.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://o4.amap.com https://mapplugin.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com https://*.music.126.net https://fonts.googleapis.com https://fonts.gstatic.com; worker-src 'self' blob:; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net https://picsum.photos https://*.googleusercontent.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com;"
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com https://mapplugin.amap.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://o4.amap.com https://mapplugin.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com https://*.music.126.net https://fonts.googleapis.com https://fonts.gstatic.com; worker-src 'self' blob:; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net https://picsum.photos https://*.googleusercontent.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; media-src 'self' https://music.163.com https://*.music.163.com https://*.music.126.net;"
     );
     next();
   });
@@ -13264,7 +13295,7 @@ async function startServer() {
   app.use((_req, res, next) => {
     res.setHeader(
       'Content-Security-Policy',
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com https://mapplugin.amap.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://o4.amap.com https://mapplugin.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com https://*.music.126.net https://fonts.googleapis.com https://fonts.gstatic.com; worker-src 'self' blob:; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net https://picsum.photos https://*.googleusercontent.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com;"
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com https://mapplugin.amap.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://o4.amap.com https://mapplugin.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com https://*.music.126.net https://fonts.googleapis.com https://fonts.gstatic.com; worker-src 'self' blob:; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net https://picsum.photos https://*.googleusercontent.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; media-src 'self' https://music.163.com https://*.music.163.com https://*.music.126.net;"
     );
     next();
   });
