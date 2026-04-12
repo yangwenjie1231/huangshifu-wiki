@@ -11477,6 +11477,37 @@ app.post('/api/image-maps', requireAuth, requireActiveUser, async (req, res) => 
       return;
     }
 
+    let blurhash: string | undefined;
+    let thumbhash: string | undefined;
+
+    const urlToGenerateHash = s3Url || externalUrl || localUrl;
+    if (urlToGenerateHash) {
+      try {
+        const { fetchBlurhashFromS3, fetchThumbhashFromS3, isBlurhashEnabled, shouldAutoGenerate } = await import('./src/server/blurhashService');
+
+        if (isBlurhashEnabled() && shouldAutoGenerate()) {
+          console.log('[ImageMap] Auto-generating blurhash for:', urlToGenerateHash);
+
+          const [blur, thumb] = await Promise.all([
+            fetchBlurhashFromS3(urlToGenerateHash),
+            fetchThumbhashFromS3(urlToGenerateHash),
+          ]);
+
+          if (blur) {
+            blurhash = blur;
+            console.log('[ImageMap] Blurhash generated:', blur.substring(0, 20) + '...');
+          }
+
+          if (thumb) {
+            thumbhash = thumb;
+            console.log('[ImageMap] Thumbhash generated:', thumb.substring(0, 20) + '...');
+          }
+        }
+      } catch (hashError) {
+        console.error('[ImageMap] Failed to generate blurhash:', hashError);
+      }
+    }
+
     const item = await prisma.imageMap.upsert({
       where: { id },
       update: {
@@ -11485,6 +11516,8 @@ app.post('/api/image-maps', requireAuth, requireActiveUser, async (req, res) => 
         ...(externalUrl !== undefined && { externalUrl: externalUrl || null }),
         ...(s3Url !== undefined && { s3Url: s3Url || null }),
         ...(storageType !== undefined && { storageType }),
+        ...(blurhash !== undefined && { blurhash }),
+        ...(thumbhash !== undefined && { thumbhash }),
       },
       create: {
         id,
@@ -11493,6 +11526,8 @@ app.post('/api/image-maps', requireAuth, requireActiveUser, async (req, res) => 
         ...(externalUrl && { externalUrl }),
         ...(s3Url && { s3Url }),
         ...(storageType && { storageType }),
+        ...(blurhash && { blurhash }),
+        ...(thumbhash && { thumbhash }),
       },
     });
 
@@ -11510,11 +11545,13 @@ app.post('/api/image-maps', requireAuth, requireActiveUser, async (req, res) => 
 
 app.patch('/api/image-maps/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { localUrl, externalUrl, s3Url, storageType } = req.body as {
+    const { localUrl, externalUrl, s3Url, storageType, blurhash, thumbhash } = req.body as {
       localUrl?: string | null;
       externalUrl?: string | null;
       s3Url?: string | null;
       storageType?: 'local' | 'external' | 's3';
+      blurhash?: string | null;
+      thumbhash?: string | null;
     };
 
     if (storageType === 's3' && !s3Url) {
@@ -11529,6 +11566,8 @@ app.patch('/api/image-maps/:id', requireAuth, requireAdmin, async (req, res) => 
         ...(externalUrl !== undefined && { externalUrl: externalUrl || null }),
         ...(s3Url !== undefined && { s3Url: s3Url || null }),
         ...(storageType !== undefined && { storageType }),
+        ...(blurhash !== undefined && { blurhash: blurhash || null }),
+        ...(thumbhash !== undefined && { thumbhash: thumbhash || null }),
       },
     });
 
@@ -11695,6 +11734,137 @@ app.post('/api/image-maps/import', requireAuth, requireAdmin, async (req, res) =
   } catch (error) {
     console.error('Import image maps error:', error);
     res.status(500).json({ error: '导入图片映射失败' });
+  }
+});
+
+app.post('/api/image-maps/:id/refresh-blurhash', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const imageMap = await prisma.imageMap.findUnique({
+      where: { id },
+    });
+
+    if (!imageMap) {
+      res.status(404).json({ error: '图片映射不存在' });
+      return;
+    }
+
+    const urlToGenerateHash = imageMap.s3Url || imageMap.externalUrl || imageMap.localUrl;
+
+    if (!urlToGenerateHash) {
+      res.status(400).json({ error: '没有可用的图片URL' });
+      return;
+    }
+
+    try {
+      const { fetchBlurhashFromS3, fetchThumbhashFromS3 } = await import('./src/server/blurhashService');
+
+      console.log('[Refresh Blurhash] Refreshing hashes for:', urlToGenerateHash);
+
+      const [blurhash, thumbhash] = await Promise.all([
+        fetchBlurhashFromS3(urlToGenerateHash),
+        fetchThumbhashFromS3(urlToGenerateHash),
+      ]);
+
+      const updatedItem = await prisma.imageMap.update({
+        where: { id },
+        data: {
+          ...(blurhash && { blurhash }),
+          ...(thumbhash && { thumbhash }),
+        },
+      });
+
+      res.json({
+        success: true,
+        item: {
+          ...updatedItem,
+          createdAt: updatedItem.createdAt.toISOString(),
+        },
+      });
+    } catch (hashError) {
+      console.error('[Refresh Blurhash] Failed to generate blurhash:', hashError);
+      res.status(500).json({ error: '生成blurhash失败' });
+    }
+  } catch (error) {
+    console.error('Refresh blurhash error:', error);
+    res.status(500).json({ error: '刷新blurhash失败' });
+  }
+});
+
+app.post('/api/image-maps/refresh-all-blurhash', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { limit = '100' } = req.query as { limit?: string };
+
+    const limitNum = parseInt(limit, 10) || 100;
+
+    const imageMaps = await prisma.imageMap.findMany({
+      where: {
+        OR: [
+          { blurhash: null },
+          { thumbhash: null },
+        ],
+      },
+      take: limitNum,
+    });
+
+    if (imageMaps.length === 0) {
+      res.json({
+        success: true,
+        message: '没有需要刷新blurhash的图片',
+        processed: 0,
+      });
+      return;
+    }
+
+    try {
+      const { fetchBlurhashFromS3, fetchThumbhashFromS3 } = await import('./src/server/blurhashService');
+
+      let processed = 0;
+      let failed = 0;
+
+      for (const imageMap of imageMaps) {
+        const urlToGenerateHash = imageMap.s3Url || imageMap.externalUrl || imageMap.localUrl;
+
+        if (!urlToGenerateHash) {
+          continue;
+        }
+
+        try {
+          const [blurhash, thumbhash] = await Promise.all([
+            fetchBlurhashFromS3(urlToGenerateHash),
+            fetchThumbhashFromS3(urlToGenerateHash),
+          ]);
+
+          await prisma.imageMap.update({
+            where: { id: imageMap.id },
+            data: {
+              ...(blurhash && { blurhash }),
+              ...(thumbhash && { thumbhash }),
+            },
+          });
+
+          processed++;
+          console.log(`[Refresh All Blurhash] Processed ${processed}/${imageMaps.length}:`, imageMap.id);
+        } catch (err) {
+          failed++;
+          console.error(`[Refresh All Blurhash] Failed for ${imageMap.id}:`, err);
+        }
+      }
+
+      res.json({
+        success: true,
+        processed,
+        failed,
+        total: imageMaps.length,
+      });
+    } catch (hashError) {
+      console.error('[Refresh All Blurhash] Failed to generate blurhash:', hashError);
+      res.status(500).json({ error: '批量生成blurhash失败' });
+    }
+  } catch (error) {
+    console.error('Refresh all blurhash error:', error);
+    res.status(500).json({ error: '刷新blurhash失败' });
   }
 });
 

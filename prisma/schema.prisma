@@ -739,6 +739,8 @@ model ImageMap {
   externalUrl String?
   s3Url       String?
   storageType StorageType @default(local)
+  blurhash    String?
+  thumbhash   String?
   createdAt   DateTime    @default(now())
 }
 
