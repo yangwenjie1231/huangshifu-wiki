@@ -88,6 +88,54 @@ IMAGE_EMBEDDING_VECTOR_SIZE="512"
 IMAGE_EMBEDDING_BATCH_SIZE="100"
 IMAGE_SEARCH_RESULT_LIMIT="24"
 MUSIC_PLAY_URL_CACHE_TTL_SECONDS="600"
+
+# ============================================
+# S3 对象存储配置（可选，用于图片主图床）
+# ============================================
+# 参考文档：docs/S3_SETUP_GUIDE.md
+
+# 是否启用 S3（false=仅使用本地存储，true=启用 S3 图床）
+S3_ENABLED="false"
+
+# S3 兼容端点（Bitiful 使用 https://s3.bitiful.net）
+S3_ENDPOINT_URL="https://s3.bitiful.net"
+S3_REGION="cn-east-1"
+S3_FORCE_PATH_STYLE="true"
+S3_SSL_ENABLED="true"
+S3_SIGNATURE_VERSION="v4"
+
+# ============================================
+# 写入凭证（机密 - 仅后端使用）
+# ============================================
+# 权限：上传、删除、列出
+# 建议：创建专用子账户，仅授予 PutObject、DeleteObject、ListBucket 权限
+S3_WRITE_ACCESS_KEY_ID=""
+S3_WRITE_SECRET_ACCESS_KEY=""
+
+# ============================================
+# 读取凭证（可用于前端）
+# ============================================
+# 权限：读取、列出（无写入、删除）
+# 用于生成下载签名，前端可使用
+S3_READ_ACCESS_KEY_ID=""
+S3_READ_SECRET_ACCESS_KEY=""
+
+# 存储桶名称（私有桶，用于存储图片）
+S3_PUBLIC_BUCKET_NAME="your-bucket-name"
+S3_PUBLIC_BUCKET_REGION="auto"
+S3_PUBLIC_BUCKET_PREFIX="wiki/"
+
+# 自定义域名（可选，用于公开访问）
+# 如果配置了 CDN 或自定义域名，填在这里
+S3_PUBLIC_DOMAIN=""
+
+# 安全配置
+S3_MAX_FILE_SIZE="10485760"  # 10MB
+S3_ALLOWED_CONTENT_TYPES="image/jpeg,image/png,image/gif,image/webp,image/svg+xml,image/bmp"
+S3_ENABLE_MD5_VERIFICATION="true"
+
+# 预签名 URL 过期时间（秒）
+S3_EXPIRES_IN="3600"
 EOF
 ```
 
@@ -105,6 +153,27 @@ EOF
 - `QDRANT_URL` 指向 Docker 内部服务名 `qdrant`（Docker Compose 服务名）。
 - `IMAGE_EMBEDDING_MODEL` 当前实现默认 `Xenova/clip-vit-base-patch32`（CPU 友好）。
 - `MUSIC_PLAY_URL_CACHE_TTL_SECONDS` 控制音乐实时播放链接缓存时长（秒，默认 600，最小 60）。
+
+### 3.1 S3 对象存储配置（可选）
+
+如需使用 S3 兼容对象存储（如 Bitiful）作为图片主图床，请配置以下环境变量：
+
+| 变量 | 说明 |
+|------|------|
+| `S3_ENABLED` | 是否启用 S3（false=本地，true=S3） |
+| `S3_ENDPOINT_URL` | S3 兼容端点地址（Bitiful 使用 `https://s3.bitiful.net`） |
+| `S3_REGION` | 区域（Bitiful 使用 `cn-east-1`） |
+| `S3_WRITE_ACCESS_KEY_ID` | 写入凭证 AccessKey（机密，仅后端使用） |
+| `S3_WRITE_SECRET_ACCESS_KEY` | 写入凭证 SecretKey（机密，仅后端使用） |
+| `S3_READ_ACCESS_KEY_ID` | 读取凭证 AccessKey（可用于前端） |
+| `S3_READ_SECRET_ACCESS_KEY` | 读取凭证 SecretKey（可用于前端） |
+| `S3_PUBLIC_BUCKET_NAME` | 存储桶名称 |
+| `S3_MAX_FILE_SIZE` | 最大文件大小（字节），默认 10MB |
+| `S3_ALLOWED_CONTENT_TYPES` | 允许的文件类型（逗号分隔） |
+| `S3_ENABLE_MD5_VERIFICATION` | 是否启用 MD5 校验（推荐 true） |
+| `S3_EXPIRES_IN` | 预签名 URL 过期时间（秒） |
+
+详细配置指南请参考：`docs/S3_SETUP_GUIDE.md`
 
 ---
 

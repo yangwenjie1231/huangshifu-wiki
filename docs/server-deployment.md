@@ -155,6 +155,54 @@ VITE_AMAP_JS_API_KEY=""
 VITE_AMAP_SECURITY_JS_CODE=""
 # 高德地图 - 后端 API（地理编码、逆地理编码）
 AMAP_API_KEY=""
+
+# ============================================
+# S3 对象存储配置（可选，用于图片主图床）
+# ============================================
+# 参考文档：docs/S3_SETUP_GUIDE.md
+
+# 是否启用 S3（false=仅使用本地存储，true=启用 S3 图床）
+S3_ENABLED="false"
+
+# S3 兼容端点（Bitiful 使用 https://s3.bitiful.net）
+S3_ENDPOINT_URL="https://s3.bitiful.net"
+S3_REGION="cn-east-1"
+S3_FORCE_PATH_STYLE="true"
+S3_SSL_ENABLED="true"
+S3_SIGNATURE_VERSION="v4"
+
+# ============================================
+# 写入凭证（机密 - 仅后端使用）
+# ============================================
+# 权限：上传、删除、列出
+# 建议：创建专用子账户，仅授予 PutObject、DeleteObject、ListBucket 权限
+S3_WRITE_ACCESS_KEY_ID=""
+S3_WRITE_SECRET_ACCESS_KEY=""
+
+# ============================================
+# 读取凭证（可用于前端）
+# ============================================
+# 权限：读取、列出（无写入、删除）
+# 用于生成下载签名，前端可使用
+S3_READ_ACCESS_KEY_ID=""
+S3_READ_SECRET_ACCESS_KEY=""
+
+# 存储桶名称（私有桶，用于存储图片）
+S3_PUBLIC_BUCKET_NAME="your-bucket-name"
+S3_PUBLIC_BUCKET_REGION="auto"
+S3_PUBLIC_BUCKET_PREFIX="wiki/"
+
+# 自定义域名（可选，用于公开访问）
+# 如果配置了 CDN 或自定义域名，填在这里
+S3_PUBLIC_DOMAIN=""
+
+# 安全配置
+S3_MAX_FILE_SIZE="10485760"  # 10MB
+S3_ALLOWED_CONTENT_TYPES="image/jpeg,image/png,image/gif,image/webp,image/svg+xml,image/bmp"
+S3_ENABLE_MD5_VERIFICATION="true"
+
+# 预签名 URL 过期时间（秒）
+S3_EXPIRES_IN="3600"
 EOF
 ```
 
@@ -167,6 +215,17 @@ EOF
 | `WECHAT_LOGIN_MOCK` | 联调阶段可设 `true`，正式环境设 `false` |
 | `COOKIE_SECURE` | HTTP 部署自动关闭，HTTPS 自动启用 |
 | `QDRANT_URL` | 指向本机 Qdrant 时保持 `http://127.0.0.1:6333` |
+| `S3_ENABLED` | 是否启用 S3 存储（false=本地，true=S3） |
+| `S3_ENDPOINT_URL` | S3 兼容端点地址 |
+| `S3_WRITE_ACCESS_KEY_ID` | 写入凭证 AccessKey（机密，仅后端使用） |
+| `S3_WRITE_SECRET_ACCESS_KEY` | 写入凭证 SecretKey（机密，仅后端使用） |
+| `S3_READ_ACCESS_KEY_ID` | 读取凭证 AccessKey（可用于前端） |
+| `S3_READ_SECRET_ACCESS_KEY` | 读取凭证 SecretKey（可用于前端） |
+| `S3_PUBLIC_BUCKET_NAME` | 存储桶名称 |
+| `S3_MAX_FILE_SIZE` | 最大文件大小（字节），默认 10MB |
+| `S3_ALLOWED_CONTENT_TYPES` | 允许的文件类型（逗号分隔） |
+| `S3_ENABLE_MD5_VERIFICATION` | 是否启用 MD5 校验（推荐 true） |
+| `S3_EXPIRES_IN` | 预签名 URL 过期时间（秒） |
 | `VITE_AMAP_JS_API_KEY` | 高德地图 JS API Key（Web 平台） |
 | `VITE_AMAP_SECURITY_JS_CODE` | 高德地图安全密钥（JS API 2.0 必须） |
 | `AMAP_API_KEY` | 高德地图 Web 服务 API Key（服务端地理编码用） |
@@ -383,6 +442,19 @@ USE_PM2=0 ./scripts/deploy.sh         # 不使用 PM2
 - [ ] 小程序 WebView 可打开首页（`miniprogram-webview`）
 - [ ] 小程序首次进入可自动登录（`wx.login code` -> `/api/auth/wechat/login`）
 - [ ] 小程序中可完成浏览 Wiki、发帖、评论闭环（`/api/mp/wiki`、`/api/mp/posts`、`/api/mp/comments`）
+
+### 11.1 S3 存储验证清单（如已启用）
+
+- [ ] S3 配置已正确添加到 `.env` 文件
+- [ ] `S3_ENABLED=true` 已设置
+- [ ] Bitiful 控制台已创建存储桶
+- [ ] 已创建写入凭证子用户（仅 PutObject、DeleteObject、ListBucket 权限）
+- [ ] 已创建读取凭证子用户（仅 GetObject、ListBucket 权限）
+- [ ] `GET /api/s3/config` 返回正确配置
+- [ ] Admin 后台「图片管理」显示 S3 统计
+- [ ] 可以成功上传图片到 S3
+- [ ] 上传的图片可通过签名 URL 访问
+- [ ] MD5 校验功能正常工作
 
 ---
 
