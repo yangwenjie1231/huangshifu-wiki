@@ -9,11 +9,13 @@ import {
   FileText,
   Settings,
   RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 import { apiGet, apiPatch, apiDelete, apiPost } from '../../lib/apiClient';
 import { useToast } from '../../components/Toast';
 import { formatDateTime } from '../../lib/dateUtils';
 import { clsx } from 'clsx';
+import { BlurhashImage } from '../../components/BlurhashImage';
 
 interface ImageMap {
   id: string;
@@ -22,6 +24,8 @@ interface ImageMap {
   externalUrl?: string;
   s3Url?: string;
   storageType?: 'local' | 's3' | 'external';
+  blurhash?: string;
+  thumbhash?: string;
   createdAt: string;
 }
 
@@ -127,6 +131,25 @@ export const ImagesTab: React.FC = () => {
     } catch (error) {
       console.error('Delete error:', error);
       show('删除失败', { variant: 'error' });
+    }
+  };
+
+  const handleRefreshBlurhash = async (id: string) => {
+    try {
+      const response = await apiPost<{ success: boolean; item: ImageMap }>(
+        `/api/image-maps/${id}/refresh-blurhash`,
+        {}
+      );
+
+      if (response.success) {
+        setImages((prev) =>
+          prev.map((img) => (img.id === id ? response.item : img))
+        );
+        show('Blurhash 生成成功', { variant: 'success' });
+      }
+    } catch (error) {
+      console.error('Refresh blurhash error:', error);
+      show('生成 Blurhash 失败', { variant: 'error' });
     }
   };
 
@@ -274,63 +297,90 @@ export const ImagesTab: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            {images.map((image) => (
-              <div
-                key={image.id}
-                className="border border-gray-100 rounded-xl p-4 hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-mono">
-                        {image.id.slice(0, 8)}
-                      </span>
-                      <span className="text-xs text-gray-400 font-mono">{image.md5.slice(0, 12)}</span>
-                      {getStorageTypeBadge(image.storageType)}
+            {images.map((image) => {
+              const imageUrl = image.s3Url || image.externalUrl || image.localUrl;
+              return (
+                <div
+                  key={image.id}
+                  className="border border-gray-100 rounded-xl p-4 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex gap-4">
+                      <div className="w-20 h-20 flex-shrink-0">
+                        <BlurhashImage
+                          blurhash={image.blurhash}
+                          src={imageUrl}
+                          alt={image.id}
+                          className="w-full h-full rounded-lg"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-mono">
+                            {image.id.slice(0, 8)}
+                          </span>
+                          <span className="text-xs text-gray-400 font-mono">{image.md5.slice(0, 12)}</span>
+                          {getStorageTypeBadge(image.storageType)}
+                          {image.blurhash && (
+                            <span className="px-2 py-0.5 bg-pink-100 text-pink-700 rounded text-xs">
+                              Blurhash
+                            </span>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          {image.localUrl && (
+                            <div className="flex items-center gap-2">
+                              <CheckCircle size={14} className="text-green-500 flex-shrink-0" />
+                              <span className="text-sm text-gray-600 truncate">本地: {image.localUrl}</span>
+                            </div>
+                          )}
+                          {image.s3Url && (
+                            <div className="flex items-center gap-2">
+                              <CheckCircle size={14} className="text-cyan-500 flex-shrink-0" />
+                              <span className="text-sm text-gray-600 truncate">S3: {image.s3Url}</span>
+                            </div>
+                          )}
+                          {image.externalUrl && (
+                            <div className="flex items-center gap-2">
+                              <CheckCircle size={14} className="text-purple-500 flex-shrink-0" />
+                              <span className="text-sm text-gray-500 truncate">外部: {image.externalUrl}</span>
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-2">
+                          创建于: {formatDateTime(image.createdAt)}
+                        </p>
+                      </div>
                     </div>
-                    <div className="space-y-1">
-                      {image.localUrl && (
-                        <div className="flex items-center gap-2">
-                          <CheckCircle size={14} className="text-green-500 flex-shrink-0" />
-                          <span className="text-sm text-gray-600 truncate">本地: {image.localUrl}</span>
-                        </div>
+                    <div className="flex gap-2">
+                      {!image.blurhash && imageUrl && (
+                        <button
+                          onClick={() => handleRefreshBlurhash(image.id)}
+                          className="p-2 text-pink-600 hover:bg-pink-50 rounded-lg transition-colors"
+                          title="生成 Blurhash"
+                        >
+                          <Sparkles size={18} />
+                        </button>
                       )}
-                      {image.s3Url && (
-                        <div className="flex items-center gap-2">
-                          <CheckCircle size={14} className="text-cyan-500 flex-shrink-0" />
-                          <span className="text-sm text-gray-600 truncate">S3: {image.s3Url}</span>
-                        </div>
-                      )}
-                      {image.externalUrl && (
-                        <div className="flex items-center gap-2">
-                          <CheckCircle size={14} className="text-purple-500 flex-shrink-0" />
-                          <span className="text-sm text-gray-500 truncate">外部: {image.externalUrl}</span>
-                        </div>
-                      )}
+                      <button
+                        onClick={() => setEditingImage(image)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="编辑"
+                      >
+                        <Edit2 size={18} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(image.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="删除"
+                      >
+                        <Trash2 size={18} />
+                      </button>
                     </div>
-                    <p className="text-xs text-gray-400 mt-2">
-                      创建于: {formatDateTime(image.createdAt)}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setEditingImage(image)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      title="编辑"
-                    >
-                      <Edit2 size={18} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(image.id)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="删除"
-                    >
-                      <Trash2 size={18} />
-                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -8,6 +8,8 @@ export interface ImageMap {
   externalUrl?: string;
   s3Url?: string;
   storageType?: 'local' | 's3' | 'external';
+  blurhash?: string;
+  thumbhash?: string;
   createdAt: any;
 }
 
