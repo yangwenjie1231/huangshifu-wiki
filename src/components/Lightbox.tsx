@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 interface LightboxImage {
@@ -16,6 +16,9 @@ interface LightboxProps {
 export const Lightbox = ({ images, initialIndex, onClose }: LightboxProps) => {
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [transitioning, setTransitioning] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const triggerElementRef = useRef<HTMLElement | null>(null);
 
   const activeImage = images[activeIndex];
   const hasPrev = images.length > 1;
@@ -43,17 +46,36 @@ export const Lightbox = ({ images, initialIndex, onClose }: LightboxProps) => {
         handlePrev();
       } else if (event.key === 'ArrowRight' && hasNext) {
         handleNext();
+      } else if (event.key === 'Tab') {
+        const focusableElements = containerRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        );
+        if (!focusableElements || focusableElements.length === 0) return;
+
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (event.shiftKey && document.activeElement === firstElement) {
+          event.preventDefault();
+          lastElement?.focus();
+        } else if (!event.shiftKey && document.activeElement === lastElement) {
+          event.preventDefault();
+          firstElement?.focus();
+        }
       }
     },
     [onClose, handlePrev, handleNext, hasPrev, hasNext],
   );
 
   useEffect(() => {
+    triggerElementRef.current = document.activeElement as HTMLElement;
+    closeButtonRef.current?.focus();
     document.addEventListener('keydown', handleKeyDown);
     document.body.style.overflow = 'hidden';
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
+      triggerElementRef.current?.focus();
     };
   }, [handleKeyDown]);
 
@@ -65,10 +87,12 @@ export const Lightbox = ({ images, initialIndex, onClose }: LightboxProps) => {
 
   return (
     <div
+      ref={containerRef}
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm"
       onClick={handleBackdropClick}
     >
       <button
+        ref={closeButtonRef}
         onClick={onClose}
         className="absolute top-4 right-4 z-10 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
         aria-label="关闭"

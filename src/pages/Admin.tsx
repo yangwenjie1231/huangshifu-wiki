@@ -83,6 +83,7 @@ const Admin = () => {
       { id: 'ban_logs' as const, label: '封禁日志', icon: Shield },
       ...(isSuperAdmin ? [{ id: 'backups' as const, label: '数据库备份', icon: Database }] : []),
       { id: 'sensitive_check' as const, label: '敏感词检测', icon: ShieldCheck },
+      { id: 'images' as const, label: '图片管理', icon: Image },
     ],
     [],
   );
