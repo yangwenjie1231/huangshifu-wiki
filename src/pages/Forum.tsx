@@ -40,6 +40,7 @@ import { ContentStatus, getStatusText } from "../lib/contentUtils";
 import { formatDate, toDateValue } from "../lib/dateUtils";
 import { LocationTagInput } from "../components/LocationTagInput";
 import Pagination from "../components/Pagination";
+import { ForumSkeleton } from "../components/ForumSkeleton";
 
 const mdParser = new MarkdownIt({
 	html: true,
@@ -216,6 +217,10 @@ const PostList = () => {
 		}
 		show("复制链接失败，请稍后重试", { variant: "error" });
 	};
+
+	if (loading) {
+		return <ForumSkeleton />;
+	}
 
 	return (
 		<div className="max-w-7xl mx-auto px-4 py-12">

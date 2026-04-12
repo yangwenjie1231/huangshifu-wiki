@@ -20,6 +20,7 @@ import Pagination from '../components/Pagination';
 import { PlatformIds } from '../types/PlatformIds';
 import { useTheme } from '../context/ThemeContext';
 import { useI18n } from '../lib/i18n';
+import { MusicSkeleton } from '../components/MusicSkeleton';
 
 const DEFAULT_PAGE_SIZE = 40;
 
@@ -460,6 +461,10 @@ const Music = () => {
     setLoading(false);
   };
 
+  if (loading) {
+    return <MusicSkeleton />;
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 md:py-12">
       <header className="mb-8 md:mb-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-6">
@@ -674,7 +679,7 @@ const Music = () => {
                   <Album size={16} /> {t('music.tabAlbums')}
                 </button>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 {isAdmin && activeTab === 'albums' && (
                   <button
                     onClick={() => {
@@ -695,7 +700,7 @@ const Music = () => {
                         setSortBy(e.target.value as typeof sortBy);
                         setPage(1);
                       }}
-                      className="px-2 py-1.5 rounded-lg border border-gray-200 text-xs bg-white"
+                      className="px-2 py-1.5 rounded-lg border border-gray-200 text-xs bg-white min-w-[100px]"
                     >
                       <option value="createdAt">{t('music.sortBy.createdAt')}</option>
                       <option value="title">{t('music.sortBy.title')}</option>
@@ -714,7 +719,7 @@ const Music = () => {
                         setFilterPlatform(e.target.value as typeof filterPlatform);
                         setPage(1);
                       }}
-                      className="px-2 py-1.5 rounded-lg border border-gray-200 text-xs bg-white"
+                      className="px-2 py-1.5 rounded-lg border border-gray-200 text-xs bg-white min-w-[90px]"
                     >
                       <option value="all">{t('music.platforms.all')}</option>
                       <option value="netease">{t('music.platforms.netease')}</option>
@@ -730,11 +735,12 @@ const Music = () => {
                         onChange={(e) => setShowAccompaniments(e.target.checked)}
                         className="w-3.5 h-3.5 rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
                       />
-                      <span>{t('music.showAccompaniments')}</span>
+                      <span className="hidden sm:inline">{t('music.showAccompaniments')}</span>
+                      <span className="sm:hidden" title={t('music.showAccompaniments')}>🎵</span>
                     </label>
                   </>
                 )}
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-auto">
                   {activeTab === 'music' ? `${displaySongs.length} ${t('music.unit.song')}` : `${albums.length} ${t('music.unit.album')}`}
                 </span>
               </div>
@@ -782,7 +788,7 @@ const Music = () => {
                                   className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
                                   title={t('music.play')}
                                 >
-                                  <Play size={14} className="text-white" />
+                                  <Play className="text-white text-[16px] md:text-[18px]" />
                                 </button>
                               </div>
                               <div className="flex-1 min-w-0 flex items-center">
@@ -842,7 +848,7 @@ const Music = () => {
                                     )}
                                     title={isBatchMode ? t('music.selectSong') : t('music.playSong')}
                                   >
-                                    <Play size={14} className={clsx(!isBatchMode && currentSong?.docId === song.docId && 'fill-current')} />
+                                    <Play className={clsx('text-[14px] md:text-[16px]', !isBatchMode && currentSong?.docId === song.docId && 'fill-current')} />
                                   </button>
                                   <Link
                                     to={`/music/${song.docId}`}
