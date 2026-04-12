@@ -28,34 +28,20 @@ import { useToast } from '../components/Toast';
 import { EmbeddingsTab } from './Admin/EmbeddingsTab';
 import { BackupsTab } from './Admin/BackupsTab';
 import { ImagesTab } from './Admin/ImagesTab';
+import type { ReviewQueueItem, ReviewQueueBucket, EditLockItem, AdminDataItem } from '../types/entities';
 
 type AdminTab = 'reviews' | 'wiki' | 'posts' | 'galleries' | 'users' | 'sections' | 'announcements' | 'music' | 'locks' | 'moderation_logs' | 'ban_logs' | 'embeddings' | 'backups' | 'sensitive_check' | 'images';
 type ReviewFilter = 'all' | 'wiki' | 'posts';
-
-type ReviewQueueBucket = {
-  type: 'wiki' | 'posts';
-  items: any[];
-};
-
-type EditLockItem = {
-  id: string;
-  collection: string;
-  recordId: string;
-  userId: string;
-  username: string;
-  createdAt: string;
-  expiresAt: string;
-};
 
 const Admin = () => {
   const { user, profile, isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState<AdminTab>('reviews');
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<AdminDataItem[]>([]);
 
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>('all');
   const [reviewLoading, setReviewLoading] = useState(false);
-  const [reviewItems, setReviewItems] = useState<any[]>([]);
+  const [reviewItems, setReviewItems] = useState<ReviewQueueItem[]>();
 
   const [newSection, setNewSection] = useState({ name: '', description: '', order: 0 });
   const [newAnnouncement, setNewAnnouncement] = useState({ content: '', link: '', active: true });
@@ -109,8 +95,8 @@ const Admin = () => {
       );
 
       merged.sort((a, b) => {
-        const left = toDateValue(a.updatedAt)?.getTime() || 0;
-        const right = toDateValue(b.updatedAt)?.getTime() || 0;
+        const left = toDateValue(a.updatedAt as string | undefined)?.getTime() || 0;
+        const right = toDateValue(b.updatedAt as string | undefined)?.getTime() || 0;
         return right - left;
       });
 
@@ -123,22 +109,22 @@ const Admin = () => {
   };
 
   const fetchData = async () => {
-    if (activeTab === 'backups' || activeTab === 'sensitive_check') {
+    if (activeTab === 'backups' || activeTab === 'sensitive_check' || activeTab === 'embeddings') {
       return;
     }
     setLoading(true);
     try {
       if (activeTab === 'locks') {
         const result = await apiGet<{ locks: EditLockItem[] }>('/api/admin/locks');
-        setData(result.locks || []);
+        setData((result.locks || []) as AdminDataItem[]);
       } else if (activeTab === 'moderation_logs') {
-        const result = await apiGet<{ logs: any[] }>('/api/admin/moderation_logs');
+        const result = await apiGet<{ logs: AdminDataItem[] }>('/api/admin/moderation_logs');
         setData(result.logs || []);
       } else if (activeTab === 'ban_logs') {
-        const result = await apiGet<{ logs: any[] }>('/api/admin/ban_logs');
+        const result = await apiGet<{ logs: AdminDataItem[] }>('/api/admin/ban_logs');
         setData(result.logs || []);
       } else {
-        const result = await apiGet<{ data: any[] }>(`/api/admin/${activeTab}`);
+        const result = await apiGet<{ data: AdminDataItem[] }>(`/api/admin/${activeTab}`);
         setData(result.data || []);
       }
     } catch (error) {
@@ -157,7 +143,7 @@ const Admin = () => {
     fetchData();
   }, [activeTab, reviewFilter]);
 
-  const handleReviewAction = async (item: any, action: 'approve' | 'reject') => {
+  const handleReviewAction = async (item: ReviewQueueItem, action: 'approve' | 'reject') => {
     const note =
       window.prompt(action === 'approve' ? '通过备注（可选）' : '驳回原因（可选）', action === 'reject' ? '请按规范完善内容' : '') || '';
     try {
@@ -184,7 +170,7 @@ const Admin = () => {
     }
   };
 
-  const toggleUserBan = async (targetUser: any) => {
+  const toggleUserBan = async (targetUser: AdminDataItem) => {
     if (!targetUser?.uid || targetUser.uid === user?.uid) return;
     const shouldUnban = targetUser.status === 'banned';
     const question = shouldUnban
@@ -200,7 +186,7 @@ const Admin = () => {
 
     try {
       const endpoint = shouldUnban ? `/api/admin/users/${targetUser.uid}/unban` : `/api/admin/users/${targetUser.uid}/ban`;
-      const result = await apiPost<{ user: any }>(endpoint, shouldUnban ? { note } : { reason: note, note });
+      const result = await apiPost<{ user: AdminDataItem }>(endpoint, shouldUnban ? { note } : { reason: note, note });
       setData((prev) => prev.map((item) => (item.uid === targetUser.uid ? { ...item, ...result.user } : item)));
     } catch (error) {
       console.error('Toggle user ban error:', error);
@@ -208,7 +194,7 @@ const Admin = () => {
     }
   };
 
-  const toggleAdminRole = async (targetUser: any) => {
+  const toggleAdminRole = async (targetUser: AdminDataItem) => {
     if (!isSuperAdmin) {
       show('只有超级管理员可以更改权限', { variant: 'error' });
       return;
@@ -256,9 +242,9 @@ const Admin = () => {
     }
   };
 
-  const toggleAnnouncement = async (ann: any) => {
+  const toggleAnnouncement = async (ann: AdminDataItem) => {
     try {
-      const result = await apiPatch<{ announcement: any }>(`/api/announcements/${ann.id}`, { active: !ann.active });
+      const result = await apiPatch<{ announcement: AdminDataItem }>(`/api/announcements/${ann.id}`, { active: !ann.active });
       const updated = result.announcement;
       setData((prev) => prev.map((item) => (item.id === ann.id ? { ...item, active: updated?.active ?? !ann.active } : item)));
     } catch (error) {
@@ -434,12 +420,12 @@ const Admin = () => {
                         <span className="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700">待审核</span>
                       </div>
                       <p className="font-bold text-gray-800 mb-1">{item.title || item.slug || item.id}</p>
-                      <p className="text-xs text-gray-500 line-clamp-2">{(item.content || '').replace(/[#*`]/g, '').slice(0, 160) || '无内容摘要'}</p>
+                      <p className="text-xs text-gray-500 line-clamp-2">{(String(item.content || '')).replace(/[#*`]/g, '').slice(0, 160) || '无内容摘要'}</p>
                       <p className="text-[10px] text-gray-400 mt-2">更新时间：{formatDateTime(item.updatedAt, 'N/A')}</p>
-                      {item.sensitiveWords && item.sensitiveWords.length > 0 && (
+                      {Array.isArray(item.sensitiveWords) && (item.sensitiveWords as string[]).length > 0 && (
                         <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
                           <span className="text-[10px] font-bold text-red-600">检测到敏感词: </span>
-                          {item.sensitiveWords.map((w: string) => (
+                          {(item.sensitiveWords as string[]).map((w: string) => (
                             <span key={w} className="text-[10px] text-red-500 mr-1">#{w}</span>
                           ))}
                         </div>
@@ -626,7 +612,7 @@ const Admin = () => {
                   ))
                 ) : data.length > 0 ? (
                   data.map((item) => {
-                    const rowId = item.docId || item.id || item.uid;
+                    const rowId = String(item.docId || item.id || item.uid || '');
                     return (
                       <tr key={rowId} className="hover:bg-gray-50/50 transition-colors group">
                         <td className="px-6 py-4">
@@ -754,7 +740,7 @@ const Admin = () => {
 
                             {activeTab === 'locks' && (
                               <button
-                                onClick={() => forceReleaseLock(item as EditLockItem)}
+                                onClick={() => forceReleaseLock(item as unknown as EditLockItem)}
                                 className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
                                 title="强制释放"
                               >

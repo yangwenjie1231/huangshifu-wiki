@@ -3,18 +3,19 @@ import { Megaphone, X, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { apiGet } from "../lib/apiClient";
 import { useTheme } from "../context/ThemeContext";
+import type { AnnouncementItem } from "../types/entities";
 
 export const AnnouncementBar = () => {
 	const { isAcademy } = useTheme();
 	const [isVisible, setIsVisible] = useState(true);
-	const [announcement, setAnnouncement] = useState<any>(null);
+	const [announcement, setAnnouncement] = useState<AnnouncementItem | null>(null);
 
 	useEffect(() => {
 		let cancelled = false;
 
 		const fetchAnnouncement = async () => {
 			try {
-				const data = await apiGet<{ announcement: any | null }>(
+				const data = await apiGet<{ announcement: AnnouncementItem | null }>(
 					"/api/announcements/latest",
 				);
 				if (!cancelled) {

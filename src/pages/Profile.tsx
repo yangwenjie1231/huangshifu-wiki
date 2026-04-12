@@ -7,16 +7,9 @@ import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import { AvatarCropModal } from '../components/AvatarCropModal';
 import { useToast } from '../components/Toast';
+import type { FavoriteItem, HistoryItem } from '../types/entities';
 
 type FavoriteTargetType = 'wiki' | 'post' | 'music';
-
-type FavoriteItem = {
-  id: string;
-  targetType: FavoriteTargetType;
-  targetId: string;
-  createdAt: string;
-  target: any;
-};
 
 type PostItem = {
   id: string;
@@ -39,14 +32,6 @@ type CommentItem = {
   parentId: string | null;
   createdAt: string;
   post: { id: string; title: string; status: string } | null;
-};
-
-type HistoryItem = {
-  id: string;
-  targetType: 'wiki' | 'post' | 'music';
-  targetId: string;
-  createdAt: string;
-  target: { slug?: string; title?: string; id?: string; category?: string; status?: string; type?: string } | null;
 };
 
 type ActiveTab = 'profile' | 'favorites' | 'posts' | 'comments' | 'history';

@@ -10,7 +10,7 @@ export interface ImageMap {
   storageType?: 'local' | 's3' | 'external';
   blurhash?: string;
   thumbhash?: string;
-  createdAt: any;
+  createdAt: string;
 }
 
 export interface ImagePreference {

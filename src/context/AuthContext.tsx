@@ -2,10 +2,11 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth, onAuthStateChanged, User } from '../lib/auth';
 import { UserPreferencesProvider } from './UserPreferencesContext';
 import { useTheme } from './ThemeContext';
+import type { UserProfile } from '../types/entities';
 
 interface AuthContextType {
   user: User | null;
-  profile: any | null;
+  profile: UserProfile | null;
   loading: boolean;
   isAdmin: boolean;
   isBanned: boolean;

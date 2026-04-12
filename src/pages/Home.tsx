@@ -23,6 +23,7 @@ import { useTheme } from "../context/ThemeContext";
 import { withThemeSearch, ThemeName } from "../lib/theme";
 import { useI18n } from "../lib/i18n";
 import { useAnimatedNumber } from "../hooks/useAnimatedNumber";
+import type { HomeFeedResponse as HomeFeedData } from "../types/api";
 
 interface AnimatedStatProps {
 	value: number;
@@ -79,16 +80,7 @@ const CategoryCard: React.FC<CategoryCardProps> = React.memo(({ cat, theme }) =>
 	</Link>
 ));
 
-type HomeFeedResponse = {
-	announcements: Array<{
-		id: string;
-		content: string;
-		link?: string;
-		createdAt: string;
-	}>;
-	hotPosts: any[];
-	recentPosts: any[];
-};
+type HomeFeedResponse = HomeFeedData;
 
 const academyHighlights = [
 	{
