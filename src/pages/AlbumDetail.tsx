@@ -8,6 +8,7 @@ import { useMusic } from '../context/MusicContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
 import { AlbumCoverManager } from '../components/AlbumCoverManager';
+import { SmartImage } from '../components/SmartImage';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { Platform, PlatformIds } from '../types/PlatformIds';
 
@@ -148,7 +149,7 @@ const AlbumDetail = () => {
       <section className="mt-6 bg-white rounded-[32px] border border-gray-100 overflow-hidden shadow-sm">
         <header className="px-6 md:px-8 py-6 border-b border-gray-100 flex flex-col md:flex-row gap-5 md:items-center md:justify-between">
           <div className="flex items-center gap-4 min-w-0">
-            <img src={album.cover} alt="" className="w-20 h-20 rounded-2xl object-cover shadow" referrerPolicy="no-referrer" />
+            <SmartImage src={album.cover} alt="" className="w-20 h-20 rounded-2xl object-cover shadow" />
             <div className="min-w-0">
               <h1 className="text-3xl font-serif font-bold text-gray-900 truncate">{album.title}</h1>
               <p className="text-sm text-gray-500">{album.artist} · {album.tracks.length} 首歌曲</p>

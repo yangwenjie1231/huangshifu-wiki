@@ -19,43 +19,43 @@ import {
   Cpu,
   Database,
   Image,
+  Gift,
+  Edit,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuth } from '../context/AuthContext';
-import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/apiClient';
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../lib/apiClient';
 import { formatDateTime, toDateValue } from '../lib/dateUtils';
 import { useToast } from '../components/Toast';
+import { SmartImage } from '../components/SmartImage';
 import { EmbeddingsTab } from './Admin/EmbeddingsTab';
 import { BackupsTab } from './Admin/BackupsTab';
 import { ImagesTab } from './Admin/ImagesTab';
+import type { ReviewQueueItem, ReviewQueueBucket, EditLockItem, AdminDataItem } from '../types/entities';
 
-type AdminTab = 'reviews' | 'wiki' | 'posts' | 'galleries' | 'users' | 'sections' | 'announcements' | 'music' | 'locks' | 'moderation_logs' | 'ban_logs' | 'embeddings' | 'backups' | 'sensitive_check' | 'images';
+type AdminTab = 'reviews' | 'wiki' | 'posts' | 'galleries' | 'users' | 'sections' | 'announcements' | 'music' | 'locks' | 'moderation_logs' | 'ban_logs' | 'embeddings' | 'backups' | 'sensitive_check' | 'images' | 'birthday';
 type ReviewFilter = 'all' | 'wiki' | 'posts';
 
-type ReviewQueueBucket = {
-  type: 'wiki' | 'posts';
-  items: any[];
-};
-
-type EditLockItem = {
+interface BirthdayConfig {
   id: string;
-  collection: string;
-  recordId: string;
-  userId: string;
-  username: string;
+  type: string;
+  title: string;
+  content: string;
+  sortOrder: number;
+  isActive: boolean;
   createdAt: string;
-  expiresAt: string;
-};
+  updatedAt: string;
+}
 
 const Admin = () => {
   const { user, profile, isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState<AdminTab>('reviews');
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<AdminDataItem[]>([]);
 
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>('all');
   const [reviewLoading, setReviewLoading] = useState(false);
-  const [reviewItems, setReviewItems] = useState<any[]>([]);
+  const [reviewItems, setReviewItems] = useState<ReviewQueueItem[]>();
 
   const [newSection, setNewSection] = useState({ name: '', description: '', order: 0 });
   const [newAnnouncement, setNewAnnouncement] = useState({ content: '', link: '', active: true });
@@ -64,6 +64,10 @@ const Admin = () => {
   const [sensitiveCheckText, setSensitiveCheckText] = useState('');
   const [sensitiveCheckResult, setSensitiveCheckResult] = useState<string[]>([]);
   const [sensitiveCheckLoading, setSensitiveCheckLoading] = useState(false);
+
+  const [birthdayFilter, setBirthdayFilter] = useState<string>('all');
+  const [editingConfig, setEditingConfig] = useState<BirthdayConfig | null>(null);
+  const [newConfig, setNewConfig] = useState({ type: 'notice', title: '', content: '', sortOrder: 0 });
 
   const isSuperAdmin = profile?.role === 'super_admin';
 
@@ -83,6 +87,8 @@ const Admin = () => {
       { id: 'ban_logs' as const, label: '封禁日志', icon: Shield },
       ...(isSuperAdmin ? [{ id: 'backups' as const, label: '数据库备份', icon: Database }] : []),
       { id: 'sensitive_check' as const, label: '敏感词检测', icon: ShieldCheck },
+      { id: 'images' as const, label: '图片管理', icon: Image },
+      { id: 'birthday' as const, label: '生贺配置', icon: Gift },
     ],
     [],
   );
@@ -108,8 +114,8 @@ const Admin = () => {
       );
 
       merged.sort((a, b) => {
-        const left = toDateValue(a.updatedAt)?.getTime() || 0;
-        const right = toDateValue(b.updatedAt)?.getTime() || 0;
+        const left = toDateValue(a.updatedAt as string | undefined)?.getTime() || 0;
+        const right = toDateValue(b.updatedAt as string | undefined)?.getTime() || 0;
         return right - left;
       });
 
@@ -122,22 +128,25 @@ const Admin = () => {
   };
 
   const fetchData = async () => {
-    if (activeTab === 'backups' || activeTab === 'sensitive_check') {
+    if (activeTab === 'backups' || activeTab === 'sensitive_check' || activeTab === 'embeddings') {
       return;
     }
     setLoading(true);
     try {
       if (activeTab === 'locks') {
         const result = await apiGet<{ locks: EditLockItem[] }>('/api/admin/locks');
-        setData(result.locks || []);
+        setData((result.locks || []) as AdminDataItem[]);
       } else if (activeTab === 'moderation_logs') {
-        const result = await apiGet<{ logs: any[] }>('/api/admin/moderation_logs');
+        const result = await apiGet<{ logs: AdminDataItem[] }>('/api/admin/moderation_logs');
         setData(result.logs || []);
       } else if (activeTab === 'ban_logs') {
-        const result = await apiGet<{ logs: any[] }>('/api/admin/ban_logs');
+        const result = await apiGet<{ logs: AdminDataItem[] }>('/api/admin/ban_logs');
         setData(result.logs || []);
+      } else if (activeTab === 'birthday') {
+        const result = await apiGet<{ data: BirthdayConfig[] }>('/api/birthday/config');
+        setData((result.data || []) as unknown as AdminDataItem[]);
       } else {
-        const result = await apiGet<{ data: any[] }>(`/api/admin/${activeTab}`);
+        const result = await apiGet<{ data: AdminDataItem[] }>(`/api/admin/${activeTab}`);
         setData(result.data || []);
       }
     } catch (error) {
@@ -156,7 +165,7 @@ const Admin = () => {
     fetchData();
   }, [activeTab, reviewFilter]);
 
-  const handleReviewAction = async (item: any, action: 'approve' | 'reject') => {
+  const handleReviewAction = async (item: ReviewQueueItem, action: 'approve' | 'reject') => {
     const note =
       window.prompt(action === 'approve' ? '通过备注（可选）' : '驳回原因（可选）', action === 'reject' ? '请按规范完善内容' : '') || '';
     try {
@@ -183,7 +192,7 @@ const Admin = () => {
     }
   };
 
-  const toggleUserBan = async (targetUser: any) => {
+  const toggleUserBan = async (targetUser: AdminDataItem) => {
     if (!targetUser?.uid || targetUser.uid === user?.uid) return;
     const shouldUnban = targetUser.status === 'banned';
     const question = shouldUnban
@@ -199,7 +208,7 @@ const Admin = () => {
 
     try {
       const endpoint = shouldUnban ? `/api/admin/users/${targetUser.uid}/unban` : `/api/admin/users/${targetUser.uid}/ban`;
-      const result = await apiPost<{ user: any }>(endpoint, shouldUnban ? { note } : { reason: note, note });
+      const result = await apiPost<{ user: AdminDataItem }>(endpoint, shouldUnban ? { note } : { reason: note, note });
       setData((prev) => prev.map((item) => (item.uid === targetUser.uid ? { ...item, ...result.user } : item)));
     } catch (error) {
       console.error('Toggle user ban error:', error);
@@ -207,7 +216,7 @@ const Admin = () => {
     }
   };
 
-  const toggleAdminRole = async (targetUser: any) => {
+  const toggleAdminRole = async (targetUser: AdminDataItem) => {
     if (!isSuperAdmin) {
       show('只有超级管理员可以更改权限', { variant: 'error' });
       return;
@@ -255,9 +264,9 @@ const Admin = () => {
     }
   };
 
-  const toggleAnnouncement = async (ann: any) => {
+  const toggleAnnouncement = async (ann: AdminDataItem) => {
     try {
-      const result = await apiPatch<{ announcement: any }>(`/api/announcements/${ann.id}`, { active: !ann.active });
+      const result = await apiPatch<{ announcement: AdminDataItem }>(`/api/announcements/${ann.id}`, { active: !ann.active });
       const updated = result.announcement;
       setData((prev) => prev.map((item) => (item.id === ann.id ? { ...item, active: updated?.active ?? !ann.active } : item)));
     } catch (error) {
@@ -433,12 +442,12 @@ const Admin = () => {
                         <span className="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700">待审核</span>
                       </div>
                       <p className="font-bold text-gray-800 mb-1">{item.title || item.slug || item.id}</p>
-                      <p className="text-xs text-gray-500 line-clamp-2">{(item.content || '').replace(/[#*`]/g, '').slice(0, 160) || '无内容摘要'}</p>
+                      <p className="text-xs text-gray-500 line-clamp-2">{(String(item.content || '')).replace(/[#*`]/g, '').slice(0, 160) || '无内容摘要'}</p>
                       <p className="text-[10px] text-gray-400 mt-2">更新时间：{formatDateTime(item.updatedAt, 'N/A')}</p>
-                      {item.sensitiveWords && item.sensitiveWords.length > 0 && (
+                      {Array.isArray(item.sensitiveWords) && (item.sensitiveWords as string[]).length > 0 && (
                         <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
                           <span className="text-[10px] font-bold text-red-600">检测到敏感词: </span>
-                          {item.sensitiveWords.map((w: string) => (
+                          {(item.sensitiveWords as string[]).map((w: string) => (
                             <span key={w} className="text-[10px] text-red-500 mr-1">#{w}</span>
                           ))}
                         </div>
@@ -523,6 +532,186 @@ const Admin = () => {
               <p className="text-sm font-bold text-green-600">未检测到敏感词</p>
             </div>
           ) : null}
+        </div>
+      ) : activeTab === 'birthday' ? (
+        <div className="space-y-6">
+          {/* 筛选器 */}
+          <div className="bg-white rounded-[28px] border border-gray-100 p-4 flex flex-wrap items-center gap-4">
+            <span className="text-sm font-bold">筛选类型：</span>
+            {['all', 'notice', 'school_history', 'honor_alumni', 'campus', 'guestbook', 'contact', 'program'].map(type => (
+              <button
+                key={type}
+                onClick={() => setBirthdayFilter(type)}
+                className={clsx(
+                  'px-3 py-1.5 rounded-full text-xs font-bold transition-all',
+                  birthdayFilter === type ? 'bg-brand-primary text-gray-900' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
+                )}
+              >
+                {type === 'all' ? '全部' : type === 'notice' ? '通知' : type === 'school_history' ? '校史' : type === 'honor_alumni' ? '校友' : type === 'campus' ? '校园' : type === 'guestbook' ? '留言壁' : type === 'contact' ? '联系' : '节目'}
+              </button>
+            ))}
+          </div>
+
+          {/* 新增表单 */}
+          <div className="bg-white rounded-[28px] border border-gray-100 p-6">
+            <h3 className="text-xl font-serif font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <Plus size={18} /> 新增配置
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <select
+                value={newConfig.type}
+                onChange={(e) => setNewConfig(prev => ({ ...prev, type: e.target.value }))}
+                className="px-4 py-2 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-brand-primary/20"
+              >
+                <option value="notice">通知公告</option>
+                <option value="school_history">校史拾遗</option>
+                <option value="honor_alumni">荣誉校友</option>
+                <option value="campus">雅学之境</option>
+                <option value="guestbook">学子留言壁</option>
+                <option value="contact">联系我们</option>
+                <option value="program">生贺节目</option>
+              </select>
+              <input
+                type="text"
+                placeholder="标题"
+                value={newConfig.title}
+                onChange={(e) => setNewConfig(prev => ({ ...prev, title: e.target.value }))}
+                className="px-4 py-2 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-brand-primary/20"
+              />
+              <input
+                type="number"
+                placeholder="排序"
+                value={newConfig.sortOrder}
+                onChange={(e) => setNewConfig(prev => ({ ...prev, sortOrder: Number(e.target.value) }))}
+                className="px-4 py-2 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-brand-primary/20"
+              />
+              <button
+                onClick={async () => {
+                  if (!newConfig.title.trim()) return;
+                  try {
+                    await apiPost('/api/birthday/config', newConfig);
+                    setNewConfig({ type: 'notice', title: '', content: '', sortOrder: 0 });
+                    await fetchData();
+                    show('配置已创建', { variant: 'success' });
+                  } catch {
+                    show('创建失败', { variant: 'error' });
+                  }
+                }}
+                className="px-6 py-2 bg-brand-primary text-gray-900 rounded-xl font-bold hover:bg-brand-primary/90"
+              >
+                添加配置
+              </button>
+            </div>
+            <textarea
+              placeholder="内容 (支持 Markdown 格式)"
+              value={newConfig.content}
+              onChange={(e) => setNewConfig(prev => ({ ...prev, content: e.target.value }))}
+              className="w-full mt-3 px-4 py-2 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-brand-primary/20 h-24"
+            />
+          </div>
+
+          {/* 配置列表 */}
+          <div className="bg-white rounded-[36px] border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-brand-cream/50 border-b border-gray-100">
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-brand-olive/60">类型</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-brand-olive/60">标题</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-brand-olive/60">排序</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-brand-olive/60">状态</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-brand-olive/60 text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {loading ? (
+                    [1, 2, 3].map(i => (
+                      <tr key={i} className="animate-pulse">
+                        <td colSpan={5} className="px-6 py-4"><div className="h-8 bg-gray-50 rounded-xl" /></td>
+                      </tr>
+                    ))
+                  ) : (
+                    (() => {
+                      const currentData = (data as unknown as BirthdayConfig[]) || [];
+                      const filteredData = birthdayFilter === 'all'
+                        ? currentData
+                        : currentData.filter(item => item.type === birthdayFilter);
+                      return filteredData.length > 0 ? (
+                        filteredData.map((item) => (
+                          <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
+                            <td className="px-6 py-4">
+                              <span className="px-2 py-1 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase rounded">
+                                {item.type}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 font-bold text-gray-700">{item.title}</td>
+                            <td className="px-6 py-4 text-gray-500">{item.sortOrder}</td>
+                            <td className="px-6 py-4">
+                              <span className={clsx(
+                                'px-3 py-1 rounded-full text-[10px] font-bold uppercase',
+                                item.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                              )}>
+                                {item.isActive ? '启用' : '禁用'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      await apiPatch(`/api/birthday/config/${item.id}/toggle`);
+                                      await fetchData();
+                                      show(item.isActive ? '已禁用' : '已启用', { variant: 'success' });
+                                    } catch {
+                                      show('操作失败', { variant: 'error' });
+                                    }
+                                  }}
+                                  className={clsx(
+                                    'p-2 rounded-lg transition-all',
+                                    item.isActive ? 'text-amber-500 hover:bg-amber-50' : 'text-green-500 hover:bg-green-50'
+                                  )}
+                                  title={item.isActive ? '禁用' : '启用'}
+                                >
+                                  {item.isActive ? <XCircle size={18} /> : <CheckCircle size={18} />}
+                                </button>
+                                <button
+                                  onClick={() => setEditingConfig(item)}
+                                  className="p-2 text-blue-400 hover:bg-blue-50 rounded-lg transition-all"
+                                  title="编辑"
+                                >
+                                  <Edit size={18} />
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (!window.confirm('确定要删除此配置吗？')) return;
+                                    try {
+                                      await apiDelete(`/api/birthday/config/${item.id}`);
+                                      await fetchData();
+                                      show('已删除', { variant: 'success' });
+                                    } catch {
+                                      show('删除失败', { variant: 'error' });
+                                    }
+                                  }}
+                                  className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-all"
+                                  title="删除"
+                                >
+                                  <Trash2 size={18} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-16 text-center text-gray-400 italic">暂无配置</td>
+                        </tr>
+                      );
+                    })()
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       ) : activeTab === 'moderation_logs' || activeTab === 'ban_logs' ? (
         <div className="bg-white rounded-[36px] border border-gray-100 shadow-sm overflow-hidden">
@@ -625,22 +814,21 @@ const Admin = () => {
                   ))
                 ) : data.length > 0 ? (
                   data.map((item) => {
-                    const rowId = item.docId || item.id || item.uid;
+                    const rowId = String(item.docId || item.id || item.uid || '');
                     return (
                       <tr key={rowId} className="hover:bg-gray-50/50 transition-colors group">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             {activeTab === 'users' ? (
-                              <img src={item.photoURL || ''} alt="" className="w-10 h-10 rounded-full object-cover bg-gray-100" referrerPolicy="no-referrer" />
+                              <SmartImage src={item.photoURL || ''} alt="" className="w-10 h-10 rounded-full object-cover bg-gray-100" />
                             ) : activeTab === 'galleries' ? (
-                              <img
+                              <SmartImage
                                 src={item.images?.[0]?.url || ''}
                                 alt=""
                                 className="w-12 h-12 rounded-xl object-cover bg-gray-100"
-                                referrerPolicy="no-referrer"
                               />
                             ) : activeTab === 'music' ? (
-                              <img src={item.cover || ''} alt="" className="w-12 h-12 rounded-xl object-cover bg-gray-100" referrerPolicy="no-referrer" />
+                              <SmartImage src={item.cover || ''} alt="" className="w-12 h-12 rounded-xl object-cover bg-gray-100" />
                             ) : (
                               <div className="w-10 h-10 rounded-full bg-brand-cream flex items-center justify-center text-brand-olive">
                                 {activeTab === 'wiki' ? <Book size={18} /> : activeTab === 'locks' ? <Lock size={18} /> : <MessageSquare size={18} />}
@@ -753,7 +941,7 @@ const Admin = () => {
 
                             {activeTab === 'locks' && (
                               <button
-                                onClick={() => forceReleaseLock(item as EditLockItem)}
+                                onClick={() => forceReleaseLock(item as unknown as EditLockItem)}
                                 className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
                                 title="强制释放"
                               >
@@ -782,6 +970,86 @@ const Admin = () => {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {editingConfig && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-[28px] p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-xl font-serif font-bold text-gray-900 mb-4">编辑配置</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">类型</label>
+                <select
+                  value={editingConfig.type}
+                  onChange={(e) => setEditingConfig({ ...editingConfig, type: e.target.value })}
+                  className="w-full px-4 py-2 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-brand-primary/20"
+                  disabled
+                >
+                  <option value="notice">通知公告</option>
+                  <option value="school_history">校史拾遗</option>
+                  <option value="honor_alumni">荣誉校友</option>
+                  <option value="campus">雅学之境</option>
+                  <option value="guestbook">学子留言壁</option>
+                  <option value="contact">联系我们</option>
+                  <option value="program">生贺节目</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">标题</label>
+                <input
+                  type="text"
+                  value={editingConfig.title}
+                  onChange={(e) => setEditingConfig({ ...editingConfig, title: e.target.value })}
+                  className="w-full px-4 py-2 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-brand-primary/20"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">排序</label>
+                <input
+                  type="number"
+                  value={editingConfig.sortOrder}
+                  onChange={(e) => setEditingConfig({ ...editingConfig, sortOrder: Number(e.target.value) })}
+                  className="w-full px-4 py-2 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-brand-primary/20"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">内容 (Markdown)</label>
+                <textarea
+                  value={editingConfig.content}
+                  onChange={(e) => setEditingConfig({ ...editingConfig, content: e.target.value })}
+                  className="w-full px-4 py-2 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-brand-primary/20 h-40"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setEditingConfig(null)}
+                className="px-6 py-2 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200"
+              >
+                取消
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await apiPut(`/api/birthday/config/${editingConfig.id}`, {
+                      title: editingConfig.title,
+                      content: editingConfig.content,
+                      sortOrder: editingConfig.sortOrder,
+                    });
+                    await fetchData();
+                    setEditingConfig(null);
+                    show('配置已更新', { variant: 'success' });
+                  } catch {
+                    show('更新失败', { variant: 'error' });
+                  }
+                }}
+                className="px-6 py-2 bg-brand-primary text-gray-900 rounded-xl font-bold hover:bg-brand-primary/90"
+              >
+                保存
+              </button>
+            </div>
           </div>
         </div>
       )}

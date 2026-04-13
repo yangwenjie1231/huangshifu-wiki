@@ -29,6 +29,7 @@ import Forum from "./pages/Forum";
 import Music from "./pages/Music";
 import Gallery from "./pages/Gallery";
 import Profile from "./pages/Profile";
+import Recruit from "./pages/Recruit";
 
 const GalleryDetail = lazy(() => import("./pages/GalleryDetail"));
 const AlbumDetail = lazy(() => import("./pages/AlbumDetail"));
@@ -99,6 +100,7 @@ const MainLayout = () => {
 			>
 				<Routes>
 					<Route path="/" element={<Home />} />
+					<Route path="/recruit" element={<Recruit />} />
 					<Route path="/wiki/*" element={<Wiki />} />
 					<Route path="/forum/*" element={<Forum />} />
 					<Route path="/gallery" element={<Gallery />} />
@@ -171,12 +173,19 @@ const MainLayout = () => {
 					</p>
 					<a
 						target="_blank"
-						rel="noreferrer"
+						rel="nofollow noopener noreferrer"
+						href="https://img.lhl.one"
+						className="text-gray-400 text-sm hover:text-gray-600 mt-2 inline-block mr-4"
+					>
+						Image Hub
+					</a>
+					<a
+						target="_blank"
+						rel="nofollow noopener noreferrer"
 						href="http://www.freecdn.vip/?zzwz"
-						title="免费云加速（FreeCDN），为您免费提供网站加速和网站防御（DDOS、CC攻击）"
 						className="text-gray-400 text-sm hover:text-gray-600 mt-2 inline-block"
 					>
-						本站由免费云加速（FreeCDN）提供网站加速和攻击防御服务
+						LHL's Images
 					</a>
 				</div>
 			</footer>

@@ -36,6 +36,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from "../lib/apiClient";
 import { useToast } from "../components/Toast";
 import { copyToClipboard, toAbsoluteInternalUrl } from "../lib/copyLink";
 import { withThemeSearch, mergeSearchParamsWithTheme } from "../lib/theme";
+import type { ThemeName } from "../lib/theme";
 import { ContentStatus, getStatusText } from "../lib/contentUtils";
 import { formatDate, toDateValue } from "../lib/dateUtils";
 import { LocationTagInput } from "../components/LocationTagInput";
@@ -91,6 +92,116 @@ type CommentItem = {
 };
 
 const DEFAULT_PAGE_SIZE = 20;
+
+interface PostCardProps {
+	post: PostItem;
+	sectionName: string;
+	isAdmin: boolean;
+	pinning: string | null;
+	theme: ThemeName;
+	onCopyLink: (event: React.MouseEvent<HTMLButtonElement>, postId: string) => void;
+	onTogglePin: (postId: string, currentlyPinned: boolean) => void;
+}
+
+const PostCard = React.memo(({ post, sectionName, isAdmin, pinning, theme, onCopyLink, onTogglePin }: PostCardProps) => (
+	<div
+		className={clsx(
+			"bg-white p-8 rounded-[32px] border hover:shadow-lg transition-all group relative",
+			post.isPinned
+				? "border-l-4 border-l-brand-primary border-gray-100"
+				: "border-gray-100 hover:border-brand-primary/20",
+		)}
+	>
+		<Link
+			to={withThemeSearch(`/forum/${post.id}`, theme)}
+			className="block"
+		>
+			<div className="flex items-center gap-3 mb-4">
+				{post.isPinned && (
+					<span className="flex items-center gap-1 px-2 py-1 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded">
+						<Pin size={10} /> 已置顶
+					</span>
+				)}
+				<span className="px-2 py-1 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded">
+					{sectionName}
+				</span>
+				<span className="text-gray-300">|</span>
+				<span className="text-gray-400 text-xs flex items-center gap-1">
+					<Clock size={12} />{" "}
+					{formatDate(post.updatedAt, "yyyy-MM-dd")}
+				</span>
+				{post.status && post.status !== "published" && (
+					<span
+						className={clsx(
+							"px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider",
+							post.status === "pending"
+								? "bg-amber-100 text-amber-700"
+								: post.status === "rejected"
+									? "bg-red-100 text-red-700"
+									: "bg-gray-100 text-gray-600",
+						)}
+					>
+						{getStatusText(post.status)}
+					</span>
+				)}
+			</div>
+			<h3 className="text-2xl font-serif font-bold mb-3 group-hover:text-brand-primary transition-colors">
+				{post.title}
+			</h3>
+			<div className="flex items-center justify-between">
+				<div className="flex items-center gap-6 text-gray-400 text-sm">
+					<span className="flex items-center gap-1.5">
+						<Heart size={16} /> {post.likesCount || 0}
+					</span>
+					<span className="flex items-center gap-1.5">
+						<ThumbsDown size={16} /> {post.dislikesCount || 0}
+					</span>
+					<span className="flex items-center gap-1.5">
+						<MessageSquare size={16} /> {post.commentsCount || 0}
+					</span>
+				</div>
+				<div className="flex items-center gap-2">
+					<div className="w-6 h-6 rounded-full bg-gray-200 overflow-hidden">
+						<UserIcon size={14} className="m-auto text-gray-400" />
+					</div>
+					<span className="text-xs text-gray-500">
+						作者 ID: {post.authorUid?.substring(0, 6)}
+					</span>
+				</div>
+			</div>
+		</Link>
+		<button
+			onClick={(event) => onCopyLink(event, post.id)}
+			className={clsx(
+				"absolute top-4 p-2 rounded-full border border-gray-100 bg-white/90 text-gray-400 hover:text-brand-primary hover:border-brand-primary/30 transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100",
+				isAdmin ? "right-24" : "right-4",
+			)}
+			title="复制内链"
+			aria-label="复制帖子内链"
+		>
+			<Link2 size={16} />
+		</button>
+		{isAdmin && (
+			<button
+				onClick={() => onTogglePin(post.id, !!post.isPinned)}
+				disabled={pinning === post.id}
+				className={clsx(
+					"absolute top-4 right-4 px-3 py-1.5 rounded-full text-xs font-medium transition-all",
+					post.isPinned
+						? "bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/20"
+						: "bg-gray-100 text-gray-500 hover:bg-gray-200",
+					pinning === post.id && "opacity-50 cursor-not-allowed",
+				)}
+			>
+				{pinning === post.id
+					? "处理中..."
+					: post.isPinned
+						? "取消置顶"
+						: "置顶"}
+			</button>
+		)}
+	</div>
+));
 
 const academyForumLecturers = [
 	{
@@ -350,105 +461,16 @@ const PostList = () => {
 				<>
 					<div className="space-y-6">
 						{posts.map((post) => (
-							<div
+							<PostCard
 								key={post.id}
-								className={clsx(
-									"bg-white p-8 rounded-[32px] border hover:shadow-lg transition-all group relative",
-									post.isPinned
-										? "border-l-4 border-l-brand-primary border-gray-100"
-										: "border-gray-100 hover:border-brand-primary/20",
-								)}
-							>
-								<Link
-									to={withThemeSearch(`/forum/${post.id}`, theme)}
-									className="block"
-								>
-									<div className="flex items-center gap-3 mb-4">
-										{post.isPinned && (
-											<span className="flex items-center gap-1 px-2 py-1 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded">
-												<Pin size={10} /> 已置顶
-											</span>
-										)}
-										<span className="px-2 py-1 bg-brand-primary/10 text-brand-primary text-[10px] font-bold uppercase tracking-wider rounded">
-											{sections.find((s) => s.id === post.section)?.name ||
-												post.section}
-										</span>
-										<span className="text-gray-300">|</span>
-										<span className="text-gray-400 text-xs flex items-center gap-1">
-											<Clock size={12} />{" "}
-											{formatDate(post.updatedAt, "yyyy-MM-dd")}
-										</span>
-										{post.status && post.status !== "published" && (
-											<span
-												className={clsx(
-													"px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider",
-													post.status === "pending"
-														? "bg-amber-100 text-amber-700"
-														: post.status === "rejected"
-															? "bg-red-100 text-red-700"
-															: "bg-gray-100 text-gray-600",
-												)}
-											>
-												{getStatusText(post.status)}
-											</span>
-										)}
-									</div>
-									<h3 className="text-2xl font-serif font-bold mb-3 group-hover:text-brand-primary transition-colors">
-										{post.title}
-									</h3>
-									<div className="flex items-center justify-between">
-										<div className="flex items-center gap-6 text-gray-400 text-sm">
-											<span className="flex items-center gap-1.5">
-												<Heart size={16} /> {post.likesCount || 0}
-											</span>
-											<span className="flex items-center gap-1.5">
-												<ThumbsDown size={16} /> {post.dislikesCount || 0}
-											</span>
-											<span className="flex items-center gap-1.5">
-												<MessageSquare size={16} /> {post.commentsCount || 0}
-											</span>
-										</div>
-										<div className="flex items-center gap-2">
-											<div className="w-6 h-6 rounded-full bg-gray-200 overflow-hidden">
-												<UserIcon size={14} className="m-auto text-gray-400" />
-											</div>
-											<span className="text-xs text-gray-500">
-												作者 ID: {post.authorUid?.substring(0, 6)}
-											</span>
-										</div>
-									</div>
-								</Link>
-								<button
-									onClick={(event) => handleCopyPostLink(event, post.id)}
-									className={clsx(
-										"absolute top-4 p-2 rounded-full border border-gray-100 bg-white/90 text-gray-400 hover:text-brand-primary hover:border-brand-primary/30 transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100",
-										isAdmin ? "right-24" : "right-4",
-									)}
-									title="复制内链"
-									aria-label="复制帖子内链"
-								>
-									<Link2 size={16} />
-								</button>
-								{isAdmin && (
-									<button
-										onClick={() => handleTogglePin(post.id, !!post.isPinned)}
-										disabled={pinning === post.id}
-										className={clsx(
-											"absolute top-4 right-4 px-3 py-1.5 rounded-full text-xs font-medium transition-all",
-											post.isPinned
-												? "bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/20"
-												: "bg-gray-100 text-gray-500 hover:bg-gray-200",
-											pinning === post.id && "opacity-50 cursor-not-allowed",
-										)}
-									>
-										{pinning === post.id
-											? "处理中..."
-											: post.isPinned
-												? "取消置顶"
-												: "置顶"}
-									</button>
-								)}
-							</div>
+								post={post}
+								sectionName={sections.find((s) => s.id === post.section)?.name || post.section}
+								isAdmin={isAdmin}
+								pinning={pinning}
+								theme={theme}
+								onCopyLink={handleCopyPostLink}
+								onTogglePin={handleTogglePin}
+							/>
 						))}
 					</div>
 					{totalPages > 1 && (

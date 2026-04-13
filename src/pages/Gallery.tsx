@@ -16,48 +16,117 @@ import { toDateValue } from '../lib/dateUtils';
 import { LocationTagInput } from '../components/LocationTagInput';
 import Pagination from '../components/Pagination';
 import { GallerySkeleton } from '../components/GallerySkeleton';
+import type { GalleryItem } from '../types/entities';
+import type { UploadSessionResponse, UploadFileResponse, GalleryCreateResponse } from '../types/api';
 
 const DEFAULT_PAGE_SIZE = 24;
-
-type UploadSessionResponse = {
-  session: {
-    id: string;
-    status: 'open' | 'finalized' | 'expired';
-    maxFiles: number;
-    uploadedFiles: number;
-    expiresAt: string;
-  };
-};
-
-type UploadFileResponse = {
-  session: {
-    id: string;
-    status: 'open' | 'finalized' | 'expired';
-    uploadedFiles: number;
-    maxFiles: number;
-  };
-  asset: {
-    id: string;
-    url: string;
-    fileName: string;
-    mimeType: string;
-    sizeBytes: number;
-  };
-};
 
 type LocalPreviewFile = {
   file: File;
   previewUrl: string;
 };
 
-type GalleryCreateResponse = {
-  gallery: {
-    id: string;
-  };
-};
+interface GalleryCardProps {
+  gallery: GalleryItem;
+  viewMode: string;
+  isAdmin: boolean;
+  deletingGalleryId: string | null;
+  onCopyLink: (event: React.MouseEvent<HTMLButtonElement>, galleryId: string) => void;
+  onRequestDelete: (event: React.MouseEvent<HTMLButtonElement>, gallery: { id: string; title?: string | null }) => void;
+}
+
+const GalleryCard = React.memo(({ gallery, viewMode, isAdmin, deletingGalleryId, onCopyLink, onRequestDelete }: GalleryCardProps) => (
+  <div className={clsx('relative group', viewMode === 'list' && 'flex')}>
+    <Link
+      to={`/gallery/${gallery.id}`}
+      className={clsx(
+        viewMode === 'list'
+          ? 'flex gap-4 p-4 bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all w-full'
+          : 'block bg-white rounded-[32px] border border-gray-100 overflow-hidden hover:shadow-xl transition-all'
+      )}
+    >
+      {viewMode === 'list' ? (
+        <>
+          <div className="w-24 h-24 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+            <SmartImage
+              src={gallery.images[0]?.url}
+              alt={gallery.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-lg font-serif font-bold group-hover:text-brand-olive transition-colors truncate">{gallery.title}</h3>
+              <span className="px-2 py-0.5 bg-black/50 backdrop-blur-md text-white text-[10px] font-bold rounded-full flex-shrink-0">
+                {gallery.images.length} 张
+              </span>
+            </div>
+            <p className="text-gray-400 text-sm line-clamp-2">
+              {gallery.description || '暂无描述'}
+            </p>
+            <p className="text-gray-300 text-xs mt-1">
+              {(gallery.description || '').substring(0, 50)}...
+            </p>
+            <div className="flex items-center gap-3 text-gray-400 text-xs mt-2">
+              <span className="flex items-center gap-1"><Clock size={10} /> {toDateValue(gallery.createdAt) ? format(toDateValue(gallery.createdAt)!, 'yyyy-MM-dd') : '刚刚'}</span>
+              <span className="flex items-center gap-1"><UserIcon size={10} /> {gallery.authorUid?.substring(0, 6)}</span>
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className={clsx('relative overflow-hidden', VIEW_MODE_CONFIG[viewMode].cardHeight)}>
+            <SmartImage
+              src={gallery.images[0]?.url}
+              alt={gallery.title}
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+            />
+            <div className="absolute top-4 right-4 px-3 py-1 bg-black/50 backdrop-blur-md text-white text-[10px] font-bold rounded-full">
+              {gallery.images.length} 张
+            </div>
+          </div>
+          <div className="p-6">
+            <h3 className="text-xl font-serif font-bold mb-2 group-hover:text-brand-olive transition-colors">{gallery.title}</h3>
+            <div className="flex flex-wrap gap-1 mb-4">
+              {gallery.tags?.map((tag: string) => (
+                <span key={tag} className="text-[10px] text-brand-olive bg-brand-cream px-2 py-0.5 rounded">#{tag}</span>
+              ))}
+            </div>
+            <div className="flex items-center justify-between text-gray-400 text-xs">
+              <span className="flex items-center gap-1"><Clock size={12} /> {toDateValue(gallery.createdAt) ? format(toDateValue(gallery.createdAt)!, 'yyyy-MM-dd') : '刚刚'}</span>
+              <span className="flex items-center gap-1"><UserIcon size={12} /> {gallery.authorUid?.substring(0, 6)}</span>
+            </div>
+          </div>
+        </>
+      )}
+    </Link>
+    {isAdmin ? (
+      <button
+        onClick={(event) => onRequestDelete(event, gallery)}
+        disabled={deletingGalleryId === gallery.id}
+        className="absolute top-4 left-4 p-2 rounded-full border border-white/70 bg-white/85 text-gray-500 shadow-sm opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:text-red-500 transition-all disabled:cursor-not-allowed disabled:opacity-60"
+        title="删除图集"
+        aria-label="删除图集"
+      >
+        <Trash2 size={14} />
+      </button>
+    ) : null}
+    <button
+      onClick={(event) => onCopyLink(event, gallery.id)}
+      className={clsx(
+        'p-2 rounded-full border bg-white/85 text-gray-500 shadow-sm hover:text-brand-olive transition-all',
+        viewMode === 'list' ? 'absolute top-4 right-4' : 'absolute bottom-4 right-4 sm:opacity-0 sm:group-hover:opacity-100'
+      )}
+      title="复制内链"
+      aria-label="复制图集内链"
+    >
+      <Link2 size={14} />
+    </button>
+  </div>
+));
 
 const GalleryList = () => {
-  const [galleries, setGalleries] = useState<any[]>([]);
+  const [galleries, setGalleries] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const { user, isAdmin, isBanned } = useAuth();
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -89,7 +158,7 @@ const GalleryList = () => {
     const fetchGalleries = async () => {
       setLoading(true);
       try {
-        const data = await apiGet<{ galleries: any[] }>('/api/galleries');
+        const data = await apiGet<{ galleries: GalleryItem[] }>('/api/galleries');
         setGalleries(data.galleries || []);
       } catch (error) {
         console.error('Fetch galleries error:', error);
@@ -177,93 +246,15 @@ const GalleryList = () => {
         <>
           <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
             {paginatedGalleries.map((gallery) => (
-            <div key={gallery.id} className={clsx('relative group', viewMode === 'list' && 'flex')}>
-              <Link
-                to={`/gallery/${gallery.id}`}
-                className={clsx(
-                  viewMode === 'list'
-                    ? 'flex gap-4 p-4 bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all w-full'
-                    : 'block bg-white rounded-[32px] border border-gray-100 overflow-hidden hover:shadow-xl transition-all'
-                )}
-              >
-                {viewMode === 'list' ? (
-                  <>
-                    <div className="w-24 h-24 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
-                      <SmartImage 
-                        src={gallery.images[0]?.url} 
-                        alt={gallery.title} 
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-lg font-serif font-bold group-hover:text-brand-olive transition-colors truncate">{gallery.title}</h3>
-                        <span className="px-2 py-0.5 bg-black/50 backdrop-blur-md text-white text-[10px] font-bold rounded-full flex-shrink-0">
-                          {gallery.images.length} 张
-                        </span>
-                      </div>
-                      <p className="text-gray-400 text-sm line-clamp-2">
-                        {gallery.description || '暂无描述'}
-                      </p>
-                      <p className="text-gray-300 text-xs mt-1">
-                        {(gallery.description || '').substring(0, 50)}...
-                      </p>
-                      <div className="flex items-center gap-3 text-gray-400 text-xs mt-2">
-                        <span className="flex items-center gap-1"><Clock size={10} /> {toDateValue(gallery.createdAt) ? format(toDateValue(gallery.createdAt)!, 'yyyy-MM-dd') : '刚刚'}</span>
-                        <span className="flex items-center gap-1"><UserIcon size={10} /> {gallery.authorUid?.substring(0, 6)}</span>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className={clsx('relative overflow-hidden', VIEW_MODE_CONFIG[viewMode].cardHeight)}>
-                      <SmartImage 
-                        src={gallery.images[0]?.url} 
-                        alt={gallery.title} 
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                      />
-                      <div className="absolute top-4 right-4 px-3 py-1 bg-black/50 backdrop-blur-md text-white text-[10px] font-bold rounded-full">
-                        {gallery.images.length} 张
-                      </div>
-                    </div>
-                    <div className="p-6">
-                      <h3 className="text-xl font-serif font-bold mb-2 group-hover:text-brand-olive transition-colors">{gallery.title}</h3>
-                      <div className="flex flex-wrap gap-1 mb-4">
-                        {gallery.tags?.map((tag: string) => (
-                          <span key={tag} className="text-[10px] text-brand-olive bg-brand-cream px-2 py-0.5 rounded">#{tag}</span>
-                        ))}
-                      </div>
-                      <div className="flex items-center justify-between text-gray-400 text-xs">
-                        <span className="flex items-center gap-1"><Clock size={12} /> {toDateValue(gallery.createdAt) ? format(toDateValue(gallery.createdAt)!, 'yyyy-MM-dd') : '刚刚'}</span>
-                        <span className="flex items-center gap-1"><UserIcon size={12} /> {gallery.authorUid?.substring(0, 6)}</span>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </Link>
-              {isAdmin ? (
-                <button
-                  onClick={(event) => handleRequestDeleteGallery(event, gallery)}
-                  disabled={deletingGalleryId === gallery.id}
-                  className="absolute top-4 left-4 p-2 rounded-full border border-white/70 bg-white/85 text-gray-500 shadow-sm opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:text-red-500 transition-all disabled:cursor-not-allowed disabled:opacity-60"
-                  title="删除图集"
-                  aria-label="删除图集"
-                >
-                  <Trash2 size={14} />
-                </button>
-              ) : null}
-              <button
-                onClick={(event) => handleCopyGalleryLink(event, gallery.id)}
-                className={clsx(
-                  'p-2 rounded-full border bg-white/85 text-gray-500 shadow-sm hover:text-brand-olive transition-all',
-                  viewMode === 'list' ? 'absolute top-4 right-4' : 'absolute bottom-4 right-4 sm:opacity-0 sm:group-hover:opacity-100'
-                )}
-                title="复制内链"
-                aria-label="复制图集内链"
-              >
-                <Link2 size={14} />
-              </button>
-            </div>
+            <GalleryCard
+              key={gallery.id}
+              gallery={gallery}
+              viewMode={viewMode}
+              isAdmin={isAdmin}
+              deletingGalleryId={deletingGalleryId}
+              onCopyLink={handleCopyGalleryLink}
+              onRequestDelete={handleRequestDeleteGallery}
+            />
           ))}
           </div>
           {totalGalleryPages > 1 && (

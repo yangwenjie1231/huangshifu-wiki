@@ -6,12 +6,27 @@ export interface ImageMap {
   md5: string;
   localUrl: string;
   externalUrl?: string;
-  createdAt: any;
+  s3Url?: string;
+  storageType?: 'local' | 's3' | 'external';
+  blurhash?: string;
+  thumbhash?: string;
+  createdAt: string;
 }
 
 export interface ImagePreference {
-  strategy: 'local' | 'external';
+  strategy: 'local' | 's3' | 'external';
   fallback: boolean;
+}
+
+export interface ImageUrlResult {
+  url: string;
+  storageType: 'local' | 's3' | 'external';
+  blurhash?: string;
+  md5: string;
+}
+
+export interface ResolveImageUrlOptions {
+  forceType?: 'local' | 's3' | 'external';
 }
 
 let cachedPreference: ImagePreference | null = null;
@@ -42,6 +57,8 @@ const getUrlByPreference = (map: ImageMap, preference: ImagePreference): string 
     switch (strategy) {
       case 'external':
         return map.externalUrl || null;
+      case 's3':
+        return map.s3Url || null;
       case 'local':
       default:
         return map.localUrl || null;
@@ -57,7 +74,7 @@ const getUrlByPreference = (map: ImageMap, preference: ImagePreference): string 
     return null;
   }
 
-  const fallbackUrls = [map.externalUrl, map.localUrl].filter(
+  const fallbackUrls = [map.s3Url, map.externalUrl, map.localUrl].filter(
     Boolean,
   ) as string[];
 
@@ -65,6 +82,85 @@ const getUrlByPreference = (map: ImageMap, preference: ImagePreference): string 
     return fallbackUrls[0];
   }
 
+  return null;
+};
+
+export const resolveImageUrl = (
+  map: ImageMap,
+  preference: ImagePreference,
+  options: ResolveImageUrlOptions = {},
+): ImageUrlResult => {
+  const { forceType } = options;
+  const strategy = forceType || preference.strategy;
+  const { fallback } = preference;
+
+  const getPrimaryUrl = (): { url: string | null; type: 'local' | 's3' | 'external' } => {
+    switch (strategy) {
+      case 'external':
+        return { url: map.externalUrl || null, type: 'external' };
+      case 's3':
+        return { url: map.s3Url || null, type: 's3' };
+      case 'local':
+      default:
+        return { url: map.localUrl || null, type: 'local' };
+    }
+  };
+
+  const primary = getPrimaryUrl();
+  if (primary.url) {
+    return {
+      url: primary.url,
+      storageType: primary.type,
+      blurhash: map.blurhash,
+      md5: map.md5,
+    };
+  }
+
+  if (!fallback) {
+    return {
+      url: '',
+      storageType: 'local',
+      blurhash: map.blurhash,
+      md5: map.md5,
+    };
+  }
+
+  const fallbackUrls = [
+    { url: map.s3Url || '', type: 's3' as const },
+    { url: map.externalUrl || '', type: 'external' as const },
+    { url: map.localUrl || '', type: 'local' as const },
+  ].filter((item) => item.url && item.url !== primary.url);
+
+  if (fallbackUrls.length > 0) {
+    const first = fallbackUrls[0];
+    return {
+      url: first.url,
+      storageType: first.type,
+      blurhash: map.blurhash,
+      md5: map.md5,
+    };
+  }
+
+  return {
+    url: '',
+    storageType: map.storageType || 'local',
+    blurhash: map.blurhash,
+    md5: map.md5,
+  };
+};
+
+export const getImageUrlWithMeta = async (
+  imageId: string,
+  options: ResolveImageUrlOptions = {},
+): Promise<ImageUrlResult | null> => {
+  try {
+    const response = await apiGet<{ item: ImageMap }>(`/api/image-maps/${imageId}`);
+    const data = response.item;
+    const preference = await getImagePreference();
+    return resolveImageUrl(data, preference, options);
+  } catch (e) {
+    console.error('Error fetching image URL with meta:', e);
+  }
   return null;
 };
 
@@ -95,23 +191,166 @@ export const uploadImageToCDNs = async (file: File): Promise<string> => {
     return existingItems[0].id;
   }
 
-  const localUrl = URL.createObjectURL(file);
+  // Upload file to server first
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const uploadResponse = await fetch('/api/uploads', {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+
+  if (!uploadResponse.ok) {
+    throw new Error('Failed to upload file to server');
+  }
+
+  const uploadData = await uploadResponse.json();
+  const localUrl = uploadData?.file?.url;
+
+  if (!localUrl) {
+    throw new Error('Failed to get upload URL');
+  }
+
   const imageId = Math.random().toString(36).substring(7);
 
-  const imageMap: ImageMap = {
+  await apiPost('/api/image-maps', {
     id: imageId,
     md5,
     localUrl,
-    createdAt: new Date().toISOString(),
-  };
-
-  await apiPost('/api/image-maps', {
-    id: imageMap.id,
-    md5: imageMap.md5,
-    localUrl: imageMap.localUrl,
+    storageType: 'local',
   });
 
   return imageId;
+};
+
+export const uploadToS3 = async (file: File): Promise<{ id: string; s3Url: string; key: string }> => {
+  const md5 = await calculateMD5(file);
+
+  const listResponse = await apiGet<{ items: ImageMap[] }>('/api/image-maps', { md5 });
+  const existingItems = listResponse.items || [];
+
+  if (existingItems.length > 0) {
+    const existing = existingItems[0];
+    if (existing.s3Url) {
+      return {
+        id: existing.id,
+        s3Url: existing.s3Url,
+        key: existing.s3Url.split('/').pop() || existing.id,
+      };
+    }
+  }
+
+  const filename = `${md5}_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+  
+  const presignResponse = await apiGet<{
+    uploadUrl: string;
+    key: string;
+    expiresIn: number;
+  }>('/api/s3/presign-upload', {
+    filename,
+    contentType: file.type,
+    bucket: 'private',
+  });
+
+  await fetch(presignResponse.uploadUrl, {
+    method: 'PUT',
+    body: file,
+    headers: {
+      'Content-Type': file.type,
+    },
+  });
+
+  const configResponse = await apiGet<{
+    enabled: boolean;
+    endpoint: string;
+    bucket: string;
+    publicDomain?: string;
+    region: string;
+  }>('/api/s3/config');
+
+  let s3Url: string;
+  if (configResponse.publicDomain) {
+    s3Url = `${configResponse.publicDomain}/${presignResponse.key}`;
+  } else {
+    s3Url = `${configResponse.endpoint}/${configResponse.bucket}/${presignResponse.key}`;
+  }
+
+  const imageId = Math.random().toString(36).substring(7);
+
+  if (existingItems.length > 0) {
+    await apiPost('/api/image-maps', {
+      id: existingItems[0].id,
+      s3Url,
+      storageType: 's3',
+    });
+    return {
+      id: existingItems[0].id,
+      s3Url,
+      key: presignResponse.key,
+    };
+  }
+
+  // Also upload to local server for backup
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const uploadResponse = await fetch('/api/uploads', {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+
+  let localUrl: string | undefined;
+  if (uploadResponse.ok) {
+    const uploadData = await uploadResponse.json();
+    localUrl = uploadData?.file?.url;
+  }
+
+  await apiPost('/api/image-maps', {
+    id: imageId,
+    md5,
+    ...(localUrl && { localUrl }),
+    s3Url,
+    storageType: 's3',
+  });
+
+  return {
+    id: imageId,
+    s3Url,
+    key: presignResponse.key,
+  };
+};
+
+export const uploadImage = async (
+  file: File,
+  preferredStorage?: 'local' | 's3',
+): Promise<{ id: string; url: string; storageType: 'local' | 's3' }> => {
+  try {
+    if (preferredStorage === 's3' || preferredStorage === undefined) {
+      try {
+        const s3Result = await uploadToS3(file);
+        return {
+          id: s3Result.id,
+          url: s3Result.s3Url,
+          storageType: 's3',
+        };
+      } catch (s3Error) {
+        console.error('S3 upload failed, falling back to local:', s3Error);
+      }
+    }
+
+    const imageId = await uploadImageToCDNs(file);
+    const urls = await getImageUrl(imageId);
+    return {
+      id: imageId,
+      url: urls[0] || '',
+      storageType: 'local',
+    };
+  } catch (error) {
+    console.error('Image upload failed:', error);
+    throw error;
+  }
 };
 
 export const getImageUrl = async (imageId: string): Promise<string[]> => {
@@ -129,7 +368,7 @@ export const getImageUrl = async (imageId: string): Promise<string[]> => {
       return [primaryUrl];
     }
 
-    const fallbackUrls = [data.externalUrl, data.localUrl].filter(
+    const fallbackUrls = [data.s3Url, data.externalUrl, data.localUrl].filter(
       (url) => url && url !== primaryUrl,
     ) as string[];
 
@@ -172,6 +411,17 @@ export const uploadMarkdownImage = async (file: File): Promise<string> => {
     }
   } catch (error) {
     console.error('Local markdown image upload failed, falling back to legacy image bed:', error);
+  }
+
+  const preference = await getImagePreference();
+  
+  if (preference.strategy === 's3') {
+    try {
+      const s3Result = await uploadToS3(file);
+      return s3Result.s3Url;
+    } catch (s3Error) {
+      console.error('S3 upload failed:', s3Error);
+    }
   }
 
   const imageId = await uploadImageToCDNs(file);

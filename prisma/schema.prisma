@@ -98,6 +98,12 @@ enum MusicCollectionType {
   playlist
 }
 
+enum StorageType {
+  local
+  s3
+  external
+}
+
 enum WikiBranchStatus {
   draft
   pending_review
@@ -727,11 +733,15 @@ model MusicPlatformConfig {
 }
 
 model ImageMap {
-  id         String   @id
-  md5        String   @unique
-  localUrl   String
+  id          String      @id
+  md5         String      @unique
+  localUrl    String
   externalUrl String?
-  createdAt  DateTime @default(now())
+  s3Url       String?
+  storageType StorageType @default(local)
+  blurhash    String?
+  thumbhash   String?
+  createdAt   DateTime    @default(now())
 }
 
 model SiteConfig {
@@ -775,4 +785,17 @@ model SearchKeyword {
   updatedAt DateTime @updatedAt
 
   @@index([count, updatedAt])
+}
+
+model BirthdayConfig {
+  id        String   @id @default(cuid())
+  type      String
+  title     String
+  content   String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type, isActive])
 }

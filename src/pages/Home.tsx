@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { HomeSkeleton } from "../components/HomeSkeleton";
+import GlassCard from "../components/GlassCard";
 import {
 	Book,
 	MessageSquare,
@@ -14,20 +17,32 @@ import {
 	Sparkles,
 	ChevronRight,
 	Flame,
+	Play,
+	Gift,
 } from "lucide-react";
 import { format } from "date-fns";
 import { apiGet } from "../lib/apiClient";
 import { toDateValue } from "../lib/dateUtils";
 import { useTheme } from "../context/ThemeContext";
-import { withThemeSearch } from "../lib/theme";
+import { withThemeSearch, ThemeName } from "../lib/theme";
 import { useI18n } from "../lib/i18n";
 import { useAnimatedNumber } from "../hooks/useAnimatedNumber";
+import type { HomeFeedResponse as HomeFeedData } from "../types/api";
 
 interface AnimatedStatProps {
 	value: number;
 	suffix?: string;
 	label: string;
 	icon: React.ReactNode;
+}
+
+interface BirthdayConfig {
+	id: string;
+	type: string;
+	title: string;
+	content: string;
+	sortOrder: number;
+	isActive: boolean;
 }
 
 const AnimatedStat: React.FC<AnimatedStatProps> = ({ value, suffix = "", label, icon }) => {
@@ -49,16 +64,36 @@ const AnimatedStat: React.FC<AnimatedStatProps> = ({ value, suffix = "", label, 
 	);
 };
 
-type HomeFeedResponse = {
-	announcements: Array<{
-		id: string;
-		content: string;
-		link?: string;
-		createdAt: string;
-	}>;
-	hotPosts: any[];
-	recentPosts: any[];
-};
+interface CategoryCardProps {
+	cat: {
+		title: string;
+		icon: React.ReactNode;
+		desc: string;
+		link: string;
+	};
+	theme: ThemeName;
+}
+
+const CategoryCard: React.FC<CategoryCardProps> = React.memo(({ cat, theme }) => (
+	<Link
+		to={withThemeSearch(cat.link, theme)}
+		className="flex items-start gap-4 p-4 rounded-2xl hover:bg-gray-50 transition-all group"
+	>
+		<div className="text-brand-primary group-hover:scale-110 transition-transform">
+			{cat.icon}
+		</div>
+		<div>
+			<h3 className="text-xl font-serif font-bold mb-1">
+				{cat.title}
+			</h3>
+			<p className="text-gray-500 text-sm leading-relaxed">
+				{cat.desc}
+			</p>
+		</div>
+	</Link>
+));
+
+type HomeFeedResponse = HomeFeedData;
 
 const academyHighlights = [
 	{
@@ -113,6 +148,26 @@ const academyCopyMappings = [
 
 const AcademyHome = () => {
 	const [showEasterPanel, setShowEasterPanel] = useState(false);
+	const [birthdayConfigs, setBirthdayConfigs] = useState<BirthdayConfig[]>([]);
+	const [configsLoading, setConfigsLoading] = useState(true);
+
+	useEffect(() => {
+		const fetchConfigs = async () => {
+			try {
+				const response = await apiGet<{ data: BirthdayConfig[] }>('/api/birthday/config');
+				setBirthdayConfigs(response.data || []);
+			} catch (error) {
+				console.error('Error fetching birthday configs:', error);
+			} finally {
+				setConfigsLoading(false);
+			}
+		};
+		fetchConfigs();
+	}, []);
+
+	// 按 type 分组配置
+	const getConfigsByType = (type: string) =>
+		birthdayConfigs.filter((c) => c.type === type).sort((a, b) => a.sortOrder - b.sortOrder);
 
 	return (
 		<div className="academy-home-wrap max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-12">
@@ -152,34 +207,29 @@ const AcademyHome = () => {
 						initial={{ opacity: 0, y: 20 }}
 						animate={{ opacity: 1, y: 0 }}
 						transition={{ delay: index * 0.1 }}
-						className={`liquidGlass-wrapper bg-white ${index === 0 ? 'bento-item-large' : ''}`}
 					>
-						<div className="liquidGlass-effect"></div>
-						<div className="liquidGlass-tint"></div>
-						<div className="liquidGlass-shine"></div>
-						<Link
-							to={withThemeSearch(item.href, "academy")}
-							className="liquidGlass-text w-full p-6 hover:-translate-y-0.5 transition-transform"
-						>
-							<h2 className="text-2xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
-								{item.title}
-							</h2>
-							<p className="text-[color:var(--color-theme-muted)] mb-4">
-								{item.subtitle}
-							</p>
-							<span className="inline-flex items-center gap-1 text-sm font-medium text-[color:var(--color-theme-accent)]">
-								前往 <ChevronRight size={14} />
-							</span>
-						</Link>
+						<GlassCard className={index === 0 ? 'bento-item-large' : ''}>
+							<Link
+								to={withThemeSearch(item.href, "academy")}
+								className="w-full p-6 hover:-translate-y-0.5 transition-transform block"
+							>
+								<h2 className="text-2xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
+									{item.title}
+								</h2>
+								<p className="text-[color:var(--color-theme-muted)] mb-4">
+									{item.subtitle}
+								</p>
+								<span className="inline-flex items-center gap-1 text-sm font-medium text-[color:var(--color-theme-accent)]">
+									前往 <ChevronRight size={14} />
+								</span>
+							</Link>
+						</GlassCard>
 					</motion.div>
 				))}
 			</section>
 
-			<section className="liquidGlass-wrapper bg-white">
-				<div className="liquidGlass-effect"></div>
-				<div className="liquidGlass-tint"></div>
-				<div className="liquidGlass-shine"></div>
-				<div className="liquidGlass-text w-full p-8 space-y-4">
+			<section>
+				<GlassCard className="w-full p-8 space-y-4">
 					<h2 className="text-2xl font-serif font-bold text-[color:var(--color-theme-accent-strong)]">
 						书院开篇
 					</h2>
@@ -207,8 +257,190 @@ const AcademyHome = () => {
 							</p>
 						</div>
 					)}
-				</div>
+				</GlassCard>
 			</section>
+
+			{/* 跳转到招募页 */}
+			<section>
+				<GlassCard className="w-full p-6 text-center">
+					<p className="text-[color:var(--color-theme-muted)] mb-4">上拉页面可前往「招募与培养」</p>
+					<Link
+						to="/recruit"
+						className="inline-flex items-center gap-2 px-6 py-3 bg-[color:var(--color-theme-accent)] text-white rounded-full font-bold hover:opacity-90 transition-opacity"
+					>
+						前往招募与培养 <ArrowRight size={16} />
+					</Link>
+				</GlassCard>
+			</section>
+
+			{/* 教务处文件通知公告 */}
+			{getConfigsByType('notice').length > 0 && (
+				<section>
+					<GlassCard className="w-full p-6 border-l-4 border-l-red-600">
+						<div className="flex items-start gap-4">
+							<div className="flex-shrink-0 w-16 h-16 bg-red-600 rounded-full flex items-center justify-center">
+								<Book size={32} className="text-white" />
+							</div>
+							<div className="flex-1">
+								<h3 className="text-sm text-red-600 font-bold mb-1">从前书院教务处文件</h3>
+								<h2 className="text-xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
+									{getConfigsByType('notice')[0]?.title || '关于黄诗扶全国巡演的通知'}
+								</h2>
+								<div className="text-sm text-[color:var(--color-theme-text)]/80 leading-relaxed">
+									<ReactMarkdown remarkPlugins={[remarkGfm]}>
+										{getConfigsByType('notice')[0]?.content || '**公演吉期：** 2026 / 06 / 19-20 19:00\n\n**雅集地点：** 上海市 · 交通银行前滩31演艺中心\n\n*望各班学子奔走相告，共襄盛典。*'}
+									</ReactMarkdown>
+								</div>
+							</div>
+						</div>
+					</GlassCard>
+				</section>
+			)}
+
+			{/* 校史拾遗 */}
+			{getConfigsByType('school_history').length > 0 && (
+				<section>
+					<GlassCard className="w-full p-6">
+						<h2 className="text-2xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-4">
+							校史拾遗
+						</h2>
+						{getConfigsByType('school_history').map((config) => (
+							<div key={config.id} className="mb-4">
+								<h3 className="text-lg font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
+									{config.title}
+								</h3>
+								<div className="text-[color:var(--color-theme-text)]/80 leading-relaxed">
+									<ReactMarkdown remarkPlugins={[remarkGfm]}>
+										{config.content}
+									</ReactMarkdown>
+								</div>
+							</div>
+						))}
+					</GlassCard>
+				</section>
+			)}
+
+			{/* 荣誉校友 */}
+			{getConfigsByType('honor_alumni').length > 0 && (
+				<section>
+					<GlassCard className="w-full p-6">
+						<h2 className="text-2xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-4">
+							荣誉校友
+						</h2>
+						{getConfigsByType('honor_alumni').map((config) => (
+							<div key={config.id} className="mb-6 last:mb-0">
+								<ReactMarkdown remarkPlugins={[remarkGfm]}>
+									{`### ${config.title}\n\n${config.content}`}
+								</ReactMarkdown>
+							</div>
+						))}
+					</GlassCard>
+				</section>
+			)}
+
+			{/* 雅学之境 */}
+			{getConfigsByType('campus').length > 0 && (
+				<section>
+					<GlassCard className="w-full p-6">
+						<h2 className="text-2xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-4">
+							雅学之境
+						</h2>
+						{getConfigsByType('campus').map((config) => (
+							<div key={config.id} className="mb-6">
+								<h3 className="text-lg font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
+									{config.title}
+								</h3>
+								<div className="text-[color:var(--color-theme-text)]/80 leading-relaxed mb-4">
+									<ReactMarkdown remarkPlugins={[remarkGfm]}>
+										{config.content}
+									</ReactMarkdown>
+								</div>
+								<div className="bg-gray-100 rounded-xl h-48 flex items-center justify-center">
+									<span className="text-gray-400 italic">图片待上传</span>
+								</div>
+							</div>
+						))}
+					</GlassCard>
+				</section>
+			)}
+
+			{/* 学子留言壁 */}
+			{getConfigsByType('guestbook').length > 0 && (
+				<section>
+					<GlassCard className="w-full p-6">
+						<h2 className="text-2xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-4">
+							学子留言壁
+						</h2>
+						<p className="text-[color:var(--color-theme-muted)] mb-4">
+							{getConfigsByType('guestbook')[0]?.title || '缘起从前，一见如故'}
+						</p>
+						<div className="space-y-3">
+							<div className="p-4 bg-[color:var(--color-theme-accent)]/5 rounded-xl">
+								<ReactMarkdown remarkPlugins={[remarkGfm]}>
+									{getConfigsByType('guestbook')[0]?.content || '*暂无留言*'}
+								</ReactMarkdown>
+							</div>
+						</div>
+					</GlassCard>
+				</section>
+			)}
+
+			{/* 联系我们 */}
+			{getConfigsByType('contact').length > 0 && (
+				<section>
+					<GlassCard className="w-full p-6">
+						<h2 className="text-2xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
+							联系我们
+						</h2>
+						<div className="text-[color:var(--color-theme-text)]/80">
+							<ReactMarkdown remarkPlugins={[remarkGfm]}>
+								{getConfigsByType('contact')[0]?.content || '**从前书院招生办**\n\n若有心求学，望拨打专线联络。\n\n- 【统理招生】卿主任\n- 【传书青鸟】123456789'}
+							</ReactMarkdown>
+						</div>
+					</GlassCard>
+				</section>
+			)}
+
+			{/* 生贺节目大观 */}
+			{getConfigsByType('program').length > 0 && (
+				<section>
+					<GlassCard className="w-full p-6">
+						<h2 className="text-2xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
+							生贺节目大观
+						</h2>
+						<p className="text-sm text-[color:var(--color-theme-muted)] mb-6">
+							校园开放日：每年5月8日 · 节目档案陆续解锁中...
+						</p>
+						<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+							{[
+								{ type: 'music', label: '音乐', icon: Music },
+								{ type: 'video', label: '视频', icon: Play },
+								{ type: 'dance', label: '舞蹈', icon: Sparkles },
+								{ type: 'easter', label: '彩蛋', icon: Gift },
+							].map(({ type, label, icon: Icon }) => {
+								const program = getConfigsByType('program').find((p) => {
+									try {
+										return JSON.parse(p.content).category === type;
+									} catch {
+										return false;
+									}
+								});
+								return (
+									<div key={type} className="p-4 bg-gradient-to-br from-[color:var(--color-theme-accent)]/10 to-[color:var(--color-theme-accent)]/5 rounded-2xl text-center">
+										<Icon size={32} className="mx-auto mb-2 text-[color:var(--color-theme-accent)]" />
+										<h3 className="font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-1">{label}</h3>
+										{program ? (
+											<p className="text-sm text-[color:var(--color-theme-text)]/80">{program.title}</p>
+										) : (
+											<p className="text-sm text-gray-400 italic">敬请期待</p>
+										)}
+									</div>
+								);
+							})}
+						</div>
+					</GlassCard>
+				</section>
+			)}
 
 			<section className="bento-grid">
 				{academyLecturers.map((lecturer, index) => (
@@ -217,12 +449,8 @@ const AcademyHome = () => {
 						initial={{ opacity: 0, y: 20 }}
 						animate={{ opacity: 1, y: 0 }}
 						transition={{ delay: index * 0.1 }}
-						className="liquidGlass-wrapper bg-white"
 					>
-						<div className="liquidGlass-effect"></div>
-						<div className="liquidGlass-tint"></div>
-						<div className="liquidGlass-shine"></div>
-						<div className="liquidGlass-text w-full p-5">
+						<GlassCard className="w-full p-5">
 							<p className="text-xs uppercase tracking-[0.2em] text-[color:var(--color-theme-muted)] mb-2">
 								{lecturer.focus}
 							</p>
@@ -232,16 +460,13 @@ const AcademyHome = () => {
 							<p className="text-sm text-[color:var(--color-theme-text)]/90 leading-relaxed">
 								{lecturer.desc}
 							</p>
-						</div>
+						</GlassCard>
 					</motion.article>
 				))}
 			</section>
 
-			<section className="liquidGlass-wrapper bg-white">
-				<div className="liquidGlass-effect"></div>
-				<div className="liquidGlass-tint"></div>
-				<div className="liquidGlass-shine"></div>
-				<div className="liquidGlass-text w-full p-6">
+			<section>
+				<GlassCard className="w-full p-6">
 					<h2 className="text-xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-4">
 						书院文案映射
 					</h2>
@@ -269,7 +494,7 @@ const AcademyHome = () => {
 							</tbody>
 						</table>
 					</div>
-				</div>
+				</GlassCard>
 			</section>
 		</div>
 	);
@@ -348,16 +573,13 @@ const Home = () => {
 			{/* Bento Grid Layout */}
 			<section className="bento-grid mb-16">
 				{/* 百科全书 */}
-				<motion.div 
-					className="bento-item-large liquidGlass-wrapper bg-white"
+				<motion.div
+					className="bento-item-large"
 					initial={{ opacity: 0, y: 20 }}
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.5 }}
 				>
-					<div className="liquidGlass-effect"></div>
-					<div className="liquidGlass-tint"></div>
-					<div className="liquidGlass-shine"></div>
-					<div className="liquidGlass-text w-full p-6 sm:p-8">
+					<GlassCard className="w-full p-6 sm:p-8">
 						<div className="flex justify-between items-end mb-8">
 							<div>
 								<h2 className="text-4xl font-serif font-bold text-gray-900 mb-2">
@@ -398,41 +620,22 @@ const Home = () => {
 									desc: "演出、直播与线下活动时间线",
 									link: "/wiki?category=event",
 								},
-							].map((cat, i) => (
-								<Link
-									key={cat.title}
-									to={withThemeSearch(cat.link, theme)}
-									className="flex items-start gap-4 p-4 rounded-2xl hover:bg-gray-50 transition-all group"
-								>
-									<div className="text-brand-primary group-hover:scale-110 transition-transform">
-										{cat.icon}
-									</div>
-									<div>
-										<h3 className="text-xl font-serif font-bold mb-1">
-											{cat.title}
-										</h3>
-										<p className="text-gray-500 text-sm leading-relaxed">
-											{cat.desc}
-										</p>
-									</div>
-								</Link>
+							].map((cat) => (
+								<CategoryCard key={cat.title} cat={cat} theme={theme} />
 							))}
 						</div>
-					</div>
+					</GlassCard>
 				</motion.div>
 
 				{/* 热门帖子 */}
 				{feed?.hotPosts && feed.hotPosts.length > 0 && (
-					<motion.div 
-						className="bento-item-tall liquidGlass-wrapper bg-white"
+					<motion.div
+						className="bento-item-tall"
 						initial={{ opacity: 0, y: 20 }}
 						animate={{ opacity: 1, y: 0 }}
 						transition={{ duration: 0.5, delay: 0.1 }}
 					>
-						<div className="liquidGlass-effect"></div>
-						<div className="liquidGlass-tint"></div>
-						<div className="liquidGlass-shine"></div>
-						<div className="liquidGlass-text w-full p-6 sm:p-8 flex flex-col h-full">
+						<GlassCard className="w-full p-6 sm:p-8 flex flex-col h-full">
 							<div className="flex justify-between items-end mb-6">
 								<h2 className="text-2xl font-serif font-bold text-gray-900 flex items-center gap-2">
 									<Flame size={20} className="text-orange-500" /> 热门帖子
@@ -476,21 +679,18 @@ const Home = () => {
 									</Link>
 								))}
 							</div>
-						</div>
+						</GlassCard>
 					</motion.div>
 				)}
 
 				{/* 社区动态 */}
-				<motion.div 
-					className="bento-item-large liquidGlass-wrapper bg-white"
+				<motion.div
+					className="bento-item-large"
 					initial={{ opacity: 0, y: 20 }}
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.5, delay: 0.2 }}
 				>
-					<div className="liquidGlass-effect"></div>
-					<div className="liquidGlass-tint"></div>
-					<div className="liquidGlass-shine"></div>
-					<div className="liquidGlass-text w-full p-6 sm:p-8">
+					<GlassCard className="w-full p-6 sm:p-8">
 						<div className="flex justify-between items-end mb-6">
 							<h2 className="text-3xl font-serif font-bold text-gray-900">
 								社区动态
@@ -554,23 +754,20 @@ const Home = () => {
 								</div>
 							)}
 						</div>
-					</div>
+					</GlassCard>
 				</motion.div>
 
 				{/* 加入我们 */}
-				<motion.div 
-					className="bento-item-tall liquidGlass-wrapper bg-gradient-to-br from-brand-primary to-brand-primary/80"
+				<motion.div
+					className="bento-item-tall"
 					initial={{ opacity: 0, y: 20 }}
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.5, delay: 0.3 }}
 				>
-					<div className="liquidGlass-effect"></div>
-					<div className="liquidGlass-tint"></div>
-					<div className="liquidGlass-shine"></div>
-					<div className="liquidGlass-text w-full p-6 sm:p-8 text-gray-900 flex flex-col justify-between h-full">
-						<div>
-							<h2 className="text-3xl font-serif font-bold mb-6">加入我们</h2>
-							<p className="text-gray-800/70 font-serif italic leading-relaxed mb-8">
+					<GlassCard className="w-full p-6 sm:p-8 text-gray-900 bg-gradient-to-br from-brand-primary to-brand-primary/80">
+						<div className="mb-8">
+							<h2 className="text-3xl font-serif font-bold mb-4">加入我们</h2>
+							<p className="text-gray-800/70 font-serif italic leading-relaxed">
 								"诗扶小筑是一个由粉丝自发维护的社区。无论你是资深乐迷，还是刚被圈粉的新人，这里都有你的位置。"
 							</p>
 						</div>
@@ -589,12 +786,12 @@ const Home = () => {
 							/>
 							<Link
 								to={withThemeSearch("/forum", theme)}
-								className="mt-4 px-6 py-3 bg-white text-brand-primary rounded-full font-bold hover:bg-white/90 transition-all text-center"
+								className="mt-4 px-6 py-3 bg-white text-brand-primary rounded-full font-bold hover:bg-white/90 transition-all text-center block"
 							>
 								立即加入
 							</Link>
 						</div>
-					</div>
+					</GlassCard>
 				</motion.div>
 			</section>
 		</div>

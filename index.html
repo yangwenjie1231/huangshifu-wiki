@@ -7,10 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com https://mapplugin.amap.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net https://picsum.photos https://*.googleusercontent.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://o4.amap.com https://mapplugin.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com https://*.music.126.net https://fonts.googleapis.com https://fonts.gstatic.com https://analysis.chatglm.cn https://gator.volces.com; worker-src 'self' blob:; media-src 'self' https://music.163.com https://*.music.163.com https://*.music.126.net;"
-    />
+    <meta name="theme-color" content="#FFD700" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/icons/icon.svg" />
     <title>黄诗扶wiki</title>
@@ -28,6 +25,13 @@
   </head>
   <body>
     <div id="root"></div>
+    <footer id="static-footer" style="display:none; background:#faf9f7; border-top:1px solid #eee; padding:12px; text-align:center; font-size:12px; color:#999;">
+      <a href="https://img.lhl.one" target="_blank" rel="nofollow noopener noreferrer" style="color:#999; text-decoration:none; margin-right:16px;">Image Hub</a>
+      <a href="http://www.freecdn.vip/?zzwz" target="_blank" rel="nofollow noopener noreferrer" style="color:#999; text-decoration:none;">LHL's Images</a>
+    </footer>
+    <script>
+      document.getElementById('static-footer').style.display = 'block';
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

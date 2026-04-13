@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { useMusic } from '../context/MusicContext';
 import { useToast } from '../components/Toast';
 import { SongCoverManager } from '../components/SongCoverManager';
+import { SmartImage } from '../components/SmartImage';
 import { SongEditModal } from '../components/SongEditModal';
 import { LyricsDisplay } from '../components/LyricsDisplay';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
@@ -205,11 +206,10 @@ const MusicDetail = () => {
       <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
         <div className="flex flex-col md:flex-row gap-6 md:items-center md:justify-between">
           <div className="flex gap-5 min-w-0">
-            <img
+            <SmartImage
               src={song.cover}
               alt={song.title}
               className="w-24 h-24 rounded-2xl object-cover shadow"
-              referrerPolicy="no-referrer"
             />
             <div className="min-w-0">
               <h1 className="text-3xl font-serif font-bold text-gray-900 truncate">{song.title}</h1>

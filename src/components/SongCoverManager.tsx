@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Loader2, Trash2, Star, Upload, X } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -23,12 +23,12 @@ interface SongCoverManagerProps {
 }
 
 export const SongCoverManager = ({ songDocId, currentCover, onCoverUpdated }: SongCoverManagerProps) => {
-  const [covers, setCovers] = React.useState<CoverItem[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [uploading, setUploading] = React.useState(false);
-  const [settingDefault, setSettingDefault] = React.useState<string | null>(null);
-  const [deleting, setDeleting] = React.useState<string | null>(null);
-  const [isOpen, setIsOpen] = React.useState(false);
+  const [covers, setCovers] = useState<CoverItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [settingDefault, setSettingDefault] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
   const { show } = useToast();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 

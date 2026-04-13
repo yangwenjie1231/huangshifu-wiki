@@ -9,17 +9,25 @@ import {
   FileText,
   Settings,
   RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 import { apiGet, apiPatch, apiDelete, apiPost } from '../../lib/apiClient';
 import { useToast } from '../../components/Toast';
 import { formatDateTime } from '../../lib/dateUtils';
 import { clsx } from 'clsx';
+import { BlurhashImage } from '../../components/BlurhashImage';
+import { SmartImage } from '../../components/SmartImage';
+import { clearImagePreferenceCache } from '../../services/imageService';
 
 interface ImageMap {
   id: string;
   md5: string;
   localUrl: string;
   externalUrl?: string;
+  s3Url?: string;
+  storageType?: 'local' | 's3' | 'external';
+  blurhash?: string;
+  thumbhash?: string;
   createdAt: string;
 }
 
@@ -28,11 +36,12 @@ interface ImageStats {
   stats: {
     local: number;
     external: number;
+    s3: number;
   };
 }
 
 interface ImagePreference {
-  strategy: 'local' | 'external';
+  strategy: 'local' | 's3' | 'external';
   fallback: boolean;
 }
 
@@ -127,6 +136,25 @@ export const ImagesTab: React.FC = () => {
     }
   };
 
+  const handleRefreshBlurhash = async (id: string) => {
+    try {
+      const response = await apiPost<{ success: boolean; item: ImageMap }>(
+        `/api/image-maps/${id}/refresh-blurhash`,
+        {}
+      );
+
+      if (response.success) {
+        setImages((prev) =>
+          prev.map((img) => (img.id === id ? response.item : img))
+        );
+        show('Blurhash 生成成功', { variant: 'success' });
+      }
+    } catch (error) {
+      console.error('Refresh blurhash error:', error);
+      show('生成 Blurhash 失败', { variant: 'error' });
+    }
+  };
+
   const handleUpdate = async () => {
     if (!editingImage) return;
 
@@ -134,6 +162,8 @@ export const ImagesTab: React.FC = () => {
       const response = await apiPatch<{ item: ImageMap }>(`/api/image-maps/${editingImage.id}`, {
         localUrl: editingImage.localUrl || null,
         externalUrl: editingImage.externalUrl || null,
+        s3Url: editingImage.s3Url || null,
+        storageType: editingImage.storageType,
       });
 
       setImages((prev) =>
@@ -151,6 +181,7 @@ export const ImagesTab: React.FC = () => {
   const handlePreferenceUpdate = async () => {
     try {
       await apiPatch('/api/config/image-preference', preference);
+      clearImagePreferenceCache();
       setShowPreferenceModal(false);
       show('设置已保存', { variant: 'success' });
     } catch (error) {
@@ -162,9 +193,24 @@ export const ImagesTab: React.FC = () => {
   const getStrategyLabel = (strategy: string) => {
     const labels: Record<string, string> = {
       local: '本地服务器',
+      s3: 'S3 图床',
       external: '外部图床',
     };
     return labels[strategy] || strategy;
+  };
+
+  const getStorageTypeBadge = (type?: string) => {
+    const badges: Record<string, { bg: string; text: string; label: string }> = {
+      local: { bg: 'bg-green-100', text: 'text-green-700', label: '本地' },
+      s3: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'S3' },
+      external: { bg: 'bg-purple-100', text: 'text-purple-700', label: '外部' },
+    };
+    const badge = badges[type || 'local'];
+    return (
+      <span className={`px-2 py-0.5 ${badge.bg} ${badge.text} rounded text-xs font-medium`}>
+        {badge.label}
+      </span>
+    );
   };
 
   return (
@@ -193,7 +239,7 @@ export const ImagesTab: React.FC = () => {
       </div>
 
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl p-4 border border-green-200">
             <p className="text-sm text-green-600 font-medium mb-1">总数量</p>
             <p className="text-3xl font-bold text-green-700">{stats.total}</p>
@@ -201,6 +247,10 @@ export const ImagesTab: React.FC = () => {
           <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-4 border border-blue-200">
             <p className="text-sm text-blue-600 font-medium mb-1">本地图片</p>
             <p className="text-3xl font-bold text-blue-700">{stats.stats.local}</p>
+          </div>
+          <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-2xl p-4 border border-cyan-200">
+            <p className="text-sm text-cyan-600 font-medium mb-1">S3 图床</p>
+            <p className="text-3xl font-bold text-cyan-700">{stats.stats.s3}</p>
           </div>
           <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-4 border border-purple-200">
             <p className="text-sm text-purple-600 font-medium mb-1">外部图床</p>
@@ -250,54 +300,89 @@ export const ImagesTab: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            {images.map((image) => (
-              <div
-                key={image.id}
-                className="border border-gray-100 rounded-xl p-4 hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-mono">
-                        {image.id.slice(0, 8)}
-                      </span>
-                      <span className="text-xs text-gray-400 font-mono">{image.md5.slice(0, 12)}</span>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle size={14} className="text-green-500 flex-shrink-0" />
-                        <span className="text-sm text-gray-600 truncate">本地: {image.localUrl}</span>
+            {images.map((image) => {
+              const imageUrl = image.s3Url || image.externalUrl || image.localUrl;
+              return (
+                <div
+                  key={image.id}
+                  className="border border-gray-100 rounded-xl p-4 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex gap-4">
+                      <div className="w-20 h-20 flex-shrink-0">
+                        <SmartImage
+                          image={image}
+                          alt={image.id}
+                          className="w-full h-full rounded-lg"
+                        />
                       </div>
-                      {image.externalUrl && (
-                        <div className="flex items-center gap-2">
-                          <CheckCircle size={14} className="text-purple-500 flex-shrink-0" />
-                          <span className="text-sm text-gray-500 truncate">外部: {image.externalUrl}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-mono">
+                            {image.id.slice(0, 8)}
+                          </span>
+                          <span className="text-xs text-gray-400 font-mono">{image.md5.slice(0, 12)}</span>
+                          {getStorageTypeBadge(image.storageType)}
+                          {image.blurhash && (
+                            <span className="px-2 py-0.5 bg-pink-100 text-pink-700 rounded text-xs">
+                              Blurhash
+                            </span>
+                          )}
                         </div>
-                      )}
+                        <div className="space-y-1">
+                          {image.localUrl && (
+                            <div className="flex items-center gap-2">
+                              <CheckCircle size={14} className="text-green-500 flex-shrink-0" />
+                              <span className="text-sm text-gray-600 truncate">本地: {image.localUrl}</span>
+                            </div>
+                          )}
+                          {image.s3Url && (
+                            <div className="flex items-center gap-2">
+                              <CheckCircle size={14} className="text-cyan-500 flex-shrink-0" />
+                              <span className="text-sm text-gray-600 truncate">S3: {image.s3Url}</span>
+                            </div>
+                          )}
+                          {image.externalUrl && (
+                            <div className="flex items-center gap-2">
+                              <CheckCircle size={14} className="text-purple-500 flex-shrink-0" />
+                              <span className="text-sm text-gray-500 truncate">外部: {image.externalUrl}</span>
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-2">
+                          创建于: {formatDateTime(image.createdAt)}
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-xs text-gray-400 mt-2">
-                      创建于: {formatDateTime(image.createdAt)}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setEditingImage(image)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      title="编辑"
-                    >
-                      <Edit2 size={18} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(image.id)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="删除"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                    <div className="flex gap-2">
+                      {!image.blurhash && imageUrl && (
+                        <button
+                          onClick={() => handleRefreshBlurhash(image.id)}
+                          className="p-2 text-pink-600 hover:bg-pink-50 rounded-lg transition-colors"
+                          title="生成 Blurhash"
+                        >
+                          <Sparkles size={18} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setEditingImage(image)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="编辑"
+                      >
+                        <Edit2 size={18} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(image.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="删除"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -349,6 +434,22 @@ export const ImagesTab: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
+                  S3 URL
+                  {editingImage.s3Url && (
+                    <span className="ml-2 text-green-600 text-xs">✓ 已配置</span>
+                  )}
+                </label>
+                <input
+                  type="text"
+                  value={editingImage.s3Url || ''}
+                  onChange={(e) => setEditingImage({ ...editingImage, s3Url: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-xl text-sm"
+                  placeholder="https://cdn.yourdomain.com/..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   外部图床 URL
                   {editingImage.externalUrl && (
                     <span className="ml-2 text-green-600 text-xs">✓ 已配置</span>
@@ -361,6 +462,19 @@ export const ImagesTab: React.FC = () => {
                   className="w-full px-4 py-2 border border-gray-200 rounded-xl text-sm"
                   placeholder="https://..."
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">存储类型</label>
+                <select
+                  value={editingImage.storageType || 'local'}
+                  onChange={(e) => setEditingImage({ ...editingImage, storageType: e.target.value as any })}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-xl text-sm"
+                >
+                  <option value="local">本地服务器</option>
+                  <option value="s3">S3 图床</option>
+                  <option value="external">外部图床</option>
+                </select>
               </div>
 
               <div className="flex gap-3 pt-4">
@@ -496,7 +610,9 @@ const ImportModal: React.FC<ImportModalProps> = ({ onClose, onSuccess }) => {
             id: parts[0],
             md5: parts[1],
             localUrl: parts[2],
-            externalUrl: parts[3] || undefined,
+            s3Url: parts[3] || undefined,
+            externalUrl: parts[4] || undefined,
+            storageType: parts[5] as 'local' | 's3' | 'external' || undefined,
           };
         });
       }
@@ -571,8 +687,8 @@ const ImportModal: React.FC<ImportModalProps> = ({ onClose, onSuccess }) => {
             className="flex-1 w-full px-4 py-2 border border-gray-200 rounded-xl text-sm font-mono resize-none"
             placeholder={
               mode === 'upsert'
-                ? '[\n  { "md5": "abc123", "localUrl": "https://...", "externalUrl": "https://..." }\n]'
-                : '[\n  { "id": "xxx", "localUrl": "https://...", "externalUrl": "https://..." }\n]'
+                ? '[\n  { "md5": "abc123", "localUrl": "https://...", "s3Url": "https://...", "externalUrl": "https://...", "storageType": "s3" }\n]'
+                : '[\n  { "id": "xxx", "localUrl": "https://...", "s3Url": "https://...", "externalUrl": "https://...", "storageType": "local" }\n]'
             }
           />
         </div>

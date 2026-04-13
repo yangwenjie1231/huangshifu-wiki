@@ -23,7 +23,52 @@
       "gallery": "精美图集",
       "wiki": "百科知识",
       "events": "演出动态"
+    },
+    "recruit": {
+      "link": "前往招募与培养",
+      "description": "点击前往「招募与培养」"
     }
+  },
+  "birthday": {
+    "notice": {
+      "title": "通知公告",
+      "subtitle": "最新公告"
+    },
+    "schoolHistory": "校史拾遗",
+    "honorAlumni": "荣誉校友",
+    "campus": "校园环境",
+    "guestbook": "学子留言",
+    "contact": "联系我们",
+    "program": "生贺节目",
+    "programCategories": {
+      "music": "音乐",
+      "video": "视频",
+      "dance": "舞蹈",
+      "easter": "彩蛋"
+    },
+    "comingSoon": "敬请期待"
+  },
+  "recruit": {
+    "title": "招募与培养",
+    "subtitle": "加入我们，一起成长",
+    "overview": "我们正在招募志同道合的伙伴。",
+    "admissionRequirements": "加入要求",
+    "trainingRequirements": "培养计划",
+    "coreSubjects": "核心技能",
+    "comprehensiveAbility": "综合能力",
+    "employmentRate": "就业成功率",
+    "employmentNote": "我们提供完善的培训和职业发展路径。",
+    "fiveScenes": "五大部门",
+    "fiveScenesDesc": "多个方向，总有一款适合你。",
+    "backToHome": "返回首页",
+    "courses": {
+      "music": "音乐组",
+      "art": "美术组",
+      "literature": "文学组",
+      "crafts": "技艺组",
+      "dream": "特别项目组"
+    },
+    "lecturers": "导师"
   },
   "music": {
     "title": "音乐作品",

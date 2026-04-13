@@ -37,6 +37,7 @@ import {
 } from './src/server/music/metingService';
 import { registerRegionRoutes } from './src/server/location/routes';
 import { registerExifRoutes } from './src/server/location/exifRoutes';
+import { registerBirthdayRoutes } from './src/server/birthday/routes';
 import { initSensitiveWords, containsSensitive, isSensitiveWord } from './src/lib/sensitiveWordFilter';
 import {
   createUploadStorageInfo,
@@ -54,7 +55,8 @@ app.set('trust proxy', 1);
 
 const prisma = new PrismaClient();
 const prismaAny = prisma as any;
-const uploadsDir = path.join(__dirname, 'uploads');
+const defaultUploadsDir = path.join(__dirname, 'uploads');
+const uploadsDir = process.env.UPLOADS_PATH || defaultUploadsDir;
 fs.mkdirSync(uploadsDir, { recursive: true });
 const backupsDir = path.join(__dirname, 'backups');
 fs.mkdirSync(backupsDir, { recursive: true });
@@ -344,6 +346,14 @@ const searchImageUpload = multer({
 app.use(express.json({ limit: '8mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  next();
+});
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
   crossOriginOpenerPolicy: false,
@@ -2969,6 +2979,7 @@ app.use(authMiddleware);
 
 registerRegionRoutes(app);
 registerExifRoutes(app);
+registerBirthdayRoutes(app);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -3935,6 +3946,9 @@ app.post('/api/notifications/read-all', requireAuth, async (req: AuthenticatedRe
 });
 
 app.get('/api/wiki', async (req: AuthenticatedRequest, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   try {
     const category = typeof req.query.category === 'string' ? req.query.category : 'all';
     const tag = typeof req.query.tag === 'string' ? req.query.tag.trim() : '';
@@ -4000,6 +4014,9 @@ app.get('/api/wiki', async (req: AuthenticatedRequest, res) => {
 });
 
 app.get('/api/mp/wiki', async (req: AuthenticatedRequest, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   try {
     const category = typeof req.query.category === 'string' ? req.query.category : 'all';
     const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
@@ -4176,6 +4193,9 @@ app.get('/api/wiki/recommended', async (req: AuthenticatedRequest, res) => {
 });
 
 app.get('/api/wiki/:slug', async (req: AuthenticatedRequest, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   try {
     const page = await prisma.wikiPage.findUnique({
       where: { slug: req.params.slug },
@@ -11458,30 +11478,76 @@ app.get('/api/image-maps/:id', async (req, res) => {
 
 app.post('/api/image-maps', requireAuth, requireActiveUser, async (req, res) => {
   try {
-    const { id, md5, localUrl, externalUrl } = req.body as {
+    const { id, md5, localUrl, externalUrl, s3Url, storageType } = req.body as {
       id?: string;
       md5?: string;
       localUrl?: string;
       externalUrl?: string;
+      s3Url?: string;
+      storageType?: 'local' | 'external' | 's3';
     };
 
-    if (!id || !md5 || !localUrl) {
+    if (!id || !md5) {
       res.status(400).json({ error: '缺少必要字段' });
       return;
+    }
+
+    if (storageType === 's3' && !s3Url) {
+      res.status(400).json({ error: 'S3存储类型需要提供s3Url' });
+      return;
+    }
+
+    let blurhash: string | undefined;
+    let thumbhash: string | undefined;
+
+    const urlToGenerateHash = s3Url || externalUrl || localUrl;
+    if (urlToGenerateHash) {
+      try {
+        const { fetchBlurhashFromS3, fetchThumbhashFromS3, isBlurhashEnabled, shouldAutoGenerate } = await import('./src/server/blurhashService');
+
+        if (isBlurhashEnabled() && shouldAutoGenerate()) {
+          console.log('[ImageMap] Auto-generating blurhash for:', urlToGenerateHash);
+
+          const [blur, thumb] = await Promise.all([
+            fetchBlurhashFromS3(urlToGenerateHash),
+            fetchThumbhashFromS3(urlToGenerateHash),
+          ]);
+
+          if (blur) {
+            blurhash = blur;
+            console.log('[ImageMap] Blurhash generated:', blur.substring(0, 20) + '...');
+          }
+
+          if (thumb) {
+            thumbhash = thumb;
+            console.log('[ImageMap] Thumbhash generated:', thumb.substring(0, 20) + '...');
+          }
+        }
+      } catch (hashError) {
+        console.error('[ImageMap] Failed to generate blurhash:', hashError);
+      }
     }
 
     const item = await prisma.imageMap.upsert({
       where: { id },
       update: {
         md5,
-        localUrl,
+        ...(localUrl !== undefined && { localUrl: localUrl || null }),
         ...(externalUrl !== undefined && { externalUrl: externalUrl || null }),
+        ...(s3Url !== undefined && { s3Url: s3Url || null }),
+        ...(storageType !== undefined && { storageType }),
+        ...(blurhash !== undefined && { blurhash }),
+        ...(thumbhash !== undefined && { thumbhash }),
       },
       create: {
         id,
         md5,
-        localUrl,
+        ...(localUrl && { localUrl }),
         ...(externalUrl && { externalUrl }),
+        ...(s3Url && { s3Url }),
+        ...(storageType && { storageType }),
+        ...(blurhash && { blurhash }),
+        ...(thumbhash && { thumbhash }),
       },
     });
 
@@ -11499,16 +11565,29 @@ app.post('/api/image-maps', requireAuth, requireActiveUser, async (req, res) => 
 
 app.patch('/api/image-maps/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { localUrl, externalUrl } = req.body as {
+    const { localUrl, externalUrl, s3Url, storageType, blurhash, thumbhash } = req.body as {
       localUrl?: string | null;
       externalUrl?: string | null;
+      s3Url?: string | null;
+      storageType?: 'local' | 'external' | 's3';
+      blurhash?: string | null;
+      thumbhash?: string | null;
     };
+
+    if (storageType === 's3' && !s3Url) {
+      res.status(400).json({ error: 'S3存储类型需要提供s3Url' });
+      return;
+    }
 
     const item = await prisma.imageMap.update({
       where: { id: req.params.id },
       data: {
         ...(localUrl !== undefined && { localUrl: localUrl || null }),
         ...(externalUrl !== undefined && { externalUrl: externalUrl || null }),
+        ...(s3Url !== undefined && { s3Url: s3Url || null }),
+        ...(storageType !== undefined && { storageType }),
+        ...(blurhash !== undefined && { blurhash: blurhash || null }),
+        ...(thumbhash !== undefined && { thumbhash: thumbhash || null }),
       },
     });
 
@@ -11544,15 +11623,17 @@ app.get('/api/image-maps/export', requireAuth, requireAdmin, async (req, res) =>
     });
 
     if (format === 'csv') {
-      const headers = ['id', 'md5', 'localUrl', 'externalUrl', 'createdAt'];
+      const headers = ['id', 'md5', 'localUrl', 'externalUrl', 's3Url', 'storageType', 'createdAt'];
       const csvRows = [headers.join(',')];
       
       for (const item of items) {
         const row = [
           item.id,
           item.md5,
-          `"${item.localUrl}"`,
+          `"${item.localUrl || ''}"`,
           `"${item.externalUrl || ''}"`,
+          `"${item.s3Url || ''}"`,
+          `"${item.storageType || ''}"`,
           item.createdAt.toISOString(),
         ];
         csvRows.push(row.join(','));
@@ -11583,6 +11664,8 @@ app.post('/api/image-maps/import', requireAuth, requireAdmin, async (req, res) =
         md5?: string;
         localUrl?: string;
         externalUrl?: string;
+        s3Url?: string;
+        storageType?: 'local' | 'external' | 's3';
       }>;
       mode: 'update' | 'create' | 'upsert';
     };
@@ -11600,6 +11683,12 @@ app.post('/api/image-maps/import', requireAuth, requireAdmin, async (req, res) =
 
     for (const item of items) {
       try {
+        if (item.storageType === 's3' && !item.s3Url) {
+          results.failed++;
+          results.errors.push(`S3存储类型需要提供s3Url: ${JSON.stringify(item)}`);
+          continue;
+        }
+
         if (mode === 'upsert' && item.md5) {
           const existing = await prisma.imageMap.findUnique({
             where: { md5: item.md5 },
@@ -11609,17 +11698,21 @@ app.post('/api/image-maps/import', requireAuth, requireAdmin, async (req, res) =
             await prisma.imageMap.update({
               where: { id: existing.id },
               data: {
-                ...(item.localUrl && { localUrl: item.localUrl }),
-                ...(item.externalUrl && { externalUrl: item.externalUrl }),
+                ...(item.localUrl !== undefined && { localUrl: item.localUrl || null }),
+                ...(item.externalUrl !== undefined && { externalUrl: item.externalUrl || null }),
+                ...(item.s3Url !== undefined && { s3Url: item.s3Url || null }),
+                ...(item.storageType !== undefined && { storageType: item.storageType }),
               },
             });
-          } else if (item.id && item.localUrl) {
+          } else if (item.id) {
             await prisma.imageMap.create({
               data: {
                 id: item.id,
                 md5: item.md5 || crypto.randomUUID(),
-                localUrl: item.localUrl,
+                ...(item.localUrl && { localUrl: item.localUrl }),
                 ...(item.externalUrl && { externalUrl: item.externalUrl }),
+                ...(item.s3Url && { s3Url: item.s3Url }),
+                ...(item.storageType && { storageType: item.storageType }),
               },
             });
           }
@@ -11630,16 +11723,20 @@ app.post('/api/image-maps/import', requireAuth, requireAdmin, async (req, res) =
             data: {
               ...(item.localUrl !== undefined && { localUrl: item.localUrl || null }),
               ...(item.externalUrl !== undefined && { externalUrl: item.externalUrl || null }),
+              ...(item.s3Url !== undefined && { s3Url: item.s3Url || null }),
+              ...(item.storageType !== undefined && { storageType: item.storageType }),
             },
           });
           results.success++;
-        } else if (mode === 'create' && item.id && item.md5 && item.localUrl) {
+        } else if (mode === 'create' && item.id && item.md5) {
           await prisma.imageMap.create({
             data: {
               id: item.id,
               md5: item.md5,
-              localUrl: item.localUrl,
+              ...(item.localUrl && { localUrl: item.localUrl }),
               ...(item.externalUrl && { externalUrl: item.externalUrl }),
+              ...(item.s3Url && { s3Url: item.s3Url }),
+              ...(item.storageType && { storageType: item.storageType }),
             },
           });
           results.success++;
@@ -11660,18 +11757,151 @@ app.post('/api/image-maps/import', requireAuth, requireAdmin, async (req, res) =
   }
 });
 
+app.post('/api/image-maps/:id/refresh-blurhash', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const imageMap = await prisma.imageMap.findUnique({
+      where: { id },
+    });
+
+    if (!imageMap) {
+      res.status(404).json({ error: '图片映射不存在' });
+      return;
+    }
+
+    const urlToGenerateHash = imageMap.s3Url || imageMap.externalUrl || imageMap.localUrl;
+
+    if (!urlToGenerateHash) {
+      res.status(400).json({ error: '没有可用的图片URL' });
+      return;
+    }
+
+    try {
+      const { fetchBlurhashFromS3, fetchThumbhashFromS3 } = await import('./src/server/blurhashService');
+
+      console.log('[Refresh Blurhash] Refreshing hashes for:', urlToGenerateHash);
+
+      const [blurhash, thumbhash] = await Promise.all([
+        fetchBlurhashFromS3(urlToGenerateHash),
+        fetchThumbhashFromS3(urlToGenerateHash),
+      ]);
+
+      const updatedItem = await prisma.imageMap.update({
+        where: { id },
+        data: {
+          ...(blurhash && { blurhash }),
+          ...(thumbhash && { thumbhash }),
+        },
+      });
+
+      res.json({
+        success: true,
+        item: {
+          ...updatedItem,
+          createdAt: updatedItem.createdAt.toISOString(),
+        },
+      });
+    } catch (hashError) {
+      console.error('[Refresh Blurhash] Failed to generate blurhash:', hashError);
+      res.status(500).json({ error: '生成blurhash失败' });
+    }
+  } catch (error) {
+    console.error('Refresh blurhash error:', error);
+    res.status(500).json({ error: '刷新blurhash失败' });
+  }
+});
+
+app.post('/api/image-maps/refresh-all-blurhash', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { limit = '100' } = req.query as { limit?: string };
+
+    const limitNum = parseInt(limit, 10) || 100;
+
+    const imageMaps = await prisma.imageMap.findMany({
+      where: {
+        OR: [
+          { blurhash: null },
+          { thumbhash: null },
+        ],
+      },
+      take: limitNum,
+    });
+
+    if (imageMaps.length === 0) {
+      res.json({
+        success: true,
+        message: '没有需要刷新blurhash的图片',
+        processed: 0,
+      });
+      return;
+    }
+
+    try {
+      const { fetchBlurhashFromS3, fetchThumbhashFromS3 } = await import('./src/server/blurhashService');
+
+      let processed = 0;
+      let failed = 0;
+
+      for (const imageMap of imageMaps) {
+        const urlToGenerateHash = imageMap.s3Url || imageMap.externalUrl || imageMap.localUrl;
+
+        if (!urlToGenerateHash) {
+          continue;
+        }
+
+        try {
+          const [blurhash, thumbhash] = await Promise.all([
+            fetchBlurhashFromS3(urlToGenerateHash),
+            fetchThumbhashFromS3(urlToGenerateHash),
+          ]);
+
+          await prisma.imageMap.update({
+            where: { id: imageMap.id },
+            data: {
+              ...(blurhash && { blurhash }),
+              ...(thumbhash && { thumbhash }),
+            },
+          });
+
+          processed++;
+          console.log(`[Refresh All Blurhash] Processed ${processed}/${imageMaps.length}:`, imageMap.id);
+        } catch (err) {
+          failed++;
+          console.error(`[Refresh All Blurhash] Failed for ${imageMap.id}:`, err);
+        }
+      }
+
+      res.json({
+        success: true,
+        processed,
+        failed,
+        total: imageMaps.length,
+      });
+    } catch (hashError) {
+      console.error('[Refresh All Blurhash] Failed to generate blurhash:', hashError);
+      res.status(500).json({ error: '批量生成blurhash失败' });
+    }
+  } catch (error) {
+    console.error('Refresh all blurhash error:', error);
+    res.status(500).json({ error: '刷新blurhash失败' });
+  }
+});
+
 app.get('/api/image-maps/stats', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const [total, withExternal] = await Promise.all([
+    const [total, withExternal, withS3] = await Promise.all([
       prisma.imageMap.count(),
       prisma.imageMap.count({ where: { externalUrl: { not: null } } }),
+      prisma.imageMap.count({ where: { storageType: 's3' } }),
     ]);
 
     res.json({
       total,
       stats: {
-        local: total,
+        local: total - withExternal - withS3,
         external: withExternal,
+        s3: withS3,
       },
     });
   } catch (error) {
@@ -11687,7 +11917,7 @@ app.get('/api/config/image-preference', async (_req, res) => {
     });
 
     const preference = config?.value as {
-      strategy?: 'local' | 'external';
+      strategy?: 'local' | 's3' | 'external';
       fallback?: boolean;
     } || { strategy: 'local', fallback: true };
 
@@ -11701,7 +11931,7 @@ app.get('/api/config/image-preference', async (_req, res) => {
 app.patch('/api/config/image-preference', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { strategy, fallback } = req.body as {
-      strategy?: 'local' | 'external';
+      strategy?: 'local' | 's3' | 'external';
       fallback?: boolean;
     };
 
@@ -11720,6 +11950,91 @@ app.patch('/api/config/image-preference', requireAuth, requireAdmin, async (req,
   } catch (error) {
     console.error('Update image preference error:', error);
     res.status(500).json({ error: '更新图片偏好设置失败' });
+  }
+});
+
+import {
+  getPresignedUploadUrl,
+  getPresignedDownloadUrl,
+  getPresignedDeleteUrl,
+  getPublicConfig,
+  validateS3Config,
+} from './src/server/s3/s3Service';
+
+app.get('/api/s3/config', async (_req, res) => {
+  try {
+    const config = getPublicConfig();
+    res.json(config);
+  } catch (error) {
+    console.error('[S3] 获取配置失败:', error);
+    res.status(500).json({ error: '获取 S3 配置失败' });
+  }
+});
+
+app.get('/api/s3/presign-upload', requireAuth, requireActiveUser, async (req, res) => {
+  try {
+    const { filename, contentType, key, contentMd5, fileSize } = req.query as {
+      filename?: string;
+      contentType?: string;
+      key?: string;
+      contentMd5?: string;
+      fileSize?: string;
+    };
+
+    if (!filename) {
+      res.status(400).json({ error: '缺少 filename 参数' });
+      return;
+    }
+
+    const objectKey = key || filename;
+
+    const result = await getPresignedUploadUrl(objectKey, undefined, {
+      contentType: contentType || 'application/octet-stream',
+      contentMd5,
+      fileSize: fileSize ? parseInt(fileSize) : undefined,
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('[S3] 生成上传签名失败:', error);
+    const message = error instanceof Error ? error.message : '生成上传签名失败';
+    res.status(500).json({ error: message });
+  }
+});
+
+app.get('/api/s3/presign-download/:key(*)', requireAuth, async (req, res) => {
+  try {
+    const { key } = req.params;
+
+    if (!key) {
+      res.status(400).json({ error: '缺少 key 参数' });
+      return;
+    }
+
+    const url = await getPresignedDownloadUrl(key);
+    res.json({ downloadUrl: url });
+  } catch (error) {
+    console.error('[S3] 生成下载签名失败:', error);
+    const message = error instanceof Error ? error.message : '生成下载签名失败';
+    res.status(500).json({ error: message });
+  }
+});
+
+app.get('/api/s3/presign-delete/:key(*)', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { key } = req.params;
+
+    if (!key) {
+      res.status(400).json({ error: '缺少 key 参数' });
+      return;
+    }
+
+    const url = await getPresignedDeleteUrl(key);
+    res.json({ deleteUrl: url });
+  } catch (error) {
+    console.error('[S3] 生成删除签名失败:', error);
+    const message = error instanceof Error ? error.message : '生成删除签名失败';
+    res.status(500).json({ error: message });
   }
 });
 
@@ -13181,6 +13496,20 @@ app.get('/api/admin/:tab', requireAdmin, async (req, res) => {
       return;
     }
 
+    if (tab === 'images') {
+      const data = await prisma.imageMap.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      });
+      res.json({
+        data: data.map((item) => ({
+          ...item,
+          createdAt: item.createdAt.toISOString(),
+        })),
+      });
+      return;
+    }
+
     res.status(400).json({ error: '未知数据类型' });
   } catch (error) {
     console.error('Fetch admin data error:', error);
@@ -13493,7 +13822,7 @@ async function startServer() {
   app.use((_req, res, next) => {
     res.setHeader(
       'Content-Security-Policy',
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com https://mapplugin.amap.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://o4.amap.com https://mapplugin.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com https://*.music.126.net https://fonts.googleapis.com https://fonts.gstatic.com; worker-src 'self' blob:; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net https://picsum.photos https://*.googleusercontent.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; media-src 'self' https://music.163.com https://*.music.163.com https://*.music.126.net;"
+      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com https://mapplugin.amap.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; font-src 'self' data: https://fonts.gstatic.com https://fonts.googleapis.com; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net https://picsum.photos https://*.googleusercontent.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://o4.amap.com https://mapplugin.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com https://*.music.126.net https://fonts.googleapis.com https://fonts.gstatic.com https://analysis.chatglm.cn https://gator.volces.com https://picsum.photos; worker-src 'self' blob:; media-src 'self' https://music.163.com https://*.music.163.com https://*.music.126.net;"
     );
     next();
   });
@@ -13511,14 +13840,6 @@ async function startServer() {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
-
-  app.use((_req, res, next) => {
-    res.setHeader(
-      'Content-Security-Policy',
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com https://mapplugin.amap.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://o4.amap.com https://mapplugin.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com https://*.music.126.net https://fonts.googleapis.com https://fonts.gstatic.com; worker-src 'self' blob:; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net https://picsum.photos https://*.googleusercontent.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; media-src 'self' https://music.163.com https://*.music.163.com https://*.music.126.net;"
-    );
-    next();
-  });
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://localhost:${PORT}`);
