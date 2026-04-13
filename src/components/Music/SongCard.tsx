@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Play, Heart, ExternalLink, ChevronRight, MessageSquare, Link2, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useI18n } from '../../lib/i18n';
+import { SmartImage } from '../SmartImage';
 import type { SongItem } from '../../types/entities';
 import type { ViewMode } from '../../types/userPreferences';
 
@@ -76,7 +77,7 @@ const SongCard = React.memo(function SongCard({
 			{viewMode === 'list' ? (
 				<>
 					<div className="relative w-14 h-14 md:w-16 md:h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
-						<img src={song.cover} alt={song.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+						<SmartImage src={song.cover} alt={song.title} className="w-full h-full object-cover" />
 						<button
 							onClick={() => onPlay(song)}
 							className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
@@ -131,7 +132,7 @@ const SongCard = React.memo(function SongCard({
 			) : (
 				<>
 					<div className="relative aspect-square rounded-xl md:rounded-2xl overflow-hidden bg-gray-100">
-						<img src={song.cover} alt={song.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+						<SmartImage src={song.cover} alt={song.title} className="w-full h-full object-cover" />
 						<div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent opacity-90" />
 						<div className="absolute left-2.5 right-2.5 bottom-2.5 md:left-3 md:right-3 md:bottom-3 flex items-center justify-between gap-2">
 							<button

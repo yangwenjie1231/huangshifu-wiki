@@ -37,6 +37,7 @@ import {
 } from './src/server/music/metingService';
 import { registerRegionRoutes } from './src/server/location/routes';
 import { registerExifRoutes } from './src/server/location/exifRoutes';
+import { registerBirthdayRoutes } from './src/server/birthday/routes';
 import { initSensitiveWords, containsSensitive, isSensitiveWord } from './src/lib/sensitiveWordFilter';
 import {
   createUploadStorageInfo,
@@ -2970,6 +2971,7 @@ app.use(authMiddleware);
 
 registerRegionRoutes(app);
 registerExifRoutes(app);
+registerBirthdayRoutes(app);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });

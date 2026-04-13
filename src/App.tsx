@@ -29,6 +29,7 @@ import Forum from "./pages/Forum";
 import Music from "./pages/Music";
 import Gallery from "./pages/Gallery";
 import Profile from "./pages/Profile";
+import Recruit from "./pages/Recruit";
 
 const GalleryDetail = lazy(() => import("./pages/GalleryDetail"));
 const AlbumDetail = lazy(() => import("./pages/AlbumDetail"));
@@ -99,6 +100,7 @@ const MainLayout = () => {
 			>
 				<Routes>
 					<Route path="/" element={<Home />} />
+					<Route path="/recruit" element={<Recruit />} />
 					<Route path="/wiki/*" element={<Wiki />} />
 					<Route path="/forum/*" element={<Forum />} />
 					<Route path="/gallery" element={<Gallery />} />

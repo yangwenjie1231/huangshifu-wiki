@@ -23,6 +23,67 @@
       "gallery": "美术学院 · 日常起居",
       "wiki": "国学院 · 读书的楼",
       "events": "体育学院 · 练武的走廊"
+    },
+    "recruit": {
+      "link": "前往招募与培养",
+      "description": "上拉页面可前往「招募与培养」"
+    }
+  },
+  "birthday": {
+    "notice": {
+      "title": "教务处文件",
+      "subtitle": "从前书院教务处文件"
+    },
+    "schoolHistory": "校史拾遗",
+    "honorAlumni": "荣誉校友",
+    "campus": "雅学之境",
+    "guestbook": "学子留言壁",
+    "contact": "联系我们",
+    "program": "生贺节目大观",
+    "programCategories": {
+      "music": "音乐",
+      "video": "视频",
+      "dance": "舞蹈",
+      "easter": "彩蛋"
+    },
+    "comingSoon": "敬请期待"
+  },
+  "recruit": {
+    "title": "招募与培养",
+    "subtitle": "五处幻境，五堂必修。以梦为马，不负韶华。",
+    "overview": "从前书院常年招收志同道合之学子，共研古风艺术之大美。",
+    "admissionRequirements": "招生要求",
+    "trainingRequirements": "培养要求",
+    "coreSubjects": "核心科目",
+    "comprehensiveAbility": "综合能力",
+    "employmentRate": "毕业生就业率",
+    "employmentNote": "（黄诗扶及其听众的专属数据）毕业后均获得在精神世界里自留一片净土的能力。",
+    "fiveScenes": "书院五景 · 限定课程",
+    "fiveScenesDesc": "五处幻境，五堂必修。特邀名师入梦传道。",
+    "backToHome": "返回书院大堂",
+    "courses": {
+      "music": "天韵阁",
+      "art": "丹青院",
+      "literature": "文枢阁",
+      "crafts": "掠影廊",
+      "dream": "藏经阁"
+    },
+    "lecturers": "特邀导师"
+  },
+  "admin": {
+    "title": "院长办公室",
+    "users": "学子管理",
+    "content": "院务管理",
+    "birthdayConfig": "生贺配置",
+    "configTypes": {
+      "all": "全部",
+      "notice": "通知",
+      "school_history": "校史",
+      "honor_alumni": "校友",
+      "campus": "校园",
+      "guestbook": "留言壁",
+      "contact": "联系",
+      "program": "节目"
     }
   },
   "music": {

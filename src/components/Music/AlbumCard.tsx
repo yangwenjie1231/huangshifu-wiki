@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { List, ChevronRight, Link2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useI18n } from '../../lib/i18n';
+import { SmartImage } from '../SmartImage';
 import type { AlbumItem } from '../../types/entities';
 import type { ViewMode } from '../../types/userPreferences';
 
@@ -30,7 +31,7 @@ const AlbumCard = React.memo(function AlbumCard({
 			{viewMode === 'list' ? (
 				<>
 					<div className="relative w-16 h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
-						<img src={album.cover} alt={album.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+						<SmartImage src={album.cover} alt={album.title} className="w-full h-full object-cover" />
 					</div>
 					<div className="flex-1 min-w-0 flex items-center">
 						<div className="flex-1 min-w-0">
@@ -53,7 +54,7 @@ const AlbumCard = React.memo(function AlbumCard({
 			) : (
 				<>
 					<Link to={`/album/${albumId}`} className="block relative aspect-square rounded-2xl overflow-hidden bg-gray-100">
-						<img src={album.cover} alt={album.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+						<SmartImage src={album.cover} alt={album.title} className="w-full h-full object-cover" />
 						<div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent opacity-80" />
 						<div className="absolute left-3 bottom-3 inline-flex items-center gap-1 text-xs text-white bg-black/60 rounded-full px-3 py-1.5">
 							<List size={13} /> {trackCount} {t('music.unit.song')}

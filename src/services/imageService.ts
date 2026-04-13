@@ -18,6 +18,17 @@ export interface ImagePreference {
   fallback: boolean;
 }
 
+export interface ImageUrlResult {
+  url: string;
+  storageType: 'local' | 's3' | 'external';
+  blurhash?: string;
+  md5: string;
+}
+
+export interface ResolveImageUrlOptions {
+  forceType?: 'local' | 's3' | 'external';
+}
+
 let cachedPreference: ImagePreference | null = null;
 
 export const getImagePreference = async (): Promise<ImagePreference> => {
@@ -71,6 +82,85 @@ const getUrlByPreference = (map: ImageMap, preference: ImagePreference): string 
     return fallbackUrls[0];
   }
 
+  return null;
+};
+
+export const resolveImageUrl = (
+  map: ImageMap,
+  preference: ImagePreference,
+  options: ResolveImageUrlOptions = {},
+): ImageUrlResult => {
+  const { forceType } = options;
+  const strategy = forceType || preference.strategy;
+  const { fallback } = preference;
+
+  const getPrimaryUrl = (): { url: string | null; type: 'local' | 's3' | 'external' } => {
+    switch (strategy) {
+      case 'external':
+        return { url: map.externalUrl || null, type: 'external' };
+      case 's3':
+        return { url: map.s3Url || null, type: 's3' };
+      case 'local':
+      default:
+        return { url: map.localUrl || null, type: 'local' };
+    }
+  };
+
+  const primary = getPrimaryUrl();
+  if (primary.url) {
+    return {
+      url: primary.url,
+      storageType: primary.type,
+      blurhash: map.blurhash,
+      md5: map.md5,
+    };
+  }
+
+  if (!fallback) {
+    return {
+      url: '',
+      storageType: 'local',
+      blurhash: map.blurhash,
+      md5: map.md5,
+    };
+  }
+
+  const fallbackUrls = [
+    { url: map.s3Url || '', type: 's3' as const },
+    { url: map.externalUrl || '', type: 'external' as const },
+    { url: map.localUrl || '', type: 'local' as const },
+  ].filter((item) => item.url && item.url !== primary.url);
+
+  if (fallbackUrls.length > 0) {
+    const first = fallbackUrls[0];
+    return {
+      url: first.url,
+      storageType: first.type,
+      blurhash: map.blurhash,
+      md5: map.md5,
+    };
+  }
+
+  return {
+    url: '',
+    storageType: map.storageType || 'local',
+    blurhash: map.blurhash,
+    md5: map.md5,
+  };
+};
+
+export const getImageUrlWithMeta = async (
+  imageId: string,
+  options: ResolveImageUrlOptions = {},
+): Promise<ImageUrlResult | null> => {
+  try {
+    const response = await apiGet<{ item: ImageMap }>(`/api/image-maps/${imageId}`);
+    const data = response.item;
+    const preference = await getImagePreference();
+    return resolveImageUrl(data, preference, options);
+  } catch (e) {
+    console.error('Error fetching image URL with meta:', e);
+  }
   return null;
 };
 
