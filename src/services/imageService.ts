@@ -191,22 +191,34 @@ export const uploadImageToCDNs = async (file: File): Promise<string> => {
     return existingItems[0].id;
   }
 
-  const localUrl = URL.createObjectURL(file);
+  // Upload file to server first
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const uploadResponse = await fetch('/api/uploads', {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+
+  if (!uploadResponse.ok) {
+    throw new Error('Failed to upload file to server');
+  }
+
+  const uploadData = await uploadResponse.json();
+  const localUrl = uploadData?.file?.url;
+
+  if (!localUrl) {
+    throw new Error('Failed to get upload URL');
+  }
+
   const imageId = Math.random().toString(36).substring(7);
 
-  const imageMap: ImageMap = {
+  await apiPost('/api/image-maps', {
     id: imageId,
     md5,
     localUrl,
     storageType: 'local',
-    createdAt: new Date().toISOString(),
-  };
-
-  await apiPost('/api/image-maps', {
-    id: imageMap.id,
-    md5: imageMap.md5,
-    localUrl: imageMap.localUrl,
-    storageType: imageMap.storageType,
   });
 
   return imageId;
@@ -279,12 +291,26 @@ export const uploadToS3 = async (file: File): Promise<{ id: string; s3Url: strin
     };
   }
 
-  const localUrl = URL.createObjectURL(file);
+  // Also upload to local server for backup
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const uploadResponse = await fetch('/api/uploads', {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+
+  let localUrl: string | undefined;
+  if (uploadResponse.ok) {
+    const uploadData = await uploadResponse.json();
+    localUrl = uploadData?.file?.url;
+  }
 
   await apiPost('/api/image-maps', {
     id: imageId,
     md5,
-    localUrl,
+    ...(localUrl && { localUrl }),
     s3Url,
     storageType: 's3',
   });

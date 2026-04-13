@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { HomeSkeleton } from "../components/HomeSkeleton";
 import GlassCard from "../components/GlassCard";
 import {
@@ -284,21 +286,10 @@ const AcademyHome = () => {
 								<h2 className="text-xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
 									{getConfigsByType('notice')[0]?.title || '关于黄诗扶全国巡演的通知'}
 								</h2>
-								<div className="text-sm text-[color:var(--color-theme-text)]/80 leading-relaxed whitespace-pre-wrap">
-									{(() => {
-										try {
-											const content = JSON.parse(getConfigsByType('notice')[0]?.content || '{}');
-											return (
-												<>
-													<p><strong>公演吉期：</strong>{content.concertDate || '2026 / 06 / 19-20 19:00'}</p>
-													<p><strong>雅集地点：</strong>{content.concertLocation || '上海市 · 交通银行前滩31演艺中心'}</p>
-													<p className="mt-3 italic">{content.callToAction || '望各班学子奔走相告，共襄盛典。'}</p>
-												</>
-											);
-										} catch {
-											return <p>{getConfigsByType('notice')[0]?.content}</p>;
-										}
-									})()}
+								<div className="text-sm text-[color:var(--color-theme-text)]/80 leading-relaxed">
+									<ReactMarkdown remarkPlugins={[remarkGfm]}>
+										{getConfigsByType('notice')[0]?.content || '**公演吉期：** 2026 / 06 / 19-20 19:00\n\n**雅集地点：** 上海市 · 交通银行前滩31演艺中心\n\n*望各班学子奔走相告，共襄盛典。*'}
+									</ReactMarkdown>
 								</div>
 							</div>
 						</div>
@@ -318,9 +309,11 @@ const AcademyHome = () => {
 								<h3 className="text-lg font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
 									{config.title}
 								</h3>
-								<p className="text-[color:var(--color-theme-text)]/80 leading-relaxed whitespace-pre-wrap">
-									{config.content}
-								</p>
+								<div className="text-[color:var(--color-theme-text)]/80 leading-relaxed">
+									<ReactMarkdown remarkPlugins={[remarkGfm]}>
+										{config.content}
+									</ReactMarkdown>
+								</div>
 							</div>
 						))}
 					</GlassCard>
@@ -334,41 +327,13 @@ const AcademyHome = () => {
 						<h2 className="text-2xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-4">
 							荣誉校友
 						</h2>
-						{getConfigsByType('honor_alumni').map((config) => {
-							let content = { titles: [], representativeWorks: [], description: '' };
-							try {
-								content = JSON.parse(config.content);
-							} catch {
-								content.description = config.content;
-							}
-							return (
-								<div key={config.id} className="flex items-start gap-6">
-									<div className="flex-shrink-0 w-24 h-24 bg-gradient-to-br from-amber-100 to-orange-100 rounded-2xl flex items-center justify-center">
-										<Music size={48} className="text-amber-600" />
-									</div>
-									<div className="flex-1">
-										<h3 className="text-xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
-											{config.title}
-										</h3>
-										<div className="flex flex-wrap gap-2 mb-3">
-											{(content.titles || []).map((title, i) => (
-												<span key={i} className="px-3 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full">
-													{title}
-												</span>
-											))}
-										</div>
-										<p className="text-sm text-[color:var(--color-theme-text)]/70 mb-2">
-											<strong>代表作：</strong>{Array.isArray(content.representativeWorks) ? content.representativeWorks.join('、') : content.representativeWorks}
-										</p>
-										{content.description && (
-											<p className="text-sm text-[color:var(--color-theme-text)]/80 leading-relaxed">
-												{content.description}
-											</p>
-										)}
-									</div>
-								</div>
-							);
-						})}
+						{getConfigsByType('honor_alumni').map((config) => (
+							<div key={config.id} className="mb-6 last:mb-0">
+								<ReactMarkdown remarkPlugins={[remarkGfm]}>
+									{`### ${config.title}\n\n${config.content}`}
+								</ReactMarkdown>
+							</div>
+						))}
 					</GlassCard>
 				</section>
 			)}
@@ -381,13 +346,15 @@ const AcademyHome = () => {
 							雅学之境
 						</h2>
 						{getConfigsByType('campus').map((config) => (
-							<div key={config.id}>
+							<div key={config.id} className="mb-6">
 								<h3 className="text-lg font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
 									{config.title}
 								</h3>
-								<p className="text-[color:var(--color-theme-text)]/80 leading-relaxed mb-4">
-									{config.content}
-								</p>
+								<div className="text-[color:var(--color-theme-text)]/80 leading-relaxed mb-4">
+									<ReactMarkdown remarkPlugins={[remarkGfm]}>
+										{config.content}
+									</ReactMarkdown>
+								</div>
 								<div className="bg-gray-100 rounded-xl h-48 flex items-center justify-center">
 									<span className="text-gray-400 italic">图片待上传</span>
 								</div>
@@ -408,22 +375,11 @@ const AcademyHome = () => {
 							{getConfigsByType('guestbook')[0]?.title || '缘起从前，一见如故'}
 						</p>
 						<div className="space-y-3">
-							{(() => {
-								let messages = [];
-								try {
-									messages = JSON.parse(getConfigsByType('guestbook')[0]?.content || '[]');
-								} catch {
-									messages = [{ nickname: '匿名', content: getConfigsByType('guestbook')[0]?.content }];
-								}
-								return messages.map((msg, i) => (
-									<div key={i} className="p-4 bg-[color:var(--color-theme-accent)]/5 rounded-xl">
-										<div className="flex items-center gap-2 mb-2">
-											<span className="font-bold text-[color:var(--color-theme-accent-strong)]">@{msg.nickname}</span>
-										</div>
-										<p className="text-sm text-[color:var(--color-theme-text)]/80">{msg.content}</p>
-									</div>
-								));
-							})()}
+							<div className="p-4 bg-[color:var(--color-theme-accent)]/5 rounded-xl">
+								<ReactMarkdown remarkPlugins={[remarkGfm]}>
+									{getConfigsByType('guestbook')[0]?.content || '*暂无留言*'}
+								</ReactMarkdown>
+							</div>
 						</div>
 					</GlassCard>
 				</section>
@@ -436,45 +392,11 @@ const AcademyHome = () => {
 						<h2 className="text-2xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
 							联系我们
 						</h2>
-						<p className="text-[color:var(--color-theme-muted)] italic mb-6">缘起从前，一见如故</p>
-						{(() => {
-							let content = { department: '从前书院招生办', description: '若有心求学，望拨打专线联络。', contacts: [] };
-							try {
-								content = JSON.parse(getConfigsByType('contact')[0]?.content);
-							} catch {
-								content.description = getConfigsByType('contact')[0]?.content;
-							}
-							return (
-								<>
-									<h3 className="text-lg font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
-										{content.department || '从前书院招生办'}
-									</h3>
-									<p className="text-[color:var(--color-theme-text)]/80 mb-4">
-										{content.description || '若有心求学，望拨打专线联络。'}
-									</p>
-									<div className="space-y-2">
-										{(content.contacts || []).map((contact, i) => (
-											<div key={i} className="flex items-center gap-2">
-												<span className="text-sm font-bold text-[color:var(--color-theme-accent-strong)]">【{contact.role}】</span>
-												<span className="text-sm text-[color:var(--color-theme-text)]/80">{contact.name}</span>
-											</div>
-										))}
-										{content.contacts?.length === 0 && (
-											<>
-												<div className="flex items-center gap-2">
-													<span className="text-sm font-bold text-[color:var(--color-theme-accent-strong)]">【统理招生】</span>
-													<span className="text-sm text-[color:var(--color-theme-text)]/80">卿主任</span>
-												</div>
-												<div className="flex items-center gap-2">
-													<span className="text-sm font-bold text-[color:var(--color-theme-accent-strong)]">【传书青鸟】</span>
-													<span className="text-sm text-[color:var(--color-theme-text)]/80">123456789</span>
-												</div>
-											</>
-										)}
-									</div>
-								</>
-							);
-						})()}
+						<div className="text-[color:var(--color-theme-text)]/80">
+							<ReactMarkdown remarkPlugins={[remarkGfm]}>
+								{getConfigsByType('contact')[0]?.content || '**从前书院招生办**\n\n若有心求学，望拨打专线联络。\n\n- 【统理招生】卿主任\n- 【传书青鸟】123456789'}
+							</ReactMarkdown>
+						</div>
 					</GlassCard>
 				</section>
 			)}

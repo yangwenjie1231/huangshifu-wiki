@@ -20,10 +20,11 @@ import {
   Database,
   Image,
   Gift,
+  Edit,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuth } from '../context/AuthContext';
-import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/apiClient';
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../lib/apiClient';
 import { formatDateTime, toDateValue } from '../lib/dateUtils';
 import { useToast } from '../components/Toast';
 import { SmartImage } from '../components/SmartImage';
@@ -602,7 +603,7 @@ const Admin = () => {
               </button>
             </div>
             <textarea
-              placeholder="内容 (JSON 格式)"
+              placeholder="内容 (支持 Markdown 格式)"
               value={newConfig.content}
               onChange={(e) => setNewConfig(prev => ({ ...prev, content: e.target.value }))}
               className="w-full mt-3 px-4 py-2 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-brand-primary/20 h-24"
@@ -658,7 +659,7 @@ const Admin = () => {
                                 <button
                                   onClick={async () => {
                                     try {
-                                      await apiPatch(`/api/birthday/config/${item.id}`, { isActive: !item.isActive });
+                                      await apiPatch(`/api/birthday/config/${item.id}/toggle`);
                                       await fetchData();
                                       show(item.isActive ? '已禁用' : '已启用', { variant: 'success' });
                                     } catch {
@@ -672,6 +673,13 @@ const Admin = () => {
                                   title={item.isActive ? '禁用' : '启用'}
                                 >
                                   {item.isActive ? <XCircle size={18} /> : <CheckCircle size={18} />}
+                                </button>
+                                <button
+                                  onClick={() => setEditingConfig(item)}
+                                  className="p-2 text-blue-400 hover:bg-blue-50 rounded-lg transition-all"
+                                  title="编辑"
+                                >
+                                  <Edit size={18} />
                                 </button>
                                 <button
                                   onClick={async () => {
@@ -962,6 +970,86 @@ const Admin = () => {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {editingConfig && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-[28px] p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-xl font-serif font-bold text-gray-900 mb-4">编辑配置</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">类型</label>
+                <select
+                  value={editingConfig.type}
+                  onChange={(e) => setEditingConfig({ ...editingConfig, type: e.target.value })}
+                  className="w-full px-4 py-2 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-brand-primary/20"
+                  disabled
+                >
+                  <option value="notice">通知公告</option>
+                  <option value="school_history">校史拾遗</option>
+                  <option value="honor_alumni">荣誉校友</option>
+                  <option value="campus">雅学之境</option>
+                  <option value="guestbook">学子留言壁</option>
+                  <option value="contact">联系我们</option>
+                  <option value="program">生贺节目</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">标题</label>
+                <input
+                  type="text"
+                  value={editingConfig.title}
+                  onChange={(e) => setEditingConfig({ ...editingConfig, title: e.target.value })}
+                  className="w-full px-4 py-2 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-brand-primary/20"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">排序</label>
+                <input
+                  type="number"
+                  value={editingConfig.sortOrder}
+                  onChange={(e) => setEditingConfig({ ...editingConfig, sortOrder: Number(e.target.value) })}
+                  className="w-full px-4 py-2 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-brand-primary/20"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">内容 (Markdown)</label>
+                <textarea
+                  value={editingConfig.content}
+                  onChange={(e) => setEditingConfig({ ...editingConfig, content: e.target.value })}
+                  className="w-full px-4 py-2 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-brand-primary/20 h-40"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setEditingConfig(null)}
+                className="px-6 py-2 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200"
+              >
+                取消
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await apiPut(`/api/birthday/config/${editingConfig.id}`, {
+                      title: editingConfig.title,
+                      content: editingConfig.content,
+                      sortOrder: editingConfig.sortOrder,
+                    });
+                    await fetchData();
+                    setEditingConfig(null);
+                    show('配置已更新', { variant: 'success' });
+                  } catch {
+                    show('更新失败', { variant: 'error' });
+                  }
+                }}
+                className="px-6 py-2 bg-brand-primary text-gray-900 rounded-xl font-bold hover:bg-brand-primary/90"
+              >
+                保存
+              </button>
+            </div>
           </div>
         </div>
       )}
