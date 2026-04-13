@@ -142,8 +142,8 @@ const Admin = () => {
         const result = await apiGet<{ logs: AdminDataItem[] }>('/api/admin/ban_logs');
         setData(result.logs || []);
       } else if (activeTab === 'birthday') {
-        const result = await apiGet<{ data: BirthdayConfig[] }>('/api/birthday/config');
-        setData((result.data || []) as unknown as AdminDataItem[]);
+        const result = await apiGet<BirthdayConfig[]>('/api/birthday/config');
+        setData((result || []) as unknown as AdminDataItem[]);
       } else {
         const result = await apiGet<{ data: AdminDataItem[] }>(`/api/admin/${activeTab}`);
         setData(result.data || []);
