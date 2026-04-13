@@ -1,4 +1,4 @@
-const CACHE_NAME = 'huangshifu-wiki-v3';
+const CACHE_NAME = 'huangshifu-wiki-v4';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -41,6 +41,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  if (url.pathname.endsWith('.html') || url.pathname === '/' || url.pathname === '') {
+    event.respondWith(fetch(event.request).catch(() => {
+      return caches.match('/index.html');
+    }));
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
@@ -59,11 +66,14 @@ self.addEventListener('fetch', (event) => {
 
         return response;
       }).catch(() => {
-        if (event.request.destination === 'document') {
-          return caches.match('/');
-        }
         return new Response('Offline', { status: 503 });
       });
     })
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });

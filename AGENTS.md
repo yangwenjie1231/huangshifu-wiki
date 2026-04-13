@@ -192,3 +192,11 @@ If any of these files appear later, treat them as high-priority instructions and
 - Run `npm run build` when changing build/runtime-sensitive code.
 - Run `npm test` to verify tests pass.
 - Do not invent command output or test results.
+
+## Service Worker (sw.js) Version Management
+
+When updating UI code (frontend components, pages, or styles), you MUST also increment the version number in `public/sw.js`:
+
+- The `CACHE_NAME` constant must be updated (e.g., from `v4` to `v5`).
+- This ensures that browsers will invalidate the old cache and fetch the new UI assets.
+- Always use a version number that clearly indicates a new cache version (e.g., `v1`, `v2`, `v3`... or `v4`, `v5`...).
