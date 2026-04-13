@@ -95,7 +95,7 @@ const Music = () => {
   const [albums, setAlbums] = useState<AlbumItem[]>([]);
   const [loadingAlbums, setLoadingAlbums] = useState(false);
   const [activeTab, setActiveTab] = useState<'music' | 'albums'>('music');
-  const [selectedPlatform, setSelectedPlatform] = useState<'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo'>('netease');
+  const [selectedPlatform, setSelectedPlatform] = useState<'netease' | 'qq' | 'kugou' | 'baidu' | 'kuwo'>('netease');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [showAccompaniments, setShowAccompaniments] = useState(false);
@@ -490,7 +490,7 @@ const Music = () => {
                   className="px-4 py-2 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-primary/20 shadow-sm"
                 >
                   <option value="netease">{t('music.platforms.netease')}</option>
-                  <option value="tencent">{t('music.platforms.tencent')}</option>
+                  <option value="qq">{t('music.platforms.tencent')}</option>
                   <option value="kugou">{t('music.platforms.kugou')}</option>
                   <option value="baidu">{t('music.platforms.baidu')}</option>
                   <option value="kuwo">{t('music.platforms.kuwo')}</option>
@@ -499,7 +499,7 @@ const Music = () => {
               <textarea 
                 value={searchId}
                 onChange={e => setSearchId(e.target.value)}
-                placeholder={`${t('music.inputPlaceholder')} ${selectedPlatform === 'netease' ? t('music.platforms.netease') : selectedPlatform === 'tencent' ? t('music.platforms.tencent') : selectedPlatform === 'kugou' ? t('music.platforms.kugou') : selectedPlatform === 'baidu' ? t('music.platforms.baidu') : t('music.platforms.kuwo')} ${t('music.idOrLinkList')}`}
+                placeholder={`${t('music.inputPlaceholder')} ${selectedPlatform === 'netease' ? t('music.platforms.netease') : selectedPlatform === 'qq' ? t('music.platforms.tencent') : selectedPlatform === 'kugou' ? t('music.platforms.kugou') : selectedPlatform === 'baidu' ? t('music.platforms.baidu') : t('music.platforms.kuwo')} ${t('music.idOrLinkList')}`}
                 className="w-full px-6 py-4 bg-white rounded-3xl border-none focus:ring-2 focus:ring-brand-primary/20 shadow-sm min-h-[120px]"
               />
               <div className="flex justify-end">

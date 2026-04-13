@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
@@ -9,13 +9,22 @@ import { withThemeSearch } from "../../lib/theme";
 import { splitTagsInput } from "../../lib/contentUtils";
 import { generateWikiIntro } from "../../services/aiService";
 import { uploadMarkdownImage } from "../../services/imageService";
-import { X, Save, Sparkles } from "lucide-react";
+import {
+	recommendRelations,
+	recommendRelationsByRules,
+	type RelationRecommendation,
+} from "../../services/aiRelationRecommendation";
+import { metadataCache } from "../../lib/metadataCache";
+import { X, Save, Sparkles, BarChart3, ChevronDown, ChevronUp, Sparkles as SparklesIcon } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import MdEditor from "react-markdown-editor-lite";
 import MarkdownIt from "markdown-it";
 import "react-markdown-editor-lite/lib/index.css";
 import { LocationTagInput } from "../../components/LocationTagInput";
 import WikiRelations from "./WikiRelations";
+import MiniRelationGraph from "./MiniRelationGraph";
 import type { WikiItemWithRelations, WikiRelationRecord } from "./types";
+import type { WikiPageMetadata } from "../../lib/wikiLinkParser";
 
 const mdParser = new MarkdownIt({
 	html: true,
@@ -47,6 +56,21 @@ const WikiEditor = () => {
 	const [generating, setGenerating] = useState(false);
 	const { show } = useToast();
 
+	// 图谱预览状态
+	const [showGraphPreview, setShowGraphPreview] = useState(false);
+	const [metadataMap, setMetadataMap] = useState<Map<string, WikiPageMetadata>>(
+		new Map(),
+	);
+
+	// AI 推荐状态
+	const [isRecommending, setIsRecommending] = useState(false);
+	const [recommendations, setRecommendations] = useState<
+		RelationRecommendation[]
+	>([]);
+	const [showRecommendations, setShowRecommendations] = useState(false);
+	const [abortController, setAbortController] =
+		useState<AbortController | null>(null);
+
 	useEffect(() => {
 		if (!isNew) {
 			const fetchPage = async () => {
@@ -74,6 +98,17 @@ const WikiEditor = () => {
 		}
 	}, [slug, isNew]);
 
+	// 加载关联元数据
+	useEffect(() => {
+		const loadMetadata = async () => {
+			if (formData.relations.length === 0) return;
+			const slugs = formData.relations.map((r) => r.targetSlug);
+			const metadata = await metadataCache.getBatch(slugs);
+			setMetadataMap(metadata);
+		};
+		loadMetadata();
+	}, [formData.relations]);
+
 	const handleLocationChange = (locationName: string, locationCode: string) => {
 		setFormData({ ...formData, locationName, locationCode });
 	};
@@ -85,6 +120,127 @@ const WikiEditor = () => {
 	const handleRelationsChange = (relations: WikiRelationRecord[]) => {
 		setFormData({ ...formData, relations });
 	};
+
+	// AI 推荐处理函数
+	const handleAIRecommend = useCallback(async () => {
+		if (!formData.title || !formData.content) {
+			show("请先填写标题和内容", { variant: "error" });
+			return;
+		}
+
+		setIsRecommending(true);
+		setShowRecommendations(true);
+
+		const controller = new AbortController();
+		setAbortController(controller);
+
+		try {
+			// 获取所有页面列表用于推荐
+			const allPagesResponse = await apiGet<{
+				pages: Array<{
+					slug: string;
+					title: string;
+					category: string;
+					description?: string;
+				}>;
+			}>("/api/wiki", { category: "all" });
+
+			const allPages = allPagesResponse.pages || [];
+
+			// 调用 AI 推荐
+			const aiRecommendations = await recommendRelations({
+				currentTitle: formData.title,
+				currentContent: formData.content,
+				currentCategory: formData.category,
+				existingRelations: formData.relations,
+				allPages,
+			});
+
+			// 如果 AI 推荐失败，降级到基于规则的推荐
+			if (aiRecommendations.length === 0) {
+				const ruleRecommendations = recommendRelationsByRules({
+					currentTitle: formData.title,
+					currentContent: formData.content,
+					currentCategory: formData.category,
+					allPages,
+					existingRelations: formData.relations,
+				});
+				setRecommendations(ruleRecommendations);
+				if (ruleRecommendations.length === 0) {
+					show("暂无推荐关联");
+				} else {
+					show(`找到 ${ruleRecommendations.length} 个推荐关联（基于规则）`, {
+						variant: "success",
+					});
+				}
+			} else {
+				setRecommendations(aiRecommendations);
+				show(`找到 ${aiRecommendations.length} 个推荐关联`, {
+					variant: "success",
+				});
+			}
+		} catch (error: any) {
+			if (error.name === "AbortError") {
+				show("已取消推荐");
+			} else {
+				console.error("AI recommendation error:", error);
+				show("推荐失败，请重试", { variant: "error" });
+			}
+			// 降级到基于规则的推荐
+			try {
+				const allPagesResponse = await apiGet<{
+					pages: Array<{
+						slug: string;
+						title: string;
+						category: string;
+						description?: string;
+					}>;
+				}>("/api/wiki", { category: "all" });
+				const ruleRecommendations = recommendRelationsByRules({
+					currentTitle: formData.title,
+					currentContent: formData.content,
+					currentCategory: formData.category,
+					allPages: allPagesResponse.pages || [],
+					existingRelations: formData.relations,
+				});
+				setRecommendations(ruleRecommendations);
+			} catch (ruleError) {
+				console.error("Rule recommendation error:", ruleError);
+			}
+		} finally {
+			setIsRecommending(false);
+			setAbortController(null);
+		}
+	}, [formData.title, formData.content, formData.category, formData.relations, show]);
+
+	const handleCancelRecommendation = useCallback(() => {
+		if (abortController) {
+			abortController.abort();
+			setIsRecommending(false);
+			show("已取消推荐");
+		}
+	}, [abortController, show]);
+
+	// 添加推荐关联
+	const handleAddRecommendation = useCallback(
+		(recommendation: RelationRecommendation) => {
+			const newRelation: WikiRelationRecord = {
+				type: recommendation.suggestedType,
+				targetSlug: recommendation.targetSlug,
+				label: recommendation.targetTitle,
+				bidirectional: false,
+			};
+			setFormData((prev) => ({
+				...prev,
+				relations: [...prev.relations, newRelation],
+			}));
+			setRecommendations((prev) =>
+				prev.filter((r) => r.targetSlug !== recommendation.targetSlug),
+			);
+			show(`已添加关联：${recommendation.targetTitle}`, { variant: "success" });
+		},
+		[show],
+	);
 
 	const handleSubmit = async (status: "draft" | "pending") => {
 		if (!user) return;
@@ -138,10 +294,7 @@ const WikiEditor = () => {
 			eventDate: formData.eventDate,
 			relations: formData.relations,
 			locationCode: formData.locationCode || null,
-			locationName: formData.locationName || null,
 			status,
-			lastEditorUid: user.uid,
-			lastEditorName: profile?.displayName || user.displayName || "匿名用户",
 		};
 
 		try {
@@ -360,7 +513,241 @@ const WikiEditor = () => {
 					<WikiRelations
 						relations={formData.relations}
 						onRelationsChange={handleRelationsChange}
+						currentPage={
+							isNew
+								? null
+								: {
+										slug: formData.slug,
+										title: formData.title,
+										category: formData.category,
+										content: formData.content,
+										tags: formData.tags
+											? formData.tags.split(",").map((t) => t.trim())
+											: [],
+										description: "",
+									} as any
+						}
 					/>
+
+					{/* 图谱预览面板 */}
+					<div className="space-y-3">
+						<button
+							type="button"
+							onClick={() => setShowGraphPreview(!showGraphPreview)}
+							className={`w-full px-4 py-3 rounded-2xl text-sm font-bold transition-all flex items-center justify-between ${
+								showGraphPreview
+									? "bg-brand-olive text-white"
+									: "bg-brand-olive/10 text-brand-olive hover:bg-brand-olive/20"
+							}`}
+						>
+							<div className="flex items-center gap-2">
+								<BarChart3 size={18} />
+								<span>📊 图谱预览</span>
+							</div>
+							<div className="flex items-center gap-1">
+								<span className="text-xs opacity-75">
+									{formData.relations.length} 个关联
+								</span>
+								{showGraphPreview ? (
+									<ChevronUp size={16} />
+								) : (
+									<ChevronDown size={16} />
+								)}
+							</div>
+						</button>
+
+						<AnimatePresence>
+							{showGraphPreview && (
+								<motion.div
+									initial={{ height: 0, opacity: 0 }}
+									animate={{ height: "auto", opacity: 1 }}
+									exit={{ height: 0, opacity: 0 }}
+									className="overflow-hidden"
+								>
+									<div className="p-4 bg-brand-cream/30 rounded-2xl border border-brand-cream">
+										<div className="flex items-center justify-between mb-3">
+											<h3 className="text-sm font-bold text-brand-olive">
+												关联图谱
+											</h3>
+											<button
+												type="button"
+												onClick={() => setShowGraphPreview(false)}
+												className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+											>
+												<X size={16} />
+											</button>
+										</div>
+										{formData.relations.length === 0 ? (
+											<div className="py-8 text-center text-gray-500 text-sm">
+												暂无关联数据，请先添加关联
+											</div>
+										) : (
+											<>
+												<MiniRelationGraph
+													relations={formData.relations}
+													metadata={metadataMap}
+													currentSlug={isNew ? "new" : slug || ""}
+													currentTitle={formData.title || "新页面"}
+													height={360}
+												/>
+												<div className="mt-3 flex items-center justify-center gap-4 text-xs text-gray-500">
+													<span>💡 提示：拖动图谱查看，滚轮缩放</span>
+												</div>
+											</>
+										)}
+									</div>
+								</motion.div>
+							)}
+						</AnimatePresence>
+					</div>
+
+					{/* AI 推荐面板 */}
+					<div className="space-y-3">
+						<button
+							type="button"
+							onClick={handleAIRecommend}
+							disabled={isRecommending || !formData.title || !formData.content}
+							className={`w-full px-4 py-3 rounded-2xl text-sm font-bold transition-all flex items-center justify-between ${
+								showRecommendations
+									? "bg-brand-primary text-white"
+									: "bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/20"
+							} disabled:opacity-50 disabled:cursor-not-allowed`}
+						>
+							<div className="flex items-center gap-2">
+								<SparklesIcon size={18} />
+								<span>🤖 AI 推荐</span>
+							</div>
+							<div className="flex items-center gap-2">
+								{isRecommending ? (
+									<span className="text-xs">推荐中...</span>
+								) : (
+									<>
+										<span className="text-xs opacity-75">
+											{recommendations.length} 个推荐
+										</span>
+										<ChevronDown size={16} />
+									</>
+								)}
+							</div>
+						</button>
+
+						<AnimatePresence>
+							{showRecommendations && (
+								<motion.div
+									initial={{ height: 0, opacity: 0 }}
+									animate={{ height: "auto", opacity: 1 }}
+									exit={{ height: 0, opacity: 0 }}
+									className="overflow-hidden"
+								>
+									<div className="p-4 bg-brand-cream/30 rounded-2xl border border-brand-cream">
+										<div className="flex items-center justify-between mb-3">
+											<h3 className="text-sm font-bold text-brand-primary">
+												AI 推荐关联
+											</h3>
+											<div className="flex items-center gap-2">
+												{isRecommending && abortController && (
+													<button
+														type="button"
+														onClick={handleCancelRecommendation}
+														className="px-3 py-1.5 bg-red-100 text-red-600 rounded-lg text-xs font-bold hover:bg-red-200 transition-all"
+													>
+														取消
+													</button>
+												)}
+												<button
+													type="button"
+													onClick={() => setShowRecommendations(false)}
+													className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+												>
+													<X size={16} />
+												</button>
+											</div>
+										</div>
+
+										{isRecommending ? (
+											<div className="py-8 text-center">
+												<div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary"></div>
+												<p className="mt-3 text-sm text-gray-600">
+													AI 正在分析内容并推荐关联...
+												</p>
+											</div>
+										) : recommendations.length === 0 ? (
+											<div className="py-8 text-center text-gray-500 text-sm">
+												暂无推荐，请先填写标题和内容后重试
+											</div>
+										) : (
+											<div className="space-y-3">
+												{recommendations.map((rec, index) => (
+													<div
+														key={rec.targetSlug}
+														className="p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md transition-all"
+													>
+														<div className="flex items-start justify-between gap-3">
+															<div className="flex-1">
+																<div className="flex items-center gap-2 mb-2">
+																	<h4 className="font-bold text-brand-olive text-sm">
+																		{rec.targetTitle}
+																	</h4>
+																	<span className="px-2 py-0.5 bg-brand-olive/10 text-brand-olive text-[10px] rounded-full">
+																		{rec.category}
+																	</span>
+																</div>
+																<p className="text-xs text-gray-600 mb-2">
+																	{rec.reason}
+																</p>
+																<div className="flex items-center gap-3 mb-2">
+																	<div className="flex-1">
+																		<div className="flex items-center justify-between text-[10px] text-gray-500 mb-1">
+																			<span>置信度</span>
+																			<span className="font-bold text-brand-primary">
+																				{(rec.confidence * 100).toFixed(0)}%
+																			</span>
+																		</div>
+																		<div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+																			<div
+																				className="h-full bg-gradient-to-r from-brand-primary to-brand-olive rounded-full transition-all"
+																				style={{
+																					width: `${rec.confidence * 100}%`,
+																				}}
+																			/>
+																		</div>
+																	</div>
+																</div>
+																<div className="flex items-center gap-2 text-[10px] text-gray-500">
+																	<span>建议类型：</span>
+																	<span className="px-1.5 py-0.5 bg-gray-100 rounded">
+																		{
+																			{
+																				related_person: "相关人物",
+																				work_relation: "作品关联",
+																				timeline_relation: "时间线关联",
+																				custom: "自定义关系",
+																			}[
+																				rec.suggestedType
+																			]
+																		}
+																	</span>
+																</div>
+															</div>
+															<button
+																type="button"
+																onClick={() =>
+																	handleAddRecommendation(rec)
+																}
+																className="px-3 py-2 bg-brand-primary text-white rounded-lg text-xs font-bold hover:bg-brand-primary/90 transition-all whitespace-nowrap"
+															>
+																添加关联
+															</button>
+														</div>
+													</div>
+												))}
+											</div>
+										)}
+									</div>
+								</motion.div>
+							)}
+						</AnimatePresence>
+					</div>
 
 					<div className="pt-8 flex flex-wrap justify-end gap-3">
 						<button
