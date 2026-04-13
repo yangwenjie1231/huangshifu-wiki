@@ -13496,6 +13496,20 @@ app.get('/api/admin/:tab', requireAdmin, async (req, res) => {
       return;
     }
 
+    if (tab === 'images') {
+      const data = await prisma.imageMap.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      });
+      res.json({
+        data: data.map((item) => ({
+          ...item,
+          createdAt: item.createdAt.toISOString(),
+        })),
+      });
+      return;
+    }
+
     res.status(400).json({ error: '未知数据类型' });
   } catch (error) {
     console.error('Fetch admin data error:', error);
@@ -13808,7 +13822,7 @@ async function startServer() {
   app.use((_req, res, next) => {
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com https://mapplugin.amap.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; font-src 'self' data: https://fonts.gstatic.com https://fonts.googleapis.com; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net https://picsum.photos https://*.googleusercontent.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://o4.amap.com https://mapplugin.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com https://*.music.126.net https://fonts.googleapis.com https://fonts.gstatic.com https://analysis.chatglm.cn https://gator.volces.com; worker-src 'self' blob:; media-src 'self' https://music.163.com https://*.music.163.com https://*.music.126.net;"
+      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com https://mapplugin.amap.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; font-src 'self' data: https://fonts.gstatic.com https://fonts.googleapis.com; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net https://picsum.photos https://*.googleusercontent.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://o4.amap.com https://mapplugin.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com https://*.music.126.net https://fonts.googleapis.com https://fonts.gstatic.com https://analysis.chatglm.cn https://gator.volces.com https://picsum.photos; worker-src 'self' blob:; media-src 'self' https://music.163.com https://*.music.163.com https://*.music.126.net;"
     );
     next();
   });

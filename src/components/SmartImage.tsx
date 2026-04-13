@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { decodeBlurhashToDataURL } from '../hooks/useBlurhash';
-import { ImageMap } from '../services/imageService';
+import { ImageMap, getImagePreference, resolveImageUrl } from '../services/imageService';
 
 export interface SmartImageProps {
   image?: ImageMap | string | null | undefined;
@@ -40,18 +40,40 @@ export const SmartImage: React.FC<SmartImageProps> = ({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [blurhashDataUrl, setBlurhashDataUrl] = useState<string | null>(null);
+  const [resolvedUrl, setResolvedUrl] = useState('');
 
   const imageInput = image || src;
-
-  const resolvedUrl = useMemo(() => {
-    if (!imageInput) return '';
-    if (typeof imageInput === 'string') return imageInput;
-    return imageInput.localUrl || imageInput.s3Url || imageInput.externalUrl || '';
-  }, [imageInput]);
 
   const blurhash = useMemo(() => {
     if (!imageInput || typeof imageInput === 'string') return undefined;
     return imageInput.blurhash;
+  }, [imageInput]);
+
+  useEffect(() => {
+    const resolveUrl = async () => {
+      if (!imageInput) {
+        setResolvedUrl('');
+        return;
+      }
+      
+      if (typeof imageInput === 'string') {
+        setResolvedUrl(imageInput);
+        return;
+      }
+
+      // Use resolveImageUrl to respect user preference
+      try {
+        const preference = await getImagePreference();
+        const result = resolveImageUrl(imageInput, preference);
+        setResolvedUrl(result.url);
+      } catch (error) {
+        console.error('Failed to resolve image URL:', error);
+        // Fallback to simple logic if preference fetch fails
+        setResolvedUrl(imageInput.localUrl || imageInput.s3Url || imageInput.externalUrl || '');
+      }
+    };
+
+    resolveUrl();
   }, [imageInput]);
 
   useEffect(() => {
@@ -112,6 +134,9 @@ export const SmartImage: React.FC<SmartImageProps> = ({
   };
 
   const imageStyleFinal: React.CSSProperties = {
+    position: 'absolute',
+    top: 0,
+    left: 0,
     display: 'block',
     width: '100%',
     height: '100%',

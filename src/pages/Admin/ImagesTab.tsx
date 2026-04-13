@@ -17,6 +17,7 @@ import { formatDateTime } from '../../lib/dateUtils';
 import { clsx } from 'clsx';
 import { BlurhashImage } from '../../components/BlurhashImage';
 import { SmartImage } from '../../components/SmartImage';
+import { clearImagePreferenceCache } from '../../services/imageService';
 
 interface ImageMap {
   id: string;
@@ -180,6 +181,7 @@ export const ImagesTab: React.FC = () => {
   const handlePreferenceUpdate = async () => {
     try {
       await apiPatch('/api/config/image-preference', preference);
+      clearImagePreferenceCache();
       setShowPreferenceModal(false);
       show('设置已保存', { variant: 'success' });
     } catch (error) {
