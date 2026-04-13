@@ -4,16 +4,16 @@
 
 ## 项目架构
 
-| 层级 | 技术 |
-|------|------|
-| 前端 | Vite 6 + React 19 + TypeScript + Tailwind CSS 4 |
-| 后端 | Express（`server.ts`） |
-| 数据库 | Prisma 6.x + PostgreSQL 18 |
-| 向量检索 | Qdrant + CLIP（`Xenova/clip-vit-base-patch32`） |
-| 进程守护 | PM2 |
-| 反向代理 | Nginx |
-| AI 集成 | Gemini（`@google/genai`） |
-| ORM | Prisma（SQLite 用于本地开发，PostgreSQL 用于生产） |
+| 层级    | 技术                                              |
+| ----- | ----------------------------------------------- |
+| 前端    | Vite 6 + React 19 + TypeScript + Tailwind CSS 4 |
+| 后端    | Express（`server.ts`）                            |
+| 数据库   | Prisma 6.x + PostgreSQL 18                      |
+| 向量检索  | Qdrant + CLIP（`Xenova/clip-vit-base-patch32`）   |
+| 进程守护  | PM2                                             |
+| 反向代理  | Nginx                                           |
+| AI 集成 | Gemini（`@google/genai`）                         |
+| ORM   | Prisma（SQLite 用于本地开发，PostgreSQL 用于生产）           |
 
 > 数据访问说明：当前前端业务页面（Wiki/Forum/Gallery/Admin/Music）统一走 REST API（`/api/*`）+ Prisma，`src/lib/firebaseCompat/` 已移除。
 
@@ -31,7 +31,7 @@ chmod +x scripts/deploy.sh
 
 一键部署脚本会自动完成：环境检测、依赖安装、数据库迁移、前端构建、PM2 启动。
 
----
+***
 
 ## 1. 环境要求
 
@@ -95,7 +95,7 @@ apt install -y postgresql-18 postgresql-client-18
 systemctl enable --now postgresql
 ```
 
----
+***
 
 ## 2. 数据库初始化
 
@@ -120,7 +120,7 @@ sudo -u postgres psql -d huangshifu_wiki -c "ALTER DEFAULT PRIVILEGES IN SCHEMA 
 sudo -u postgres psql -d huangshifu_wiki -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO hsf_app;"
 ```
 
----
+***
 
 ## 3. 配置环境变量
 
@@ -264,7 +264,7 @@ https://你的域名/?wx_code=mock:openId
 
 > **注意**：修改 `VITE_*` 变量后需要重新构建前端：`npm run build`
 
----
+***
 
 ## 4. 启动 Qdrant 向量数据库
 
@@ -279,7 +279,7 @@ curl http://127.0.0.1:6333/healthz
 
 返回 `{"status":"ok"}` 表示正常。
 
----
+***
 
 ## 5. 初始化 Prisma 与数据库
 
@@ -292,6 +292,7 @@ npm run db:seed
 ```
 
 > **Prisma 版本注意**：本项目使用 Prisma 6.x，不支持 7.x。若报 `prisma: not found` 或 schema 错误，重新安装：
+>
 > ```bash
 > npm install prisma@^6.7.0 @prisma/client@^6.7.0
 > npx prisma --version  # 应显示 6.x
@@ -321,7 +322,7 @@ npm run regions:import
 
 此命令从 [slightlee/regions-data](https://github.com/slightlee/regions-data) 获取最新行政区划数据并写入 `Region` 表。
 
----
+***
 
 ## 6. 构建并启动服务
 
@@ -340,7 +341,7 @@ curl http://127.0.0.1:3000/api/health
 # 返回: {"status":"ok"}
 ```
 
----
+***
 
 ## 7. 使用 PM2 守护进程
 
@@ -362,7 +363,7 @@ pm2 restart huangshifu-wiki --update-env  # 更新 .env 后使用
 pm2 stop huangshifu-wiki
 ```
 
----
+***
 
 ## 8. 配置 Nginx 反向代理
 
@@ -400,7 +401,7 @@ systemctl restart nginx
 
 建议关闭 3000 端口对公网暴露，仅保留 80/443。
 
----
+***
 
 ## 9. 配置 HTTPS（Let's Encrypt）
 
@@ -415,7 +416,7 @@ certbot --nginx -d your-domain.com
 certbot renew --dry-run
 ```
 
----
+***
 
 ## 10. 部署脚本参数
 
@@ -430,16 +431,16 @@ USE_PM2=0 ./scripts/deploy.sh         # 不使用 PM2
 
 环境变量：
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `APP_NAME` | `huangshifu-wiki` | PM2 进程名 |
-| `APP_PORT` | `3000` | 健康检查端口 |
-| `ENV_FILE` | `.env` | 环境文件路径 |
-| `INSTALL_MODE` | `ci` | 依赖安装模式 |
-| `ENABLE_VECTOR_SYNC` | `1` | 部署时自动执行向量同步 |
-| `VECTOR_SYNC_LIMIT` | `100` | 向量同步批次大小 |
+| 变量                   | 默认值               | 说明          |
+| -------------------- | ----------------- | ----------- |
+| `APP_NAME`           | `huangshifu-wiki` | PM2 进程名     |
+| `APP_PORT`           | `3000`            | 健康检查端口      |
+| `ENV_FILE`           | `.env`            | 环境文件路径      |
+| `INSTALL_MODE`       | `ci`              | 依赖安装模式      |
+| `ENABLE_VECTOR_SYNC` | `1`               | 部署时自动执行向量同步 |
+| `VECTOR_SYNC_LIMIT`  | `100`             | 向量同步批次大小    |
 
----
+***
 
 ## 11. 上线后验证清单
 
@@ -551,6 +552,7 @@ pm2 save
 ```
 
 **预防**：
+
 - 每次 `git pull` 后执行 `npm run db:generate` 和 `npm run db:deploy`
 - 大版本升级后检查 `npx prisma migrate status`
 
@@ -580,16 +582,18 @@ pm2 save
 **诊断**：
 
 1. 检查 `SongAlbumRelation` 表是否有该专辑的关联记录：
+
 ```bash
 psql "postgresql://hsf_app:密码@127.0.0.1:5432/huangshifu_wiki" \
   -c "SELECT * FROM \"SongAlbumRelation\" WHERE \"albumDocId\" IN (SELECT \"docId\" FROM \"Album\" WHERE title='专辑名称');"
 ```
 
-2. 检查导入日志中 `linked` 计数是否异常。
+1. 检查导入日志中 `linked` 计数是否异常。
 
 **原因**：代码中 `normalizeTrackDiscPayload` 函数期望的字段是 `songDocId`，但导入时传入的是 `docId`，导致关联数据无法正确创建。
 
 **解决方案**：升级到包含此修复的版本，或手动执行以下 SQL 修复已有数据：
+
 ```bash
 psql "postgresql://hsf_app:密码@127.0.0.1:5432/huangshifu_wiki" -c "
 -- 检查 SongAlbumRelation 是否为空
@@ -599,7 +603,7 @@ SELECT COUNT(*) FROM \"SongAlbumRelation\" WHERE \"albumDocId\" IN (
 "
 ```
 
----
+***
 
 ## 13. 更新发布流程
 
@@ -640,7 +644,7 @@ npm run build
 
 若三项全部通过，再执行 `pm2 restart huangshifu-wiki --update-env`。
 
----
+***
 
 ## 14. 数据库备份
 
@@ -698,7 +702,7 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 
 建议配合 `crontab` 做每日自动备份。
 
----
+***
 
 ## 15. 安全机制说明
 
@@ -717,16 +721,16 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 
 ### 15.3 安全嵌入平台白名单
 
-| 平台 | 域名 |
-|------|------|
-| Bilibili | player.bilibili.com |
-| 网易云音乐 | music.163.com |
-| QQ 音乐 | y.qq.com |
-| YouTube | youtube.com / www.youtube.com |
-| 优酷 | player.youku.com |
-| 爱奇艺 | open.iqiyi.com / www.iqiyi.com |
-| 微博视频 | weibo.com / www.weibo.com |
-| Vimeo | vimeo.com / player.vimeo.com |
+| 平台       | 域名                                                      |
+| -------- | ------------------------------------------------------- |
+| Bilibili | player.bilibili.com                                     |
+| 网易云音乐    | music.163.com                                           |
+| QQ 音乐    | y.qq.com                                                |
+| YouTube  | youtube.com / [www.youtube.com](http://www.youtube.com) |
+| 优酷       | player.youku.com                                        |
+| 爱奇艺      | open.iqiyi.com / [www.iqiyi.com](http://www.iqiyi.com)  |
+| 微博视频     | weibo.com / [www.weibo.com](http://www.weibo.com)       |
+| Vimeo    | vimeo.com / player.vimeo.com                            |
 
 ### 15.4 Content Security Policy 与高德地图
 
@@ -734,15 +738,16 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 
 **高德地图 JS API 白名单**（必须包含以下域名才能正常使用地图功能）：
 
-| 域名 | 用途 |
-|------|------|
-| `webapi.amap.com` | 高德 Web API 主域名 |
-| `jsapi.amap.com` | 高德 JS API 域名 |
+| 域名                       | 用途             |
+| ------------------------ | -------------- |
+| `webapi.amap.com`        | 高德 Web API 主域名 |
+| `jsapi.amap.com`         | 高德 JS API 域名   |
 | `jsapi-service.amap.com` | 高德 JS API 服务域名 |
-| `restapi.amap.com` | 高德 REST API 域名 |
-| `mapplugin.amap.com` | 高德地图插件域名 |
+| `restapi.amap.com`       | 高德 REST API 域名 |
+| `mapplugin.amap.com`     | 高德地图插件域名       |
 
 **说明**：
+
 - CSP 配置位于 `server.ts` 中，共三处：开发环境中间件（line 51）、生产环境 `startServer` 函数（line 12777）、生产环境最终配置（line 12799）
 - `script-src` 和 `connect-src` 指令都需要包含上述所有高德域名
 - 如果地图功能无法加载（脚本被阻塞），请检查所有三处 CSP 配置是否一致
@@ -753,17 +758,16 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 
 **播放策略**：
 
-| 平台 | 播放方式 | 说明 |
-|------|----------|------|
-| 网易云音乐 | 客户端直连 | 直接构造 URL: `https://music.163.com/song/media/outer/url?id={neteaseId}.mp3` |
-| QQ/酷狗/百度/酷我 | 服务器 API | 通过 `/api/music/:docId/play-url` 获取，服务器缓存结果 |
+| 平台          | 播放方式    | 说明                                                                        |
+| ----------- | ------- | ------------------------------------------------------------------------- |
+| 网易云音乐       | 客户端直连   | 直接构造 URL: `https://music.163.com/song/media/outer/url?id={neteaseId}.mp3` |
+| QQ/酷狗/百度/酷我 | 服务器 API | 通过 `/api/music/:docId/play-url` 获取，服务器缓存结果                                |
 
 **实现逻辑**：
 
 1. **网易云歌曲**（`primaryPlatform === 'netease'` 且存在 `neteaseId`）：
    - 前端直接构造直链，绕过服务器
    - 用户客户端直连网易云服务器，延迟最低
-
 2. **其他平台歌曲**：
    - 前端请求服务器 `/api/music/:docId/play-url`
    - 服务器优先使用缓存（默认 10 分钟 TTL）
@@ -771,13 +775,13 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 
 **优势**：
 
-- 网易云歌曲：用户端直连，绕过服务器网络瓶颈，播放延迟从 ~10s 降至 <1s
+- 网易云歌曲：用户端直连，绕过服务器网络瓶颈，播放延迟从 \~10s 降至 <1s
 - 其他平台：服务器缓存减少外部 API 调用，提升稳定性
 
 **环境变量**：
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
+| 变量                                 | 默认值   | 说明            |
+| ---------------------------------- | ----- | ------------- |
 | `MUSIC_PLAY_URL_CACHE_TTL_SECONDS` | `600` | 播放地址缓存 TTL（秒） |
 
 ### 15.6 敏感词过滤
@@ -805,10 +809,10 @@ npm run download:sensitive-words
 
 **API 接口**：
 
-| 接口 | 方法 | 说明 |
-|------|------|------|
+| 接口                           | 方法   | 说明                                                                     |
+| ---------------------------- | ---- | ---------------------------------------------------------------------- |
 | `/api/admin/check-sensitive` | POST | 敏感词检测（需管理员权限），请求体 `{ text: string }`，返回 `{ sensitiveWords: string[] }` |
-| `/api/admin/review-queue` | GET | 审核队列返回时自动附带 `sensitiveWords` 字段 |
+| `/api/admin/review-queue`    | GET  | 审核队列返回时自动附带 `sensitiveWords` 字段                                        |
 
 **管理员面板**：
 
@@ -819,7 +823,6 @@ npm run download:sensitive-words
 1. **网易云歌曲**（`primaryPlatform === 'netease'` 且存在 `neteaseId`）：
    - 前端直接构造直链，绕过服务器
    - 用户客户端直连网易云服务器，延迟最低
-
 2. **其他平台歌曲**：
    - 前端请求服务器 `/api/music/:docId/play-url`
    - 服务器优先使用缓存（默认 10 分钟 TTL）
@@ -827,16 +830,16 @@ npm run download:sensitive-words
 
 **优势**：
 
-- 网易云歌曲：用户端直连，绕过服务器网络瓶颈，播放延迟从 ~10s 降至 <1s
+- 网易云歌曲：用户端直连，绕过服务器网络瓶颈，播放延迟从 \~10s 降至 <1s
 - 其他平台：服务器缓存减少外部 API 调用，提升稳定性
 
 **环境变量**：
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
+| 变量                                 | 默认值   | 说明            |
+| ---------------------------------- | ----- | ------------- |
 | `MUSIC_PLAY_URL_CACHE_TTL_SECONDS` | `600` | 播放地址缓存 TTL（秒） |
 
----
+***
 
 ## 附录：主要数据库表
 
@@ -1011,31 +1014,26 @@ pm2 restart huangshifu-wiki --update-env
   - `imageService` 改为直接调用 `/api/image-maps`（按 MD5 查重 + upsert 映射）
   - `Music` 页面认证引用改为 `src/lib/auth.ts`
   - **部署影响**：无数据库迁移，无新增环境变量，仅需常规 `npm run build` 后重启服务
-
 - **小程序 WebView 壳工程 + Web 自动登录**：新增 `miniprogram-webview/`，并在 Web 端增加 `wx_code` 自动登录能力
 - **小程序 WebView 壳工程 + Web 自动登录**：新增 `miniprogram-webview/`，并在 Web 端增加 `wx_code` 自动登录能力
   - 新增 `src/lib/miniProgram.ts`：解析/清理 `wx_code` 及可选头像昵称参数
   - 更新 `src/App.tsx`：在小程序 WebView 环境下自动触发 `loginWithWeChat`
   - 新增 `miniprogram-webview/`：可直接在微信开发者工具导入运行
   - **部署影响**：无数据库迁移；需确保生产环境微信小程序凭据已配置且业务域名已在微信后台放行
-
 - **P0 代码复用重构**：抽取重复工具函数与类型定义，减少重复代码并降低维护成本
   - 新增 `src/lib/formatUtils.ts`：统一音乐时长格式化
   - 新增 `src/lib/dateUtils.ts`：统一日期解析与格式化
   - 新增 `src/lib/contentUtils.ts`：统一状态文案与标签输入处理
   - 新增 `src/types/PlatformIds.ts`：统一音乐平台 ID 类型
   - **部署影响**：无数据库迁移，无新增环境变量，仅需常规 `npm run build` 后重启服务
-
 - **图集评论功能**：图集现在支持评论功能，用户可以对已发布的图集发表评论和回复
   - 新增 `GET /api/galleries/:id/comments` API 获取图集评论
   - 新增 `POST /api/galleries/:id/comments` API 发表评论
   - **数据库变更**：`PostComment` 表新增 `galleryId String?` 可选字段，支持关联图集
-
 - **图集版权标识**：图集现在支持设置版权标识信息
   - `PATCH /api/galleries/:id` API 新增支持 `copyright` 字段
   - **数据库变更**：`Gallery` 表新增 `copyright String?` 可选字段
   - 图集作者和管理员可以在编辑图集时设置版权信息
-
 - **部署注意**：更新代码后需执行 `npm run db:generate` 和 `npm run db:push`（开发环境）或 `npm run db:deploy`（生产环境）以应用新的 Prisma schema
 
 ### v5.x
@@ -1045,7 +1043,6 @@ pm2 restart huangshifu-wiki --update-env
   - Gallery 列表移除兼容层 `onSnapshot` 轮询，改为页面加载时 REST 拉取
   - Music 列表、去重检查、删除改为直接请求 `/api/music*`
   - `src/lib/firebaseCompat/` 保留为备用兼容层（非主路径）
-
 - **敏感词过滤功能**：内置 DFA 算法敏感词检测，用于过滤热门搜索词和辅助内容审核
   - 敏感词不会被记录到热门搜索
   - 审核内容时自动检测并显示敏感词
@@ -1053,7 +1050,6 @@ pm2 restart huangshifu-wiki --update-env
   - 新增 `POST /api/admin/check-sensitive` API
   - 敏感词库文件位于 `public/sensitive-words/words.txt`
   - **部署注意**：需执行 `npm run download:sensitive-words` 下载敏感词库
-
 - **新增用户视图偏好设置**：用户可以选择四种内容展示模式（大图标、中图标、小图标、列表），偏好设置存储在 `User.preferences` 字段（JSON 类型），支持以下页面：
   - 百科页面（Wiki）
   - 图集馆（Gallery）
@@ -1066,3 +1062,4 @@ pm2 restart huangshifu-wiki --update-env
 ### v4.x
 
 - **移动端底部导航新增搜索入口**：移动端视图（`< md`）的底部导航栏（`BottomNav`）已新增「搜索」按钮，与桌面端导航栏的搜索链接保持一致。无需服务器端操作，仅需前端重新构建部署。
+
