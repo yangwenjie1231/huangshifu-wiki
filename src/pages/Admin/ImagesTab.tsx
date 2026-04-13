@@ -16,6 +16,7 @@ import { useToast } from '../../components/Toast';
 import { formatDateTime } from '../../lib/dateUtils';
 import { clsx } from 'clsx';
 import { BlurhashImage } from '../../components/BlurhashImage';
+import { SmartImage } from '../../components/SmartImage';
 
 interface ImageMap {
   id: string;
@@ -307,9 +308,8 @@ export const ImagesTab: React.FC = () => {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex gap-4">
                       <div className="w-20 h-20 flex-shrink-0">
-                        <BlurhashImage
-                          blurhash={image.blurhash}
-                          src={imageUrl}
+                        <SmartImage
+                          image={image}
                           alt={image.id}
                           className="w-full h-full rounded-lg"
                         />
