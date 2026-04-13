@@ -203,6 +203,21 @@ S3_ENABLE_MD5_VERIFICATION="true"
 
 # 预签名 URL 过期时间（秒）
 S3_EXPIRES_IN="3600"
+
+# ============================================
+# 自定义上传目录（可选，用于解决 /root 等目录的权限问题）
+# ============================================
+# 设置上传文件的存储路径，默认在项目根目录的 uploads/
+# 如需将上传文件存储到其他位置（如 /var/www/huangshifu-wiki/uploads）
+# UPLOADS_PATH="/var/www/huangshifu-wiki/uploads"
+
+# ============================================
+# Blurhash 哈希占位配置（可选）
+# ============================================
+BLURHASH_ENABLED="true"
+BLURHASH_AUTO_GENERATE="true"
+BLURHASH_COMPONENTS_X="4"
+BLURHASH_COMPONENTS_Y="3"
 EOF
 ```
 
@@ -836,16 +851,161 @@ npm run download:sensitive-words
 | `Album` | 专辑 |
 | `MediaAsset` | 媒体资产 |
 | `ImageEmbedding` | 图片向量 |
+| `ImageMap` | 图片映射（blurhash、S3 URL、本地和外部图床 URL） |
 | `Region` | 行政区划 |
 | `EditLock` | 编辑锁 |
 | `WikiBranch` | Wiki 分支 |
 | `WikiPullRequest` | Wiki PR |
+| `BirthdayConfig` | 生贺配置（用于"从前书院"皮肤的内容管理） |
+
+---
+
+## 附录：图片系统架构
+
+本文档介绍系统的图片上传、存储、显示完整流程。详见 `docs/IMAGE_SYSTEM.md`。
+
+### 数据模型 (ImageMap)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | String | 唯一标识 |
+| `md5` | String | 文件 MD5 哈希，用于去重 |
+| `localUrl` | String | 本地存储 URL |
+| `externalUrl` | String? | 外部自定义图床 URL |
+| `s3Url` | String? | S3 存储 URL |
+| `storageType` | StorageType | 当前存储类型 (local/s3/external) |
+| `blurhash` | String? | Blurhash 预览数据 |
+| `thumbhash` | String? | 缩略图哈希（预留） |
+| `createdAt` | DateTime | 创建时间 |
+
+### API 端点
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/image-maps` | 获取图片列表 |
+| GET | `/api/image-maps/:id` | 获取单张图片 |
+| POST | `/api/image-maps` | 创建图片记录 |
+| PATCH | `/api/image-maps/:id` | 更新图片 |
+| DELETE | `/api/image-maps/:id` | 删除图片 |
+| GET | `/api/image-maps/export` | 导出 CSV |
+| POST | `/api/image-maps/import` | 批量导入 |
+| POST | `/api/image-maps/:id/refresh-blurhash` | 刷新 blurhash |
+| POST | `/api/image-maps/refresh-all-blurhash` | 批量生成 blurhash |
+| GET | `/api/image-maps/stats` | 获取统计 |
+| GET | `/api/config/image-preference` | 获取存储策略 |
+| PATCH | `/api/config/image-preference` | 设置存储策略 |
+| GET | `/api/s3/config` | 获取 S3 配置 |
+| GET | `/api/s3/presign-upload` | 生成上传签名 |
+| GET | `/api/s3/presign-download/:key` | 生成下载签名 |
+
+### 前端组件
+
+系统使用统一的 `SmartImage` 组件处理所有图片显示：
+- 支持 ImageMap 对象或纯 URL 字符串输入
+- 自动解码 blurhash 显示模糊预览
+- 图片加载过渡动画
+- 错误处理和 fallback
+
+### 存储策略
+
+通过 Admin 后台 → 图片管理 → 设置可配置：
+- **默认存储**: local / s3 / external
+- **启用回退**: true / false
+
+修改立即生效，无需重启服务。
+
+### 环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `UPLOADS_PATH` | 项目根目录/uploads | 自定义上传路径 |
+| `BLURHASH_ENABLED` | true | 是否启用 blurhash |
+| `BLURHASH_AUTO_GENERATE` | true | 上传时自动生成 |
+| `BLURHASH_COMPONENTS_X` | 4 | blurhash X 分量 |
+| `BLURHASH_COMPONENTS_Y` | 3 | blurhash Y 分量 |
+
+### 自定义上传路径配置
+
+如果需要将上传文件存储到非项目目录（如 `/var/www/huangshifu-wiki/uploads`）：
+
+1. 创建目录并设置权限：
+```bash
+mkdir -p /var/www/huangshifu-wiki/uploads
+chown -R node_user:node_user /var/www/huangshifu-wiki/uploads
+```
+
+2. 在 `.env` 中添加：
+```bash
+UPLOADS_PATH="/var/www/huangshifu-wiki/uploads"
+```
+
+3. 重启服务：
+```bash
+pm2 restart huangshifu-wiki --update-env
+```
+
+### S3 双写模式
+
+当 S3 已配置时，上传会同时保存到本地和 S3：
+- `localUrl` - 本地存储路径
+- `s3Url` - S3 存储路径
+
+根据存储策略切换使用。
+
+### BirthdayConfig 表结构
+
+`BirthdayConfig` 表用于存储"从前书院"生贺特别皮肤的内容配置，支持管理员通过后台动态修改。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | String | 唯一标识（cuid） |
+| `type` | String | 配置类型：`notice`/`school_history`/`honor_alumni`/`campus`/`guestbook`/`contact`/`program` |
+| `title` | String | 标题 |
+| `content` | String | 内容（JSON 字符串格式） |
+| `sortOrder` | Int | 排序顺序 |
+| `isActive` | Boolean | 是否启用 |
+| `createdAt` | DateTime | 创建时间 |
+| `updatedAt` | DateTime | 更新时间 |
+
+**API 接口**：
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/api/birthday/config` | GET | 获取所有生贺配置 |
+| `/api/birthday/config/:type` | GET | 按类型获取配置 |
+| `/api/birthday/config` | POST | 创建配置（需管理员权限） |
+| `/api/birthday/config/:id` | PUT | 更新配置（需管理员权限） |
+| `/api/birthday/config/:id/toggle` | PATCH | 切换激活状态（需管理员权限） |
+| `/api/birthday/config/:id` | DELETE | 删除配置（需管理员权限） |
+
+**配置类型说明**：
+
+| 类型 | 说明 | content 格式 |
+|------|------|--------------|
+| `notice` | 通知公告 | `{ concertDate, concertLocation, callToAction }` |
+| `school_history` | 校史拾遗 | 纯文本 |
+| `honor_alumni` | 荣誉校友 | `{ titles[], representativeWorks[], description }` |
+| `campus` | 雅学之境 | 纯文本 |
+| `guestbook` | 学子留言壁 | `[{ nickname, content }]` |
+| `contact` | 联系我们 | `{ department, description, contacts[] }` |
+| `program` | 生贺节目 | `{ category: 'music'/'video'/'dance'/'easter' }` |
 
 ---
 
 ## 附录：更新日志
 
 ### v6.x
+
+- **从前书院生贺皮肤配置系统**：新增 `BirthdayConfig` 数据库模型和完整 CRUD API，支持管理员通过后台动态管理生贺页面内容
+  - 新增 `prisma/schema.prisma`：`BirthdayConfig` 模型
+  - 新增 `src/server/birthday/birthdayService.ts`：生贺配置服务
+  - 新增 `src/server/birthday/routes.ts`：RESTful API 路由
+  - 新增 `src/pages/Recruit.tsx`：`/recruit` 招募与培养页面
+  - 更新 `src/pages/Admin.tsx`：新增"生贺配置"管理 Tab
+  - 更新 `src/pages/Home.tsx`：AcademyHome 组件新增 8 个内容模块
+  - 新增 `prisma/seed-birthday.ts`：生贺配置种子数据脚本
+  - **数据库变更**：新增 `BirthdayConfig` 表
+  - **部署注意**：需执行 `npm run db:generate` 和 `npm run db:push`（开发环境）或 `npm run db:deploy`（生产环境）以应用新的 Prisma schema。可选执行 `npx tsx prisma/seed-birthday.ts` 初始化默认生贺配置数据。
 
 - **移除 firebaseCompat 兼容层**：彻底删除 `src/lib/firebaseCompat/` 与 `src/firebase.ts`
   - `imageService` 改为直接调用 `/api/image-maps`（按 MD5 查重 + upsert 映射）

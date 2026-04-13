@@ -8,6 +8,7 @@
 - 向量检索继续使用 Qdrant（Docker 容器）。
 - 数据库初始化使用 Prisma Migration：`npm run db:deploy`。
 - 首次上线后执行一次 `npm run db:seed` 初始化管理员账号。
+- （可选）首次上线后执行 `npx tsx prisma/seed-birthday.ts` 初始化生贺配置数据。
 
 适用架构：
 
@@ -174,6 +175,44 @@ EOF
 | `S3_EXPIRES_IN` | 预签名 URL 过期时间（秒） |
 
 详细配置指南请参考：`docs/S3_SETUP_GUIDE.md`
+
+### 3.2 自定义上传目录（可选）
+
+用于将上传文件存储到非容器内部目录（如解决 `/root` 权限问题）：
+
+```bash
+# 创建宿主机目录
+mkdir -p /var/www/huangshifu-wiki/uploads
+chown -R 1001:1001 /var/www/huangshifu-wiki/uploads
+
+# 在 .env 中添加
+UPLOADS_PATH="/var/www/huangshifu-wiki/uploads"
+```
+
+更新 `docker-compose.yml` 添加卷挂载：
+
+```yaml
+services:
+  app:
+    volumes:
+      - /var/www/huangshifu-wiki/uploads:/app/uploads
+```
+
+### 3.3 Blurhash 哈希占位配置（可选）
+
+```bash
+BLURHASH_ENABLED="true"
+BLURHASH_AUTO_GENERATE="true"
+BLURHASH_COMPONENTS_X="4"
+BLURHASH_COMPONENTS_Y="3"
+```
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `BLURHASH_ENABLED` | true | 是否启用 blurhash |
+| `BLURHASH_AUTO_GENERATE` | true | 上传时自动生成 |
+| `BLURHASH_COMPONENTS_X` | 4 | blurhash X 分量 |
+| `BLURHASH_COMPONENTS_Y` | 3 | blurhash Y 分量 |
 
 ---
 
@@ -400,7 +439,24 @@ npm run regions:import
 docker exec -it hsf-postgres psql -U hsf_wiki -d huangshifu_wiki -c "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;"
 ```
 
-返回应包含 `User`、`WikiPage`、`MusicTrack`、`Album`、`ImageEmbedding`、`SongCover`、`Region` 等表。
+返回应包含 `User`、`WikiPage`、`MusicTrack`、`Album`、`ImageEmbedding`、`ImageMap`、`SongCover`、`Region`、`BirthdayConfig` 等表。
+
+### 5.4.1 初始化生贺配置数据（可选）
+
+首次部署后，如需初始化"从前书院"生贺皮肤的默认配置数据，可执行种子脚本：
+
+```bash
+docker exec -it hsf-app npx tsx prisma/seed-birthday.ts
+```
+
+该脚本会创建以下默认生贺配置：
+- 教务处文件通知公告（巡演信息）
+- 校史拾遗
+- 荣誉校友（黄诗扶信息）
+- 雅学之境（校园环境）
+- 学子留言壁（示例留言）
+- 联系我们（招生办联系方式）
+- 生贺节目（音乐/视频/舞蹈/彩蛋四类）
 
 ---
 
@@ -520,6 +576,8 @@ docker compose up -d app
 docker compose logs -f app
 ```
 
+> **生贺配置（v6.x+）**：如果代码更新包含 BirthdayConfig 模型变更，需执行 `npm run db:deploy` 应用迁移。
+>
 > **地点标签功能（v4.0+）**：如果需要更新行政区划数据，可执行：
 > ```bash
 > npm run regions:import
@@ -756,3 +814,43 @@ docker compose ps
 | `QDRANT_API_KEY` | Qdrant API Key | 空 |
 | `VITE_AMAP_JS_API_KEY` | 高德地图 JS API Key | 空 |
 | `AMAP_API_KEY` | 高德地图 Web Service Key | 空 |
+| `UPLOADS_PATH` | 自定义上传目录 | 项目根目录/uploads |
+| `BLURHASH_ENABLED` | 是否启用 blurhash | `true` |
+| `BLURHASH_AUTO_GENERATE` | 上传时自动生成 blurhash | `true` |
+| `BLURHASH_COMPONENTS_X` | blurhash X 分量 | `4` |
+| `BLURHASH_COMPONENTS_Y` | blurhash Y 分量 | `3` |
+| `S3_ENABLED` | 是否启用 S3 存储 | `false` |
+
+---
+
+## 18. 图片系统架构（简要）
+
+详细文档请参考 `docs/IMAGE_SYSTEM.md`。
+
+### ImageMap 数据模型
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | String | 唯一标识 |
+| `md5` | String | 文件 MD5 哈希 |
+| `localUrl` | String | 本地存储 URL |
+| `externalUrl` | String? | 外部图床 URL |
+| `s3Url` | String? | S3 存储 URL |
+| `storageType` | StorageType | 存储类型 |
+| `blurhash` | String? | Blurhash 预览 |
+
+### SmartImage 组件
+
+系统使用统一的 `SmartImage` 组件处理所有图片显示：
+- 支持 ImageMap 对象或纯 URL 字符串
+- 自动 blurhash 预览
+- 加载过渡动画
+- 错误处理
+
+### 存储策略
+
+通过 Admin 后台 → 图片管理 → 设置 配置：
+- 默认存储：local / s3 / external
+- 启用回退：true / false
+
+修改立即生效，无需重启容器。
