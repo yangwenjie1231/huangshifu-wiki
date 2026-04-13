@@ -3,14 +3,31 @@ import React, {
 	useCallback,
 	useRef,
 	useEffect,
+	useMemo,
 } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { X } from "lucide-react";
+import { X, Filter, SortAsc, Search, ChevronDown, ChevronUp } from "lucide-react";
 import { clsx } from "clsx";
 import { apiGet } from "../../lib/apiClient";
 import { useToast } from "../../components/Toast";
 import type { WikiRelationType, WikiRelationRecord } from "./types";
 import { RELATION_TYPE_LABELS } from "./types";
+import RelationPreview from "./RelationPreview";
+import { calculateRelationQuality } from "../../lib/relationQuality";
+import {
+	filterAndSortRelations,
+	type SortStrategy,
+	type FilterOptions,
+	DEFAULT_FILTER_OPTIONS,
+	DEFAULT_SORT_STRATEGY,
+	getTypeLabel,
+	getQualityFilterLabel,
+	getSortStrategyLabel,
+	type RelationWithMetadata,
+} from "../../lib/relationSorter";
+import { metadataCache } from "../../lib/metadataCache";
+import type { WikiPageMetadata } from "../../lib/wikiLinkParser";
+import type { WikiItem } from "../../types/entities";
 
 type RelationSearchSuggestion = {
 	type: "keyword" | "wiki" | "post" | "music" | "album";
@@ -35,14 +52,65 @@ const parseInternalLink = (
 interface WikiRelationsProps {
 	relations: WikiRelationRecord[];
 	onRelationsChange: (relations: WikiRelationRecord[]) => void;
+	currentPage?: WikiItem | null;
 }
 
 const WikiRelations: React.FC<WikiRelationsProps> = ({
 	relations,
 	onRelationsChange,
+	currentPage = null,
 }) => {
 	const { show } = useToast();
 
+	// 筛选和排序状态
+	const [sortStrategy, setSortStrategy] =
+		useState<SortStrategy>(DEFAULT_SORT_STRATEGY);
+	const [filterOptions, setFilterOptions] = useState<FilterOptions>(
+		DEFAULT_FILTER_OPTIONS,
+	);
+	const [showFilters, setShowFilters] = useState(false);
+
+	// 元数据缓存
+	const [metadataMap, setMetadataMap] = useState<Map<string, WikiPageMetadata>>(
+		new Map(),
+	);
+
+	// 加载元数据
+	useEffect(() => {
+		const loadMetadata = async () => {
+			const slugs = relations.map((r) => r.targetSlug);
+			if (slugs.length === 0) return;
+
+			const metadata = await metadataCache.getBatch(slugs);
+			setMetadataMap(metadata);
+		};
+
+		loadMetadata();
+	}, [relations]);
+
+	// 带元数据的关联
+	const relationsWithMetadata: RelationWithMetadata[] = useMemo(() => {
+		return relations.map((relation) => {
+			const metadata = metadataMap.get(relation.targetSlug) || null;
+			const quality = calculateRelationQuality(relation, currentPage, metadata);
+			return {
+				...relation,
+				metadata,
+				qualityScore: quality.total,
+			};
+		});
+	}, [relations, metadataMap, currentPage]);
+
+	// 筛选和排序后的关联
+	const filteredAndSortedRelations = useMemo(() => {
+		return filterAndSortRelations(
+			relationsWithMetadata,
+			filterOptions,
+			sortStrategy,
+		);
+	}, [relationsWithMetadata, filterOptions, sortStrategy]);
+
+	// 新建关联的状态
 	const [newRelation, setNewRelation] = useState<WikiRelationRecord>({
 		type: "related_person",
 		targetSlug: "",
@@ -57,6 +125,11 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 	const [relationSelectedIndex, setRelationSelectedIndex] = useState(-1);
 	const relationSearchRef = useRef<HTMLDivElement>(null);
 	const relationSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+	// 编辑状态
+	const [editingIndex, setEditingIndex] = useState<number | null>(null);
+	const [editingRelation, setEditingRelation] =
+		useState<WikiRelationRecord | null>(null);
 
 	const handleRelationInputChange = useCallback(
 		(input: string) => {
@@ -145,181 +218,498 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 		onRelationsChange(relations.filter((_, i) => i !== index));
 	};
 
+	const handleEditRelation = (index: number) => {
+		setEditingIndex(index);
+		setEditingRelation({ ...relations[index] });
+	};
+
+	const handleSaveEdit = () => {
+		if (!editingRelation || editingIndex === null) return;
+		const updated = [...relations];
+		updated[editingIndex] = editingRelation;
+		onRelationsChange(updated);
+		setEditingIndex(null);
+		setEditingRelation(null);
+	};
+
+	const handleCancelEdit = () => {
+		setEditingIndex(null);
+		setEditingRelation(null);
+	};
+
+	// 筛选控件
+	const FilterControls = () => (
+		<div className="space-y-3">
+			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+				{/* 类型筛选 */}
+				<div>
+					<label className="block text-xs font-bold text-brand-olive/60 mb-1">
+						关联类型
+					</label>
+					<select
+						value={filterOptions.type}
+						onChange={(e) =>
+							setFilterOptions({
+								...filterOptions,
+								type: e.target.value as FilterOptions["type"],
+							})
+						}
+						className="w-full px-3 py-2 bg-white rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-olive/20"
+					>
+						<option value="all">全部类型</option>
+						<option value="related_person">相关人物</option>
+						<option value="work_relation">作品关联</option>
+						<option value="timeline_relation">时间线关联</option>
+						<option value="custom">自定义关系</option>
+					</select>
+				</div>
+
+				{/* 质量筛选 */}
+				<div>
+					<label className="block text-xs font-bold text-brand-olive/60 mb-1">
+						质量筛选
+					</label>
+					<select
+						value={filterOptions.quality}
+						onChange={(e) =>
+							setFilterOptions({
+								...filterOptions,
+								quality: e.target.value as FilterOptions["quality"],
+							})
+						}
+						className="w-full px-3 py-2 bg-white rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-olive/20"
+					>
+						<option value="all">全部质量</option>
+						<option value="excellent">优秀 85+</option>
+						<option value="good">良好 70+</option>
+						<option value="fair">一般 55+</option>
+					</select>
+				</div>
+
+				{/* 排序方式 */}
+				<div>
+					<label className="block text-xs font-bold text-brand-olive/60 mb-1">
+						排序方式
+					</label>
+					<select
+						value={sortStrategy}
+						onChange={(e) =>
+							setSortStrategy(e.target.value as SortStrategy)
+						}
+						className="w-full px-3 py-2 bg-white rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-olive/20"
+					>
+						<option value="quality">质量优先</option>
+						<option value="type_grouped">类型分组</option>
+						<option value="date">时间排序</option>
+						<option value="alphabetical">字母顺序</option>
+					</select>
+				</div>
+
+				{/* 搜索框 */}
+				<div>
+					<label className="block text-xs font-bold text-brand-olive/60 mb-1">
+						搜索
+					</label>
+					<div className="relative">
+						<Search
+							size={14}
+							className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+						/>
+						<input
+							type="text"
+							value={filterOptions.search}
+							onChange={(e) =>
+								setFilterOptions({
+									...filterOptions,
+									search: e.target.value,
+								})
+							}
+							placeholder="搜索标题、描述..."
+							className="w-full pl-9 pr-3 py-2 bg-white rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-olive/20"
+						/>
+					</div>
+				</div>
+			</div>
+
+			{/* 筛选结果统计 */}
+			<div className="flex items-center justify-between text-xs text-gray-500">
+				<span>
+					显示{" "}
+					<span className="font-bold text-brand-olive">
+						{filteredAndSortedRelations.length}
+					</span>{" "}
+					/ {relations.length} 个关联
+				</span>
+				{(filterOptions.type !== "all" ||
+					filterOptions.quality !== "all" ||
+					filterOptions.search ||
+					sortStrategy !== DEFAULT_SORT_STRATEGY) && (
+					<button
+						type="button"
+						onClick={() => {
+							setFilterOptions(DEFAULT_FILTER_OPTIONS);
+							setSortStrategy(DEFAULT_SORT_STRATEGY);
+						}}
+						className="text-brand-primary hover:underline"
+					>
+						重置筛选
+					</button>
+				)}
+			</div>
+		</div>
+	);
+
 	return (
 		<div className="space-y-4">
+			{/* 标题栏 */}
 			<div className="flex items-center justify-between">
 				<label className="text-xs font-bold uppercase tracking-widest text-brand-olive/60">
 					相关页面
 				</label>
-				<button
-					type="button"
-					onClick={handleAddRelation}
-					className="px-4 py-2 bg-brand-primary/10 text-brand-primary rounded-xl text-xs font-bold hover:bg-brand-primary/20 transition-all"
-				>
-					+ 添加关联
-				</button>
+				<div className="flex items-center gap-2">
+					<button
+						type="button"
+						onClick={() => setShowFilters(!showFilters)}
+						className={clsx(
+							"px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5",
+							showFilters
+								? "bg-brand-olive text-white"
+								: "bg-brand-olive/10 text-brand-olive hover:bg-brand-olive/20",
+						)}
+					>
+						<Filter size={14} />
+						筛选
+						{showFilters ? (
+							<ChevronUp size={12} />
+						) : (
+							<ChevronDown size={12} />
+						)}
+					</button>
+					<button
+						type="button"
+						onClick={handleAddRelation}
+						className="px-4 py-1.5 bg-brand-primary/10 text-brand-primary rounded-xl text-xs font-bold hover:bg-brand-primary/20 transition-all"
+					>
+						+ 添加关联
+					</button>
+				</div>
 			</div>
 
-			{relations.length > 0 && (
-				<div className="space-y-2">
-					{relations.map((relation, index) => (
-						<div
-							key={index}
-							className="flex items-center gap-3 p-3 bg-brand-cream/50 rounded-xl"
-						>
-							<span className="text-xs text-brand-primary font-bold min-w-[80px]">
-								{RELATION_TYPE_LABELS[relation.type]}
-							</span>
-							<span className="flex-1 text-sm truncate">
-								{relation.label || relation.targetSlug}
-							</span>
-							{relation.bidirectional && (
-								<span className="text-[10px] text-gray-400">↔ 双向</span>
-							)}
-							<button
-								type="button"
-								onClick={() => handleRemoveRelation(index)}
-								className="text-gray-400 hover:text-red-500 transition-colors"
-							>
-								<X size={16} />
-							</button>
+			{/* 筛选面板 */}
+			<AnimatePresence>
+				{showFilters && (
+					<motion.div
+						initial={{ height: 0, opacity: 0 }}
+						animate={{ height: "auto", opacity: 1 }}
+						exit={{ height: 0, opacity: 0 }}
+						className="overflow-hidden"
+					>
+						<div className="p-4 bg-brand-cream/30 rounded-2xl border border-brand-cream">
+							<FilterControls />
 						</div>
-					))}
+					</motion.div>
+				)}
+			</AnimatePresence>
+
+			{/* 关联列表 */}
+			{filteredAndSortedRelations.length > 0 && (
+				<div className="space-y-3">
+					{filteredAndSortedRelations.map((relation, index) => {
+						// 找到原始数组中的索引
+						const originalIndex = relations.findIndex(
+							(r) =>
+								r.targetSlug === relation.targetSlug &&
+								r.type === relation.type,
+						);
+
+						return (
+							<RelationPreview
+							key={`${relation.targetSlug}-${relation.type}`}
+							relation={{
+								...relation,
+								metadata: relation.metadata || undefined,
+							}}
+							currentPage={currentPage || ({} as WikiItem)}
+							onEdit={() => handleEditRelation(originalIndex)}
+							onRemove={() => handleRemoveRelation(originalIndex)}
+							isNew={editingIndex === originalIndex}
+						/>
+						);
+					})}
 				</div>
 			)}
 
-			<div className="flex flex-col sm:flex-row gap-3 p-4 bg-brand-cream/30 rounded-2xl border border-brand-cream">
-				<select
-					value={newRelation.type}
-					onChange={(e) =>
-						setNewRelation({
-							...newRelation,
-							type: e.target.value as WikiRelationType,
-						})
-					}
-					className="px-4 py-2 bg-white rounded-xl border border-gray-200 text-sm"
-				>
-					<option value="related_person">相关人物</option>
-					<option value="work_relation">作品关联</option>
-					<option value="timeline_relation">时间线关联</option>
-					<option value="custom">自定义关系</option>
-				</select>
-				<div ref={relationSearchRef} className="relative flex-1">
-					<input
-						type="text"
-						value={newRelation.targetSlug}
-						onChange={(e) => {
-							handleRelationInputChange(e.target.value);
-						}}
-						placeholder="输入 [[页面标题]] 或直接输入 slug"
-						className="w-full px-4 py-2 bg-white rounded-xl border border-gray-200 text-sm"
-						onKeyDown={(e) => {
-							if (!showRelationDropdown) return;
-							if (e.key === "ArrowDown") {
-								e.preventDefault();
-								setRelationSelectedIndex((prev) =>
-									Math.min(prev + 1, relationSearchResults.length - 1),
-								);
-							} else if (e.key === "ArrowUp") {
-								e.preventDefault();
-								setRelationSelectedIndex((prev) =>
-									Math.max(prev - 1, -1),
-								);
-							} else if (
-								e.key === "Enter" &&
-								relationSelectedIndex >= 0
-							) {
-								e.preventDefault();
-								const selected =
-									relationSearchResults[relationSelectedIndex];
-								setNewRelation({
-									...newRelation,
-									targetSlug: selected.id || "",
-								});
-								setShowRelationDropdown(false);
-							} else if (e.key === "Escape") {
-								setShowRelationDropdown(false);
-							}
-						}}
-					/>
-					<AnimatePresence>
-						{showRelationDropdown && (
-							<motion.div
-								initial={{ opacity: 0, y: -4 }}
-								animate={{ opacity: 1, y: 0 }}
-								exit={{ opacity: 0, y: -4 }}
-								className="absolute z-50 mt-1 w-full bg-white rounded-xl border border-gray-200 shadow-lg max-h-60 overflow-auto"
-							>
-								<div className="px-3 py-2 text-xs text-gray-500 border-b border-gray-100 bg-gray-50">
-									直接输入{" "}
-									<code className="bg-gray-200 px-1 rounded">
-										[[标题]]
-									</code>{" "}
-									格式更快
+			{/* 空状态 */}
+			{relations.length > 0 &&
+				filteredAndSortedRelations.length === 0 && (
+					<div className="p-8 text-center text-gray-500 bg-brand-cream/30 rounded-2xl border border-brand-cream">
+						<p className="text-sm">没有符合筛选条件的关联</p>
+						<button
+							type="button"
+							onClick={() => {
+								setFilterOptions(DEFAULT_FILTER_OPTIONS);
+								setSortStrategy(DEFAULT_SORT_STRATEGY);
+							}}
+							className="mt-2 text-brand-primary hover:underline text-sm"
+						>
+							重置筛选条件
+						</button>
+					</div>
+				)}
+
+			{/* 编辑关联弹窗 */}
+			<AnimatePresence>
+				{editingRelation && editingIndex !== null && (
+					<motion.div
+						initial={{ opacity: 0 }}
+						animate={{ opacity: 1 }}
+						exit={{ opacity: 0 }}
+						className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+						onClick={handleCancelEdit}
+					>
+						<motion.div
+							initial={{ scale: 0.95, y: 20 }}
+							animate={{ scale: 1, y: 0 }}
+							exit={{ scale: 0.95, y: 20 }}
+							className="bg-white rounded-2xl p-6 max-w-md w-full"
+							onClick={(e) => e.stopPropagation()}
+						>
+							<div className="flex items-center justify-between mb-4">
+								<h3 className="text-lg font-bold text-brand-olive">
+									编辑关联
+								</h3>
+								<button
+									onClick={handleCancelEdit}
+									className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+								>
+									<X size={20} />
+								</button>
+							</div>
+
+							<div className="space-y-3">
+								<div>
+									<label className="block text-xs font-bold text-gray-600 mb-1">
+										关联类型
+									</label>
+									<select
+										value={editingRelation.type}
+										onChange={(e) =>
+											setEditingRelation({
+												...editingRelation,
+												type: e.target.value as WikiRelationType,
+											})
+										}
+										className="w-full px-3 py-2 bg-white rounded-xl border border-gray-200 text-sm"
+									>
+										<option value="related_person">相关人物</option>
+										<option value="work_relation">作品关联</option>
+										<option value="timeline_relation">时间线关联</option>
+										<option value="custom">自定义关系</option>
+									</select>
 								</div>
-								{relationSearchLoading ? (
-									<div className="px-4 py-2 text-sm text-gray-500">
-										搜索中...
-									</div>
-								) : relationSearchResults.length === 0 ? (
-									<div className="px-4 py-2 text-sm text-gray-500">
-										未找到相关页面，请尝试输入 [[页面标题]]
-									</div>
-								) : (
-									relationSearchResults.map((result, idx) => (
-										<div
-											key={result.id}
-											className={`px-4 py-2 cursor-pointer ${idx === relationSelectedIndex ? "bg-brand-primary/10" : "hover:bg-gray-50"}`}
-											onClick={() => {
-												setNewRelation({
-													...newRelation,
-													targetSlug: result.id || "",
-												});
-												setShowRelationDropdown(false);
-											}}
-											onMouseEnter={() =>
-												setRelationSelectedIndex(idx)
+
+								<div>
+									<label className="block text-xs font-bold text-gray-600 mb-1">
+										目标页面
+									</label>
+									<input
+										type="text"
+										value={editingRelation.targetSlug}
+										readOnly
+										className="w-full px-3 py-2 bg-gray-50 rounded-xl border border-gray-200 text-sm text-gray-500"
+									/>
+								</div>
+
+								<div>
+									<label className="block text-xs font-bold text-gray-600 mb-1">
+										显示名称
+									</label>
+									<input
+										type="text"
+										value={editingRelation.label || ""}
+										onChange={(e) =>
+											setEditingRelation({
+												...editingRelation,
+												label: e.target.value,
+											})
+										}
+										placeholder="可选"
+										className="w-full px-3 py-2 bg-white rounded-xl border border-gray-200 text-sm"
+									/>
+								</div>
+
+								<div>
+									<label className="flex items-center gap-2 text-sm text-gray-600">
+										<input
+											type="checkbox"
+											checked={editingRelation.bidirectional}
+											onChange={(e) =>
+												setEditingRelation({
+													...editingRelation,
+													bidirectional: e.target.checked,
+												})
 											}
-										>
-											<div className="text-sm font-medium text-brand-olive">
-												{result.text}
-											</div>
-											<div className="text-xs text-gray-500 truncate flex items-center gap-2">
-												<span className="bg-gray-100 px-1.5 py-0.5 rounded text-[10px]">
-													{result.id}
-												</span>
-												<span>{result.subtext}</span>
-											</div>
-										</div>
-									))
-								)}
-							</motion.div>
-						)}
-					</AnimatePresence>
-				</div>
-				<input
-					type="text"
-					value={newRelation.label || ""}
-					onChange={(e) =>
-						setNewRelation({ ...newRelation, label: e.target.value })
-					}
-					placeholder="显示名称 (可选)"
-					className="flex-1 px-4 py-2 bg-white rounded-xl border border-gray-200 text-sm"
-				/>
-				<label className="flex items-center gap-2 text-xs text-gray-500 whitespace-nowrap">
-					<input
-						type="checkbox"
-						checked={newRelation.bidirectional}
+											className="rounded"
+										/>
+										双向关联
+									</label>
+								</div>
+							</div>
+
+							<div className="flex gap-3 mt-6">
+								<button
+									onClick={handleCancelEdit}
+									className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-200 transition-all"
+								>
+									取消
+								</button>
+								<button
+									onClick={handleSaveEdit}
+									className="flex-1 px-4 py-2 bg-brand-olive text-white rounded-xl text-sm font-bold hover:bg-brand-olive/90 transition-all"
+								>
+									保存
+								</button>
+							</div>
+						</motion.div>
+					</motion.div>
+				)}
+			</AnimatePresence>
+
+			{/* 添加关联表单 */}
+			<div className="flex flex-col gap-3 p-4 bg-brand-cream/30 rounded-2xl border border-brand-cream">
+				<div className="flex flex-col sm:flex-row gap-3">
+					<select
+						value={newRelation.type}
 						onChange={(e) =>
 							setNewRelation({
 								...newRelation,
-								bidirectional: e.target.checked,
+								type: e.target.value as WikiRelationType,
 							})
 						}
-						className="rounded"
+						className="px-4 py-2 bg-white rounded-xl border border-gray-200 text-sm"
+					>
+						<option value="related_person">相关人物</option>
+						<option value="work_relation">作品关联</option>
+						<option value="timeline_relation">时间线关联</option>
+						<option value="custom">自定义关系</option>
+					</select>
+					<div ref={relationSearchRef} className="relative flex-1">
+						<input
+							type="text"
+							value={newRelation.targetSlug}
+							onChange={(e) => {
+								handleRelationInputChange(e.target.value);
+							}}
+							placeholder="输入 [[页面标题]] 或直接输入 slug"
+							className="w-full px-4 py-2 bg-white rounded-xl border border-gray-200 text-sm"
+							onKeyDown={(e) => {
+								if (!showRelationDropdown) return;
+								if (e.key === "ArrowDown") {
+									e.preventDefault();
+									setRelationSelectedIndex((prev) =>
+										Math.min(prev + 1, relationSearchResults.length - 1),
+									);
+								} else if (e.key === "ArrowUp") {
+									e.preventDefault();
+									setRelationSelectedIndex((prev) =>
+										Math.max(prev - 1, -1),
+									);
+								} else if (
+									e.key === "Enter" &&
+									relationSelectedIndex >= 0
+								) {
+									e.preventDefault();
+									const selected =
+										relationSearchResults[relationSelectedIndex];
+									setNewRelation({
+										...newRelation,
+										targetSlug: selected.id || "",
+									});
+									setShowRelationDropdown(false);
+								} else if (e.key === "Escape") {
+									setShowRelationDropdown(false);
+								}
+							}}
+						/>
+						<AnimatePresence>
+							{showRelationDropdown && (
+								<motion.div
+									initial={{ opacity: 0, y: -4 }}
+									animate={{ opacity: 1, y: 0 }}
+									exit={{ opacity: 0, y: -4 }}
+									className="absolute z-50 mt-1 w-full bg-white rounded-xl border border-gray-200 shadow-lg max-h-60 overflow-auto"
+								>
+									<div className="px-3 py-2 text-xs text-gray-500 border-b border-gray-100 bg-gray-50">
+										直接输入{" "}
+										<code className="bg-gray-200 px-1 rounded">
+											[[标题]]
+										</code>{" "}
+										格式更快
+									</div>
+									{relationSearchLoading ? (
+										<div className="px-4 py-2 text-sm text-gray-500">
+											搜索中...
+										</div>
+									) : relationSearchResults.length === 0 ? (
+										<div className="px-4 py-2 text-sm text-gray-500">
+											未找到相关页面，请尝试输入 [[页面标题]]
+										</div>
+									) : (
+										relationSearchResults.map((result, idx) => (
+											<div
+												key={result.id}
+												className={`px-4 py-2 cursor-pointer ${idx === relationSelectedIndex ? "bg-brand-primary/10" : "hover:bg-gray-50"}`}
+												onClick={() => {
+													setNewRelation({
+														...newRelation,
+														targetSlug: result.id || "",
+													});
+													setShowRelationDropdown(false);
+												}}
+												onMouseEnter={() =>
+													setRelationSelectedIndex(idx)
+												}
+											>
+												<div className="text-sm font-medium text-brand-olive">
+													{result.text}
+												</div>
+												<div className="text-xs text-gray-500 truncate flex items-center gap-2">
+													<span className="bg-gray-100 px-1.5 py-0.5 rounded text-[10px]">
+														{result.id}
+													</span>
+													<span>{result.subtext}</span>
+												</div>
+											</div>
+										))
+									)}
+								</motion.div>
+							)}
+						</AnimatePresence>
+					</div>
+					<input
+						type="text"
+						value={newRelation.label || ""}
+						onChange={(e) =>
+							setNewRelation({ ...newRelation, label: e.target.value })
+						}
+						placeholder="显示名称 (可选)"
+						className="flex-1 px-4 py-2 bg-white rounded-xl border border-gray-200 text-sm"
 					/>
-					双向关联
-				</label>
+					<label className="flex items-center gap-2 text-xs text-gray-500 whitespace-nowrap">
+						<input
+							type="checkbox"
+							checked={newRelation.bidirectional}
+							onChange={(e) =>
+								setNewRelation({
+									...newRelation,
+									bidirectional: e.target.checked,
+								})
+							}
+							className="rounded"
+						/>
+						双向关联
+					</label>
+				</div>
 			</div>
 		</div>
 	);

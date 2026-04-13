@@ -6051,7 +6051,7 @@ app.get('/api/posts/:id', async (req: AuthenticatedRequest, res) => {
 
 app.post('/api/posts', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
-    const { title, section, content, tags, status, musicDocId, albumDocId } = req.body as {
+    const { title, section, content, tags, status, musicDocId, albumDocId, locationCode } = req.body as {
       title?: string;
       section?: string;
       content?: string;
@@ -6059,6 +6059,7 @@ app.post('/api/posts', requireAuth, requireActiveUser, async (req: Authenticated
       status?: ContentStatus;
       musicDocId?: string;
       albumDocId?: string;
+      locationCode?: string;
     };
 
     if (!title || !section || !content) {
@@ -6108,6 +6109,7 @@ app.post('/api/posts', requireAuth, requireActiveUser, async (req: Authenticated
         authorUid: req.authUser!.uid,
         musicDocId: normalizedMusicDocId,
         albumDocId: normalizedAlbumDocId,
+        locationCode,
       },
     });
 
@@ -6428,7 +6430,7 @@ app.post('/api/posts/:id/submit', requireAuth, requireActiveUser, async (req: Au
 
 app.put('/api/posts/:id', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
-    const { title, section, content, tags, status, musicDocId, albumDocId } = req.body as {
+    const { title, section, content, tags, status, musicDocId, albumDocId, locationCode } = req.body as {
       title?: string;
       section?: string;
       content?: string;
@@ -6436,6 +6438,7 @@ app.put('/api/posts/:id', requireAuth, requireActiveUser, async (req: Authentica
       status?: ContentStatus;
       musicDocId?: string;
       albumDocId?: string;
+      locationCode?: string;
     };
 
     if (!title || !section || !content) {
@@ -6514,6 +6517,7 @@ app.put('/api/posts/:id', requireAuth, requireActiveUser, async (req: Authentica
         reviewedAt: null,
         musicDocId: normalizedMusicDocId,
         albumDocId: normalizedAlbumDocId,
+        locationCode,
       },
     });
 
