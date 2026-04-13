@@ -223,29 +223,29 @@ EOF
 
 ### 环境变量说明
 
-| 变量 | 说明 |
-|------|------|
-| `VITE_GEMINI_API_KEY` | 空时 AI 功能自动降级 |
-| `JWT_SECRET` | 必须设置，否则服务无法启动 |
-| `WECHAT_LOGIN_MOCK` | 联调阶段可设 `true`，正式环境设 `false` |
-| `COOKIE_SECURE` | HTTP 部署自动关闭，HTTPS 自动启用 |
-| `QDRANT_URL` | 指向本机 Qdrant 时保持 `http://127.0.0.1:6333` |
-| `S3_ENABLED` | 是否启用 S3 存储（false=本地，true=S3） |
-| `S3_ENDPOINT_URL` | S3 兼容端点地址 |
-| `S3_WRITE_ACCESS_KEY_ID` | 写入凭证 AccessKey（机密，仅后端使用） |
-| `S3_WRITE_SECRET_ACCESS_KEY` | 写入凭证 SecretKey（机密，仅后端使用） |
-| `S3_READ_ACCESS_KEY_ID` | 读取凭证 AccessKey（可用于前端） |
-| `S3_READ_SECRET_ACCESS_KEY` | 读取凭证 SecretKey（可用于前端） |
-| `S3_PUBLIC_BUCKET_NAME` | 存储桶名称 |
-| `S3_MAX_FILE_SIZE` | 最大文件大小（字节），默认 10MB |
-| `S3_ALLOWED_CONTENT_TYPES` | 允许的文件类型（逗号分隔） |
-| `S3_ENABLE_MD5_VERIFICATION` | 是否启用 MD5 校验（推荐 true） |
-| `S3_EXPIRES_IN` | 预签名 URL 过期时间（秒） |
-| `VITE_AMAP_JS_API_KEY` | 高德地图 JS API Key（Web 平台） |
-| `VITE_AMAP_SECURITY_JS_CODE` | 高德地图安全密钥（JS API 2.0 必须） |
-| `AMAP_API_KEY` | 高德地图 Web 服务 API Key（服务端地理编码用） |
-| `BACKUP_PASSWORD` | 数据库备份加密密码（必须设置，否则备份功能不可用） |
-| `BACKUP_RETAIN_COUNT` | 备份文件保留数量（默认 20），超过后自动删除最旧备份 |
+| 变量                           | 说明                                      |
+| ---------------------------- | --------------------------------------- |
+| `VITE_GEMINI_API_KEY`        | 空时 AI 功能自动降级                            |
+| `JWT_SECRET`                 | 必须设置，否则服务无法启动                           |
+| `WECHAT_LOGIN_MOCK`          | 联调阶段可设 `true`，正式环境设 `false`             |
+| `COOKIE_SECURE`              | HTTP 部署自动关闭，HTTPS 自动启用                  |
+| `QDRANT_URL`                 | 指向本机 Qdrant 时保持 `http://127.0.0.1:6333` |
+| `S3_ENABLED`                 | 是否启用 S3 存储（false=本地，true=S3）            |
+| `S3_ENDPOINT_URL`            | S3 兼容端点地址                               |
+| `S3_WRITE_ACCESS_KEY_ID`     | 写入凭证 AccessKey（机密，仅后端使用）                |
+| `S3_WRITE_SECRET_ACCESS_KEY` | 写入凭证 SecretKey（机密，仅后端使用）                |
+| `S3_READ_ACCESS_KEY_ID`      | 读取凭证 AccessKey（可用于前端）                   |
+| `S3_READ_SECRET_ACCESS_KEY`  | 读取凭证 SecretKey（可用于前端）                   |
+| `S3_PUBLIC_BUCKET_NAME`      | 存储桶名称                                   |
+| `S3_MAX_FILE_SIZE`           | 最大文件大小（字节），默认 10MB                      |
+| `S3_ALLOWED_CONTENT_TYPES`   | 允许的文件类型（逗号分隔）                           |
+| `S3_ENABLE_MD5_VERIFICATION` | 是否启用 MD5 校验（推荐 true）                    |
+| `S3_EXPIRES_IN`              | 预签名 URL 过期时间（秒）                         |
+| `VITE_AMAP_JS_API_KEY`       | 高德地图 JS API Key（Web 平台）                 |
+| `VITE_AMAP_SECURITY_JS_CODE` | 高德地图安全密钥（JS API 2.0 必须）                 |
+| `AMAP_API_KEY`               | 高德地图 Web 服务 API Key（服务端地理编码用）           |
+| `BACKUP_PASSWORD`            | 数据库备份加密密码（必须设置，否则备份功能不可用）               |
+| `BACKUP_RETAIN_COUNT`        | 备份文件保留数量（默认 20），超过后自动删除最旧备份             |
 
 ### 3.1 微信小程序 WebView 登录相关
 
@@ -472,7 +472,7 @@ USE_PM2=0 ./scripts/deploy.sh         # 不使用 PM2
 - [ ] 上传的图片可通过签名 URL 访问
 - [ ] MD5 校验功能正常工作
 
----
+***
 
 ## 12. 常见问题排查
 
@@ -843,25 +843,25 @@ npm run download:sensitive-words
 
 ## 附录：主要数据库表
 
-| 表名 | 说明 |
-|------|------|
-| `User` | 用户账号（包含 `preferences` JSON 字段存储视图偏好） |
-| `Post` | 论坛帖子 |
-| `PostComment` | 评论（支持关联 `Post` 或 `Gallery`） |
-| `WikiPage` | Wiki 页面 |
-| `Gallery` | 图集（支持版权标识 `copyright` 字段） |
-| `MusicTrack` | 音乐曲目 |
-| `Album` | 专辑 |
-| `MediaAsset` | 媒体资产 |
-| `ImageEmbedding` | 图片向量 |
-| `ImageMap` | 图片映射（blurhash、S3 URL、本地和外部图床 URL） |
-| `Region` | 行政区划 |
-| `EditLock` | 编辑锁 |
-| `WikiBranch` | Wiki 分支 |
-| `WikiPullRequest` | Wiki PR |
-| `BirthdayConfig` | 生贺配置（用于"从前书院"皮肤的内容管理） |
+| 表名                | 说明                                   |
+| ----------------- | ------------------------------------ |
+| `User`            | 用户账号（包含 `preferences` JSON 字段存储视图偏好） |
+| `Post`            | 论坛帖子                                 |
+| `PostComment`     | 评论（支持关联 `Post` 或 `Gallery`）          |
+| `WikiPage`        | Wiki 页面                              |
+| `Gallery`         | 图集（支持版权标识 `copyright` 字段）            |
+| `MusicTrack`      | 音乐曲目                                 |
+| `Album`           | 专辑                                   |
+| `MediaAsset`      | 媒体资产                                 |
+| `ImageEmbedding`  | 图片向量                                 |
+| `ImageMap`        | 图片映射（blurhash、S3 URL、本地和外部图床 URL）    |
+| `Region`          | 行政区划                                 |
+| `EditLock`        | 编辑锁                                  |
+| `WikiBranch`      | Wiki 分支                              |
+| `WikiPullRequest` | Wiki PR                              |
+| `BirthdayConfig`  | 生贺配置（用于"从前书院"皮肤的内容管理）                |
 
----
+***
 
 ## 附录：图片系统架构
 
@@ -869,41 +869,42 @@ npm run download:sensitive-words
 
 ### 数据模型 (ImageMap)
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `id` | String | 唯一标识 |
-| `md5` | String | 文件 MD5 哈希，用于去重 |
-| `localUrl` | String | 本地存储 URL |
-| `externalUrl` | String? | 外部自定义图床 URL |
-| `s3Url` | String? | S3 存储 URL |
+| 字段            | 类型          | 说明                         |
+| ------------- | ----------- | -------------------------- |
+| `id`          | String      | 唯一标识                       |
+| `md5`         | String      | 文件 MD5 哈希，用于去重             |
+| `localUrl`    | String      | 本地存储 URL                   |
+| `externalUrl` | String?     | 外部自定义图床 URL                |
+| `s3Url`       | String?     | S3 存储 URL                  |
 | `storageType` | StorageType | 当前存储类型 (local/s3/external) |
-| `blurhash` | String? | Blurhash 预览数据 |
-| `thumbhash` | String? | 缩略图哈希（预留） |
-| `createdAt` | DateTime | 创建时间 |
+| `blurhash`    | String?     | Blurhash 预览数据              |
+| `thumbhash`   | String?     | 缩略图哈希（预留）                  |
+| `createdAt`   | DateTime    | 创建时间                       |
 
 ### API 端点
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/image-maps` | 获取图片列表 |
-| GET | `/api/image-maps/:id` | 获取单张图片 |
-| POST | `/api/image-maps` | 创建图片记录 |
-| PATCH | `/api/image-maps/:id` | 更新图片 |
-| DELETE | `/api/image-maps/:id` | 删除图片 |
-| GET | `/api/image-maps/export` | 导出 CSV |
-| POST | `/api/image-maps/import` | 批量导入 |
-| POST | `/api/image-maps/:id/refresh-blurhash` | 刷新 blurhash |
-| POST | `/api/image-maps/refresh-all-blurhash` | 批量生成 blurhash |
-| GET | `/api/image-maps/stats` | 获取统计 |
-| GET | `/api/config/image-preference` | 获取存储策略 |
-| PATCH | `/api/config/image-preference` | 设置存储策略 |
-| GET | `/api/s3/config` | 获取 S3 配置 |
-| GET | `/api/s3/presign-upload` | 生成上传签名 |
-| GET | `/api/s3/presign-download/:key` | 生成下载签名 |
+| 方法     | 路径                                     | 说明            |
+| ------ | -------------------------------------- | ------------- |
+| GET    | `/api/image-maps`                      | 获取图片列表        |
+| GET    | `/api/image-maps/:id`                  | 获取单张图片        |
+| POST   | `/api/image-maps`                      | 创建图片记录        |
+| PATCH  | `/api/image-maps/:id`                  | 更新图片          |
+| DELETE | `/api/image-maps/:id`                  | 删除图片          |
+| GET    | `/api/image-maps/export`               | 导出 CSV        |
+| POST   | `/api/image-maps/import`               | 批量导入          |
+| POST   | `/api/image-maps/:id/refresh-blurhash` | 刷新 blurhash   |
+| POST   | `/api/image-maps/refresh-all-blurhash` | 批量生成 blurhash |
+| GET    | `/api/image-maps/stats`                | 获取统计          |
+| GET    | `/api/config/image-preference`         | 获取存储策略        |
+| PATCH  | `/api/config/image-preference`         | 设置存储策略        |
+| GET    | `/api/s3/config`                       | 获取 S3 配置      |
+| GET    | `/api/s3/presign-upload`               | 生成上传签名        |
+| GET    | `/api/s3/presign-download/:key`        | 生成下载签名        |
 
 ### 前端组件
 
 系统使用统一的 `SmartImage` 组件处理所有图片显示：
+
 - 支持 ImageMap 对象或纯 URL 字符串输入
 - 自动解码 blurhash 显示模糊预览
 - 图片加载过渡动画
@@ -912,6 +913,7 @@ npm run download:sensitive-words
 ### 存储策略
 
 通过 Admin 后台 → 图片管理 → 设置可配置：
+
 - **默认存储**: local / s3 / external
 - **启用回退**: true / false
 
@@ -919,30 +921,33 @@ npm run download:sensitive-words
 
 ### 环境变量
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `UPLOADS_PATH` | 项目根目录/uploads | 自定义上传路径 |
-| `BLURHASH_ENABLED` | true | 是否启用 blurhash |
-| `BLURHASH_AUTO_GENERATE` | true | 上传时自动生成 |
-| `BLURHASH_COMPONENTS_X` | 4 | blurhash X 分量 |
-| `BLURHASH_COMPONENTS_Y` | 3 | blurhash Y 分量 |
+| 变量                       | 默认值           | 说明            |
+| ------------------------ | ------------- | ------------- |
+| `UPLOADS_PATH`           | 项目根目录/uploads | 自定义上传路径       |
+| `BLURHASH_ENABLED`       | true          | 是否启用 blurhash |
+| `BLURHASH_AUTO_GENERATE` | true          | 上传时自动生成       |
+| `BLURHASH_COMPONENTS_X`  | 4             | blurhash X 分量 |
+| `BLURHASH_COMPONENTS_Y`  | 3             | blurhash Y 分量 |
 
 ### 自定义上传路径配置
 
 如果需要将上传文件存储到非项目目录（如 `/var/www/huangshifu-wiki/uploads`）：
 
 1. 创建目录并设置权限：
+
 ```bash
 mkdir -p /var/www/huangshifu-wiki/uploads
 chown -R node_user:node_user /var/www/huangshifu-wiki/uploads
 ```
 
-2. 在 `.env` 中添加：
+1. 在 `.env` 中添加：
+
 ```bash
 UPLOADS_PATH="/var/www/huangshifu-wiki/uploads"
 ```
 
-3. 重启服务：
+1. 重启服务：
+
 ```bash
 pm2 restart huangshifu-wiki --update-env
 ```
@@ -950,6 +955,7 @@ pm2 restart huangshifu-wiki --update-env
 ### S3 双写模式
 
 当 S3 已配置时，上传会同时保存到本地和 S3：
+
 - `localUrl` - 本地存储路径
 - `s3Url` - S3 存储路径
 
@@ -959,41 +965,41 @@ pm2 restart huangshifu-wiki --update-env
 
 `BirthdayConfig` 表用于存储"从前书院"生贺特别皮肤的内容配置，支持管理员通过后台动态修改。
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `id` | String | 唯一标识（cuid） |
-| `type` | String | 配置类型：`notice`/`school_history`/`honor_alumni`/`campus`/`guestbook`/`contact`/`program` |
-| `title` | String | 标题 |
-| `content` | String | 内容（JSON 字符串格式） |
-| `sortOrder` | Int | 排序顺序 |
-| `isActive` | Boolean | 是否启用 |
-| `createdAt` | DateTime | 创建时间 |
-| `updatedAt` | DateTime | 更新时间 |
+| 字段          | 类型       | 说明                                                                                     |
+| ----------- | -------- | -------------------------------------------------------------------------------------- |
+| `id`        | String   | 唯一标识（cuid）                                                                             |
+| `type`      | String   | 配置类型：`notice`/`school_history`/`honor_alumni`/`campus`/`guestbook`/`contact`/`program` |
+| `title`     | String   | 标题                                                                                     |
+| `content`   | String   | 内容（JSON 字符串格式）                                                                         |
+| `sortOrder` | Int      | 排序顺序                                                                                   |
+| `isActive`  | Boolean  | 是否启用                                                                                   |
+| `createdAt` | DateTime | 创建时间                                                                                   |
+| `updatedAt` | DateTime | 更新时间                                                                                   |
 
 **API 接口**：
 
-| 接口 | 方法 | 说明 |
-|------|------|------|
-| `/api/birthday/config` | GET | 获取所有生贺配置 |
-| `/api/birthday/config/:type` | GET | 按类型获取配置 |
-| `/api/birthday/config` | POST | 创建配置（需管理员权限） |
-| `/api/birthday/config/:id` | PUT | 更新配置（需管理员权限） |
-| `/api/birthday/config/:id/toggle` | PATCH | 切换激活状态（需管理员权限） |
-| `/api/birthday/config/:id` | DELETE | 删除配置（需管理员权限） |
+| 接口                                | 方法     | 说明             |
+| --------------------------------- | ------ | -------------- |
+| `/api/birthday/config`            | GET    | 获取所有生贺配置       |
+| `/api/birthday/config/:type`      | GET    | 按类型获取配置        |
+| `/api/birthday/config`            | POST   | 创建配置（需管理员权限）   |
+| `/api/birthday/config/:id`        | PUT    | 更新配置（需管理员权限）   |
+| `/api/birthday/config/:id/toggle` | PATCH  | 切换激活状态（需管理员权限） |
+| `/api/birthday/config/:id`        | DELETE | 删除配置（需管理员权限）   |
 
 **配置类型说明**：
 
-| 类型 | 说明 | content 格式 |
-|------|------|--------------|
-| `notice` | 通知公告 | `{ concertDate, concertLocation, callToAction }` |
-| `school_history` | 校史拾遗 | 纯文本 |
-| `honor_alumni` | 荣誉校友 | `{ titles[], representativeWorks[], description }` |
-| `campus` | 雅学之境 | 纯文本 |
-| `guestbook` | 学子留言壁 | `[{ nickname, content }]` |
-| `contact` | 联系我们 | `{ department, description, contacts[] }` |
-| `program` | 生贺节目 | `{ category: 'music'/'video'/'dance'/'easter' }` |
+| 类型               | 说明    | content 格式                                         |
+| ---------------- | ----- | -------------------------------------------------- |
+| `notice`         | 通知公告  | `{ concertDate, concertLocation, callToAction }`   |
+| `school_history` | 校史拾遗  | 纯文本                                                |
+| `honor_alumni`   | 荣誉校友  | `{ titles[], representativeWorks[], description }` |
+| `campus`         | 雅学之境  | 纯文本                                                |
+| `guestbook`      | 学子留言壁 | `[{ nickname, content }]`                          |
+| `contact`        | 联系我们  | `{ department, description, contacts[] }`          |
+| `program`        | 生贺节目  | `{ category: 'music'/'video'/'dance'/'easter' }`   |
 
----
+***
 
 ## 附录：更新日志
 
@@ -1009,7 +1015,6 @@ pm2 restart huangshifu-wiki --update-env
   - 新增 `prisma/seed-birthday.ts`：生贺配置种子数据脚本
   - **数据库变更**：新增 `BirthdayConfig` 表
   - **部署注意**：需执行 `npm run db:generate` 和 `npm run db:push`（开发环境）或 `npm run db:deploy`（生产环境）以应用新的 Prisma schema。可选执行 `npx tsx prisma/seed-birthday.ts` 初始化默认生贺配置数据。
-
 - **移除 firebaseCompat 兼容层**：彻底删除 `src/lib/firebaseCompat/` 与 `src/firebase.ts`
   - `imageService` 改为直接调用 `/api/image-maps`（按 MD5 查重 + upsert 映射）
   - `Music` 页面认证引用改为 `src/lib/auth.ts`
