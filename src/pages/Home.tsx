@@ -15,6 +15,8 @@ import {
 	Sparkles,
 	ChevronRight,
 	Flame,
+	Play,
+	Gift,
 } from "lucide-react";
 import { format } from "date-fns";
 import { apiGet } from "../lib/apiClient";
@@ -30,6 +32,15 @@ interface AnimatedStatProps {
 	suffix?: string;
 	label: string;
 	icon: React.ReactNode;
+}
+
+interface BirthdayConfig {
+	id: string;
+	type: string;
+	title: string;
+	content: string;
+	sortOrder: number;
+	isActive: boolean;
 }
 
 const AnimatedStat: React.FC<AnimatedStatProps> = ({ value, suffix = "", label, icon }) => {
@@ -135,6 +146,26 @@ const academyCopyMappings = [
 
 const AcademyHome = () => {
 	const [showEasterPanel, setShowEasterPanel] = useState(false);
+	const [birthdayConfigs, setBirthdayConfigs] = useState<BirthdayConfig[]>([]);
+	const [configsLoading, setConfigsLoading] = useState(true);
+
+	useEffect(() => {
+		const fetchConfigs = async () => {
+			try {
+				const response = await apiGet<{ data: BirthdayConfig[] }>('/api/birthday/config');
+				setBirthdayConfigs(response.data || []);
+			} catch (error) {
+				console.error('Error fetching birthday configs:', error);
+			} finally {
+				setConfigsLoading(false);
+			}
+		};
+		fetchConfigs();
+	}, []);
+
+	// 按 type 分组配置
+	const getConfigsByType = (type: string) =>
+		birthdayConfigs.filter((c) => c.type === type).sort((a, b) => a.sortOrder - b.sortOrder);
 
 	return (
 		<div className="academy-home-wrap max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-12">
@@ -226,6 +257,268 @@ const AcademyHome = () => {
 					)}
 				</GlassCard>
 			</section>
+
+			{/* 跳转到招募页 */}
+			<section>
+				<GlassCard className="w-full p-6 text-center">
+					<p className="text-[color:var(--color-theme-muted)] mb-4">上拉页面可前往「招募与培养」</p>
+					<Link
+						to="/recruit"
+						className="inline-flex items-center gap-2 px-6 py-3 bg-[color:var(--color-theme-accent)] text-white rounded-full font-bold hover:opacity-90 transition-opacity"
+					>
+						前往招募与培养 <ArrowRight size={16} />
+					</Link>
+				</GlassCard>
+			</section>
+
+			{/* 教务处文件通知公告 */}
+			{getConfigsByType('notice').length > 0 && (
+				<section>
+					<GlassCard className="w-full p-6 border-l-4 border-l-red-600">
+						<div className="flex items-start gap-4">
+							<div className="flex-shrink-0 w-16 h-16 bg-red-600 rounded-full flex items-center justify-center">
+								<Book size={32} className="text-white" />
+							</div>
+							<div className="flex-1">
+								<h3 className="text-sm text-red-600 font-bold mb-1">从前书院教务处文件</h3>
+								<h2 className="text-xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
+									{getConfigsByType('notice')[0]?.title || '关于黄诗扶全国巡演的通知'}
+								</h2>
+								<div className="text-sm text-[color:var(--color-theme-text)]/80 leading-relaxed whitespace-pre-wrap">
+									{(() => {
+										try {
+											const content = JSON.parse(getConfigsByType('notice')[0]?.content || '{}');
+											return (
+												<>
+													<p><strong>公演吉期：</strong>{content.concertDate || '2026 / 06 / 19-20 19:00'}</p>
+													<p><strong>雅集地点：</strong>{content.concertLocation || '上海市 · 交通银行前滩31演艺中心'}</p>
+													<p className="mt-3 italic">{content.callToAction || '望各班学子奔走相告，共襄盛典。'}</p>
+												</>
+											);
+										} catch {
+											return <p>{getConfigsByType('notice')[0]?.content}</p>;
+										}
+									})()}
+								</div>
+							</div>
+						</div>
+					</GlassCard>
+				</section>
+			)}
+
+			{/* 校史拾遗 */}
+			{getConfigsByType('school_history').length > 0 && (
+				<section>
+					<GlassCard className="w-full p-6">
+						<h2 className="text-2xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-4">
+							校史拾遗
+						</h2>
+						{getConfigsByType('school_history').map((config) => (
+							<div key={config.id} className="mb-4">
+								<h3 className="text-lg font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
+									{config.title}
+								</h3>
+								<p className="text-[color:var(--color-theme-text)]/80 leading-relaxed whitespace-pre-wrap">
+									{config.content}
+								</p>
+							</div>
+						))}
+					</GlassCard>
+				</section>
+			)}
+
+			{/* 荣誉校友 */}
+			{getConfigsByType('honor_alumni').length > 0 && (
+				<section>
+					<GlassCard className="w-full p-6">
+						<h2 className="text-2xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-4">
+							荣誉校友
+						</h2>
+						{getConfigsByType('honor_alumni').map((config) => {
+							let content = { titles: [], representativeWorks: [], description: '' };
+							try {
+								content = JSON.parse(config.content);
+							} catch {
+								content.description = config.content;
+							}
+							return (
+								<div key={config.id} className="flex items-start gap-6">
+									<div className="flex-shrink-0 w-24 h-24 bg-gradient-to-br from-amber-100 to-orange-100 rounded-2xl flex items-center justify-center">
+										<Music size={48} className="text-amber-600" />
+									</div>
+									<div className="flex-1">
+										<h3 className="text-xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
+											{config.title}
+										</h3>
+										<div className="flex flex-wrap gap-2 mb-3">
+											{(content.titles || []).map((title, i) => (
+												<span key={i} className="px-3 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full">
+													{title}
+												</span>
+											))}
+										</div>
+										<p className="text-sm text-[color:var(--color-theme-text)]/70 mb-2">
+											<strong>代表作：</strong>{Array.isArray(content.representativeWorks) ? content.representativeWorks.join('、') : content.representativeWorks}
+										</p>
+										{content.description && (
+											<p className="text-sm text-[color:var(--color-theme-text)]/80 leading-relaxed">
+												{content.description}
+											</p>
+										)}
+									</div>
+								</div>
+							);
+						})}
+					</GlassCard>
+				</section>
+			)}
+
+			{/* 雅学之境 */}
+			{getConfigsByType('campus').length > 0 && (
+				<section>
+					<GlassCard className="w-full p-6">
+						<h2 className="text-2xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-4">
+							雅学之境
+						</h2>
+						{getConfigsByType('campus').map((config) => (
+							<div key={config.id}>
+								<h3 className="text-lg font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
+									{config.title}
+								</h3>
+								<p className="text-[color:var(--color-theme-text)]/80 leading-relaxed mb-4">
+									{config.content}
+								</p>
+								<div className="bg-gray-100 rounded-xl h-48 flex items-center justify-center">
+									<span className="text-gray-400 italic">图片待上传</span>
+								</div>
+							</div>
+						))}
+					</GlassCard>
+				</section>
+			)}
+
+			{/* 学子留言壁 */}
+			{getConfigsByType('guestbook').length > 0 && (
+				<section>
+					<GlassCard className="w-full p-6">
+						<h2 className="text-2xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-4">
+							学子留言壁
+						</h2>
+						<p className="text-[color:var(--color-theme-muted)] mb-4">
+							{getConfigsByType('guestbook')[0]?.title || '缘起从前，一见如故'}
+						</p>
+						<div className="space-y-3">
+							{(() => {
+								let messages = [];
+								try {
+									messages = JSON.parse(getConfigsByType('guestbook')[0]?.content || '[]');
+								} catch {
+									messages = [{ nickname: '匿名', content: getConfigsByType('guestbook')[0]?.content }];
+								}
+								return messages.map((msg, i) => (
+									<div key={i} className="p-4 bg-[color:var(--color-theme-accent)]/5 rounded-xl">
+										<div className="flex items-center gap-2 mb-2">
+											<span className="font-bold text-[color:var(--color-theme-accent-strong)]">@{msg.nickname}</span>
+										</div>
+										<p className="text-sm text-[color:var(--color-theme-text)]/80">{msg.content}</p>
+									</div>
+								));
+							})()}
+						</div>
+					</GlassCard>
+				</section>
+			)}
+
+			{/* 联系我们 */}
+			{getConfigsByType('contact').length > 0 && (
+				<section>
+					<GlassCard className="w-full p-6">
+						<h2 className="text-2xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
+							联系我们
+						</h2>
+						<p className="text-[color:var(--color-theme-muted)] italic mb-6">缘起从前，一见如故</p>
+						{(() => {
+							let content = { department: '从前书院招生办', description: '若有心求学，望拨打专线联络。', contacts: [] };
+							try {
+								content = JSON.parse(getConfigsByType('contact')[0]?.content);
+							} catch {
+								content.description = getConfigsByType('contact')[0]?.content;
+							}
+							return (
+								<>
+									<h3 className="text-lg font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
+										{content.department || '从前书院招生办'}
+									</h3>
+									<p className="text-[color:var(--color-theme-text)]/80 mb-4">
+										{content.description || '若有心求学，望拨打专线联络。'}
+									</p>
+									<div className="space-y-2">
+										{(content.contacts || []).map((contact, i) => (
+											<div key={i} className="flex items-center gap-2">
+												<span className="text-sm font-bold text-[color:var(--color-theme-accent-strong)]">【{contact.role}】</span>
+												<span className="text-sm text-[color:var(--color-theme-text)]/80">{contact.name}</span>
+											</div>
+										))}
+										{content.contacts?.length === 0 && (
+											<>
+												<div className="flex items-center gap-2">
+													<span className="text-sm font-bold text-[color:var(--color-theme-accent-strong)]">【统理招生】</span>
+													<span className="text-sm text-[color:var(--color-theme-text)]/80">卿主任</span>
+												</div>
+												<div className="flex items-center gap-2">
+													<span className="text-sm font-bold text-[color:var(--color-theme-accent-strong)]">【传书青鸟】</span>
+													<span className="text-sm text-[color:var(--color-theme-text)]/80">123456789</span>
+												</div>
+											</>
+										)}
+									</div>
+								</>
+							);
+						})()}
+					</GlassCard>
+				</section>
+			)}
+
+			{/* 生贺节目大观 */}
+			{getConfigsByType('program').length > 0 && (
+				<section>
+					<GlassCard className="w-full p-6">
+						<h2 className="text-2xl font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
+							生贺节目大观
+						</h2>
+						<p className="text-sm text-[color:var(--color-theme-muted)] mb-6">
+							校园开放日：每年5月8日 · 节目档案陆续解锁中...
+						</p>
+						<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+							{[
+								{ type: 'music', label: '音乐', icon: Music },
+								{ type: 'video', label: '视频', icon: Play },
+								{ type: 'dance', label: '舞蹈', icon: Sparkles },
+								{ type: 'easter', label: '彩蛋', icon: Gift },
+							].map(({ type, label, icon: Icon }) => {
+								const program = getConfigsByType('program').find((p) => {
+									try {
+										return JSON.parse(p.content).category === type;
+									} catch {
+										return false;
+									}
+								});
+								return (
+									<div key={type} className="p-4 bg-gradient-to-br from-[color:var(--color-theme-accent)]/10 to-[color:var(--color-theme-accent)]/5 rounded-2xl text-center">
+										<Icon size={32} className="mx-auto mb-2 text-[color:var(--color-theme-accent)]" />
+										<h3 className="font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-1">{label}</h3>
+										{program ? (
+											<p className="text-sm text-[color:var(--color-theme-text)]/80">{program.title}</p>
+										) : (
+											<p className="text-sm text-gray-400 italic">敬请期待</p>
+										)}
+									</div>
+								);
+							})}
+						</div>
+					</GlassCard>
+				</section>
+			)}
 
 			<section className="bento-grid">
 				{academyLecturers.map((lecturer, index) => (
