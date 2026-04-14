@@ -185,6 +185,8 @@ const Admin = () => {
     try {
       if (activeTab === 'locks') {
         await apiDelete(`/api/admin/locks/${id}`);
+      } else if (activeTab === 'galleries') {
+        await apiDelete(`/api/galleries/${id}`);
       } else {
         await apiDelete(`/api/admin/${activeTab}/${id}`);
       }
