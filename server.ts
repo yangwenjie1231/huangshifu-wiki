@@ -11980,6 +11980,246 @@ app.get('/api/image-maps', async (req, res) => {
   }
 });
 
+app.get('/api/image-maps/export', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const format = (req.query.format as string) || 'json';
+    const items = await prisma.imageMap.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (format === 'csv') {
+      const headers = ['id', 'md5', 'localUrl', 'externalUrl', 's3Url', 'storageType', 'createdAt'];
+      const csvRows = [headers.join(',')];
+      
+      for (const item of items) {
+        const row = [
+          item.id,
+          item.md5,
+          `"${item.localUrl || ''}"`,
+          `"${item.externalUrl || ''}"`,
+          `"${item.s3Url || ''}"`,
+          `"${item.storageType || ''}"`,
+          item.createdAt.toISOString(),
+        ];
+        csvRows.push(row.join(','));
+      }
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="image-maps-${Date.now()}.csv"`);
+      res.send(csvRows.join('\n'));
+    } else {
+      res.json({
+        items: items.map((item) => ({
+          ...item,
+          createdAt: item.createdAt.toISOString(),
+        })),
+      });
+    }
+  } catch (error) {
+    console.error('Export image maps error:', error);
+    res.status(500).json({ error: '导出图片映射失败' });
+  }
+});
+
+app.get('/api/image-maps/stats', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const [total, withExternal, withS3] = await Promise.all([
+      prisma.imageMap.count(),
+      prisma.imageMap.count({ where: { externalUrl: { not: null } } }),
+      prisma.imageMap.count({ where: { storageType: 's3' } }),
+    ]);
+
+    res.json({
+      total,
+      stats: {
+        local: total - withExternal - withS3,
+        external: withExternal,
+        s3: withS3,
+      },
+    });
+  } catch (error) {
+    console.error('Get image map stats error:', error);
+    res.status(500).json({ error: '获取图片统计失败' });
+  }
+});
+
+app.post('/api/image-maps/import', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { items, mode } = req.body as {
+      items: Array<{
+        id?: string;
+        md5?: string;
+        localUrl?: string;
+        externalUrl?: string;
+        s3Url?: string;
+        storageType?: 'local' | 'external' | 's3';
+      }>;
+      mode: 'update' | 'create' | 'upsert';
+    };
+
+    if (!Array.isArray(items) || items.length === 0) {
+      res.status(400).json({ error: '缺少导入数据' });
+      return;
+    }
+
+    const results = {
+      success: 0,
+      failed: 0,
+      errors: [] as string[],
+    };
+
+    for (const item of items) {
+      try {
+        if (item.storageType === 's3' && !item.s3Url) {
+          results.failed++;
+          results.errors.push(`S3存储类型需要提供s3Url: ${JSON.stringify(item)}`);
+          continue;
+        }
+
+        if (mode === 'upsert' && item.md5) {
+          const existing = await prisma.imageMap.findUnique({
+            where: { md5: item.md5 },
+          });
+
+          if (existing) {
+            await prisma.imageMap.update({
+              where: { id: existing.id },
+              data: {
+                ...(item.localUrl !== undefined && { localUrl: item.localUrl || null }),
+                ...(item.externalUrl !== undefined && { externalUrl: item.externalUrl || null }),
+                ...(item.s3Url !== undefined && { s3Url: item.s3Url || null }),
+                ...(item.storageType !== undefined && { storageType: item.storageType }),
+              },
+            });
+          } else if (item.id) {
+            await prisma.imageMap.create({
+              data: {
+                id: item.id,
+                md5: item.md5 || crypto.randomUUID(),
+                ...(item.localUrl && { localUrl: item.localUrl }),
+                ...(item.externalUrl && { externalUrl: item.externalUrl }),
+                ...(item.s3Url && { s3Url: item.s3Url }),
+                ...(item.storageType && { storageType: item.storageType }),
+              },
+            });
+          }
+          results.success++;
+        } else if (mode === 'update' && item.id) {
+          await prisma.imageMap.update({
+            where: { id: item.id },
+            data: {
+              ...(item.localUrl !== undefined && { localUrl: item.localUrl || null }),
+              ...(item.externalUrl !== undefined && { externalUrl: item.externalUrl || null }),
+              ...(item.s3Url !== undefined && { s3Url: item.s3Url || null }),
+              ...(item.storageType !== undefined && { storageType: item.storageType }),
+            },
+          });
+          results.success++;
+        } else if (mode === 'create' && item.id && item.md5) {
+          await prisma.imageMap.create({
+            data: {
+              id: item.id,
+              md5: item.md5,
+              ...(item.localUrl && { localUrl: item.localUrl }),
+              ...(item.externalUrl && { externalUrl: item.externalUrl }),
+              ...(item.s3Url && { s3Url: item.s3Url }),
+              ...(item.storageType && { storageType: item.storageType }),
+            },
+          });
+          results.success++;
+        } else {
+          results.failed++;
+          results.errors.push(`数据格式错误: ${JSON.stringify(item)}`);
+        }
+      } catch (err) {
+        results.failed++;
+        results.errors.push(`处理失败: ${JSON.stringify(item)} - ${(err as Error).message}`);
+      }
+    }
+
+    res.json(results);
+  } catch (error) {
+    console.error('Import image maps error:', error);
+    res.status(500).json({ error: '导入图片映射失败' });
+  }
+});
+
+app.post('/api/image-maps/refresh-all-blurhash', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { limit = '100' } = req.query as { limit?: string };
+
+    const limitNum = parseInt(limit, 10) || 100;
+
+    const imageMaps = await prisma.imageMap.findMany({
+      where: {
+        OR: [
+          { blurhash: null },
+          { thumbhash: null },
+        ],
+      },
+      take: limitNum,
+    });
+
+    if (imageMaps.length === 0) {
+      res.json({
+        success: true,
+        message: '没有需要刷新blurhash的图片',
+        processed: 0,
+      });
+      return;
+    }
+
+    try {
+      const { fetchBlurhashFromS3, fetchThumbhashFromS3 } = await import('./src/server/blurhashService');
+
+      let processed = 0;
+      let failed = 0;
+
+      for (const imageMap of imageMaps) {
+        const urlToGenerateHash = imageMap.s3Url || imageMap.externalUrl || imageMap.localUrl;
+
+        if (!urlToGenerateHash) {
+          continue;
+        }
+
+        try {
+          const [blurhash, thumbhash] = await Promise.all([
+            fetchBlurhashFromS3(urlToGenerateHash),
+            fetchThumbhashFromS3(urlToGenerateHash),
+          ]);
+
+          await prisma.imageMap.update({
+            where: { id: imageMap.id },
+            data: {
+              ...(blurhash && { blurhash }),
+              ...(thumbhash && { thumbhash }),
+            },
+          });
+
+          processed++;
+          console.log(`[Refresh All Blurhash] Processed ${processed}/${imageMaps.length}:`, imageMap.id);
+        } catch (err) {
+          failed++;
+          console.error(`[Refresh All Blurhash] Failed for ${imageMap.id}:`, err);
+        }
+      }
+
+      res.json({
+        success: true,
+        processed,
+        failed,
+        total: imageMaps.length,
+      });
+    } catch (hashError) {
+      console.error('[Refresh All Blurhash] Failed to generate blurhash:', hashError);
+      res.status(500).json({ error: '批量生成blurhash失败' });
+    }
+  } catch (error) {
+    console.error('Refresh all blurhash error:', error);
+    res.status(500).json({ error: '刷新blurhash失败' });
+  }
+});
+
 app.get('/api/image-maps/:id', async (req, res) => {
   try {
     const item = await prisma.imageMap.findUnique({
@@ -12142,148 +12382,6 @@ app.delete('/api/image-maps/:id', requireAuth, requireAdmin, async (req, res) =>
   }
 });
 
-app.get('/api/image-maps/export', requireAuth, requireAdmin, async (req, res) => {
-  try {
-    const format = (req.query.format as string) || 'json';
-    const items = await prisma.imageMap.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (format === 'csv') {
-      const headers = ['id', 'md5', 'localUrl', 'externalUrl', 's3Url', 'storageType', 'createdAt'];
-      const csvRows = [headers.join(',')];
-      
-      for (const item of items) {
-        const row = [
-          item.id,
-          item.md5,
-          `"${item.localUrl || ''}"`,
-          `"${item.externalUrl || ''}"`,
-          `"${item.s3Url || ''}"`,
-          `"${item.storageType || ''}"`,
-          item.createdAt.toISOString(),
-        ];
-        csvRows.push(row.join(','));
-      }
-
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename="image-maps-${Date.now()}.csv"`);
-      res.send(csvRows.join('\n'));
-    } else {
-      res.json({
-        items: items.map((item) => ({
-          ...item,
-          createdAt: item.createdAt.toISOString(),
-        })),
-      });
-    }
-  } catch (error) {
-    console.error('Export image maps error:', error);
-    res.status(500).json({ error: '导出图片映射失败' });
-  }
-});
-
-app.post('/api/image-maps/import', requireAuth, requireAdmin, async (req, res) => {
-  try {
-    const { items, mode } = req.body as {
-      items: Array<{
-        id?: string;
-        md5?: string;
-        localUrl?: string;
-        externalUrl?: string;
-        s3Url?: string;
-        storageType?: 'local' | 'external' | 's3';
-      }>;
-      mode: 'update' | 'create' | 'upsert';
-    };
-
-    if (!Array.isArray(items) || items.length === 0) {
-      res.status(400).json({ error: '缺少导入数据' });
-      return;
-    }
-
-    const results = {
-      success: 0,
-      failed: 0,
-      errors: [] as string[],
-    };
-
-    for (const item of items) {
-      try {
-        if (item.storageType === 's3' && !item.s3Url) {
-          results.failed++;
-          results.errors.push(`S3存储类型需要提供s3Url: ${JSON.stringify(item)}`);
-          continue;
-        }
-
-        if (mode === 'upsert' && item.md5) {
-          const existing = await prisma.imageMap.findUnique({
-            where: { md5: item.md5 },
-          });
-
-          if (existing) {
-            await prisma.imageMap.update({
-              where: { id: existing.id },
-              data: {
-                ...(item.localUrl !== undefined && { localUrl: item.localUrl || null }),
-                ...(item.externalUrl !== undefined && { externalUrl: item.externalUrl || null }),
-                ...(item.s3Url !== undefined && { s3Url: item.s3Url || null }),
-                ...(item.storageType !== undefined && { storageType: item.storageType }),
-              },
-            });
-          } else if (item.id) {
-            await prisma.imageMap.create({
-              data: {
-                id: item.id,
-                md5: item.md5 || crypto.randomUUID(),
-                ...(item.localUrl && { localUrl: item.localUrl }),
-                ...(item.externalUrl && { externalUrl: item.externalUrl }),
-                ...(item.s3Url && { s3Url: item.s3Url }),
-                ...(item.storageType && { storageType: item.storageType }),
-              },
-            });
-          }
-          results.success++;
-        } else if (mode === 'update' && item.id) {
-          await prisma.imageMap.update({
-            where: { id: item.id },
-            data: {
-              ...(item.localUrl !== undefined && { localUrl: item.localUrl || null }),
-              ...(item.externalUrl !== undefined && { externalUrl: item.externalUrl || null }),
-              ...(item.s3Url !== undefined && { s3Url: item.s3Url || null }),
-              ...(item.storageType !== undefined && { storageType: item.storageType }),
-            },
-          });
-          results.success++;
-        } else if (mode === 'create' && item.id && item.md5) {
-          await prisma.imageMap.create({
-            data: {
-              id: item.id,
-              md5: item.md5,
-              ...(item.localUrl && { localUrl: item.localUrl }),
-              ...(item.externalUrl && { externalUrl: item.externalUrl }),
-              ...(item.s3Url && { s3Url: item.s3Url }),
-              ...(item.storageType && { storageType: item.storageType }),
-            },
-          });
-          results.success++;
-        } else {
-          results.failed++;
-          results.errors.push(`数据格式错误: ${JSON.stringify(item)}`);
-        }
-      } catch (err) {
-        results.failed++;
-        results.errors.push(`处理失败: ${JSON.stringify(item)} - ${(err as Error).message}`);
-      }
-    }
-
-    res.json(results);
-  } catch (error) {
-    console.error('Import image maps error:', error);
-    res.status(500).json({ error: '导入图片映射失败' });
-  }
-});
-
 app.post('/api/image-maps/:id/refresh-blurhash', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -12336,104 +12434,6 @@ app.post('/api/image-maps/:id/refresh-blurhash', requireAuth, requireAdmin, asyn
   } catch (error) {
     console.error('Refresh blurhash error:', error);
     res.status(500).json({ error: '刷新blurhash失败' });
-  }
-});
-
-app.post('/api/image-maps/refresh-all-blurhash', requireAuth, requireAdmin, async (req, res) => {
-  try {
-    const { limit = '100' } = req.query as { limit?: string };
-
-    const limitNum = parseInt(limit, 10) || 100;
-
-    const imageMaps = await prisma.imageMap.findMany({
-      where: {
-        OR: [
-          { blurhash: null },
-          { thumbhash: null },
-        ],
-      },
-      take: limitNum,
-    });
-
-    if (imageMaps.length === 0) {
-      res.json({
-        success: true,
-        message: '没有需要刷新blurhash的图片',
-        processed: 0,
-      });
-      return;
-    }
-
-    try {
-      const { fetchBlurhashFromS3, fetchThumbhashFromS3 } = await import('./src/server/blurhashService');
-
-      let processed = 0;
-      let failed = 0;
-
-      for (const imageMap of imageMaps) {
-        const urlToGenerateHash = imageMap.s3Url || imageMap.externalUrl || imageMap.localUrl;
-
-        if (!urlToGenerateHash) {
-          continue;
-        }
-
-        try {
-          const [blurhash, thumbhash] = await Promise.all([
-            fetchBlurhashFromS3(urlToGenerateHash),
-            fetchThumbhashFromS3(urlToGenerateHash),
-          ]);
-
-          await prisma.imageMap.update({
-            where: { id: imageMap.id },
-            data: {
-              ...(blurhash && { blurhash }),
-              ...(thumbhash && { thumbhash }),
-            },
-          });
-
-          processed++;
-          console.log(`[Refresh All Blurhash] Processed ${processed}/${imageMaps.length}:`, imageMap.id);
-        } catch (err) {
-          failed++;
-          console.error(`[Refresh All Blurhash] Failed for ${imageMap.id}:`, err);
-        }
-      }
-
-      res.json({
-        success: true,
-        processed,
-        failed,
-        total: imageMaps.length,
-      });
-    } catch (hashError) {
-      console.error('[Refresh All Blurhash] Failed to generate blurhash:', hashError);
-      res.status(500).json({ error: '批量生成blurhash失败' });
-    }
-  } catch (error) {
-    console.error('Refresh all blurhash error:', error);
-    res.status(500).json({ error: '刷新blurhash失败' });
-  }
-});
-
-app.get('/api/image-maps/stats', requireAuth, requireAdmin, async (req, res) => {
-  try {
-    const [total, withExternal, withS3] = await Promise.all([
-      prisma.imageMap.count(),
-      prisma.imageMap.count({ where: { externalUrl: { not: null } } }),
-      prisma.imageMap.count({ where: { storageType: 's3' } }),
-    ]);
-
-    res.json({
-      total,
-      stats: {
-        local: total - withExternal - withS3,
-        external: withExternal,
-        s3: withS3,
-      },
-    });
-  } catch (error) {
-    console.error('Get image map stats error:', error);
-    res.status(500).json({ error: '获取图片统计失败' });
   }
 });
 

@@ -182,6 +182,10 @@ const Admin = () => {
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('确定要删除这项内容吗？此操作不可撤销。')) return;
+    if (!id) {
+      show('无效的 ID', { variant: 'error' });
+      return;
+    }
     try {
       if (activeTab === 'locks') {
         await apiDelete(`/api/admin/locks/${id}`);
@@ -832,7 +836,7 @@ const Admin = () => {
                               <SmartImage src={item.photoURL || ''} alt="" className="w-10 h-10 rounded-full object-cover bg-gray-100" />
                             ) : activeTab === 'galleries' ? (
                               <SmartImage
-                                src={item.images?.[0]?.url || ''}
+                                src={(Array.isArray(item.images) && item.images[0]?.url) || ''}
                                 alt=""
                                 className="w-12 h-12 rounded-xl object-cover bg-gray-100"
                               />
