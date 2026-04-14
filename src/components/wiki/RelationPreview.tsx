@@ -20,6 +20,7 @@ interface RelationPreviewProps {
 	onRemove?: () => void;
 	onConfirm?: () => void;
 	isNew?: boolean;
+	isEditing?: boolean;
 }
 
 const RelationPreview: React.FC<RelationPreviewProps> = ({
@@ -29,6 +30,7 @@ const RelationPreview: React.FC<RelationPreviewProps> = ({
 	onRemove,
 	onConfirm,
 	isNew = false,
+	isEditing = false,
 }) => {
 	const quality = useMemo(() => {
 		return calculateRelationQuality(
@@ -45,7 +47,7 @@ const RelationPreview: React.FC<RelationPreviewProps> = ({
 			initial={{ opacity: 0, y: -10 }}
 			animate={{ opacity: 1, y: 0 }}
 			exit={{ opacity: 0, y: -10 }}
-			className={`p-4 rounded-2xl border-2 ${isNew ? "border-brand-olive/30 bg-brand-olive/5" : "border-gray-100 bg-white"} hover:shadow-md transition-all`}
+			className={`p-4 rounded-2xl border-2 ${isNew || isEditing ? "border-brand-olive/30 bg-brand-olive/5" : "border-gray-100 bg-white"} hover:shadow-md transition-all`}
 		>
 			<div className="flex items-start justify-between gap-3 mb-3">
 				<div className="flex-1">
@@ -54,10 +56,15 @@ const RelationPreview: React.FC<RelationPreviewProps> = ({
 							{relation.metadata?.title || relation.label || relation.targetSlug}
 						</h4>
 						{isNew && (
-							<span className="px-2 py-0.5 bg-brand-olive text-white text-[10px] font-bold rounded-full">
-								新建
-							</span>
-						)}
+						<span className="px-2 py-0.5 bg-brand-olive text-white text-[10px] font-bold rounded-full">
+							新建
+						</span>
+					)}
+					{isEditing && (
+						<span className="px-2 py-0.5 bg-blue-500 text-white text-[10px] font-bold rounded-full">
+							编辑中
+						</span>
+					)}
 					</div>
 					<div className="flex items-center gap-2 text-xs text-gray-500">
 						<span className="flex items-center gap-1">

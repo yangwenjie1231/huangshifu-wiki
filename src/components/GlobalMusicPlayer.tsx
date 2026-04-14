@@ -5,6 +5,13 @@ import { useMusic } from '../context/MusicContext';
 import { clsx } from 'clsx';
 import { formatTime } from '../lib/formatUtils';
 
+interface AudioStats {
+  bufferHealth: number;
+  isStalling: boolean;
+  stallCount: number;
+  readyState: number;
+}
+
 export const GlobalMusicPlayer = () => {
   const { 
     currentSong, setCurrentSong, isPlaying, setIsPlaying, playNext, playPrevious,
@@ -16,8 +23,16 @@ export const GlobalMusicPlayer = () => {
   const [resolvingPlayUrl, setResolvingPlayUrl] = useState(false);
   const [playUrlError, setPlayUrlError] = useState('');
   const [volumeSliderExpanded, setVolumeSliderExpanded] = useState(false);
+  const [audioStats, setAudioStats] = useState<AudioStats>({
+    bufferHealth: 0,
+    isStalling: false,
+    stallCount: 0,
+    readyState: 0
+  });
   const volumeHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const timeUpdateRef = useRef<number>(0);
+  const stallCheckRef = useRef<number>(0);
 
   useEffect(() => {
     const resolvePlayUrl = async () => {
@@ -74,20 +89,49 @@ export const GlobalMusicPlayer = () => {
     if (!audioRef.current) return;
     audioRef.current.currentTime = 0;
     seekTo(0);
+    // 重置音频统计
+    setAudioStats({
+      bufferHealth: 0,
+      isStalling: false,
+      stallCount: 0,
+      readyState: 0
+    });
   }, [resolvedPlayUrl, seekTo]);
 
   useEffect(() => {
     if (audioRef.current) {
       if (isPlaying) {
-        audioRef.current.play().catch(e => {
-          console.error("Playback failed:", e);
-          setIsPlaying(false);
-        });
+        // 检查缓冲是否足够再播放
+        const audio = audioRef.current;
+        const canPlay = audio.readyState >= 3 || // HAVE_FUTURE_DATA
+          (audio.buffered.length > 0 && 
+           audio.buffered.end(audio.buffered.length - 1) - audio.currentTime > 2);
+        
+        if (canPlay) {
+          audio.play().catch(e => {
+            console.error("Playback failed:", e);
+            setIsPlaying(false);
+          });
+        } else {
+          // 等待缓冲完成
+          const checkBuffer = () => {
+            if (audio.buffered.length > 0 && 
+                audio.buffered.end(audio.buffered.length - 1) - audio.currentTime > 2) {
+              audio.play().catch(e => {
+                console.error("Playback failed:", e);
+                setIsPlaying(false);
+              });
+            } else {
+              setTimeout(checkBuffer, 100);
+            }
+          };
+          checkBuffer();
+        }
       } else {
         audioRef.current.pause();
       }
     }
-  }, [isPlaying, currentSong]);
+  }, [isPlaying, currentSong, setIsPlaying]);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -96,7 +140,7 @@ export const GlobalMusicPlayer = () => {
   }, [contextVolume, contextIsMuted]);
 
   useEffect(() => {
-    if (audioRef.current && audioRef.current.currentTime !== contextCurrentTime) {
+    if (audioRef.current && Math.abs(audioRef.current.currentTime - contextCurrentTime) > 0.5) {
       audioRef.current.currentTime = contextCurrentTime;
     }
   }, [contextCurrentTime]);
@@ -130,9 +174,28 @@ export const GlobalMusicPlayer = () => {
     playNext();
   };
 
+  // 节流的时间更新处理 - 每 250ms 最多更新一次
   const onTimeUpdate = useCallback(() => {
+    const now = Date.now();
+    if (now - timeUpdateRef.current < 250) return;
+    timeUpdateRef.current = now;
+    
     if (audioRef.current) {
       seekTo(audioRef.current.currentTime);
+      
+      // 更新音频统计
+      const audio = audioRef.current;
+      let bufferHealth = 0;
+      if (audio.buffered.length > 0) {
+        const bufferedEnd = audio.buffered.end(audio.buffered.length - 1);
+        bufferHealth = bufferedEnd - audio.currentTime;
+      }
+      
+      setAudioStats(prev => ({
+        ...prev,
+        bufferHealth,
+        readyState: audio.readyState
+      }));
     }
   }, [seekTo]);
 
@@ -141,6 +204,34 @@ export const GlobalMusicPlayer = () => {
       contextSetDuration(audioRef.current.duration);
     }
   }, [contextSetDuration]);
+
+  // 卡顿检测
+  const onWaiting = useCallback(() => {
+    setAudioStats(prev => ({
+      ...prev,
+      isStalling: true,
+      stallCount: prev.stallCount + 1
+    }));
+    console.warn('[音频缓冲] 正在等待数据...');
+  }, []);
+
+  const onCanPlay = useCallback(() => {
+    setAudioStats(prev => ({
+      ...prev,
+      isStalling: false
+    }));
+  }, []);
+
+  const onError = useCallback((e: React.SyntheticEvent<HTMLAudioElement>) => {
+    const audio = e.currentTarget;
+    console.error('[音频错误]', {
+      error: audio.error,
+      networkState: audio.networkState,
+      readyState: audio.readyState,
+      currentSrc: audio.currentSrc
+    });
+    setPlayUrlError('音频加载失败，请检查网络连接');
+  }, []);
 
   const handleProgressChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const time = parseFloat(e.target.value);
@@ -199,6 +290,12 @@ export const GlobalMusicPlayer = () => {
             <div className="min-w-0">
               <h4 className="font-bold text-gray-900 truncate">{currentSong.title}</h4>
               <p className="text-xs text-gray-400 truncate">{currentSong.artist}</p>
+              {audioStats.isStalling && (
+                <p className="text-xs text-amber-500 animate-pulse">缓冲中...</p>
+              )}
+              {!audioStats.isStalling && audioStats.bufferHealth < 3 && audioStats.bufferHealth > 0 && (
+                <p className="text-xs text-gray-400">缓冲: {audioStats.bufferHealth.toFixed(1)}s</p>
+              )}
             </div>
           </div>
 
@@ -353,8 +450,14 @@ export const GlobalMusicPlayer = () => {
       <audio
         ref={audioRef}
         src={resolvedPlayUrl || currentSong.playUrl || currentSong.audioUrl}
+        preload="auto"
+        crossOrigin="anonymous"
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={onLoadedMetadata}
+        onWaiting={onWaiting}
+        onCanPlay={onCanPlay}
+        onCanPlayThrough={onCanPlay}
+        onError={onError}
         onEnded={playNext}
       />
     </motion.div>

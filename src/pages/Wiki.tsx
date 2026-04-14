@@ -26,7 +26,7 @@ import {
 	Clock,
 	User as UserIcon,
 	ArrowLeft,
-	Save,
+	Heart,
 	X,
 	Sparkles,
 	History,
@@ -570,7 +570,7 @@ const WikiPageView = () => {
 	const [relationGraph, setRelationGraph] = useState<RelationGraphData | null>(
 		null,
 	);
-	const [showGraph, setShowGraph] = useState(false);
+	const [showGraph, setShowGraph] = useState(true);
 
 	useEffect(() => {
 		const fetchPage = async () => {
@@ -831,7 +831,7 @@ const WikiPageView = () => {
 								)}
 								title={page.favoritedByMe ? "取消收藏" : "收藏页面"}
 							>
-								<Save size={20} />
+								<Heart size={20} />
 							</button>
 							<button
 								onClick={handleToggleLike}
@@ -888,12 +888,15 @@ const WikiPageView = () => {
 								className={clsx(
 									"p-3 rounded-full transition-all flex items-center gap-2",
 									showGraph
-										? "bg-brand-olive text-white"
+										? "bg-brand-olive text-white shadow-md"
 										: "bg-brand-cream text-brand-olive hover:bg-brand-olive hover:text-white",
 								)}
-								title="知识图谱"
+								title={showGraph ? "收起图谱" : "展开图谱"}
 							>
-								<Network size={20} />
+								<Link2 size={20} />
+								<span className="text-xs font-bold hidden sm:inline">
+									{showGraph ? "收起图谱" : "展开图谱"}
+								</span>
 							</button>
 							<button
 								onClick={async () => {

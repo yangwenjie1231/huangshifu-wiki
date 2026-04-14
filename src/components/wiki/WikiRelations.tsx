@@ -424,16 +424,16 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 
 						return (
 							<RelationPreview
-							key={`${relation.targetSlug}-${relation.type}`}
-							relation={{
-								...relation,
-								metadata: relation.metadata || undefined,
-							}}
-							currentPage={currentPage || ({} as WikiItem)}
-							onEdit={() => handleEditRelation(originalIndex)}
-							onRemove={() => handleRemoveRelation(originalIndex)}
-							isNew={editingIndex === originalIndex}
-						/>
+								key={`${relation.targetSlug}-${relation.type}`}
+								relation={{
+									...relation,
+									metadata: relation.metadata || undefined,
+								}}
+								currentPage={currentPage || ({} as WikiItem)}
+								onEdit={() => handleEditRelation(originalIndex)}
+								onRemove={() => handleRemoveRelation(originalIndex)}
+								isEditing={editingIndex === originalIndex}
+							/>
 						);
 					})}
 				</div>

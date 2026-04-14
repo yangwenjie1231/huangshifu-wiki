@@ -32,10 +32,10 @@ type RelationGraphProps = {
 };
 
 const EDGE_COLORS: Record<WikiRelationType, string> = {
-  related_person: '#5f6f52',
-  work_relation: '#8b5e3c',
-  timeline_relation: '#4c6a92',
-  custom: '#6f5f7a',
+  related_person: '#6B8E23',
+  work_relation: '#CD853F',
+  timeline_relation: '#4682B4',
+  custom: '#9370DB',
 };
 
 function shortenLabel(value: string, max = 11) {
@@ -94,11 +94,11 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
   }
 
   return (
-    <div className="rounded-3xl border border-brand-cream bg-brand-cream/20 p-4 sm:p-6">
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-[360px] sm:h-[460px]" role="img" aria-label="Wiki 关系图谱">
+    <div className="rounded-3xl border border-brand-olive/20 bg-gradient-to-br from-brand-cream/30 to-white p-6 sm:p-8 shadow-sm">
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-[400px] sm:h-[500px]" role="img" aria-label="Wiki 关系图谱">
         <defs>
-          <marker id="wiki-relation-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#7b8a70" />
+          <marker id="wiki-relation-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#5f6f52" />
           </marker>
         </defs>
 
@@ -119,20 +119,21 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
                 x2={to.x}
                 y2={to.y}
                 stroke={edgeColor}
-                strokeWidth={edge.inferred ? 1.8 : 2.6}
+                strokeWidth={edge.inferred ? 2 : 3}
                 strokeDasharray={edge.inferred ? '6 5' : undefined}
                 markerEnd="url(#wiki-relation-arrow)"
-                opacity={0.88}
+                opacity={0.75}
               />
               <text
                 x={midX}
-                y={midY - 4}
+                y={midY - 6}
                 textAnchor="middle"
                 fill={edgeColor}
-                fontSize="12"
-                fontWeight={700}
+                fontSize="13"
+                fontWeight={600}
+                style={{ textShadow: '0 1px 2px rgba(255,255,255,0.8)' }}
               >
-                {shortenLabel(edge.label || edge.typeLabel, 12)}
+                {shortenLabel(edge.label || edge.typeLabel, 14)}
               </text>
             </g>
           );
@@ -143,13 +144,13 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
           if (!point) return null;
 
           const isCenter = node.slug === currentSlug || node.isCenter;
-          const radius = isCenter ? 34 : node.depth === 1 ? 26 : 22;
+          const radius = isCenter ? 42 : node.depth === 1 ? 32 : 28;
 
           return (
             <g
               key={node.slug}
               transform={`translate(${point.x}, ${point.y})`}
-              className={clsx('transition-opacity', isCenter ? '' : 'hover:opacity-90')}
+              className={clsx('transition-all duration-300', isCenter ? '' : 'hover:opacity-80 hover:scale-105')}
               onClick={() => {
                 if (!isCenter && onNodeClick) {
                   onNodeClick(node.slug);
@@ -159,40 +160,57 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
             >
               <circle
                 r={radius}
-                fill={isCenter ? '#5f6f52' : node.depth === 1 ? '#d7cfb5' : '#e9e3d1'}
-                stroke={isCenter ? '#4f5f43' : '#c8bfa4'}
-                strokeWidth={isCenter ? 2.5 : 1.6}
+                fill={isCenter ? '#6B8E23' : node.depth === 1 ? '#F4A460' : '#DEB88B'}
+                stroke={isCenter ? '#556B2F' : '#D2B48C'}
+                strokeWidth={isCenter ? 3 : 2}
+                filter={isCenter ? 'drop-shadow(0 2px 4px rgba(107, 142, 35, 0.3))' : 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))'}
               />
               <text
                 x={0}
-                y={-2}
+                y={-4}
                 textAnchor="middle"
-                fill={isCenter ? '#ffffff' : '#4b4f42'}
-                fontSize={isCenter ? '13' : '12'}
+                fill={isCenter ? '#ffffff' : '#2F2F2F'}
+                fontSize={isCenter ? '15' : '14'}
                 fontWeight={700}
+                style={{ textShadow: isCenter ? '0 1px 2px rgba(0,0,0,0.2)' : 'none' }}
               >
-                {shortenLabel(node.title, isCenter ? 10 : 9)}
+                {shortenLabel(node.title, isCenter ? 12 : 11)}
               </text>
               <text
                 x={0}
-                y={13}
+                y={16}
                 textAnchor="middle"
-                fill={isCenter ? '#f0f3ed' : '#6f7567'}
-                fontSize="10"
+                fill={isCenter ? '#F0F8FF' : '#5F5F5F'}
+                fontSize="11"
+                fontWeight={500}
               >
-                {node.depth === 0 ? '当前页面' : `${node.depth}层`}
+                {node.depth === 0 ? '当前页面' : `${node.depth}度关联`}
               </text>
             </g>
           );
         })}
       </svg>
 
-      <div className="mt-4 flex flex-wrap gap-3 text-xs text-gray-500">
-        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full bg-[#5f6f52]" /> 相关人物</span>
-        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full bg-[#8b5e3c]" /> 作品关联</span>
-        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full bg-[#4c6a92]" /> 时间线关联</span>
-        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full bg-[#6f5f7a]" /> 自定义关系</span>
-        <span className="text-gray-400">虚线表示反向推断关系</span>
+      <div className="mt-6 flex flex-wrap gap-4 text-sm">
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-brand-cream/50 rounded-full">
+          <span className="inline-block h-3 w-3 rounded-full bg-[#6B8E23] shadow-sm" />
+          <span className="text-gray-700 font-medium">相关人物</span>
+        </div>
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-brand-cream/50 rounded-full">
+          <span className="inline-block h-3 w-3 rounded-full bg-[#CD853F] shadow-sm" />
+          <span className="text-gray-700 font-medium">作品关联</span>
+        </div>
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-brand-cream/50 rounded-full">
+          <span className="inline-block h-3 w-3 rounded-full bg-[#4682B4] shadow-sm" />
+          <span className="text-gray-700 font-medium">时间线关联</span>
+        </div>
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-brand-cream/50 rounded-full">
+          <span className="inline-block h-3 w-3 rounded-full bg-[#9370DB] shadow-sm" />
+          <span className="text-gray-700 font-medium">自定义关系</span>
+        </div>
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100/50 rounded-full">
+          <span className="text-gray-500 font-medium">虚线表示反向推断关系</span>
+        </div>
       </div>
     </div>
   );

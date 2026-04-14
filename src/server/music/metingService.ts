@@ -76,7 +76,8 @@ function normalizeText(value: unknown, fallback = '') {
   if (typeof value !== 'string') {
     return fallback;
   }
-  const normalized = value.trim();
+  // Remove backticks that may wrap the URL from Meting API response
+  const normalized = value.trim().replace(/^`+|`+$/g, '');
   return normalized || fallback;
 }
 
