@@ -49,7 +49,7 @@ const GalleryCard = React.memo(({ gallery, viewMode, isAdmin, deletingGalleryId,
         <>
           <div className="w-24 h-24 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
             <SmartImage
-              src={gallery.images[0]?.url}
+              src={(Array.isArray(gallery.images) && gallery.images[0]?.url) || ''}
               alt={gallery.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
@@ -58,7 +58,7 @@ const GalleryCard = React.memo(({ gallery, viewMode, isAdmin, deletingGalleryId,
             <div className="flex items-center gap-2 mb-1">
               <h3 className="text-lg font-serif font-bold group-hover:text-brand-olive transition-colors truncate">{gallery.title}</h3>
               <span className="px-2 py-0.5 bg-black/50 backdrop-blur-md text-white text-[10px] font-bold rounded-full flex-shrink-0">
-                {gallery.images.length} 张
+                {Array.isArray(gallery.images) ? gallery.images.length : 0} 张
               </span>
             </div>
             <p className="text-gray-400 text-sm line-clamp-2">
@@ -77,12 +77,12 @@ const GalleryCard = React.memo(({ gallery, viewMode, isAdmin, deletingGalleryId,
         <>
           <div className={clsx('relative overflow-hidden', VIEW_MODE_CONFIG[viewMode].cardHeight)}>
             <SmartImage
-              src={gallery.images[0]?.url}
+              src={(Array.isArray(gallery.images) && gallery.images[0]?.url) || ''}
               alt={gallery.title}
               className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
             />
             <div className="absolute top-4 right-4 px-3 py-1 bg-black/50 backdrop-blur-md text-white text-[10px] font-bold rounded-full">
-              {gallery.images.length} 张
+              {Array.isArray(gallery.images) ? gallery.images.length : 0} 张
             </div>
           </div>
           <div className="p-6">

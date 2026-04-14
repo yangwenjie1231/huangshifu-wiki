@@ -135,7 +135,7 @@ const SearchGalleryCard = React.memo(({ gallery, viewMode, theme }: SearchGaller
 			<>
 				<div className="w-24 h-24 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
 					<SmartImage
-						src={gallery.images[0]?.url}
+						src={(Array.isArray(gallery.images) && gallery.images[0]?.url) || ''}
 						alt=""
 						className="w-full h-full object-cover"
 					/>
@@ -157,7 +157,7 @@ const SearchGalleryCard = React.memo(({ gallery, viewMode, theme }: SearchGaller
 						</p>
 					</div>
 					<span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full flex-shrink-0">
-						{gallery.images.length} 张
+						{Array.isArray(gallery.images) ? gallery.images.length : 0} 张
 					</span>
 				</div>
 			</>
@@ -165,7 +165,7 @@ const SearchGalleryCard = React.memo(({ gallery, viewMode, theme }: SearchGaller
 			<>
 				<div className="h-32 overflow-hidden">
 					<SmartImage
-						src={gallery.images[0]?.url}
+						src={(Array.isArray(gallery.images) && gallery.images[0]?.url) || ''}
 						alt=""
 						className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
 					/>
@@ -175,7 +175,7 @@ const SearchGalleryCard = React.memo(({ gallery, viewMode, theme }: SearchGaller
 						{gallery.title}
 					</h3>
 					<p className="text-[10px] text-gray-400">
-						{gallery.images.length} 张图片
+						{Array.isArray(gallery.images) ? gallery.images.length : 0} 张图片
 					</p>
 				</div>
 			</>
