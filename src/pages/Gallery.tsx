@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Image as ImageIcon, Plus, Folder, X, Upload, Clock, User as UserIcon, Link2, Trash2 } from 'lucide-react';
 import { useUserPreferences } from '../context/UserPreferencesContext';
@@ -321,6 +321,7 @@ const GalleryList = () => {
 
 const UploadModal = ({ onClose }: { onClose: () => void }) => {
   const { user, isAdmin, isBanned } = useAuth();
+  const navigate = useNavigate();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
@@ -472,7 +473,7 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
 
         await apiPost(`/api/uploads/sessions/${sessionId}/finalize`);
 
-        await apiPost<GalleryCreateResponse>('/api/galleries', {
+        const galleryResponse = await apiPost<GalleryCreateResponse>('/api/galleries', {
           title: galleryTitle,
           description: description || `来自 ${groupName} 的图集`,
           uploadSessionId: sessionId,
@@ -480,6 +481,11 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
           tags: tags.split(',').map(t => t.trim()).filter(t => t),
           locationCode: locationCode,
         });
+
+        // 跳转到刚创建的图集详情页
+        if (galleryResponse.gallery?.id) {
+          navigate(`/gallery/${galleryResponse.gallery.id}`);
+        }
       }
 
       handleClose();
