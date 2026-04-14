@@ -469,7 +469,12 @@ export const uploadMarkdownImage = async (file: File): Promise<string> => {
  * 
  * 返回包含 assetId 和根据策略选择的 URL
  */
-export const uploadImageWithStrategy = async (file: File): Promise<{ assetId: string; url: string }> => {
+export const uploadImageWithStrategy = async (
+  file: File,
+  options: { type?: 'general' | 'avatar' } = {}
+): Promise<{ assetId: string; url: string }> => {
+  const { type = 'general' } = options;
+  
   // 获取当前存储策略
   const preference = await getImagePreference();
   
@@ -530,4 +535,16 @@ export const uploadImageWithStrategy = async (file: File): Promise<{ assetId: st
     assetId: data.file.assetId, 
     url: data.file.url 
   };
+};
+
+/**
+ * 上传头像（支持裁剪和存储策略）
+ * 
+ * @param blob 裁剪后的头像图片 Blob
+ * @returns 上传后的头像 URL
+ */
+export const uploadAvatar = async (blob: Blob): Promise<string> => {
+  const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
+  const result = await uploadImageWithStrategy(file, { type: 'avatar' });
+  return result.url;
 };
