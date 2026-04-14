@@ -4,7 +4,7 @@ import { clsx } from 'clsx';
 
 import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/apiClient';
 import { useToast } from './Toast';
-import { uploadImageWithStrategy } from '../services/imageService';
+import { uploadImageWithStrategy, type UploadImageResult } from '../services/imageService';
 
 type CoverItem = {
   id: string;
@@ -67,7 +67,7 @@ export const SongCoverManager = ({ songDocId, currentCover, onCoverUpdated }: So
 
     setUploading(true);
     try {
-      const result = await uploadImageWithStrategy(file);
+      const result: UploadImageResult = await uploadImageWithStrategy(file, { type: 'cover' });
       
       if (!result.assetId) {
         throw new Error('上传失败');

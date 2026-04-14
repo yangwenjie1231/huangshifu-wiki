@@ -2,7 +2,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from 'react-image-crop';
 import { X, Upload, Loader2 } from 'lucide-react';
 
-import { uploadAvatar } from '../services/imageService';
+import { uploadAvatar, type UploadImageResult } from '../services/imageService';
 
 interface AvatarCropModalProps {
   open: boolean;
@@ -119,8 +119,8 @@ export const AvatarCropModal = ({ open, onClose, onSuccess }: AvatarCropModalPro
         return;
       }
 
-      const photoURL = await uploadAvatar(blob);
-      onSuccess(photoURL);
+      const result: UploadImageResult = await uploadAvatar(blob);
+      onSuccess(result.url);
       handleClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : '上传失败');

@@ -29,6 +29,23 @@ export interface ResolveImageUrlOptions {
   forceType?: 'local' | 's3' | 'external';
 }
 
+export interface UploadImageOptions {
+  type?: 'general' | 'avatar' | 'cover' | 'gallery' | 'markdown';
+  onProgress?: (progress: number) => void;
+  signal?: AbortSignal;
+}
+
+export interface UploadImageResult {
+  assetId: string;
+  url: string;
+  localUrl?: string;
+  s3Url?: string;
+  externalUrl?: string;
+  storageType: 'local' | 's3' | 'external';
+  md5?: string;
+  blurhash?: string;
+}
+
 let cachedPreference: ImagePreference | null = null;
 
 export const getImagePreference = async (): Promise<ImagePreference> => {
@@ -392,71 +409,13 @@ export const getPrimaryImageUrl = async (imageId: string): Promise<string | null
 };
 
 export const uploadMarkdownImage = async (file: File): Promise<string> => {
-  // 获取当前存储策略
-  const preference = await getImagePreference();
-  
-  // 根据策略决定是否启用三重存储
-  // 如果策略是 s3 或 external，启用三重存储以确保所有 URL 都可用
-  const useTripleStorage = preference.strategy === 's3' || preference.strategy === 'external';
-  
   try {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    // 构建 URL，可选启用三重存储模式
-    const url = new URL('/api/uploads', window.location.origin);
-    if (useTripleStorage) {
-      url.searchParams.set('tripleStorage', 'true');
-    }
-
-    const response = await fetch(url.toString(), {
-      method: 'POST',
-      credentials: 'include',
-      body: formData,
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      
-      // 如果启用了三重存储，根据策略返回对应的 URL
-      if (useTripleStorage && data.tripleStorage) {
-        const { localUrl, s3Url, externalUrl } = data.tripleStorage;
-        
-        switch (preference.strategy) {
-          case 'external':
-            return externalUrl || s3Url || localUrl;
-          case 's3':
-            return s3Url || externalUrl || localUrl;
-          case 'local':
-          default:
-            return localUrl;
-        }
-      }
-      
-      // 否则返回默认 URL
-      const url = data?.file?.url;
-      if (typeof url === 'string' && url) {
-        return url;
-      }
-    }
+    const result = await uploadImageWithStrategy(file, { type: 'markdown' });
+    return result.url;
   } catch (error) {
     console.error('Markdown image upload failed:', error);
+    throw error;
   }
-
-  // 如果上传失败，尝试使用旧的备用方案
-  if (preference.strategy === 's3') {
-    try {
-      const s3Result = await uploadToS3(file);
-      return s3Result.s3Url;
-    } catch (s3Error) {
-      console.error('S3 upload failed:', s3Error);
-    }
-  }
-
-  // 最后的备用方案：使用图床
-  const imageId = await uploadImageToCDNs(file);
-  const urls = await getImageUrl(imageId);
-  return urls[0] || '';
 };
 
 /**
@@ -467,13 +426,13 @@ export const uploadMarkdownImage = async (file: File): Promise<string> => {
  * - s3: 上传到 S3（同时本地备份）
  * - external: 上传到外部图床（同时本地和 S3 备份）
  * 
- * 返回包含 assetId 和根据策略选择的 URL
+ * 返回包含 assetId 和根据策略选择的 URL，以及所有存储位置的 URL
  */
 export const uploadImageWithStrategy = async (
   file: File,
-  options: { type?: 'general' | 'avatar' } = {}
-): Promise<{ assetId: string; url: string }> => {
-  const { type = 'general' } = options;
+  options: UploadImageOptions = {}
+): Promise<UploadImageResult> => {
+  const { type = 'general', onProgress, signal } = options;
   
   // 获取当前存储策略
   const preference = await getImagePreference();
@@ -494,6 +453,7 @@ export const uploadImageWithStrategy = async (
     method: 'POST',
     credentials: 'include',
     body: formData,
+    signal,
   });
 
   if (!response.ok) {
@@ -502,38 +462,46 @@ export const uploadImageWithStrategy = async (
   }
 
   const data = await response.json() as { 
-    file: { assetId: string; url: string };
+    file: { assetId: string; url: string; md5?: string };
     tripleStorage?: { localUrl: string; s3Url?: string; externalUrl?: string };
   };
   
-  // 如果启用了三重存储，根据策略返回对应的 URL
+  // 如果启用了三重存储，返回所有 URL
   if (useTripleStorage && data.tripleStorage) {
     const { localUrl, s3Url, externalUrl } = data.tripleStorage;
     
+    let selectedUrl: string;
     switch (preference.strategy) {
       case 'external':
-        return { 
-          assetId: data.file.assetId, 
-          url: externalUrl || s3Url || localUrl 
-        };
+        selectedUrl = externalUrl || s3Url || localUrl;
+        break;
       case 's3':
-        return { 
-          assetId: data.file.assetId, 
-          url: s3Url || externalUrl || localUrl 
-        };
+        selectedUrl = s3Url || externalUrl || localUrl;
+        break;
       case 'local':
       default:
-        return { 
-          assetId: data.file.assetId, 
-          url: localUrl 
-        };
+        selectedUrl = localUrl;
+        break;
     }
+    
+    return {
+      assetId: data.file.assetId,
+      url: selectedUrl,
+      localUrl,
+      s3Url,
+      externalUrl,
+      storageType: preference.strategy,
+      md5: data.file.md5,
+    };
   }
   
   // 否则返回默认 URL
-  return { 
-    assetId: data.file.assetId, 
-    url: data.file.url 
+  return {
+    assetId: data.file.assetId,
+    url: data.file.url,
+    localUrl: data.file.url,
+    storageType: 'local',
+    md5: data.file.md5,
   };
 };
 
@@ -541,10 +509,13 @@ export const uploadImageWithStrategy = async (
  * 上传头像（支持裁剪和存储策略）
  * 
  * @param blob 裁剪后的头像图片 Blob
- * @returns 上传后的头像 URL
+ * @param options 上传选项
+ * @returns 上传后的头像 URL 和完整结果
  */
-export const uploadAvatar = async (blob: Blob): Promise<string> => {
+export const uploadAvatar = async (
+  blob: Blob,
+  options?: UploadImageOptions
+): Promise<UploadImageResult> => {
   const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
-  const result = await uploadImageWithStrategy(file, { type: 'avatar' });
-  return result.url;
+  return uploadImageWithStrategy(file, { ...options, type: 'avatar' });
 };
