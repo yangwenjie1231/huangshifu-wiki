@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Cloud,
   Eye,
   EyeOff,
   GripVertical,
@@ -147,6 +148,7 @@ const GalleryDetail = () => {
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState<CommentItem | null>(null);
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [tripleStorage, setTripleStorage] = useState(false);
 
   const addImagesInputRef = useRef<HTMLInputElement>(null);
   const draftRef = useRef<GalleryDraft | null>(null);
@@ -287,7 +289,7 @@ const GalleryDetail = () => {
         const assetIds: string[] = [];
 
         for (const image of pendingImages) {
-          const uploadResult = await uploadFileToSession(sessionId, image.pendingFile!);
+          const uploadResult = await uploadFileToSession(sessionId, image.pendingFile!, tripleStorage);
           assetIds.push(uploadResult.asset.id);
           assetIdByClientId.set(image.clientId, uploadResult.asset.id);
         }
@@ -366,11 +368,17 @@ const GalleryDetail = () => {
     }
   };
 
-  const uploadFileToSession = async (sessionId: string, file: File) => {
+  const uploadFileToSession = async (sessionId: string, file: File, useTripleStorage = false) => {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch(`/api/uploads/sessions/${sessionId}/files`, {
+    // 构建 URL，可选启用三重存储模式
+    const url = new URL(`/api/uploads/sessions/${sessionId}/files`, window.location.origin);
+    if (useTripleStorage) {
+      url.searchParams.set('tripleStorage', 'true');
+    }
+
+    const response = await fetch(url.toString(), {
       method: 'POST',
       credentials: 'include',
       body: formData,
@@ -587,6 +595,22 @@ const GalleryDetail = () => {
               {(editing ? draft?.published : gallery.published) ? <Eye size={14} /> : <EyeOff size={14} />}
               {editing ? ((draft?.published ? '设为草稿' : '设为发布') as string) : (gallery.published ? '已发布' : '草稿中')}
             </button>
+            {editing && (
+              <button
+                onClick={() => setTripleStorage(!tripleStorage)}
+                disabled={saving || uploading}
+                className={clsx(
+                  'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold disabled:opacity-50',
+                  tripleStorage
+                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                    : 'bg-gray-50 text-gray-600 border border-gray-200',
+                )}
+                title="启用三重存储模式：同时上传到本地、S3 和外部图床"
+              >
+                <Cloud size={14} />
+                {tripleStorage ? '三重存储: 开' : '三重存储: 关'}
+              </button>
+            )}
             <input ref={addImagesInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handleAddImages} />
           </div>
         )}

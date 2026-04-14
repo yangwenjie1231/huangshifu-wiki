@@ -21,6 +21,7 @@ import {
   Image,
   Gift,
   Edit,
+  Link,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuth } from '../context/AuthContext';
@@ -31,9 +32,10 @@ import { SmartImage } from '../components/SmartImage';
 import { EmbeddingsTab } from './Admin/EmbeddingsTab';
 import { BackupsTab } from './Admin/BackupsTab';
 import { ImagesTab } from './Admin/ImagesTab';
+import MarkdownLinkUpdater from './Admin/MarkdownLinkUpdater';
 import type { ReviewQueueItem, ReviewQueueBucket, EditLockItem, AdminDataItem } from '../types/entities';
 
-type AdminTab = 'reviews' | 'wiki' | 'posts' | 'galleries' | 'users' | 'sections' | 'announcements' | 'music' | 'locks' | 'moderation_logs' | 'ban_logs' | 'embeddings' | 'backups' | 'sensitive_check' | 'images' | 'birthday';
+type AdminTab = 'reviews' | 'wiki' | 'posts' | 'galleries' | 'users' | 'sections' | 'announcements' | 'music' | 'locks' | 'moderation_logs' | 'ban_logs' | 'embeddings' | 'backups' | 'sensitive_check' | 'images' | 'birthday' | 'markdown_links';
 type ReviewFilter = 'all' | 'wiki' | 'posts';
 
 interface BirthdayConfig {
@@ -89,6 +91,7 @@ const Admin = () => {
       { id: 'sensitive_check' as const, label: '敏感词检测', icon: ShieldCheck },
       { id: 'images' as const, label: '图片管理', icon: Image },
       { id: 'birthday' as const, label: '生贺配置', icon: Gift },
+      ...(isSuperAdmin ? [{ id: 'markdown_links' as const, label: '链接更新', icon: Link }] : []),
     ],
     [],
   );
@@ -424,7 +427,7 @@ const Admin = () => {
                 <div key={i} className="h-28 bg-white rounded-3xl border border-gray-100 animate-pulse" />
               ))}
             </div>
-          ) : reviewItems.length > 0 ? (
+          ) : reviewItems && reviewItems.length > 0 ? (
             <div className="space-y-4">
               {reviewItems.map((item) => (
                 <div key={`${item.reviewType}-${item.reviewId}`} className="bg-white rounded-3xl border border-gray-100 p-6">
@@ -532,6 +535,10 @@ const Admin = () => {
               <p className="text-sm font-bold text-green-600">未检测到敏感词</p>
             </div>
           ) : null}
+        </div>
+      ) : activeTab === 'markdown_links' ? (
+        <div className="bg-white rounded-[36px] border border-gray-100 shadow-sm overflow-hidden p-6">
+          <MarkdownLinkUpdater />
         </div>
       ) : activeTab === 'birthday' ? (
         <div className="space-y-6">

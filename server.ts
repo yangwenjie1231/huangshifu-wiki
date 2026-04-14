@@ -1029,6 +1029,123 @@ async function safeDeleteUploadFileByUrl(url: string) {
   await safeDeleteUploadFileByStorageKey(storageKey);
 }
 
+/**
+ * 上传文件到 S3
+ */
+async function uploadFileToS3(
+  filePath: string,
+  objectKey: string,
+  contentType: string
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    const { getS3ClientWrite, getPublicConfig } = await import('./src/server/s3/s3Service');
+    const { PutObjectCommand } = await import('@aws-sdk/client-s3');
+
+    const s3Client = getS3ClientWrite();
+    const config = getPublicConfig();
+
+    if (!config.enabled) {
+      return { success: false, error: 'S3 not enabled' };
+    }
+
+    const fileBuffer = await fs.promises.readFile(filePath);
+
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: config.bucket,
+        Key: objectKey,
+        Body: fileBuffer,
+        ContentType: contentType,
+      })
+    );
+
+    const url = config.publicDomain
+      ? `${config.publicDomain}/${objectKey}`
+      : `${config.endpoint}/${config.bucket}/${objectKey}`;
+
+    return { success: true, url };
+  } catch (error) {
+    console.error('[S3 Upload] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'S3 upload failed',
+    };
+  }
+}
+
+/**
+ * 上传文件到外部图床
+ */
+async function uploadFileToExternal(
+  filePath: string,
+  fileName: string,
+  contentType: string,
+  config: {
+    apiUrl: string;
+    apiKey?: string;
+    customHeaders?: Record<string, string>;
+  }
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    const FormData = (await import('form-data')).default;
+
+    const formData = new FormData();
+    formData.append('file', await fs.promises.readFile(filePath), {
+      filename: fileName,
+      contentType,
+    });
+
+    const headers: Record<string, string> = {
+      ...config.customHeaders,
+      ...formData.getHeaders(),
+    };
+    if (config.apiKey) {
+      headers['Authorization'] = `Bearer ${config.apiKey}`;
+    }
+
+    const response = await fetch(config.apiUrl, {
+      method: 'POST',
+      headers,
+      body: formData as unknown as BodyInit,
+    });
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: `External upload failed: ${response.status} ${response.statusText}`,
+      };
+    }
+
+    const data = await response.json();
+
+    // 解析外部图床返回的 URL（支持常见格式）
+    let externalUrl: string | undefined;
+    if (data.url) {
+      externalUrl = data.url;
+    } else if (data.data?.url) {
+      externalUrl = data.data.url;
+    } else if (data.image?.url) {
+      externalUrl = data.image.url;
+    } else if (data.link) {
+      externalUrl = data.link;
+    } else if (Array.isArray(data) && data[0]?.url) {
+      externalUrl = data[0].url;
+    }
+
+    if (!externalUrl) {
+      return { success: false, error: 'Failed to parse external upload response' };
+    }
+
+    return { success: true, url: externalUrl };
+  } catch (error) {
+    console.error('[External Upload] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'External upload failed',
+    };
+  }
+}
+
 async function validateUploadedImage(file: Express.Multer.File) {
   const ext = path.extname(file.originalname).toLowerCase();
   if (!ALLOWED_IMAGE_EXTENSIONS.has(ext)) {
@@ -2842,7 +2959,7 @@ function toCommentResponse(comment: {
   };
 }
 
-function toGalleryResponse(gallery: {
+async function toGalleryResponse(gallery: {
   id: string;
   title: string;
   description: string;
@@ -2869,9 +2986,39 @@ function toGalleryResponse(gallery: {
       mimeType: string;
       sizeBytes: number;
       status: string;
+      storageKey: string;
     } | null;
   }[];
 }) {
+  // 获取当前存储策略
+  let storageStrategy: 'local' | 's3' | 'external' = 'local';
+  try {
+    const storageConfig = await prisma.siteConfig.findUnique({
+      where: { key: 'image_preference' },
+    });
+    const preference = storageConfig?.value as { strategy?: 'local' | 's3' | 'external' };
+    storageStrategy = preference?.strategy || 'local';
+  } catch (error) {
+    console.warn('Failed to get storage strategy:', error);
+  }
+
+  // 获取所有图片的 ImageMap 记录
+  const storageKeys = gallery.images
+    .map(img => img.asset?.storageKey)
+    .filter((key): key is string => Boolean(key));
+  
+  const imageMaps = storageKeys.length > 0
+    ? await prisma.imageMap.findMany({
+        where: {
+          localUrl: {
+            in: storageKeys.map(key => `/uploads/${key}`),
+          },
+        },
+      })
+    : [];
+
+  const imageMapByLocalUrl = new Map(imageMaps.map(im => [im.localUrl, im]));
+
   return {
     id: gallery.id,
     title: gallery.title,
@@ -2888,14 +3035,39 @@ function toGalleryResponse(gallery: {
     updatedAt: gallery.updatedAt.toISOString(),
     images: gallery.images
       .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map((image) => ({
-        id: image.id,
-        assetId: image.assetId || image.asset?.id || null,
-        url: image.asset?.publicUrl || image.url,
-        name: image.asset?.fileName || image.name,
-        mimeType: image.asset?.mimeType || null,
-        sizeBytes: image.asset?.sizeBytes || null,
-      })),
+      .map((image) => {
+        // 根据存储策略选择 URL
+        let url = image.asset?.publicUrl || image.url;
+        
+        if (image.asset?.storageKey) {
+          const localUrl = `/uploads/${image.asset.storageKey}`;
+          const imageMap = imageMapByLocalUrl.get(localUrl);
+          
+          if (imageMap) {
+            switch (storageStrategy) {
+              case 'external':
+                url = imageMap.externalUrl || imageMap.s3Url || imageMap.localUrl || url;
+                break;
+              case 's3':
+                url = imageMap.s3Url || imageMap.externalUrl || imageMap.localUrl || url;
+                break;
+              case 'local':
+              default:
+                url = imageMap.localUrl || url;
+                break;
+            }
+          }
+        }
+
+        return {
+          id: image.id,
+          assetId: image.assetId || image.asset?.id || null,
+          url,
+          name: image.asset?.fileName || image.name,
+          mimeType: image.asset?.mimeType || null,
+          sizeBytes: image.asset?.sizeBytes || null,
+        };
+      }),
   };
 }
 
@@ -2969,6 +3141,226 @@ app.use(authMiddleware);
 registerRegionRoutes(app);
 registerExifRoutes(app);
 registerBirthdayRoutes(app);
+
+// Markdown 链接更新服务
+import {
+  batchUpdateWikiLinks,
+  switchWikiStorage,
+  scanAllWikiLinks,
+  getWikiPageLinks,
+  previewLinkUpdate,
+} from './src/server/wiki/markdownLinkUpdater';
+import { generateStorageSwitchMappings } from './src/lib/markdownLinkReplacer';
+
+/**
+ * 扫描所有 Wiki 页面的资源链接分布（管理员）
+ */
+app.get('/api/admin/wiki-links/scan', requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const result = await scanAllWikiLinks();
+    res.json(result);
+  } catch (error) {
+    console.error('Scan wiki links error:', error);
+    res.status(500).json({ error: '扫描 Wiki 链接失败' });
+  }
+});
+
+/**
+ * 获取指定 Wiki 页面的资源链接（管理员）
+ */
+app.get('/api/admin/wiki-links/:slug', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const result = await getWikiPageLinks(slug);
+    res.json(result);
+  } catch (error) {
+    console.error('Get wiki page links error:', error);
+    const message = error instanceof Error ? error.message : '获取 Wiki 页面链接失败';
+    res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * 预览链接更新效果（管理员）
+ */
+app.post('/api/admin/wiki-links/preview', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { mappings, slugs } = req.body as {
+      mappings: Array<{ oldUrl: string; newUrl: string; useRegex?: boolean }>;
+      slugs?: string[];
+    };
+
+    if (!mappings || !Array.isArray(mappings) || mappings.length === 0) {
+      res.status(400).json({ error: '请提供链接映射规则' });
+      return;
+    }
+
+    const result = await previewLinkUpdate(mappings, { specificSlugs: slugs });
+    res.json(result);
+  } catch (error) {
+    console.error('Preview link update error:', error);
+    res.status(500).json({ error: '预览链接更新失败' });
+  }
+});
+
+/**
+ * 批量更新 Wiki 页面链接（管理员）
+ */
+app.post('/api/admin/wiki-links/update', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const {
+      mappings,
+      dryRun = false,
+      limit,
+      filterUrl,
+      specificSlugs,
+    } = req.body as {
+      mappings: Array<{ oldUrl: string; newUrl: string; useRegex?: boolean }>;
+      dryRun?: boolean;
+      limit?: number;
+      filterUrl?: string;
+      specificSlugs?: string[];
+    };
+
+    if (!mappings || !Array.isArray(mappings) || mappings.length === 0) {
+      res.status(400).json({ error: '请提供链接映射规则' });
+      return;
+    }
+
+    const result = await batchUpdateWikiLinks(mappings, {
+      dryRun,
+      limit,
+      filterUrl,
+      specificSlugs,
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Batch update wiki links error:', error);
+    res.status(500).json({ error: '批量更新 Wiki 链接失败' });
+  }
+});
+
+/**
+ * 切换 Wiki 存储策略（管理员）
+ */
+app.post('/api/admin/wiki-links/switch-storage', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const {
+      fromStorage,
+      toStorage,
+      config,
+      dryRun = true,
+      limit,
+    } = req.body as {
+      fromStorage: 'local' | 's3' | 'external';
+      toStorage: 'local' | 's3' | 'external';
+      config: {
+        localBaseUrl?: string;
+        s3BaseUrl?: string;
+        externalBaseUrl?: string;
+      };
+      dryRun?: boolean;
+      limit?: number;
+    };
+
+    if (!fromStorage || !toStorage) {
+      res.status(400).json({ error: '请提供源存储和目标存储类型' });
+      return;
+    }
+
+    if (fromStorage === toStorage) {
+      res.status(400).json({ error: '源存储和目标存储不能相同' });
+      return;
+    }
+
+    const result = await switchWikiStorage(fromStorage, toStorage, config, {
+      dryRun,
+      limit,
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Switch wiki storage error:', error);
+    res.status(500).json({ error: '切换 Wiki 存储策略失败' });
+  }
+});
+
+/**
+ * 根据 ImageMap 更新 Wiki 中的图片链接（管理员）
+ * 当图片的存储 URL 发生变化时，自动更新所有引用该图片的 Wiki 页面
+ */
+app.post('/api/admin/wiki-links/sync-with-imagemap', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { imageId, dryRun = true } = req.body as {
+      imageId?: string;
+      dryRun?: boolean;
+    };
+
+    // 获取所有有变化的 ImageMap 记录
+    const imageMaps = imageId
+      ? await prisma.imageMap.findMany({ where: { id: imageId } })
+      : await prisma.imageMap.findMany({
+          where: {
+            OR: [
+              { localUrl: { not: null } },
+              { s3Url: { not: null } },
+              { externalUrl: { not: null } },
+            ],
+          },
+        });
+
+    const mappings: Array<{ oldUrl: string; newUrl: string }> = [];
+
+    // 获取当前存储策略
+    const storageConfig = await prisma.siteConfig.findUnique({
+      where: { key: 'image_preference' },
+    });
+    const preference = (storageConfig?.value as { strategy?: 'local' | 's3' | 'external' }) || { strategy: 'local' };
+    const targetStorage = preference.strategy || 'local';
+
+    for (const imageMap of imageMaps) {
+      const urls = {
+        local: imageMap.localUrl,
+        s3: imageMap.s3Url,
+        external: imageMap.externalUrl,
+      };
+
+      const targetUrl = urls[targetStorage];
+      if (!targetUrl) continue;
+
+      // 为每个非目标存储的 URL 创建映射
+      for (const [storage, url] of Object.entries(urls)) {
+        if (url && storage !== targetStorage && url !== targetUrl) {
+          mappings.push({
+            oldUrl: url,
+            newUrl: targetUrl,
+          });
+        }
+      }
+    }
+
+    if (mappings.length === 0) {
+      res.json({
+        message: '没有需要更新的链接映射',
+        mappings: [],
+        result: null,
+      });
+      return;
+    }
+
+    const result = await batchUpdateWikiLinks(mappings, { dryRun });
+
+    res.json({
+      message: `找到 ${mappings.length} 个链接映射`,
+      mappings,
+      result,
+    });
+  } catch (error) {
+    console.error('Sync wiki links with imagemap error:', error);
+    res.status(500).json({ error: '同步 Wiki 链接与 ImageMap 失败' });
+  }
+});
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -7326,7 +7718,7 @@ app.get('/api/galleries/:id', async (req: AuthenticatedRequest, res) => {
       return;
     }
 
-    res.json({ gallery: toGalleryResponse(gallery) });
+    res.json({ gallery: await toGalleryResponse(gallery) });
   } catch (error) {
     console.error('Fetch gallery detail error:', error);
     res.status(500).json({ error: '获取图集详情失败' });
@@ -7436,6 +7828,55 @@ app.post('/api/uploads/sessions/:id/files', requireAuth, requireActiveUser, uplo
       return;
     }
 
+    // 检查是否启用三重存储模式
+    const tripleStorage = req.query.tripleStorage === 'true';
+
+    let s3Url: string | undefined;
+    let externalUrl: string | undefined;
+
+    // 三重存储模式：同时上传到 S3 和外部图床
+    if (tripleStorage) {
+      // 1. 上传到 S3（如果配置了）
+      try {
+        const { getPublicConfig } = await import('./src/server/s3/s3Service');
+        const s3Config = getPublicConfig();
+        if (s3Config.enabled) {
+          const objectKey = `gallery/${file.filename}`;
+          const uploadResult = await uploadFileToS3(file.path, objectKey, validatedMimeType);
+          if (uploadResult.success && uploadResult.url) {
+            s3Url = uploadResult.url;
+          }
+        }
+      } catch (error) {
+        console.warn('[TripleStorage] S3 upload failed:', error);
+      }
+
+      // 2. 上传到外部图床（如果配置了）
+      try {
+        const externalConfig = await prisma.siteConfig.findUnique({
+          where: { key: 'external_upload' },
+        });
+        const config = externalConfig?.value as {
+          enabled?: boolean;
+          apiUrl?: string;
+          apiKey?: string;
+          customHeaders?: Record<string, string>;
+        };
+        if (config?.enabled && config?.apiUrl) {
+          const uploadResult = await uploadFileToExternal(file.path, file.originalname, validatedMimeType, {
+            apiUrl: config.apiUrl,
+            apiKey: config.apiKey,
+            customHeaders: config.customHeaders,
+          });
+          if (uploadResult.success && uploadResult.url) {
+            externalUrl = uploadResult.url;
+          }
+        }
+      } catch (error) {
+        console.warn('[TripleStorage] External upload failed:', error);
+      }
+    }
+
     const created = await prisma.$transaction(async (tx) => {
       const updatedSession = await tx.uploadSession.update({
         where: { id: session.id },
@@ -7457,6 +7898,21 @@ app.post('/api/uploads/sessions/:id/files', requireAuth, requireActiveUser, uplo
         },
       });
 
+      // 同时创建 ImageMap 记录，用于统一图片管理
+      const publicUrl = buildUploadPublicUrl(file.filename);
+      const imageId = `${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+      
+      await tx.imageMap.create({
+        data: {
+          id: imageId,
+          md5: file.filename.split('_')[0] || imageId,
+          localUrl: publicUrl,
+          s3Url,
+          externalUrl,
+          storageType: 'local',
+        },
+      });
+
       return {
         updatedSession,
         asset,
@@ -7466,6 +7922,13 @@ app.post('/api/uploads/sessions/:id/files', requireAuth, requireActiveUser, uplo
     res.status(201).json({
       session: toUploadSessionResponse(created.updatedSession),
       asset: toMediaAssetResponse(created.asset),
+      ...(tripleStorage && {
+        tripleStorage: {
+          localUrl: buildUploadPublicUrl(file.filename),
+          s3Url,
+          externalUrl,
+        },
+      }),
     });
   } catch (error) {
     if (file?.filename) {
@@ -13815,7 +14278,7 @@ async function startServer() {
   app.use((_req, res, next) => {
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com https://mapplugin.amap.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; font-src 'self' data: https://fonts.gstatic.com https://fonts.googleapis.com; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net https://picsum.photos https://*.googleusercontent.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://o4.amap.com https://mapplugin.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com https://*.music.126.net https://fonts.googleapis.com https://fonts.gstatic.com https://analysis.chatglm.cn https://gator.volces.com https://picsum.photos https://*.googleusercontent.com; worker-src 'self' blob:; media-src 'self' https://music.163.com https://*.music.163.com https://*.music.126.net;"
+      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com https://mapplugin.amap.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; font-src 'self' data:; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net https://picsum.photos https://*.googleusercontent.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://o4.amap.com https://mapplugin.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com https://*.music.126.net https://analysis.chatglm.cn https://gator.volces.com https://picsum.photos https://*.googleusercontent.com; worker-src 'self' blob:; media-src 'self' https://music.163.com https://*.music.163.com https://*.music.126.net;"
     );
     next();
   });
