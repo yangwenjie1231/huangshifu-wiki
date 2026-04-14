@@ -8016,6 +8016,55 @@ app.post('/api/uploads', requireAuth, requireActiveUser, upload.single('file'), 
       return;
     }
 
+    // 检查是否启用三重存储模式
+    const tripleStorage = req.query.tripleStorage === 'true';
+
+    let s3Url: string | undefined;
+    let externalUrl: string | undefined;
+
+    // 三重存储模式：同时上传到 S3 和外部图床
+    if (tripleStorage) {
+      // 1. 上传到 S3（如果配置了）
+      try {
+        const { getPublicConfig } = await import('./src/server/s3/s3Service');
+        const s3Config = getPublicConfig();
+        if (s3Config.enabled) {
+          const objectKey = `markdown/${file.filename}`;
+          const uploadResult = await uploadFileToS3(file.path, objectKey, mimeType);
+          if (uploadResult.success && uploadResult.url) {
+            s3Url = uploadResult.url;
+          }
+        }
+      } catch (error) {
+        console.warn('[TripleStorage] S3 upload failed:', error);
+      }
+
+      // 2. 上传到外部图床（如果配置了）
+      try {
+        const externalConfig = await prisma.siteConfig.findUnique({
+          where: { key: 'external_upload' },
+        });
+        const config = externalConfig?.value as {
+          enabled?: boolean;
+          apiUrl?: string;
+          apiKey?: string;
+          customHeaders?: Record<string, string>;
+        };
+        if (config?.enabled && config?.apiUrl) {
+          const uploadResult = await uploadFileToExternal(file.path, file.originalname, mimeType, {
+            apiUrl: config.apiUrl,
+            apiKey: config.apiKey,
+            customHeaders: config.customHeaders,
+          });
+          if (uploadResult.success && uploadResult.url) {
+            externalUrl = uploadResult.url;
+          }
+        }
+      } catch (error) {
+        console.warn('[TripleStorage] External upload failed:', error);
+      }
+    }
+
     const asset = await prisma.mediaAsset.create({
       data: {
         ownerUid: req.authUser!.uid,
@@ -8028,6 +8077,21 @@ app.post('/api/uploads', requireAuth, requireActiveUser, upload.single('file'), 
       },
     });
 
+    // 同时创建 ImageMap 记录，用于统一图片管理
+    const publicUrl = buildUploadPublicUrl(getUploadFileStorageKey(file));
+    const imageId = `${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    
+    await prisma.imageMap.create({
+      data: {
+        id: imageId,
+        md5: file.filename.split('_')[0] || imageId,
+        localUrl: publicUrl,
+        s3Url,
+        externalUrl,
+        storageType: 'local',
+      },
+    });
+
     res.status(201).json({
       file: {
         assetId: asset.id,
@@ -8037,6 +8101,13 @@ app.post('/api/uploads', requireAuth, requireActiveUser, upload.single('file'), 
         url: asset.publicUrl,
         name: file.originalname,
       },
+      ...(tripleStorage && {
+        tripleStorage: {
+          localUrl: publicUrl,
+          s3Url,
+          externalUrl,
+        },
+      }),
     });
   } catch (error) {
     if (req.file?.filename) {

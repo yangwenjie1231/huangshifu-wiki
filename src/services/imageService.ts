@@ -392,11 +392,24 @@ export const getPrimaryImageUrl = async (imageId: string): Promise<string | null
 };
 
 export const uploadMarkdownImage = async (file: File): Promise<string> => {
+  // 获取当前存储策略
+  const preference = await getImagePreference();
+  
+  // 根据策略决定是否启用三重存储
+  // 如果策略是 s3 或 external，启用三重存储以确保所有 URL 都可用
+  const useTripleStorage = preference.strategy === 's3' || preference.strategy === 'external';
+  
   try {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch('/api/uploads', {
+    // 构建 URL，可选启用三重存储模式
+    const url = new URL('/api/uploads', window.location.origin);
+    if (useTripleStorage) {
+      url.searchParams.set('tripleStorage', 'true');
+    }
+
+    const response = await fetch(url.toString(), {
       method: 'POST',
       credentials: 'include',
       body: formData,
@@ -404,17 +417,33 @@ export const uploadMarkdownImage = async (file: File): Promise<string> => {
 
     if (response.ok) {
       const data = await response.json();
+      
+      // 如果启用了三重存储，根据策略返回对应的 URL
+      if (useTripleStorage && data.tripleStorage) {
+        const { localUrl, s3Url, externalUrl } = data.tripleStorage;
+        
+        switch (preference.strategy) {
+          case 'external':
+            return externalUrl || s3Url || localUrl;
+          case 's3':
+            return s3Url || externalUrl || localUrl;
+          case 'local':
+          default:
+            return localUrl;
+        }
+      }
+      
+      // 否则返回默认 URL
       const url = data?.file?.url;
       if (typeof url === 'string' && url) {
         return url;
       }
     }
   } catch (error) {
-    console.error('Local markdown image upload failed, falling back to legacy image bed:', error);
+    console.error('Markdown image upload failed:', error);
   }
 
-  const preference = await getImagePreference();
-  
+  // 如果上传失败，尝试使用旧的备用方案
   if (preference.strategy === 's3') {
     try {
       const s3Result = await uploadToS3(file);
@@ -424,7 +453,81 @@ export const uploadMarkdownImage = async (file: File): Promise<string> => {
     }
   }
 
+  // 最后的备用方案：使用图床
   const imageId = await uploadImageToCDNs(file);
   const urls = await getImageUrl(imageId);
   return urls[0] || '';
+};
+
+/**
+ * 统一图片上传函数（支持存储策略）
+ * 
+ * 根据当前存储策略自动选择上传方式：
+ * - local: 上传到本地
+ * - s3: 上传到 S3（同时本地备份）
+ * - external: 上传到外部图床（同时本地和 S3 备份）
+ * 
+ * 返回包含 assetId 和根据策略选择的 URL
+ */
+export const uploadImageWithStrategy = async (file: File): Promise<{ assetId: string; url: string }> => {
+  // 获取当前存储策略
+  const preference = await getImagePreference();
+  
+  // 根据策略决定是否启用三重存储
+  const useTripleStorage = preference.strategy === 's3' || preference.strategy === 'external';
+  
+  const formData = new FormData();
+  formData.append('file', file);
+
+  // 构建 URL，可选启用三重存储模式
+  const url = new URL('/api/uploads', window.location.origin);
+  if (useTripleStorage) {
+    url.searchParams.set('tripleStorage', 'true');
+  }
+
+  const response = await fetch(url.toString(), {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error((data as { error?: string })?.error || '上传失败');
+  }
+
+  const data = await response.json() as { 
+    file: { assetId: string; url: string };
+    tripleStorage?: { localUrl: string; s3Url?: string; externalUrl?: string };
+  };
+  
+  // 如果启用了三重存储，根据策略返回对应的 URL
+  if (useTripleStorage && data.tripleStorage) {
+    const { localUrl, s3Url, externalUrl } = data.tripleStorage;
+    
+    switch (preference.strategy) {
+      case 'external':
+        return { 
+          assetId: data.file.assetId, 
+          url: externalUrl || s3Url || localUrl 
+        };
+      case 's3':
+        return { 
+          assetId: data.file.assetId, 
+          url: s3Url || externalUrl || localUrl 
+        };
+      case 'local':
+      default:
+        return { 
+          assetId: data.file.assetId, 
+          url: localUrl 
+        };
+    }
+  }
+  
+  // 否则返回默认 URL
+  return { 
+    assetId: data.file.assetId, 
+    url: data.file.url 
+  };
 };

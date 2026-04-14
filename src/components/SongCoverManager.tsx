@@ -4,6 +4,7 @@ import { clsx } from 'clsx';
 
 import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/apiClient';
 import { useToast } from './Toast';
+import { uploadImageWithStrategy } from '../services/imageService';
 
 type CoverItem = {
   id: string;
@@ -66,47 +67,14 @@ export const SongCoverManager = ({ songDocId, currentCover, onCoverUpdated }: So
 
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch(`/api/uploads`, {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        let errorMessage = '上传失败';
-        const contentType = response.headers.get('content-type');
-
-        if (contentType?.includes('application/json')) {
-          try {
-            const data = await response.json();
-            errorMessage = (data as { error?: string })?.error || errorMessage;
-          } catch {
-            // JSON parse failed, use default errorMessage
-          }
-        } else {
-          // Non-JSON response (likely HTML error page)
-          const text = await response.text().catch(() => '');
-          console.error('Upload error response:', text.slice(0, 500));
-          if (response.status === 413) {
-            errorMessage = '文件过大，请选择更小的图片';
-          } else if (response.status === 401) {
-            errorMessage = '请先登录';
-          } else if (response.status === 403) {
-            errorMessage = '没有上传权限';
-          } else if (response.status === 400) {
-            errorMessage = '图片格式不支持或文件损坏';
-          }
-        }
-        throw new Error(errorMessage);
+      const result = await uploadImageWithStrategy(file);
+      
+      if (!result.assetId) {
+        throw new Error('上传失败');
       }
 
-      const uploadResult = await response.json() as { file: { assetId: string; url: string } };
-
       await apiPost(`/api/music/${songDocId}/covers`, {
-        assetId: uploadResult.file.assetId,
+        assetId: result.assetId,
       });
 
       show('封面上传成功');

@@ -4,6 +4,7 @@ import { clsx } from 'clsx';
 
 import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/apiClient';
 import { useToast } from './Toast';
+import { uploadImageWithStrategy } from '../services/imageService';
 
 type CoverItem = {
   id: string;
@@ -66,24 +67,14 @@ export const AlbumCoverManager = ({ albumDocId, currentCover, onCoverUpdated }: 
 
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch(`/api/uploads`, {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error((data as { error?: string })?.error || '上传失败');
+      const result = await uploadImageWithStrategy(file);
+      
+      if (!result.assetId) {
+        throw new Error('上传失败');
       }
 
-      const uploadResult = await response.json() as { file: { assetId: string; url: string } };
-
       await apiPost(`/api/albums/${albumDocId}/covers`, {
-        assetId: uploadResult.file.assetId,
+        assetId: result.assetId,
       });
 
       show('封面上传成功');
