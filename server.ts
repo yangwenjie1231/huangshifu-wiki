@@ -359,18 +359,7 @@ app.use(helmet({
   crossOriginOpenerPolicy: false,
   originAgentCluster: false,
   hsts: false,
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "blob:", "https://*.amap.com", "http://*.amap.com", "https://*.gaode.com", "http://*.music.126.net", "https://*.music.126.net", "https://*.picsum.photos"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://webapi.amap.com", "https://jsapi.amap.com", "https://jsapi-service.amap.com", "https://restapi.amap.com", "https://mapplugin.amap.com"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      connectSrc: ["'self'", "https://restapi.amap.com", "https://webapi.amap.com", "https://jsapi.amap.com", "https://o4.amap.com", "https://mapplugin.amap.com", "https://jsapi-data1.amap.com", "https://jsapi-data2.amap.com", "https://jsapi-data3.amap.com", "https://jsapi-data4.amap.com", "https://jsapi-data5.amap.com"],
-      workerSrc: ["'self'", "blob:"],
-      upgradeInsecureRequests: null,
-      mediaSrc: ["'self'", "https://music.163.com"],
-    },
-  },
+  contentSecurityPolicy: false,
 }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -13826,7 +13815,7 @@ async function startServer() {
   app.use((_req, res, next) => {
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com https://mapplugin.amap.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; font-src 'self' data: https://fonts.gstatic.com https://fonts.googleapis.com; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net https://picsum.photos https://*.googleusercontent.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://o4.amap.com https://mapplugin.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com https://*.music.126.net https://fonts.googleapis.com https://fonts.gstatic.com https://analysis.chatglm.cn https://gator.volces.com https://picsum.photos; worker-src 'self' blob:; media-src 'self' https://music.163.com https://*.music.163.com https://*.music.126.net;"
+      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com https://mapplugin.amap.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; font-src 'self' data: https://fonts.gstatic.com https://fonts.googleapis.com; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net https://picsum.photos https://*.googleusercontent.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://o4.amap.com https://mapplugin.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com https://*.music.126.net https://fonts.googleapis.com https://fonts.gstatic.com https://analysis.chatglm.cn https://gator.volces.com https://picsum.photos https://*.googleusercontent.com https://fonts.gstatic.com; worker-src 'self' blob:; media-src 'self' https://music.163.com https://*.music.163.com https://*.music.126.net;"
     );
     next();
   });
