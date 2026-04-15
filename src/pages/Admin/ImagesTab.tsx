@@ -531,6 +531,7 @@ export const ImagesTab: React.FC = () => {
                   className="w-full px-4 py-2 border border-gray-200 rounded-xl text-sm"
                 >
                   <option value="local">本地服务器</option>
+                  <option value="s3">S3 图床</option>
                   <option value="external">外部图床</option>
                 </select>
                 <p className="text-xs text-gray-500 mt-1">
