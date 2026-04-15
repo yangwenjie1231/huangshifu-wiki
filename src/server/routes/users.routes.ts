@@ -182,6 +182,32 @@ router.post('/avatar', requireAuth, requireActiveUser, async (req: Authenticated
   }
 });
 
+router.patch('/me', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { displayName, bio, preferences } = req.body;
+    const updateData: Record<string, unknown> = {};
+    
+    if (displayName !== undefined) updateData.displayName = displayName;
+    if (bio !== undefined) updateData.bio = bio;
+    if (preferences !== undefined) updateData.preferences = preferences;
+    
+    if (Object.keys(updateData).length === 0) {
+      res.status(400).json({ error: '没有要更新的字段' });
+      return;
+    }
+    
+    const user = await prisma.user.update({
+      where: { uid: req.authUser!.uid },
+      data: updateData,
+    });
+    
+    res.json({ user: userToApiUser(user) });
+  } catch (error) {
+    console.error('Update user profile error:', error);
+    res.status(500).json({ error: '更新用户资料失败' });
+  }
+});
+
 router.delete('/account', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
     // Soft delete or account deletion logic
