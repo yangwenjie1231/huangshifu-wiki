@@ -32,6 +32,7 @@ import { registerImageMapsRoutes } from './src/server/routes/image-maps.routes';
 import { registerConfigRoutes } from './src/server/routes/config.routes';
 import { registerS3Routes } from './src/server/routes/s3.routes';
 import { registerMusicSongRoutes } from './src/server/routes/music-song.routes';
+import { registerUploadRoutes } from './src/server/routes/uploads.routes';
 
 dotenv.config({ path: '.env.local' });
 dotenv.config();
@@ -148,6 +149,9 @@ app.use(cookieParser());
 
 app.use(authMiddleware);
 
+// 静态文件服务 - 必须在路由注册之前
+app.use('/uploads', express.static(uploadsDir));
+
 registerRegionRoutes(app);
 registerExifRoutes(app);
 registerBirthdayRoutes(app);
@@ -169,6 +173,7 @@ registerImageMapsRoutes(app);
 registerConfigRoutes(app);
 registerS3Routes(app);
 registerMusicSongRoutes(app);
+registerUploadRoutes(app);
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof multer.MulterError) {

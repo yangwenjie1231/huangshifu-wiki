@@ -578,6 +578,54 @@ router.get('/:userId/likes', requireAuth, async (req: AuthenticatedRequest, res)
   }
 });
 
+// User browsing history route
+router.get('/me/history', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { type, limit = '20', offset = '0' } = req.query;
+    const userId = req.authUser!.uid;
+
+    const limitNum = Math.min(Math.max(Number(limit) || 20, 1), 100);
+    const offsetNum = Math.max(Number(offset) || 0, 0);
+
+    const where: Record<string, unknown> = {
+      userUid: userId,
+    };
+
+    // Filter by type if provided
+    if (type && ['wiki', 'post', 'music'].includes(type as string)) {
+      where.targetType = type as string;
+    }
+
+    const [histories, total] = await Promise.all([
+      prisma.browsingHistory.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limitNum,
+        skip: offsetNum,
+      }),
+      prisma.browsingHistory.count({ where }),
+    ]);
+
+    res.json({
+      history: histories.map((item) => ({
+        id: item.id,
+        targetType: item.targetType,
+        targetId: item.targetId,
+        createdAt: item.createdAt.toISOString(),
+      })),
+      pagination: {
+        total,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + limitNum < total,
+      },
+    });
+  } catch (error) {
+    console.error('Get user history error:', error);
+    res.status(500).json({ error: '获取历史记录失败' });
+  }
+});
+
 export function registerUsersRoutes(app: Router) {
   app.use('/api/users', router);
 }
