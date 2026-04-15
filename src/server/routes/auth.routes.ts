@@ -10,6 +10,10 @@ const prisma = new PrismaClient();
 
 const SUPER_ADMIN_EMAIL = process.env.SEED_SUPER_ADMIN_EMAIL || '';
 
+router.get('/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 router.get('/me', async (req: AuthenticatedRequest, res) => {
   if (!req.authUser) {
     res.json({ user: null });
