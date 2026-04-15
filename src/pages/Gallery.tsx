@@ -360,7 +360,7 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
       const validFiles: { file: File; previewUrl: string }[] = [];
       const invalidFiles: string[] = [];
 
-      Array.from(e.target.files!).forEach((file) => {
+      Array.from(e.target.files!).forEach((file: File) => {
         if (!allowedTypes.includes(file.type)) {
           invalidFiles.push(`${file.name} (不支持的文件类型)`);
         } else if (file.size > maxSize) {
@@ -410,18 +410,8 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
       url.searchParams.set('tripleStorage', 'true');
     }
 
-    const response = await fetch(url.toString(), {
-      method: 'POST',
-      credentials: 'include',
-      body: formData,
-    });
-
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const message = typeof data === 'object' && data && 'error' in data ? String((data as Record<string, unknown>).error) : '上传失败';
-      throw new Error(message);
-    }
-    return data as UploadFileResponse;
+    const data = await apiUpload<UploadFileResponse>(url.toString(), formData);
+    return data;
   };
 
   const handleUpload = async () => {

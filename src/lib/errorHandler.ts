@@ -56,6 +56,20 @@ export class ValidationError extends AppError {
   }
 }
 
+export class BusinessError extends AppError {
+  constructor(message: string = '业务错误') {
+    super(message, 'BUSINESS_ERROR', 400, true);
+    this.name = 'BusinessError';
+  }
+}
+
+export class ServerError extends AppError {
+  constructor(message: string = '服务器错误') {
+    super(message, 'SERVER_ERROR', 500, true);
+    this.name = 'ServerError';
+  }
+}
+
 type ErrorContext = {
   component?: string;
   action?: string;
@@ -115,6 +129,107 @@ export function getUserMessage(error: unknown): string {
       return error.message;
     }
     return '系统异常，请稍后重试';
+  }
+
+  if (error instanceof Error) {
+    return error.message || '操作失败，请稍后重试';
+  }
+
+  return '未知错误，请稍后重试';
+}
+
+// ============================================================================
+// API 错误分类和日志
+// ============================================================================
+
+export interface ApiErrorContext {
+  url: string;
+  method: string;
+  statusCode?: number;
+  requestBody?: unknown;
+  responseData?: unknown;
+}
+
+/**
+ * 根据 HTTP 状态码分类错误
+ */
+export function classifyError(status: number, data: unknown): AppError {
+  const errorMessage = typeof data === 'object' && data && 'error' in data
+    ? String((data as Record<string, unknown>).error)
+    : `请求失败：${status}`;
+
+  if (status === 401) {
+    return new AuthError(errorMessage || '登录已过期，请重新登录');
+  }
+
+  if (status === 403) {
+    return new PermissionError(errorMessage || '权限不足');
+  }
+
+  if (status === 404) {
+    return new NotFoundError(errorMessage || '资源未找到');
+  }
+
+  if (status >= 400 && status < 500) {
+    return new BusinessError(errorMessage || '请求失败');
+  }
+
+  if (status >= 500) {
+    return new ServerError(errorMessage || '服务器繁忙，请稍后再试');
+  }
+
+  return new AppError(errorMessage, 'UNKNOWN_ERROR', status);
+}
+
+/**
+ * 记录详细的 API 错误日志
+ */
+export function logApiError(error: Error, context: ApiErrorContext): void {
+  const logData = {
+    error: {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    },
+    request: {
+      url: context.url,
+      method: context.method,
+      statusCode: context.statusCode,
+    },
+    requestBody: context.requestBody,
+    responseData: context.responseData,
+    timestamp: new Date().toISOString(),
+  };
+
+  if (error instanceof AppError && error.isOperational) {
+    console.warn('[API Error]', logData);
+  } else {
+    console.error('[API Error]', logData);
+  }
+}
+
+/**
+ * 获取用户友好的错误消息
+ */
+export function getUserFriendlyMessage(error: unknown): string {
+  if (error instanceof NetworkError) {
+    return '网络连接失败，请检查网络设置';
+  }
+
+  if (error instanceof AuthError) {
+    return '登录已过期，请重新登录';
+  }
+
+  if (error instanceof BusinessError) {
+    return error.message;
+  }
+
+  if (error instanceof ServerError) {
+    return '服务器繁忙，请稍后再试';
+  }
+
+  if (error instanceof AppError) {
+    return error.isOperational ? error.message : '系统异常，请稍后重试';
   }
 
   if (error instanceof Error) {

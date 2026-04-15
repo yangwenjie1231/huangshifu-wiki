@@ -88,13 +88,17 @@ export const BackupsTab = () => {
 
   const handleDownload = async (filename: string) => {
     try {
+      // 使用 fetch 而非 apiClient，因为需要处理 Blob 下载
+      // apiClient 默认解析 JSON，而这里需要原始 Blob 数据用于文件下载
       const response = await fetch(`/api/admin/backup/${encodeURIComponent(filename)}/download`, {
         credentials: 'include',
       });
+      
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         throw new Error(data.error || '下载失败');
       }
+      
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -104,10 +108,11 @@ export const BackupsTab = () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      show('下载完成');
+      show('下载完成', { variant: 'success' });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : '下载失败';
-      show(msg, { variant: 'error' });
+      console.error('Download error:', error);
+      const message = error instanceof Error ? error.message : '下载失败';
+      show(message, { variant: 'error' });
     }
   };
 

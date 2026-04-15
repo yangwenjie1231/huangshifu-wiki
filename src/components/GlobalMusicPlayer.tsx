@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useMusic } from '../context/MusicContext';
 import { clsx } from 'clsx';
 import { formatTime } from '../lib/formatUtils';
+import { apiGet } from '../lib/apiClient';
+import type { MusicPlayUrlResponse } from '../types/api';
 
 interface AudioStats {
   bufferHealth: number;
@@ -64,11 +66,7 @@ export const GlobalMusicPlayer = () => {
       setPlayUrlError('');
 
       try {
-        const response = await fetch(`/api/music/${encodeURIComponent(currentSong.docId)}/play-url`);
-        if (!response.ok) {
-          throw new Error(`play-url request failed: ${response.status}`);
-        }
-        const data = await response.json() as { playUrl?: string };
+        const data = await apiGet<MusicPlayUrlResponse>(`/api/music/${encodeURIComponent(currentSong.docId)}/play-url`);
         const nextUrl = typeof data.playUrl === 'string' && data.playUrl.trim()
           ? data.playUrl.trim()
           : (currentSong.playUrl || fallback);

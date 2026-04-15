@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MapPin, X, Loader2 } from 'lucide-react';
 import { MapPickerModal, type PickedLocation } from './MapPickerModal';
+import { apiGet, apiPost } from '../lib/apiClient';
 
 interface RegionSuggestion {
   code: string;
@@ -47,10 +48,9 @@ export const LocationTagInput = ({
 
     setLoading(true);
     try {
-      const response = await fetch(
+      const data = await apiGet<{ regions?: RegionSuggestion[] }>(
         `/api/regions/search?q=${encodeURIComponent(query)}&limit=10`
       );
-      const data = await response.json();
       setSuggestions(data.regions || []);
     } catch (err) {
       console.error('Failed to fetch suggestions:', err);
@@ -121,21 +121,14 @@ export const LocationTagInput = ({
 
   const handleMapConfirm = async (location: PickedLocation) => {
     try {
-      const response = await fetch('/api/regions/resolve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lng: location.lng, lat: location.lat }),
-      });
+      const data = await apiPost<{ result?: { adcode: string; province: string; city: string; district: string } }>(
+        '/api/regions/resolve',
+        { lng: location.lng, lat: location.lat }
+      );
 
-      if (!response.ok) {
-        console.error('Failed to resolve location');
-        return;
-      }
-
-      const data = await response.json();
       if (data.result) {
         const adcode = data.result.adcode;
-        const fullName = `${data.result.province}${data.result.city}${data.result.district}`.replace(/^(内蒙古自治区|宁夏回族自治区|广西壮族自治区|新疆维吾尔自治区|西藏自治区|特别行政区)/g, (m: string) => m);
+        const fullName = `${data.result.province}${data.result.city}${data.result.district}`.replace(/^(内蒙古自治区 | 宁夏回族自治区 | 广西壮族自治区 | 新疆维吾尔自治区 | 西藏自治区 | 特别行政区)/g, (m: string) => m);
 
         setInputValue(fullName);
         onChange(fullName, adcode);

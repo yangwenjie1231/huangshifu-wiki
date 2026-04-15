@@ -5,6 +5,8 @@ import { useMusic } from '../context/MusicContext';
 import { clsx } from 'clsx';
 import { formatTime } from '../lib/formatUtils';
 import { Platform, PlatformIds } from '../types/PlatformIds';
+import { apiGet } from '../lib/apiClient';
+import type { MusicDetailResponse } from '../types/api';
 
 interface Song {
   id: string;
@@ -30,9 +32,8 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
     const fetchSong = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`/api/music/song/${songId}`);
-        const data = await response.json();
-        setSong(data);
+        const data = await apiGet<MusicDetailResponse>(`/api/music/song/${songId}`);
+        setSong(data.song);
       } catch (e) {
         console.error("Error fetching song:", e);
       }

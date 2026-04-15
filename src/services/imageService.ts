@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from '../lib/apiClient';
+import { apiGet, apiPost, apiUpload } from '../lib/apiClient';
 import SparkMD5 from 'spark-md5';
 import type { UploadSessionResponse, UploadFileResponse } from '../types/api';
 
@@ -222,18 +222,10 @@ export const uploadImageToCDNs = async (file: File): Promise<string> => {
   const formData = new FormData();
   formData.append('file', file);
 
-  const uploadUrl = new URL(`/api/uploads/sessions/${sessionId}/files`, window.location.origin);
-  const uploadResponse = await fetch(uploadUrl.toString(), {
-    method: 'POST',
-    credentials: 'include',
-    body: formData,
-  });
-
-  if (!uploadResponse.ok) {
-    throw new Error('Failed to upload file to session');
-  }
-
-  const uploadData = await uploadResponse.json() as UploadFileResponse;
+  const uploadData = await apiUpload<UploadFileResponse>(
+    `/api/uploads/sessions/${sessionId}/files`,
+    formData
+  );
   const assetId = uploadData.asset.id;
 
   // 完成会话
@@ -271,6 +263,8 @@ export const uploadToS3 = async (file: File): Promise<{ id: string; s3Url: strin
     bucket: 'private',
   });
 
+  // 注意：此处保留 fetch，因为是直接上传到外部 S3 的 presigned URL，不是 API 调用
+  // presigned URL 是 AWS S3 的签名 URL，需要使用 PUT 方法直接上传文件到 S3
   await fetch(presignResponse.uploadUrl, {
     method: 'PUT',
     body: file,
@@ -317,19 +311,18 @@ export const uploadToS3 = async (file: File): Promise<{ id: string; s3Url: strin
   const formData = new FormData();
   formData.append('file', file);
 
-  const uploadUrl = new URL(`/api/uploads/sessions/${sessionId2}/files`, window.location.origin);
-  const uploadResponse = await fetch(uploadUrl.toString(), {
-    method: 'POST',
-    credentials: 'include',
-    body: formData,
-  });
-
   let localUrl: string | undefined;
-  if (uploadResponse.ok) {
-    const uploadData = await uploadResponse.json() as UploadFileResponse;
+  try {
+    const uploadData = await apiUpload<UploadFileResponse>(
+      `/api/uploads/sessions/${sessionId2}/files`,
+      formData
+    );
     localUrl = uploadData.asset.url;
     // 完成会话
     await apiPost(`/api/uploads/sessions/${sessionId2}/finalize`);
+  } catch (error) {
+    console.error('Failed to upload backup to local storage:', error);
+    // 本地备份上传失败不影响 S3 上传结果
   }
 
   // 创建图片映射记录
@@ -457,27 +450,14 @@ export const uploadImageWithStrategy = async (
   formData.append('file', file);
 
   // 构建 URL，可选启用三重存储模式
-  const uploadUrl = new URL(`/api/uploads/sessions/${sessionId}/files`, window.location.origin);
-  if (useTripleStorage) {
-    uploadUrl.searchParams.set('tripleStorage', 'true');
-  }
+  const uploadPath = `/api/uploads/sessions/${sessionId}/files${
+    useTripleStorage ? '?tripleStorage=true' : ''
+  }`;
 
-  const response = await fetch(uploadUrl.toString(), {
-    method: 'POST',
-    credentials: 'include',
-    body: formData,
-    signal,
-  });
-
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error((data as { error?: string })?.error || '上传失败');
-  }
-
-  const data = await response.json() as { 
+  const data = await apiUpload<{ 
     asset: { id: string; publicUrl: string; md5?: string };
     tripleStorage?: { localUrl: string; s3Url?: string; externalUrl?: string };
-  };
+  }>(uploadPath, formData, { signal, onProgress });
   
   // 完成会话
   await apiPost(`/api/uploads/sessions/${sessionId}/finalize`);

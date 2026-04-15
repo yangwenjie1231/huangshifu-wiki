@@ -95,3 +95,223 @@ export interface ImagePreference {
   strategy: 'local' | 's3' | 'external';
   fallback: boolean;
 }
+
+// ============================================================================
+// 错误类型定义
+// ============================================================================
+
+export type ErrorType = 'NetworkError' | 'AuthError' | 'BusinessError' | 'ServerError';
+
+export interface ApiErrorObject {
+  error: string;
+  code?: string;
+  details?: Record<string, unknown>;
+}
+
+// ============================================================================
+// 通用响应类型
+// ============================================================================
+
+export interface PaginationParams {
+  page?: number;
+  limit?: number;
+  sort?: string;
+  order?: 'asc' | 'desc';
+}
+
+export interface SuccessResponse {
+  success: boolean;
+  message?: string;
+}
+
+// ============================================================================
+// 认证相关类型
+// ============================================================================
+
+export interface AuthMeResponse {
+  user: {
+    uid: string;
+    nickname: string;
+    avatarUrl?: string;
+    role: 'user' | 'admin' | 'super_admin';
+    status: 'active' | 'banned' | 'pending';
+    preferences?: Record<string, unknown>;
+  } | null;
+}
+
+export interface AuthRegisterRequest {
+  email: string;
+  password: string;
+  nickname: string;
+}
+
+export interface AuthLoginRequest {
+  email: string;
+  password: string;
+}
+
+// ============================================================================
+// 用户相关类型
+// ============================================================================
+
+export interface UserUpdateRequest {
+  nickname?: string;
+  avatarUrl?: string;
+  preferences?: Record<string, unknown>;
+}
+
+export interface UserResponse {
+  user: {
+    uid: string;
+    nickname: string;
+    avatarUrl?: string;
+    role: string;
+    status: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+}
+
+// ============================================================================
+// Wiki 相关类型
+// ============================================================================
+
+export interface WikiDetailResponse {
+  wiki: {
+    id: string;
+    slug: string;
+    title: string;
+    category: string;
+    content: string;
+    summary?: string;
+    tags?: string[];
+    likes: number;
+    dislikes: number;
+    views: number;
+    isPinned: boolean;
+    status: 'draft' | 'pending' | 'approved' | 'rejected';
+    createdAt: string;
+    updatedAt: string;
+    author?: UserResponse['user'];
+  };
+}
+
+export interface WikiListResponse extends PaginatedResponse<WikiDetailResponse['wiki']> {}
+
+// ============================================================================
+// 帖子相关类型
+// ============================================================================
+
+export interface PostDetailResponse {
+  post: {
+    id: string;
+    title: string;
+    content: string;
+    sectionId: string;
+    authorId: string;
+    likes: number;
+    dislikes: number;
+    commentsCount: number;
+    views: number;
+    isPinned: boolean;
+    status: string;
+    createdAt: string;
+    updatedAt: string;
+    author?: UserResponse['user'];
+    section?: {
+      id: string;
+      name: string;
+    };
+  };
+}
+
+export interface PostListResponse extends PaginatedResponse<PostDetailResponse['post']> {}
+
+// ============================================================================
+// 音乐相关类型
+// ============================================================================
+
+export interface MusicListResponse {
+  songs: Array<{
+    id: string;
+    docId: string;
+    title: string;
+    artist: string;
+    album?: string;
+    coverUrl?: string;
+    playUrl?: string;
+    duration?: number;
+    createdAt: string;
+  }>;
+  total: number;
+}
+
+export interface MusicDetailResponse {
+  song: {
+    id: string;
+    docId: string;
+    title: string;
+    artist: string;
+    album?: string;
+    coverUrl?: string;
+    playUrl?: string;
+    duration?: number;
+    createdAt: string;
+  };
+}
+
+export interface MusicPlayUrlResponse {
+  playUrl: string;
+}
+
+// ============================================================================
+// 画廊相关类型
+// ============================================================================
+
+export interface GalleryDetailResponse {
+  gallery: {
+    id: string;
+    title: string;
+    description?: string;
+    coverUrl: string;
+    imageCount: number;
+    likes: number;
+    views: number;
+    createdAt: string;
+    updatedAt: string;
+    author?: UserResponse['user'];
+  };
+}
+
+export interface GalleryListResponse extends PaginatedResponse<GalleryDetailResponse['gallery']> {}
+
+export interface GalleryUploadResponse {
+  urls: string[];
+}
+
+// ============================================================================
+// 管理相关类型
+// ============================================================================
+
+export interface AdminBackup {
+  filename: string;
+  size: number;
+  createdAt: string;
+}
+
+export interface AdminBackupsResponse {
+  backups: AdminBackup[];
+}
+
+export interface AdminReviewQueueItem {
+  id: string;
+  type: 'wiki' | 'post' | 'gallery';
+  title: string;
+  author: UserResponse['user'];
+  submittedAt: string;
+}
+
+export interface AdminReviewQueueResponse {
+  items: AdminReviewQueueItem[];
+  total: number;
+}

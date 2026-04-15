@@ -22,7 +22,7 @@ import { SmartImage } from '../components/SmartImage';
 import { Lightbox } from '../components/Lightbox';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
-import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/apiClient';
+import { apiDelete, apiGet, apiPatch, apiPost, apiUpload } from '../lib/apiClient';
 import { splitTagsInput } from '../lib/contentUtils';
 import { formatDateTime, toDateValue } from '../lib/dateUtils';
 
@@ -378,18 +378,8 @@ const GalleryDetail = () => {
       url.searchParams.set('tripleStorage', 'true');
     }
 
-    const response = await fetch(url.toString(), {
-      method: 'POST',
-      credentials: 'include',
-      body: formData,
-    });
-
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const message = typeof data === 'object' && data && 'error' in data ? String((data as Record<string, unknown>).error) : '上传失败';
-      throw new Error(message);
-    }
-    return data as UploadFileResponse;
+    const data = await apiUpload<UploadFileResponse>(url.toString(), formData);
+    return data;
   };
 
   const appendPendingFiles = (fileList: FileList | File[]) => {

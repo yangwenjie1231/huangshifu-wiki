@@ -97,12 +97,15 @@ export const ImagesTab: React.FC = () => {
 
   const handleExport = async (format: 'json' | 'csv') => {
     try {
+      // 使用 fetch 而非 apiClient，因为需要处理 Blob 下载
+      // apiClient 默认解析 JSON，而这里需要原始 Blob 数据用于文件下载
       const response = await fetch(`/api/image-maps/export?format=${format}`, {
         credentials: 'include',
       });
 
       if (!response.ok) {
-        throw new Error('导出失败');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || '导出失败');
       }
 
       const blob = await response.blob();
@@ -118,7 +121,8 @@ export const ImagesTab: React.FC = () => {
       show(`成功导出 ${images.length} 条图片记录`, { variant: 'success' });
     } catch (error) {
       console.error('Export error:', error);
-      show('导出失败', { variant: 'error' });
+      const message = error instanceof Error ? error.message : '导出失败';
+      show(message, { variant: 'error' });
     }
   };
 

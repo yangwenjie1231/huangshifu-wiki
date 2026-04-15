@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { UserPreferences, ViewMode, DEFAULT_PREFERENCES } from '../types/userPreferences';
-import { apiPatch } from '../lib/apiClient';
+import { apiGet, apiPatch } from '../lib/apiClient';
 import { useAuth } from './AuthContext';
+import type { AuthMeResponse } from '../types/api';
 
 const STORAGE_KEY = 'user_preferences';
 
@@ -73,14 +74,13 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
   };
 
   const fetchUserPreferencesFromAPI = async (): Promise<{ preferences?: Record<string, unknown> } | null> => {
-    const res = await fetch('/api/users/me', {
-      credentials: 'include',
-    });
-    if (res.ok) {
-      const data = await res.json();
+    try {
+      const data = await apiGet<AuthMeResponse>('/api/users/me');
       return data.user;
+    } catch (error) {
+      console.error('Failed to fetch user preferences from API:', error);
+      return null;
     }
-    return null;
   };
 
   const updatePreferences = useCallback(async (updates: Partial<UserPreferences>) => {

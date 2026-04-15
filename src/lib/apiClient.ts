@@ -1,3 +1,10 @@
+import {
+  classifyError,
+  logApiError,
+  NetworkError,
+  type ApiErrorContext,
+} from './errorHandler';
+
 interface RequestOptions extends RequestInit {
   query?: Record<string, string | number | boolean | undefined | null>;
 }
@@ -17,21 +24,44 @@ function buildUrl(path: string, query?: RequestOptions['query']) {
   return qs ? `${path}?${qs}` : path;
 }
 
-async function parseResponse<T>(response: Response): Promise<T> {
+async function parseResponse<T>(response: Response, context?: Omit<ApiErrorContext, 'statusCode' | 'responseData'>): Promise<T> {
   const data = await response.json().catch(() => ({}));
+  
   if (!response.ok) {
-    const message =
-      typeof data === 'object' && data && 'error' in data
-        ? String((data as Record<string, unknown>).error)
-        : `Request failed with status ${response.status}`;
-    throw new Error(message);
+    const error = classifyError(response.status, data);
+    
+    // 记录详细错误日志
+    if (context) {
+      logApiError(error, {
+        ...context,
+        statusCode: response.status,
+        responseData: data,
+      });
+    } else {
+      console.error('[API Error]', {
+        url: response.url,
+        status: response.status,
+        error: error.message,
+      });
+    }
+    
+    throw error;
   }
+  
   return data as T;
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}) {
   const { query, headers, ...rest } = options;
-  const response = await fetch(buildUrl(path, query), {
+  const url = buildUrl(path, query);
+  
+  const context: Omit<ApiErrorContext, 'statusCode' | 'responseData'> = {
+    url: path,
+    method: rest.method || 'GET',
+    requestBody: rest.body,
+  };
+
+  const response = await fetch(url, {
     credentials: 'include',
     headers: {
       ...API_JSON_HEADERS,
@@ -40,7 +70,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}) 
     ...rest,
   });
 
-  return parseResponse<T>(response);
+  return parseResponse<T>(response, context);
 }
 
 export async function apiGet<T>(path: string, query?: RequestOptions['query']) {
@@ -72,13 +102,81 @@ export async function apiDelete<T>(path: string) {
   return apiRequest<T>(path, { method: 'DELETE' });
 }
 
-export async function apiUpload<T>(path: string, formData: FormData) {
+export interface ApiUploadOptions {
+  signal?: AbortSignal;
+  onProgress?: (percent: number) => void;
+}
+
+export async function apiUpload<T>(path: string, formData: FormData, options?: ApiUploadOptions) {
+  const { signal, onProgress } = options || {};
+  
+  const context: Omit<ApiErrorContext, 'statusCode' | 'responseData'> = {
+    url: path,
+    method: 'POST',
+    requestBody: '[FormData]',
+  };
+
+  // 如果提供了进度回调，使用 XMLHttpRequest
+  if (onProgress) {
+    return new Promise<T>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          onProgress(Math.round((e.loaded / e.total) * 100));
+        }
+      });
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch {
+            resolve(xhr.responseText as unknown as T);
+          }
+        } else {
+          try {
+            const data = JSON.parse(xhr.responseText);
+            const error = classifyError(xhr.status, data);
+            logApiError(error, { ...context, statusCode: xhr.status, responseData: data });
+            reject(error);
+          } catch {
+            const error = new Error(`Upload failed: ${xhr.status}`);
+            logApiError(error, { ...context, statusCode: xhr.status, responseData: null });
+            reject(error);
+          }
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        const error = new NetworkError('Network error');
+        logApiError(error, { ...context, statusCode: 0, responseData: null });
+        reject(error);
+      });
+      xhr.addEventListener('abort', () => {
+        const error = new Error('Upload cancelled');
+        logApiError(error, { ...context, statusCode: 0, responseData: null });
+        reject(error);
+      });
+
+      xhr.open('POST', path);
+      xhr.withCredentials = true;
+      if (signal) {
+        signal.addEventListener('abort', () => xhr.abort());
+      }
+      xhr.send(formData);
+    });
+  }
+
+  // 否则使用 fetch
   const response = await fetch(path, {
     method: 'POST',
     credentials: 'include',
     body: formData,
+    signal,
   });
-  return parseResponse<T>(response);
+  
+  return parseResponse<T>(response, context);
 }
 
 export function apiUploadWithProgress<T>(
@@ -148,3 +246,18 @@ export async function apiUploadWithRetry<T>(
 
   throw lastError!;
 }
+
+// ============================================================================
+// 导出错误类型供外部使用
+// ============================================================================
+
+export {
+  NetworkError,
+  AuthError,
+  BusinessError,
+  ServerError,
+  PermissionError,
+  NotFoundError,
+  ValidationError,
+  type AppError,
+} from './errorHandler';

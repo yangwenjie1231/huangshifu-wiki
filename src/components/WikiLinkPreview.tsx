@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { apiGet } from '../lib/apiClient';
 
 interface WikiLinkPreviewProps {
   slug: string;
-  children: React.ReactNode;
+  children: import('react').React.ReactNode;
 }
 
 interface WikiPageSummary {
@@ -12,6 +13,13 @@ interface WikiPageSummary {
   content: string;
   category: string;
   updatedAt: string;
+}
+
+interface WikiPageResponse {
+  page: WikiPageSummary;
+  backlinks?: Array<{ slug: string; title: string }>;
+  relations?: Record<string, unknown>;
+  relationGraph?: Record<string, unknown>;
 }
 
 export default function WikiLinkPreview({ slug, children }: WikiLinkPreviewProps) {
@@ -32,11 +40,7 @@ export default function WikiLinkPreview({ slug, children }: WikiLinkPreviewProps
 
     setLoading(true);
     try {
-      const response = await fetch(`/api/wiki/${slug}`, {
-        signal: abortControllerRef.current.signal,
-      });
-      if (!response.ok) throw new Error('Failed to fetch');
-      const data = await response.json();
+      const data = await apiGet<WikiPageResponse>(`/api/wiki/${slug}`);
       setPreview({
         title: data.page.title,
         content: data.page.content || '',

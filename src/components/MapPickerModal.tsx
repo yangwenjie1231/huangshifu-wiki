@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { X, MapPin, Search, Loader2 } from 'lucide-react';
+import { apiGet, apiPost } from '../lib/apiClient';
 
 declare global {
   interface Window {
@@ -142,15 +143,9 @@ export const MapPickerModal = ({
     mapRef.current.add(marker);
 
     try {
-      const response = await fetch(
+      const data = await apiGet<{ result?: { formattedAddress: string; province: string; city: string; district: string; adcode: string } }>(
         `/api/regions/resolve?lng=${lng}&lat=${lat}`
       );
-
-      if (!response.ok) {
-        throw new Error('Failed to resolve location');
-      }
-
-      const data = await response.json();
 
       if (data.result) {
         const location: PickedLocation = {
@@ -184,10 +179,9 @@ export const MapPickerModal = ({
 
     setSearching(true);
     try {
-      const response = await fetch(
+      const data = await apiGet<{ results?: any[] }>(
         `/api/regions/search/address?q=${encodeURIComponent(query)}`
       );
-      const data = await response.json();
       setSearchResults(data.results || []);
     } catch (err) {
       console.error('Search failed:', err);

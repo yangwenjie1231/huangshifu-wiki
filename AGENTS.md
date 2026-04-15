@@ -162,10 +162,48 @@ If any of these files appear later, treat them as high-priority instructions and
 
 ### 8) API Client Patterns
 
-- Use `apiGet`, `apiPost`, `apiPut`, `apiPatch`, `apiDelete`, `apiUpload` from `@/lib/apiClient`.
-- API functions auto-serialize query params and set JSON headers.
-- Form data uploads use `apiUpload` without JSON Content-Type.
-- Error responses throw with backend `error` message.
+**使用统一的 API 客户端**：
+- 使用 `apiGet`, `apiPost`, `apiPut`, `apiPatch`, `apiDelete`, `apiUpload` from `@/lib/apiClient`
+- API 函数自动序列化 query params 和设置 JSON headers
+- Form data 上传使用 `apiUpload`（不需要设置 JSON Content-Type）
+- 错误响应自动抛出后端返回的 `error` 消息
+- **例外情况**（允许直接使用 `fetch`）：
+  - 下载文件 Blob（如导出功能、备份下载）
+  - 外部 API 调用（如 S3 presigned URL 上传）
+  - 需要在这些情况下添加注释说明原因
+
+**错误处理最佳实践**：
+```typescript
+// 推荐模式：使用 apiClient + 明确的类型
+try {
+  const data = await apiGet<WikiDetailResponse>(`/api/wiki/${slug}`);
+  // 处理成功结果
+} catch (error) {
+  // 自动记录详细日志
+  // 错误已分类：NetworkError, AuthError, BusinessError, ServerError
+  if (error instanceof AuthError) {
+    // 特殊处理认证错误（如跳转到登录页）
+  } else {
+    // 通用错误处理：显示用户友好的错误提示
+    console.error('API error:', error);
+  }
+}
+```
+
+**自定义 Hook 简化状态管理**：
+```typescript
+import { useApi } from '@/hooks/useApi';
+
+const { data, error, loading, execute } = useApi<WikiDetailResponse>();
+
+// 执行 API 调用
+await execute(() => apiGet(`/api/wiki/${slug}`));
+```
+
+**类型定义**：
+- 所有 API 响应类型定义在 `@/types/api.ts`
+- Zod schema 定义在 `@/lib/apiTypes.ts`（用于运行时验证）
+- 避免使用 `any` 类型，使用明确的 interface
 
 ### 9) Firestore / Auth Conventions
 
