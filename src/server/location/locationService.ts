@@ -1,6 +1,5 @@
-import { PrismaClient, Region } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { Region } from '@prisma/client';
+import { prisma } from '../prisma';
 
 export interface RegionSearchResult {
   code: string;

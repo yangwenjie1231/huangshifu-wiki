@@ -8,7 +8,7 @@
  * - 记录更新历史
  */
 
-import { PrismaClient, WikiPage } from '@prisma/client';
+import { prisma } from '../prisma';
 import {
   scanMarkdownLinks,
   replaceMarkdownLinks,
@@ -17,8 +17,6 @@ import {
   LinkMapping,
   ReplaceResult,
 } from '../../lib/markdownLinkReplacer';
-
-const prisma = new PrismaClient();
 
 export interface UpdateWikiLinksOptions {
   /** 预览模式（不实际修改） */

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../prisma';
 import { requireAuth, requireActiveUser, AuthenticatedRequest } from '../middleware/auth';
 import {
   createUploadSessionExpiresAt,
@@ -14,7 +14,6 @@ import {
 } from '../utils';
 import fs from 'fs';
 
-const prisma = new PrismaClient();
 const router = Router();
 
 // 配置 multer 用于处理文件上传

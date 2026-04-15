@@ -1,9 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
 import * as birthdayService from './birthdayService';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 type AuthenticatedRequest = Request & {
   authUser?: {

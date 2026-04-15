@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import {
   extractGpsFromImageUrl,
   extractGpsFromMultipleImages,
@@ -10,7 +9,6 @@ import { resolveCoordinateToRegion, isAmapConfigured } from './geoService';
 import { findMostCommonRegion, type RegionSearchResult } from './locationService';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.post('/extract-gps', async (req, res) => {
   try {

@@ -1,13 +1,12 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { requireAdmin, type AuthenticatedRequest } from '../middleware/auth';
 import { parseInteger, parseBoolean } from '../utils';
+import { prisma } from '../prisma';
 import { getEmbeddingModelName, getEmbeddingVectorSize } from '../vector/clipEmbedding';
 import { getQdrantCollectionName } from '../vector/qdrantService';
 import { enqueueMissingImageEmbeddings, syncImageEmbeddingBatch } from '../vector/embeddingSync';
 
 const router = Router();
-const prisma = new PrismaClient();
 const prismaAny = prisma as any;
 
 const IMAGE_EMBEDDING_BATCH_SIZE = Math.max(1, Number(process.env.IMAGE_EMBEDDING_BATCH_SIZE || 100));

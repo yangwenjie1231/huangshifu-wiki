@@ -1,10 +1,9 @@
 import bcrypt from 'bcryptjs';
 import { Request, Response, NextFunction } from 'express';
 import * as jwt from 'jsonwebtoken';
-import { PrismaClient, UserRole as PrismaUserRole } from '@prisma/client';
+import { UserRole as PrismaUserRole } from '@prisma/client';
 import type { ApiUser, SessionJwtPayload, UserStatus, AuthenticatedRequest } from '../types';
-
-const prisma = new PrismaClient();
+import { prisma } from '../prisma';
 
 const JWT_SECRET = process.env.JWT_SECRET || '';
 const AUTH_COOKIE_NAME = 'hsf_token';

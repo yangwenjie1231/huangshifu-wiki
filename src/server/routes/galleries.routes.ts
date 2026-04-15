@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireActiveUser, requireAdmin, isAdminRole } from '../middleware/auth';
 import type { ApiUser, AuthenticatedRequest } from '../types';
 import {
@@ -19,8 +18,8 @@ import {
   toCommentResponse,
 } from '../utils';
 import { enqueueGalleryImageEmbeddings } from '../vector/embeddingSync';
+import { prisma } from '../prisma';
 
-const prisma = new PrismaClient();
 const prismaAny = prisma as any;
 
 function canViewGallery(gallery: { published: boolean; authorUid: string }, authUser?: ApiUser) {

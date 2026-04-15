@@ -66,6 +66,7 @@ import {
   ALLOWED_IMAGE_MIME_TYPES,
 } from '../types';
 import { userToApiUser, isAdminRole } from '../middleware/auth';
+import { prisma } from '../prisma';
 
 dotenv.config({ path: '.env.local' });
 dotenv.config();
@@ -73,7 +74,6 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const prisma = new PrismaClient();
 const prismaAny = prisma as any;
 const defaultUploadsDir = path.join(__dirname, '..', '..', '..', 'uploads');
 const uploadsDir = process.env.UPLOADS_PATH || defaultUploadsDir;

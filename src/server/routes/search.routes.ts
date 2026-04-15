@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireAdmin, type AuthenticatedRequest } from '../middleware/auth';
 import {
   parseInteger,
@@ -19,12 +18,12 @@ import {
   toEmbeddingPayload,
   parseDate,
 } from '../utils';
+import { prisma } from '../prisma';
 import { getEmbeddingModelName, getEmbeddingVectorSize, generateImageEmbedding, generateTextEmbedding } from '../vector/clipEmbedding';
 import { getQdrantCollectionName, searchImageEmbeddingPoints } from '../vector/qdrantService';
 import { createUploadStorageInfo } from '../uploadPath';
 
 const router = Router();
-const prisma = new PrismaClient();
 const prismaAny = prisma as any;
 
 const IMAGE_SEARCH_RESULT_LIMIT = Math.max(1, Number(process.env.IMAGE_SEARCH_RESULT_LIMIT || 24));
