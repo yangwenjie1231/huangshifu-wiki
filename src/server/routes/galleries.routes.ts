@@ -1,0 +1,1273 @@
+import { Router } from 'express';
+import { PrismaClient } from '@prisma/client';
+import { requireAuth, requireActiveUser, requireAdmin, isAdminRole } from '../middleware/auth';
+import type { ApiUser, AuthenticatedRequest } from '../types';
+import {
+  serializeTags,
+  normalizeTagList,
+  parseAssetIdList,
+  parseBoolean,
+  createUploadSessionExpiresAt,
+  isUploadSessionExpired,
+  buildUploadPublicUrl,
+  getUploadFileStorageKey,
+  safeDeleteUploadFileByStorageKey,
+  safeDeleteUploadFileByUrl,
+  validateUploadedImage,
+  uploadFileToS3,
+  uploadFileToExternal,
+  toCommentResponse,
+} from '../utils';
+import { enqueueGalleryImageEmbeddings } from '../vector/embeddingSync';
+
+const prisma = new PrismaClient();
+const prismaAny = prisma as any;
+
+function canViewGallery(gallery: { published: boolean; authorUid: string }, authUser?: ApiUser) {
+  if (gallery.published) return true;
+  if (!authUser) return false;
+  if (isAdminRole(authUser.role)) return true;
+  return gallery.authorUid === authUser.uid;
+}
+
+function canManageGallery(gallery: { authorUid: string }, authUser?: ApiUser) {
+  if (!authUser) return false;
+  if (isAdminRole(authUser.role)) return true;
+  return gallery.authorUid === authUser.uid;
+}
+
+async function toGalleryResponse(gallery: {
+  id: string;
+  title: string;
+  description: string;
+  authorUid: string;
+  authorName: string;
+  tags: unknown;
+  locationCode?: string | null;
+  copyright?: string | null;
+  published: boolean;
+  publishedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  location?: { code: string; name: string; fullName: string } | null;
+  images: {
+    id: string;
+    url: string;
+    name: string;
+    sortOrder: number;
+    assetId?: string | null;
+    asset?: {
+      id: string;
+      publicUrl: string;
+      fileName: string;
+      mimeType: string;
+      sizeBytes: number;
+      status: string;
+      storageKey: string;
+    } | null;
+  }[];
+}) {
+  let storageStrategy: 'local' | 's3' | 'external' = 'local';
+  try {
+    const storageConfig = await prisma.siteConfig.findUnique({
+      where: { key: 'image_preference' },
+    });
+    const preference = storageConfig?.value as { strategy?: 'local' | 's3' | 'external' };
+    storageStrategy = preference?.strategy || 'local';
+  } catch (error) {
+    console.warn('Failed to get storage strategy:', error);
+  }
+
+  const storageKeys = gallery.images
+    .map(img => img.asset?.storageKey)
+    .filter((key): key is string => Boolean(key));
+
+  const imageMaps = storageKeys.length > 0
+    ? await prisma.imageMap.findMany({
+        where: {
+          localUrl: {
+            in: storageKeys.map(key => `/uploads/${key}`),
+          },
+        },
+      })
+    : [];
+
+  const imageMapByLocalUrl = new Map(imageMaps.map(im => [im.localUrl, im]));
+
+  return {
+    id: gallery.id,
+    title: gallery.title,
+    description: gallery.description,
+    authorUid: gallery.authorUid,
+    authorName: gallery.authorName,
+    tags: serializeTags(gallery.tags),
+    locationCode: gallery.locationCode || null,
+    locationName: gallery.location?.fullName || null,
+    copyright: gallery.copyright || null,
+    published: gallery.published,
+    publishedAt: gallery.publishedAt ? gallery.publishedAt.toISOString() : null,
+    createdAt: gallery.createdAt.toISOString(),
+    updatedAt: gallery.updatedAt.toISOString(),
+    images: gallery.images
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((image) => {
+        let url = image.asset?.publicUrl || image.url;
+
+        if (image.asset?.storageKey) {
+          const localUrl = `/uploads/${image.asset.storageKey}`;
+          const imageMap = imageMapByLocalUrl.get(localUrl);
+
+          if (imageMap) {
+            switch (storageStrategy) {
+              case 'external':
+                url = imageMap.externalUrl || imageMap.s3Url || imageMap.localUrl || url;
+                break;
+              case 's3':
+                url = imageMap.s3Url || imageMap.externalUrl || imageMap.localUrl || url;
+                break;
+              case 'local':
+              default:
+                url = imageMap.localUrl || url;
+                break;
+            }
+          }
+        }
+
+        return {
+          id: image.id,
+          assetId: image.assetId || image.asset?.id || null,
+          url,
+          name: image.asset?.fileName || image.name,
+          mimeType: image.asset?.mimeType || null,
+          sizeBytes: image.asset?.sizeBytes || null,
+        };
+      }),
+  };
+}
+
+const router = Router();
+
+// GET /api/galleries - List all galleries
+router.get('/', async (req: AuthenticatedRequest, res) => {
+  try {
+    const visibilityWhere = req.authUser
+      ? (isAdminRole(req.authUser.role)
+          ? {}
+          : {
+              OR: [
+                { published: true },
+                { authorUid: req.authUser.uid },
+              ],
+            })
+      : { published: true };
+
+    const galleries = await prisma.gallery.findMany({
+      where: visibilityWhere,
+      include: {
+        images: {
+          include: {
+            asset: true,
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    res.json({ galleries: galleries.map(toGalleryResponse) });
+  } catch (error) {
+    console.error('Fetch galleries error:', error);
+    res.status(500).json({ error: '获取图集失败' });
+  }
+});
+
+// GET /api/galleries/:id - Get gallery detail
+router.get('/:id', async (req: AuthenticatedRequest, res) => {
+  try {
+    const gallery = await prisma.gallery.findUnique({
+      where: { id: req.params.id },
+      include: {
+        images: {
+          include: {
+            asset: true,
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    if (!gallery) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    if (!canViewGallery(gallery, req.authUser)) {
+      res.status(403).json({ error: '该图集尚未发布' });
+      return;
+    }
+
+    res.json({ gallery: await toGalleryResponse(gallery) });
+  } catch (error) {
+    console.error('Fetch gallery detail error:', error);
+    res.status(500).json({ error: '获取图集详情失败' });
+  }
+});
+
+// POST /api/galleries/upload - Upload images to create gallery
+router.post('/upload', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  const files = req.files as Express.Multer.File[];
+  const createdAssetIds: string[] = [];
+  try {
+    const title = typeof req.body.title === 'string' ? req.body.title : '';
+    const description = typeof req.body.description === 'string' ? req.body.description : '';
+    const tagsRaw = typeof req.body.tags === 'string' ? req.body.tags : '';
+    const tags = tagsRaw
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+
+    if (!files || files.length === 0) {
+      res.status(400).json({ error: '请上传至少一张图片' });
+      return;
+    }
+
+    const finalTitle = title || '默认图集';
+    const validatedFiles = await Promise.all(
+      files.map(async (file) => {
+        const { mimeType } = await validateUploadedImage(file);
+        const asset = await prisma.mediaAsset.create({
+          data: {
+            ownerUid: req.authUser!.uid,
+            storageKey: getUploadFileStorageKey(file),
+            publicUrl: buildUploadPublicUrl(getUploadFileStorageKey(file)),
+            fileName: file.originalname,
+            mimeType,
+            sizeBytes: file.size,
+            status: 'ready',
+          },
+        });
+        createdAssetIds.push(asset.id);
+        return {
+          file,
+          asset,
+        };
+      }),
+    );
+
+    const gallery = await prisma.gallery.create({
+      data: {
+        title: finalTitle,
+        description: description || `${finalTitle} 图集`,
+        authorUid: req.authUser!.uid,
+        authorName: req.authUser!.displayName,
+        tags,
+        images: {
+          create: validatedFiles.map((entry, index) => ({
+            assetId: entry.asset.id,
+            url: entry.asset.publicUrl,
+            name: entry.asset.fileName,
+            sortOrder: index,
+          })),
+        },
+      },
+      include: {
+        images: {
+          include: {
+            asset: true,
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    try {
+      await enqueueGalleryImageEmbeddings(
+        prisma,
+        gallery.images.map((image) => image.id),
+      );
+    } catch (error) {
+      console.error('Enqueue gallery image embeddings error:', error);
+    }
+
+    res.status(201).json({ gallery: toGalleryResponse(gallery) });
+  } catch (error) {
+    if (createdAssetIds.length > 0) {
+      await prisma.mediaAsset.deleteMany({
+        where: {
+          id: { in: createdAssetIds },
+        },
+      });
+    }
+    await Promise.all(
+      files.map((file) => safeDeleteUploadFileByStorageKey(file.filename)),
+    );
+    console.error('Upload gallery error:', error);
+    const message = error instanceof Error ? error.message : '';
+    if (message.includes('图片') || message.includes('文件')) {
+      res.status(400).json({ error: message });
+      return;
+    }
+    res.status(500).json({ error: '上传图集失败' });
+  }
+});
+
+// POST /api/galleries - Create gallery from existing assets
+router.post('/', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { title, description, tags, images, assetIds, uploadSessionId, locationCode } = req.body as {
+      title?: string;
+      description?: string;
+      tags?: string[];
+      images?: { url: string; name: string }[];
+      assetIds?: string[];
+      uploadSessionId?: string;
+      locationCode?: string;
+    };
+
+    const normalizedAssetIds = parseAssetIdList(assetIds);
+
+    if (normalizedAssetIds.length > 0) {
+      const finalTitle = typeof title === 'string' && title.trim() ? title.trim() : '默认图集';
+      const finalDescription = typeof description === 'string' && description.trim()
+        ? description.trim()
+        : `${finalTitle} 图集`;
+      const finalTags = normalizeTagList(tags);
+
+      const assets = await prisma.mediaAsset.findMany({
+        where: {
+          id: { in: normalizedAssetIds },
+          ownerUid: req.authUser!.uid,
+          status: 'ready',
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      if (assets.length !== normalizedAssetIds.length) {
+        res.status(400).json({ error: '包含无效或无权限的图片资源' });
+        return;
+      }
+
+      if (uploadSessionId && typeof uploadSessionId === 'string') {
+        const session = await prisma.uploadSession.findUnique({
+          where: { id: uploadSessionId },
+          select: {
+            id: true,
+            ownerUid: true,
+            status: true,
+            expiresAt: true,
+          },
+        });
+
+        if (!session || session.ownerUid !== req.authUser!.uid) {
+          res.status(400).json({ error: '上传会话不存在' });
+          return;
+        }
+
+        if (session.status === 'expired' || isUploadSessionExpired(session.expiresAt)) {
+          if (session.status !== 'expired') {
+            await prisma.uploadSession.update({
+              where: { id: session.id },
+              data: { status: 'expired' },
+            });
+          }
+          res.status(410).json({ error: '上传会话已过期，请重新上传' });
+          return;
+        }
+
+        if (session.status !== 'finalized') {
+          res.status(400).json({ error: '请先完成上传会话' });
+          return;
+        }
+      }
+
+      const assetsById = new Map(assets.map((asset) => [asset.id, asset]));
+      const orderedAssets = normalizedAssetIds
+        .map((id) => assetsById.get(id))
+        .filter((asset): asset is typeof assets[number] => Boolean(asset));
+
+      const gallery = await prisma.gallery.create({
+        data: {
+          title: finalTitle,
+          description: finalDescription,
+          authorUid: req.authUser!.uid,
+          authorName: req.authUser!.displayName,
+          tags: finalTags,
+          locationCode: locationCode || null,
+          images: {
+            create: orderedAssets.map((asset, index) => ({
+              assetId: asset.id,
+              url: asset.publicUrl,
+              name: asset.fileName || `image-${index + 1}`,
+              sortOrder: index,
+            })),
+          },
+        },
+        include: {
+          images: {
+            orderBy: { sortOrder: 'asc' },
+            include: {
+              asset: true,
+            },
+          },
+        },
+      });
+
+      try {
+        await enqueueGalleryImageEmbeddings(
+          prisma,
+          gallery.images.map((image) => image.id),
+        );
+      } catch (error) {
+        console.error('Enqueue gallery image embeddings error:', error);
+      }
+
+      res.status(201).json({ gallery: toGalleryResponse(gallery) });
+      return;
+    }
+
+    if (!images || !Array.isArray(images) || images.length === 0) {
+      res.status(400).json({ error: '图集至少需要一张图片' });
+      return;
+    }
+
+    const normalizedTitle = typeof title === 'string' && title.trim() ? title.trim() : '默认图集';
+    const normalizedDescription = typeof description === 'string' && description.trim() ? description.trim() : '无描述';
+    const normalizedTags = normalizeTagList(tags);
+
+    const normalizedImages = images
+      .map((image, index) => {
+        if (!image || typeof image.url !== 'string') {
+          return null;
+        }
+        const url = image.url.trim();
+        if (!url || !url.startsWith('/uploads/')) {
+          return null;
+        }
+        const fallbackName = `image-${index + 1}`;
+        const name = typeof image.name === 'string' && image.name.trim() ? image.name.trim() : fallbackName;
+        return {
+          url,
+          name,
+        };
+      })
+      .filter((item): item is { url: string; name: string } => Boolean(item));
+
+    if (!normalizedImages.length || normalizedImages.length !== images.length) {
+      res.status(400).json({ error: '图片地址不合法，请重新上传' });
+      return;
+    }
+
+    const fallbackAssets = await prisma.mediaAsset.findMany({
+      where: {
+        ownerUid: req.authUser!.uid,
+        status: 'ready',
+        publicUrl: {
+          in: normalizedImages.map((item) => item.url),
+        },
+      },
+      select: {
+        id: true,
+        publicUrl: true,
+      },
+    });
+    const assetByUrl = new Map(fallbackAssets.map((item) => [item.publicUrl, item.id]));
+
+    const gallery = await prisma.gallery.create({
+      data: {
+        title: normalizedTitle,
+        description: normalizedDescription,
+        authorUid: req.authUser!.uid,
+        authorName: req.authUser!.displayName,
+        tags: normalizedTags,
+        locationCode: locationCode || null,
+        images: {
+          create: normalizedImages.map((image, index) => ({
+            assetId: assetByUrl.get(image.url) || null,
+            url: image.url,
+            name: image.name,
+            sortOrder: index,
+          })),
+        },
+      },
+      include: {
+        images: {
+          orderBy: { sortOrder: 'asc' },
+          include: {
+            asset: true,
+          },
+        },
+      },
+    });
+
+    try {
+      await enqueueGalleryImageEmbeddings(
+        prisma,
+        gallery.images.map((image) => image.id),
+      );
+    } catch (error) {
+      console.error('Enqueue gallery image embeddings error:', error);
+    }
+
+    res.status(201).json({ gallery: toGalleryResponse(gallery) });
+  } catch (error) {
+    console.error('Create gallery error:', error);
+    res.status(500).json({ error: '创建图集失败' });
+  }
+});
+
+// PATCH /api/galleries/:id - Update gallery
+router.patch('/:id', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const gallery = await prisma.gallery.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        authorUid: true,
+      },
+    });
+
+    if (!gallery) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    if (!canManageGallery(gallery, req.authUser)) {
+      res.status(403).json({ error: '无权限编辑该图集' });
+      return;
+    }
+
+    const title = typeof req.body?.title === 'string' ? req.body.title.trim() : undefined;
+    const description = typeof req.body?.description === 'string' ? req.body.description.trim() : undefined;
+    const tags = req.body?.tags !== undefined ? normalizeTagList(req.body.tags) : undefined;
+    const locationCode = req.body?.locationCode !== undefined ? (typeof req.body.locationCode === 'string' && req.body.locationCode.length > 0 ? req.body.locationCode : null) : undefined;
+    const copyright = req.body?.copyright !== undefined ? (typeof req.body.copyright === 'string' ? req.body.copyright.trim() : null) : undefined;
+    const published = req.body?.published !== undefined ? parseBoolean(req.body.published, false) : undefined;
+    const imagesRaw = Array.isArray(req.body?.images) ? req.body.images : undefined;
+    const imageInstructions = imagesRaw?.map((item) => {
+      if (!item || typeof item !== 'object') {
+        return null;
+      }
+      const parsed = item as Record<string, unknown>;
+      const imageId = typeof parsed.imageId === 'string'
+        ? parsed.imageId.trim()
+        : '';
+      const assetId = typeof parsed.assetId === 'string'
+        ? parsed.assetId.trim()
+        : '';
+      if (imageId && !assetId) {
+        return { kind: 'existing' as const, imageId };
+      }
+      if (assetId && !imageId) {
+        return { kind: 'asset' as const, assetId };
+      }
+      return null;
+    }) ?? undefined;
+
+    const data: {
+      title?: string;
+      description?: string;
+      tags?: string[];
+      locationCode?: string | null;
+      copyright?: string | null;
+      published?: boolean;
+      publishedAt?: Date | null;
+    } = {};
+
+    if (title !== undefined && title.length > 0) {
+      data.title = title;
+    }
+    if (description !== undefined) {
+      data.description = description || '无描述';
+    }
+    if (tags !== undefined) {
+      data.tags = tags;
+    }
+    if (locationCode !== undefined) {
+      data.locationCode = locationCode;
+    }
+    if (copyright !== undefined) {
+      data.copyright = copyright;
+    }
+    if (published !== undefined) {
+      data.published = published;
+      data.publishedAt = published ? new Date() : null;
+    }
+
+    if (imageInstructions !== undefined) {
+      if (!imageInstructions.length || imageInstructions.some((item) => !item)) {
+        res.status(400).json({ error: '图片保存数据无效' });
+        return;
+      }
+    }
+
+    if (!Object.keys(data).length && imageInstructions === undefined) {
+      res.status(400).json({ error: '没有可更新的字段' });
+      return;
+    }
+
+    const newImageIds: string[] = [];
+    const removedImages: Array<{ id: string; assetId: string | null; url: string }> = [];
+
+    const updated = await prisma.$transaction(async (tx) => {
+      if (Object.keys(data).length) {
+        await tx.gallery.update({
+          where: { id: req.params.id },
+          data,
+        });
+      }
+
+      if (imageInstructions !== undefined) {
+        const validatedInstructions = imageInstructions.filter(
+          (item): item is { kind: 'existing'; imageId: string } | { kind: 'asset'; assetId: string } => Boolean(item),
+        );
+        if (validatedInstructions.length !== imageInstructions.length) {
+          throw new Error('图片保存数据无效');
+        }
+
+        const existingImages = await tx.galleryImage.findMany({
+          where: { galleryId: req.params.id },
+          select: {
+            id: true,
+            assetId: true,
+            url: true,
+          },
+        });
+
+        const existingImageMap = new Map(existingImages.map((item) => [item.id, item]));
+        const existingIdsInPayload = validatedInstructions
+          .filter((item): item is { kind: 'existing'; imageId: string } => item?.kind === 'existing')
+          .map((item) => item.imageId);
+        if (new Set(existingIdsInPayload).size !== existingIdsInPayload.length) {
+          throw new Error('排序列表包含重复图片');
+        }
+        if (existingIdsInPayload.some((imageId) => !existingImageMap.has(imageId))) {
+          throw new Error('排序列表包含无效图片');
+        }
+
+        const assetIdsInPayload = validatedInstructions
+          .filter((item): item is { kind: 'asset'; assetId: string } => item?.kind === 'asset')
+          .map((item) => item.assetId);
+        if (new Set(assetIdsInPayload).size !== assetIdsInPayload.length) {
+          throw new Error('图片列表包含重复资源');
+        }
+
+        const assets: Array<{ id: string; publicUrl: string; fileName: string | null }> = assetIdsInPayload.length
+          ? await tx.mediaAsset.findMany({
+              select: {
+                id: true,
+                publicUrl: true,
+                fileName: true,
+              },
+              where: {
+                id: { in: assetIdsInPayload },
+                ownerUid: req.authUser!.uid,
+                status: 'ready',
+              },
+            })
+          : [];
+        if (assets.length !== assetIdsInPayload.length) {
+          throw new Error('图片列表包含无效或无权限的资源');
+        }
+        const assetMap = new Map(assets.map((asset) => [asset.id, asset]));
+
+        const keptIds = new Set(existingIdsInPayload);
+        removedImages.push(...existingImages.filter((item) => !keptIds.has(item.id)));
+        if (removedImages.length === existingImages.length && assetIdsInPayload.length === 0) {
+          throw new Error('图集至少需要保留一张图片');
+        }
+
+        if (removedImages.length) {
+          await tx.galleryImage.deleteMany({
+            where: { id: { in: removedImages.map((item) => item.id) } },
+          });
+        }
+
+        for (const [index, instruction] of validatedInstructions.entries()) {
+          if (instruction.kind === 'existing') {
+            await tx.galleryImage.update({
+              where: { id: instruction.imageId },
+              data: { sortOrder: index },
+            });
+            continue;
+          }
+
+          const asset = assetMap.get(instruction.assetId);
+          if (!asset) {
+            throw new Error('图片列表包含无效或无权限的资源');
+          }
+          const created = await tx.galleryImage.create({
+            data: {
+              galleryId: req.params.id,
+              assetId: asset.id,
+              url: asset.publicUrl,
+              name: asset.fileName || `image-${index + 1}`,
+              sortOrder: index,
+            },
+            select: { id: true },
+          });
+          newImageIds.push(created.id);
+        }
+      }
+
+      return tx.gallery.findUnique({
+        where: { id: req.params.id },
+        include: {
+          images: {
+            include: {
+              asset: true,
+            },
+            orderBy: { sortOrder: 'asc' },
+          },
+        },
+      });
+    });
+
+    if (!updated) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    if (newImageIds.length) {
+      try {
+        await enqueueGalleryImageEmbeddings(prisma, newImageIds);
+      } catch (error) {
+        console.error('Enqueue gallery image embeddings error:', error);
+      }
+    }
+
+    if (removedImages.length) {
+      await Promise.all(
+        removedImages.map(async (item) => {
+          if (item.assetId) {
+            const linked = await prisma.galleryImage.count({ where: { assetId: item.assetId } });
+            if (linked === 0) {
+              const asset = await prisma.mediaAsset.findUnique({ where: { id: item.assetId } });
+              if (asset) {
+                await safeDeleteUploadFileByStorageKey(asset.storageKey);
+                await prisma.mediaAsset.update({
+                  where: { id: asset.id },
+                  data: { status: 'deleted' },
+                });
+              }
+            }
+          } else {
+            await safeDeleteUploadFileByUrl(item.url);
+          }
+        }),
+      );
+    }
+
+    res.json({ gallery: toGalleryResponse(updated) });
+  } catch (error) {
+    console.error('Update gallery error:', error);
+    res.status(500).json({ error: '更新图集失败' });
+  }
+});
+
+// PATCH /api/galleries/:id/publish - Publish/unpublish gallery
+router.patch('/:id/publish', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const gallery = await prisma.gallery.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        authorUid: true,
+        published: true,
+      },
+    });
+
+    if (!gallery) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    if (!canManageGallery(gallery, req.authUser)) {
+      res.status(403).json({ error: '无权限修改图集发布状态' });
+      return;
+    }
+
+    const nextPublished = parseBoolean(req.body?.published, !gallery.published);
+    const updated = await prisma.gallery.update({
+      where: { id: req.params.id },
+      data: {
+        published: nextPublished,
+        publishedAt: nextPublished ? new Date() : null,
+      },
+      include: {
+        images: {
+          include: {
+            asset: true,
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    res.json({ gallery: toGalleryResponse(updated) });
+  } catch (error) {
+    console.error('Update gallery publish status error:', error);
+    res.status(500).json({ error: '修改图集发布状态失败' });
+  }
+});
+
+// POST /api/galleries/:id/images - Add images to gallery
+router.post('/:id/images', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const gallery = await prisma.gallery.findUnique({
+      where: { id: req.params.id },
+      include: {
+        images: {
+          select: {
+            id: true,
+            sortOrder: true,
+          },
+        },
+      },
+    });
+
+    if (!gallery) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    if (!canManageGallery(gallery, req.authUser)) {
+      res.status(403).json({ error: '无权限编辑该图集' });
+      return;
+    }
+
+    const assetIds = parseAssetIdList(req.body?.assetIds);
+    if (!assetIds.length) {
+      res.status(400).json({ error: '请提供至少一个图片资源' });
+      return;
+    }
+
+    const uploadSessionId = typeof req.body?.uploadSessionId === 'string' ? req.body.uploadSessionId.trim() : '';
+    if (uploadSessionId) {
+      const session = await prisma.uploadSession.findUnique({
+        where: { id: uploadSessionId },
+        select: {
+          id: true,
+          ownerUid: true,
+          status: true,
+          expiresAt: true,
+        },
+      });
+      if (!session || session.ownerUid !== req.authUser!.uid) {
+        res.status(400).json({ error: '上传会话不存在' });
+        return;
+      }
+      if (session.status === 'expired' || isUploadSessionExpired(session.expiresAt)) {
+        if (session.status !== 'expired') {
+          await prisma.uploadSession.update({
+            where: { id: session.id },
+            data: { status: 'expired' },
+          });
+        }
+        res.status(410).json({ error: '上传会话已过期，请重新上传' });
+        return;
+      }
+      if (session.status !== 'finalized') {
+        res.status(400).json({ error: '请先完成上传会话' });
+        return;
+      }
+    }
+
+    const assets = await prisma.mediaAsset.findMany({
+      where: {
+        id: { in: assetIds },
+        ownerUid: req.authUser!.uid,
+        status: 'ready',
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (assets.length !== assetIds.length) {
+      res.status(400).json({ error: '包含无效或无权限的图片资源' });
+      return;
+    }
+
+    const assetMap = new Map(assets.map((asset) => [asset.id, asset]));
+    const orderedAssets = assetIds
+      .map((id) => assetMap.get(id))
+      .filter((asset): asset is typeof assets[number] => Boolean(asset));
+    const baseSortOrder = gallery.images.length
+      ? Math.max(...gallery.images.map((item) => item.sortOrder)) + 1
+      : 0;
+
+    await prisma.gallery.update({
+      where: { id: gallery.id },
+      data: {
+        images: {
+          create: orderedAssets.map((asset, index) => ({
+            assetId: asset.id,
+            url: asset.publicUrl,
+            name: asset.fileName || `image-${baseSortOrder + index + 1}`,
+            sortOrder: baseSortOrder + index,
+          })),
+        },
+      },
+    });
+
+    const updated = await prisma.gallery.findUnique({
+      where: { id: gallery.id },
+      include: {
+        images: {
+          include: {
+            asset: true,
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    if (updated) {
+      try {
+        await enqueueGalleryImageEmbeddings(
+          prisma,
+          updated.images.map((image) => image.id),
+        );
+      } catch (error) {
+        console.error('Enqueue gallery image embeddings error:', error);
+      }
+
+      res.json({ gallery: toGalleryResponse(updated) });
+      return;
+    }
+
+    res.status(404).json({ error: '图集不存在' });
+  } catch (error) {
+    console.error('Append gallery images error:', error);
+    res.status(500).json({ error: '追加图集图片失败' });
+  }
+});
+
+// DELETE /api/galleries/:id/images/:imageId - Delete image from gallery
+router.delete('/:id/images/:imageId', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const gallery = await prisma.gallery.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        authorUid: true,
+      },
+    });
+
+    if (!gallery) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    if (!canManageGallery(gallery, req.authUser)) {
+      res.status(403).json({ error: '无权限编辑该图集' });
+      return;
+    }
+
+    const image = await prisma.galleryImage.findUnique({
+      where: { id: req.params.imageId },
+      select: {
+        id: true,
+        galleryId: true,
+        assetId: true,
+        url: true,
+      },
+    });
+
+    if (!image || image.galleryId !== gallery.id) {
+      res.status(404).json({ error: '图片不存在' });
+      return;
+    }
+
+    const imageCount = await prisma.galleryImage.count({ where: { galleryId: gallery.id } });
+    if (imageCount <= 1) {
+      res.status(400).json({ error: '图集至少需要保留一张图片' });
+      return;
+    }
+
+    await prisma.galleryImage.delete({ where: { id: image.id } });
+
+    if (image.assetId) {
+      const linked = await prisma.galleryImage.count({ where: { assetId: image.assetId } });
+      if (linked === 0) {
+        const asset = await prisma.mediaAsset.findUnique({ where: { id: image.assetId } });
+        if (asset) {
+          await safeDeleteUploadFileByStorageKey(asset.storageKey);
+          await prisma.mediaAsset.update({
+            where: { id: asset.id },
+            data: { status: 'deleted' },
+          });
+        }
+      }
+    } else {
+      await safeDeleteUploadFileByUrl(image.url);
+    }
+
+    const remaining = await prisma.galleryImage.findMany({
+      where: { galleryId: gallery.id },
+      orderBy: { sortOrder: 'asc' },
+      select: { id: true },
+    });
+
+    await Promise.all(
+      remaining.map((item, index) =>
+        prisma.galleryImage.update({
+          where: { id: item.id },
+          data: { sortOrder: index },
+        }),
+      ),
+    );
+
+    const updated = await prisma.gallery.findUnique({
+      where: { id: gallery.id },
+      include: {
+        images: {
+          include: {
+            asset: true,
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    if (!updated) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    res.json({ gallery: toGalleryResponse(updated) });
+  } catch (error) {
+    console.error('Delete gallery image error:', error);
+    res.status(500).json({ error: '删除图集图片失败' });
+  }
+});
+
+// PATCH /api/galleries/:id/images/reorder - Reorder gallery images
+router.patch('/:id/images/reorder', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const gallery = await prisma.gallery.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        authorUid: true,
+      },
+    });
+
+    if (!gallery) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    if (!canManageGallery(gallery, req.authUser)) {
+      res.status(403).json({ error: '无权限编辑该图集' });
+      return;
+    }
+
+    const imageIdsRaw = Array.isArray(req.body?.imageIds) ? req.body.imageIds : [];
+    const imageIds = imageIdsRaw
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (!imageIds.length) {
+      res.status(400).json({ error: '请提供图片排序列表' });
+      return;
+    }
+
+    const existing = await prisma.galleryImage.findMany({
+      where: { galleryId: gallery.id },
+      select: { id: true },
+    });
+    const existingIds = existing.map((item) => item.id);
+    if (existingIds.length !== imageIds.length) {
+      res.status(400).json({ error: '排序列表与当前图片数量不一致' });
+      return;
+    }
+    const existingSet = new Set(existingIds);
+    if (imageIds.some((id) => !existingSet.has(id))) {
+      res.status(400).json({ error: '排序列表包含无效图片' });
+      return;
+    }
+
+    await prisma.$transaction(
+      imageIds.map((imageId, index) =>
+        prisma.galleryImage.update({
+          where: { id: imageId },
+          data: { sortOrder: index },
+        }),
+      ),
+    );
+
+    const updated = await prisma.gallery.findUnique({
+      where: { id: gallery.id },
+      include: {
+        images: {
+          include: {
+            asset: true,
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    if (!updated) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    res.json({ gallery: toGalleryResponse(updated) });
+  } catch (error) {
+    console.error('Reorder gallery images error:', error);
+    res.status(500).json({ error: '重排图集图片失败' });
+  }
+});
+
+// GET /api/galleries/:id/comments - Get gallery comments
+router.get('/:id/comments', async (req: AuthenticatedRequest, res) => {
+  try {
+    const gallery = await prisma.gallery.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        published: true,
+        authorUid: true,
+      },
+    });
+
+    if (!gallery) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    if (!canViewGallery(gallery, req.authUser)) {
+      res.status(403).json({ error: '该图集尚未发布' });
+      return;
+    }
+
+    const comments = await prisma.postComment.findMany({
+      where: { galleryId: req.params.id },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    res.json({ comments: comments.map(toCommentResponse) });
+  } catch (error) {
+    console.error('Fetch gallery comments error:', error);
+    res.status(500).json({ error: '获取图集评论失败' });
+  }
+});
+
+// POST /api/galleries/:id/comments - Add comment to gallery
+router.post('/:id/comments', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { content, parentId } = req.body as {
+      content?: string;
+      parentId?: string | null;
+    };
+
+    if (!content || !content.trim()) {
+      res.status(400).json({ error: '评论内容不能为空' });
+      return;
+    }
+
+    const gallery = await prisma.gallery.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        published: true,
+        authorUid: true,
+      },
+    });
+
+    if (!gallery || !canViewGallery(gallery, req.authUser)) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    if (!gallery.published) {
+      res.status(403).json({ error: '仅已发布内容可评论' });
+      return;
+    }
+
+    let replyTargetUid: string | null = null;
+    if (parentId) {
+      const parent = await prisma.postComment.findUnique({
+        where: { id: parentId },
+        select: {
+          id: true,
+          galleryId: true,
+          authorUid: true,
+        },
+      });
+      if (!parent || parent.galleryId !== req.params.id) {
+        res.status(400).json({ error: '回复目标不存在' });
+        return;
+      }
+      replyTargetUid = parent.authorUid;
+    }
+
+    const comment = await prisma.postComment.create({
+      data: {
+        galleryId: req.params.id,
+        authorUid: req.authUser!.uid,
+        authorName: req.authUser!.displayName,
+        authorPhoto: req.authUser!.photoURL,
+        content,
+        parentId: parentId || null,
+      },
+    });
+
+    res.status(201).json({ comment: toCommentResponse(comment) });
+  } catch (error) {
+    console.error('Create gallery comment error:', error);
+    res.status(500).json({ error: '发表评论失败' });
+  }
+});
+
+// DELETE /api/galleries/:id - Delete gallery (admin only)
+router.delete('/:id', requireAdmin, async (req, res) => {
+  try {
+    const gallery = await prisma.gallery.findUnique({
+      where: { id: req.params.id },
+      include: {
+        images: true,
+      },
+    });
+
+    if (!gallery) {
+      res.status(404).json({ error: '图集不存在' });
+      return;
+    }
+
+    await prisma.gallery.delete({
+      where: { id: req.params.id },
+    });
+
+    await Promise.all(
+      gallery.images.map(async (image) => {
+        if (image.assetId) {
+          const linked = await prisma.galleryImage.count({ where: { assetId: image.assetId } });
+          if (linked === 0) {
+            const asset = await prisma.mediaAsset.findUnique({ where: { id: image.assetId } });
+            if (asset) {
+              await safeDeleteUploadFileByStorageKey(asset.storageKey);
+              await prisma.mediaAsset.update({
+                where: { id: asset.id },
+                data: { status: 'deleted' },
+              });
+            }
+          }
+        } else {
+          await safeDeleteUploadFileByUrl(image.url);
+        }
+      }),
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete gallery error:', error);
+    res.status(500).json({ error: '删除图集失败' });
+  }
+});
+
+export function registerGalleriesRoutes(app: Router) {
+  app.use('/api/galleries', router);
+}

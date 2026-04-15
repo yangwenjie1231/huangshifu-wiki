@@ -1,0 +1,314 @@
+import { Request } from 'express';
+import { JwtPayload } from 'jsonwebtoken';
+import { Prisma, UserRole as PrismaUserRole } from '@prisma/client';
+
+type UserStatus = 'active' | 'banned';
+type ContentStatus = 'draft' | 'pending' | 'published' | 'rejected';
+type WikiBranchStatus = 'draft' | 'pending_review' | 'merged' | 'rejected' | 'conflict';
+type WikiPullRequestStatus = 'open' | 'merged' | 'rejected';
+type WikiRelationType = 'related_person' | 'work_relation' | 'timeline_relation' | 'custom';
+type FavoriteTargetType = 'wiki' | 'post' | 'music';
+type ModerationTargetType = 'wiki' | 'post';
+type NotificationType = 'reply' | 'like' | 'review_result';
+type BrowsingTargetType = 'wiki' | 'post' | 'music';
+type PostSortType = 'latest' | 'hot' | 'recommended';
+
+type MusicPlatform = 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo';
+type DisplayAlbumMode = 'none' | 'linked' | 'manual';
+type MusicCollectionType = 'album' | 'playlist';
+
+type WikiRelationRecord = {
+  type: WikiRelationType;
+  targetSlug: string;
+  label?: string;
+  bidirectional: boolean;
+};
+
+type WikiRelationResolved = WikiRelationRecord & {
+  typeLabel: string;
+  targetTitle: string;
+  targetCategory: string;
+  inferred: boolean;
+  sourceSlug: string;
+  sourceTitle: string;
+};
+
+type WikiRelationGraphNode = {
+  slug: string;
+  title: string;
+  category: string;
+  depth: 0 | 1 | 2;
+  isCenter: boolean;
+};
+
+type WikiRelationGraphEdge = {
+  sourceSlug: string;
+  targetSlug: string;
+  type: WikiRelationType;
+  typeLabel: string;
+  label: string | null;
+  inferred: boolean;
+};
+
+type MusicTrackWithRelations = {
+  docId: string;
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  cover: string;
+  audioUrl: string;
+  lyric: string | null;
+  primaryPlatform: MusicPlatform;
+  enabledPlatform: MusicPlatform | null;
+  neteaseId: string | null;
+  tencentId: string | null;
+  kugouId: string | null;
+  baiduId: string | null;
+  kuwoId: string | null;
+  customPlatformLinks: Prisma.JsonValue | null;
+  displayAlbumMode: DisplayAlbumMode;
+  manualAlbumName: string | null;
+  defaultCoverSource: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  covers: Array<{
+    id: string;
+    publicUrl: string;
+    isDefault: boolean;
+    sortOrder: number;
+  }>;
+  albumRelations: Array<{
+    albumDocId: string;
+    discNumber: number;
+    trackOrder: number;
+    isDisplay: boolean;
+    album: {
+      docId: string;
+      title: string;
+      artist: string;
+      cover: string;
+      defaultCoverSource: string | null;
+      covers: Array<{
+        id: string;
+        publicUrl: string;
+        isDefault: boolean;
+      }>;
+    };
+  }>;
+  instrumentalLinks?: Array<{
+    targetSongDocId: string;
+  }>;
+};
+
+interface PlayUrlCacheValue {
+  platform: MusicPlatform;
+  sourceId: string;
+  url: string;
+  fetchedAt: number;
+  expiresAt: number;
+}
+
+interface ImportSongInput {
+  sourceId: string;
+  title: string;
+  artist: string;
+  album: string;
+  picId: string;
+  urlId: string;
+  lyricId: string;
+  cover: string;
+  sourceUrl: string;
+  isInstrumental?: boolean;
+}
+
+type SongCustomPlatformLink = {
+  label: string;
+  url: string;
+};
+
+interface SessionJwtPayload extends JwtPayload {
+  uid: string;
+  role: PrismaUserRole;
+}
+
+interface WechatCodeSessionResponse {
+  openid?: string;
+  unionid?: string;
+  session_key?: string;
+  errcode?: number;
+  errmsg?: string;
+}
+
+interface ApiUser {
+  uid: string;
+  email: string;
+  displayName: string;
+  photoURL: string | null;
+  wechatBound: boolean;
+  role: PrismaUserRole;
+  status: UserStatus;
+  banReason: string | null;
+  bannedAt: string | null;
+  level: number;
+  bio: string;
+}
+
+type AuthenticatedRequest = Request & {
+  authUser?: ApiUser;
+};
+
+type WikiResponseInput = {
+  id: string;
+  slug: string;
+  title: string;
+  category: string;
+  content: string;
+  tags: unknown;
+  relations?: unknown;
+  eventDate: string | null;
+  locationCode?: string | null;
+  status: ContentStatus;
+  reviewNote: string | null;
+  reviewedBy: string | null;
+  reviewedAt: Date | null;
+  viewCount?: number;
+  favoritesCount: number;
+  lastEditorUid: string;
+  lastEditorName: string;
+  createdAt: Date;
+  updatedAt: Date;
+  location?: { code: string; name: string; fullName: string } | null;
+};
+
+type WikiRelationPageLite = {
+  slug: string;
+  title: string;
+  category: string;
+  status: ContentStatus;
+  lastEditorUid: string;
+  relations: unknown;
+};
+
+type WikiReverseRelationEntry = {
+  sourcePage: WikiRelationPageLite;
+  relation: WikiRelationRecord;
+};
+
+type WikiRelationBundle = {
+  centerPage: WikiRelationPageLite;
+  relations: WikiRelationResolved[];
+  graph: {
+    nodes: WikiRelationGraphNode[];
+    edges: WikiRelationGraphEdge[];
+  };
+};
+
+type WikiBranchWithPage = {
+  id: string;
+  pageSlug: string;
+  editorUid: string;
+  editorName: string;
+  status: WikiBranchStatus;
+  latestRevisionId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  page?: {
+    slug: string;
+    title: string;
+    category: string;
+  } | null;
+};
+
+type WikiPullRequestWithRelations = {
+  id: string;
+  branchId: string;
+  pageSlug: string;
+  title: string;
+  description: string | null;
+  status: WikiPullRequestStatus;
+  createdByUid: string;
+  createdByName: string;
+  reviewedBy: string | null;
+  reviewedAt: Date | null;
+  mergedAt: Date | null;
+  baseRevisionId: string | null;
+  conflictData: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+  branch?: WikiBranchWithPage | null;
+  page?: {
+    slug: string;
+    title: string;
+    category: string;
+  } | null;
+  comments?: {
+    id: string;
+    prId: string;
+    authorUid: string;
+    authorName: string;
+    content: string;
+    createdAt: Date;
+  }[];
+};
+
+const WIKI_RELATION_SCAN_LIMIT = 800;
+const MUSIC_SECTION_ID = 'music';
+const EDIT_LOCK_COLLECTION_ALLOWLIST = new Set([
+  'songs',
+  'albums',
+  'galleries',
+  'activities',
+  'wiki',
+  'posts',
+]);
+const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp']);
+const ALLOWED_IMAGE_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/bmp',
+]);
+
+export type {
+  UserStatus,
+  ContentStatus,
+  WikiBranchStatus,
+  WikiPullRequestStatus,
+  WikiRelationType,
+  FavoriteTargetType,
+  ModerationTargetType,
+  NotificationType,
+  BrowsingTargetType,
+  PostSortType,
+  MusicPlatform,
+  DisplayAlbumMode,
+  MusicCollectionType,
+  WikiRelationRecord,
+  WikiRelationResolved,
+  WikiRelationGraphNode,
+  WikiRelationGraphEdge,
+  MusicTrackWithRelations,
+  PlayUrlCacheValue,
+  ImportSongInput,
+  SongCustomPlatformLink,
+  SessionJwtPayload,
+  WechatCodeSessionResponse,
+  ApiUser,
+  AuthenticatedRequest,
+  WikiResponseInput,
+  WikiRelationPageLite,
+  WikiReverseRelationEntry,
+  WikiRelationBundle,
+  WikiBranchWithPage,
+  WikiPullRequestWithRelations,
+};
+
+export {
+  WIKI_RELATION_SCAN_LIMIT,
+  MUSIC_SECTION_ID,
+  EDIT_LOCK_COLLECTION_ALLOWLIST,
+  ALLOWED_IMAGE_EXTENSIONS,
+  ALLOWED_IMAGE_MIME_TYPES,
+};
