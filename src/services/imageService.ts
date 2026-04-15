@@ -1,5 +1,6 @@
 import { apiGet, apiPost } from '../lib/apiClient';
 import SparkMD5 from 'spark-md5';
+import type { UploadSessionResponse, UploadFileResponse } from '../types/api';
 
 export interface ImageMap {
   id: string;
@@ -198,9 +199,14 @@ const calculateMD5 = (file: File): Promise<string> => {
   });
 };
 
+/**
+ * 通过会话模式上传图片到 CDN
+ * 使用上传会话流程：创建会话 -> 上传文件 -> 完成会话
+ */
 export const uploadImageToCDNs = async (file: File): Promise<string> => {
   const md5 = await calculateMD5(file);
 
+  // 检查是否已存在相同 MD5 的图片
   const listResponse = await apiGet<{ items: ImageMap[] }>('/api/image-maps', { md5 });
   const existingItems = listResponse.items || [];
 
@@ -208,37 +214,32 @@ export const uploadImageToCDNs = async (file: File): Promise<string> => {
     return existingItems[0].id;
   }
 
-  // Upload file to server first
+  // 创建上传会话
+  const sessionResponse = await apiPost<UploadSessionResponse>('/api/uploads/sessions', {});
+  const sessionId = sessionResponse.session.id;
+
+  // 上传文件到会话
   const formData = new FormData();
   formData.append('file', file);
 
-  const uploadResponse = await fetch('/api/uploads', {
+  const uploadUrl = new URL(`/api/uploads/sessions/${sessionId}/files`, window.location.origin);
+  const uploadResponse = await fetch(uploadUrl.toString(), {
     method: 'POST',
     credentials: 'include',
     body: formData,
   });
 
   if (!uploadResponse.ok) {
-    throw new Error('Failed to upload file to server');
+    throw new Error('Failed to upload file to session');
   }
 
-  const uploadData = await uploadResponse.json();
-  const localUrl = uploadData?.file?.url;
+  const uploadData = await uploadResponse.json() as UploadFileResponse;
+  const assetId = uploadData.asset.id;
 
-  if (!localUrl) {
-    throw new Error('Failed to get upload URL');
-  }
+  // 完成会话
+  await apiPost(`/api/uploads/sessions/${sessionId}/finalize`);
 
-  const imageId = Math.random().toString(36).substring(7);
-
-  await apiPost('/api/image-maps', {
-    id: imageId,
-    md5,
-    localUrl,
-    storageType: 'local',
-  });
-
-  return imageId;
+  return assetId;
 };
 
 export const uploadToS3 = async (file: File): Promise<{ id: string; s3Url: string; key: string }> => {
@@ -296,6 +297,7 @@ export const uploadToS3 = async (file: File): Promise<{ id: string; s3Url: strin
   const imageId = Math.random().toString(36).substring(7);
 
   if (existingItems.length > 0) {
+    // 更新已存在的图片映射
     await apiPost('/api/image-maps', {
       id: existingItems[0].id,
       s3Url,
@@ -308,11 +310,15 @@ export const uploadToS3 = async (file: File): Promise<{ id: string; s3Url: strin
     };
   }
 
-  // Also upload to local server for backup
+  // 通过会话模式上传到本地作为备份
+  const sessionResponse = await apiPost<UploadSessionResponse>('/api/uploads/sessions', {});
+  const sessionId2 = sessionResponse.session.id;
+
   const formData = new FormData();
   formData.append('file', file);
 
-  const uploadResponse = await fetch('/api/uploads', {
+  const uploadUrl = new URL(`/api/uploads/sessions/${sessionId2}/files`, window.location.origin);
+  const uploadResponse = await fetch(uploadUrl.toString(), {
     method: 'POST',
     credentials: 'include',
     body: formData,
@@ -320,10 +326,13 @@ export const uploadToS3 = async (file: File): Promise<{ id: string; s3Url: strin
 
   let localUrl: string | undefined;
   if (uploadResponse.ok) {
-    const uploadData = await uploadResponse.json();
-    localUrl = uploadData?.file?.url;
+    const uploadData = await uploadResponse.json() as UploadFileResponse;
+    localUrl = uploadData.asset.url;
+    // 完成会话
+    await apiPost(`/api/uploads/sessions/${sessionId2}/finalize`);
   }
 
+  // 创建图片映射记录
   await apiPost('/api/image-maps', {
     id: imageId,
     md5,
@@ -440,16 +449,20 @@ export const uploadImageWithStrategy = async (
   // 根据策略决定是否启用三重存储
   const useTripleStorage = preference.strategy === 's3' || preference.strategy === 'external';
   
+  // 创建上传会话
+  const sessionResponse = await apiPost<UploadSessionResponse>('/api/uploads/sessions', {});
+  const sessionId = sessionResponse.session.id;
+  
   const formData = new FormData();
   formData.append('file', file);
 
   // 构建 URL，可选启用三重存储模式
-  const url = new URL('/api/uploads', window.location.origin);
+  const uploadUrl = new URL(`/api/uploads/sessions/${sessionId}/files`, window.location.origin);
   if (useTripleStorage) {
-    url.searchParams.set('tripleStorage', 'true');
+    uploadUrl.searchParams.set('tripleStorage', 'true');
   }
 
-  const response = await fetch(url.toString(), {
+  const response = await fetch(uploadUrl.toString(), {
     method: 'POST',
     credentials: 'include',
     body: formData,
@@ -462,9 +475,12 @@ export const uploadImageWithStrategy = async (
   }
 
   const data = await response.json() as { 
-    file: { assetId: string; url: string; md5?: string };
+    asset: { id: string; publicUrl: string; md5?: string };
     tripleStorage?: { localUrl: string; s3Url?: string; externalUrl?: string };
   };
+  
+  // 完成会话
+  await apiPost(`/api/uploads/sessions/${sessionId}/finalize`);
   
   // 如果启用了三重存储，返回所有 URL
   if (useTripleStorage && data.tripleStorage) {
@@ -485,23 +501,23 @@ export const uploadImageWithStrategy = async (
     }
     
     return {
-      assetId: data.file.assetId,
-      url: selectedUrl,
+      assetId: data.asset.id,
+      url: data.asset.publicUrl,
       localUrl,
       s3Url,
       externalUrl,
       storageType: preference.strategy,
-      md5: data.file.md5,
+      md5: data.asset.md5,
     };
   }
   
   // 否则返回默认 URL
   return {
-    assetId: data.file.assetId,
-    url: data.file.url,
-    localUrl: data.file.url,
+    assetId: data.asset.id,
+    url: data.asset.publicUrl,
+    localUrl: data.asset.publicUrl,
     storageType: 'local',
-    md5: data.file.md5,
+    md5: data.asset.md5,
   };
 };
 
