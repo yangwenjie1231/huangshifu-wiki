@@ -154,6 +154,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 									<input
 										type="email"
 										required
+										autoComplete="email"
 										value={email}
 										onChange={(e) => setEmail(e.target.value)}
 										placeholder="邮箱"
@@ -163,6 +164,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 										type="password"
 										required
 										minLength={6}
+										autoComplete="current-password"
 										value={password}
 										onChange={(e) => setPassword(e.target.value)}
 										placeholder="密码（至少 6 位）"

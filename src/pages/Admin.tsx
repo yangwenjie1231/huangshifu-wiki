@@ -172,7 +172,7 @@ const Admin = () => {
     const note =
       window.prompt(action === 'approve' ? '通过备注（可选）' : '驳回原因（可选）', action === 'reject' ? '请按规范完善内容' : '') || '';
     try {
-      await apiPost(`/api/admin/review/${item.reviewType}/${item.reviewId}/${action}`, { note });
+      await apiPut(`/api/admin/review-queue/${item.reviewId}/${action}`, { note });
       await fetchReviewQueue();
     } catch (error) {
       console.error(`${action} review item error:`, error);
