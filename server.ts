@@ -1,4 +1,12 @@
 import dotenv from 'dotenv';
+
+// 立即加载环境变量，确保在导入其他模块之前
+// 其他模块可能依赖于 process.env
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config({ path: '.env.local' });
+}
+dotenv.config();
+
 import express, { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
@@ -33,9 +41,6 @@ import { registerConfigRoutes } from './src/server/routes/config.routes';
 import { registerS3Routes } from './src/server/routes/s3.routes';
 import { registerMusicSongRoutes } from './src/server/routes/music-song.routes';
 import { registerUploadRoutes } from './src/server/routes/uploads.routes';
-
-dotenv.config({ path: '.env.local' });
-dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
