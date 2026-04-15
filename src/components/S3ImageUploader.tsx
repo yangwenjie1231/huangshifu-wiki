@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { Upload, Image as ImageIcon, CheckCircle, AlertCircle, RefreshCw, X } from 'lucide-react';
 import { useS3Upload } from '../hooks/useS3Upload';
+import { apiGet } from '../lib/apiClient';
 
 export interface S3ImageUploaderProps {
   onUpload?: (url: string, key: string, md5?: string) => void;
@@ -93,7 +94,19 @@ export const S3ImageUploader: React.FC<S3ImageUploaderProps> = ({
           enableMd5Verification,
         });
 
-        const url = `https://your-bucket-url/${key}`;
+        // 从 S3 config 获取正确的 URL
+        const config = await apiGet<{
+          enabled: boolean;
+          endpoint: string;
+          bucket: string;
+          publicDomain?: string;
+          region: string;
+        }>('/api/s3/config');
+
+        const url = config.publicDomain
+          ? `${config.publicDomain}/${key}`
+          : `${config.endpoint}/${config.bucket}/${key}`;
+
         setUploadedUrl(url);
         setUploadedKey(key);
         onUpload?.(url, key, md5);
