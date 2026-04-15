@@ -29,6 +29,10 @@ export interface UpdateWikiLinksOptions {
   filterUrl?: string;
   /** 指定页面 slug 列表 */
   specificSlugs?: string[];
+  /** 编辑器 UID（用于创建修订记录） */
+  editorUid?: string;
+  /** 编辑器名称（用于创建修订记录） */
+  editorName?: string;
 }
 
 export interface WikiLinkUpdateResult {
@@ -66,7 +70,7 @@ export async function batchUpdateWikiLinks(
   mappings: LinkMapping[],
   options: UpdateWikiLinksOptions = {}
 ): Promise<BatchUpdateResult> {
-  const { dryRun = false, limit, filterUrl, specificSlugs } = options;
+  const { dryRun = false, limit, filterUrl, specificSlugs, editorUid, editorName } = options;
   const startTime = Date.now();
 
   // 构建查询条件
@@ -130,8 +134,8 @@ export async function batchUpdateWikiLinks(
             tags: page.tags,
             relations: page.relations,
             eventDate: page.eventDate,
-            editorUid: 'system',
-            editorName: `链接更新服务(自动更新${replaceResult.replaceCount}处)`,
+            editorUid: editorUid || 'system',
+            editorName: editorName || `链接更新服务 (自动更新${replaceResult.replaceCount}处)`,
           },
         });
       }

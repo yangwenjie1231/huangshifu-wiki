@@ -18,13 +18,27 @@ function isAdminRole(role: string | undefined) {
 }
 
 function authenticateAdmin(req: AuthenticatedRequest, res: Response, next: () => void) {
+  let token: string | undefined;
+
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  } else {
+    const cookieName = 'hsf_token';
+    const cookies = req.headers.cookie;
+    if (cookies) {
+      const cookieValue = cookies.split(';').find(c => c.trim().startsWith(`${cookieName}=`));
+      if (cookieValue) {
+        token = cookieValue.split('=')[1];
+      }
+    }
+  }
+
+  if (!token) {
     res.status(401).json({ error: '请先登录' });
     return;
   }
 
-  const token = authHeader.split(' ')[1];
   const jwt = require('jsonwebtoken');
   const JWT_SECRET = process.env.JWT_SECRET || '';
 

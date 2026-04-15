@@ -131,7 +131,7 @@ const Admin = () => {
   };
 
   const fetchData = async () => {
-    if (activeTab === 'backups' || activeTab === 'sensitive_check' || activeTab === 'embeddings') {
+    if (activeTab === 'backups' || activeTab === 'sensitive_check' || activeTab === 'embeddings' || activeTab === 'markdown_links') {
       return;
     }
     setLoading(true);
