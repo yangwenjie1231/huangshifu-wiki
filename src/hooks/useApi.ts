@@ -8,7 +8,7 @@ interface UseApiState<T> {
 }
 
 interface UseApiReturn<T> extends UseApiState<T> {
-  execute: (fn: () => Promise<T>) => Promise<void>;
+  execute: (fn: () => Promise<T>) => Promise<T | void>;
   reset: () => void;
 }
 

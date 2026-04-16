@@ -145,7 +145,9 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
       edges: {
         width: 2,
         smooth: {
+          enabled: true,
           type: 'continuous',
+          roundness: 0.5,
         },
       },
       layout: {

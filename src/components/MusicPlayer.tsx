@@ -10,12 +10,14 @@ import type { MusicDetailResponse } from '../types/api';
 
 interface Song {
   id: string;
+  docId?: string;
   title: string;
   artist: string;
   album: string;
   cover: string;
   audioUrl: string;
-  lyric?: string;
+  playUrl?: string;
+  lyric?: string | null;
   primaryPlatform?: Platform | null;
   platformIds?: PlatformIds;
 }
@@ -33,7 +35,19 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
       setLoading(true);
       try {
         const data = await apiGet<MusicDetailResponse>(`/api/music/song/${songId}`);
-        setSong(data.song);
+        // 映射 API 返回的字段到本地 Song 类型
+        const apiSong = data.song;
+        setSong({
+          id: apiSong.id,
+          docId: apiSong.docId,
+          title: apiSong.title,
+          artist: apiSong.artist,
+          album: apiSong.album || '',
+          cover: apiSong.coverUrl || '',
+          audioUrl: apiSong.playUrl || '',
+          playUrl: apiSong.playUrl,
+          lyric: null,
+        });
       } catch (e) {
         console.error("Error fetching song:", e);
       }

@@ -5,7 +5,7 @@ import { apiGet } from '../lib/apiClient';
 
 interface WikiLinkPreviewProps {
   slug: string;
-  children: import('react').React.ReactNode;
+  children: React.ReactNode;
 }
 
 interface WikiPageSummary {
