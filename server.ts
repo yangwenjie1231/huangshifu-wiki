@@ -8,8 +8,10 @@ if (process.env.NODE_ENV !== 'production') {
 dotenv.config();
 
 import express, { Request, Response, NextFunction } from 'express';
+import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -142,9 +144,53 @@ const searchImageUpload = multer({
   },
 });
 
+// ============================================================================
+// CORS 配置 - 优化预检请求性能
+// ============================================================================
+// 配置 Access-Control-Max-Age 缓存预检结果，减少 OPTIONS 请求次数
+// 浏览器默认缓存时间：Chrome 10分钟，Firefox 24小时，Safari 5分钟
+// 设置为 86400 秒 (24小时) 以最大化缓存效果
+const CORS_MAX_AGE = 86400; // 24小时
+
+if (CORS_ORIGIN) {
+  app.use(cors({
+    origin: CORS_ORIGIN,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    // 只保留必要的请求头，减少预检请求复杂度
+    // Content-Type: application/json 会触发预检，但这是必需的
+    // Authorization 用于认证，也是必需的
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    maxAge: CORS_MAX_AGE, // 缓存预检结果 24 小时
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
+  }));
+} else {
+  // 开发环境或同源部署：允许所有来源，但仍配置 maxAge 优化性能
+  app.use(cors({
+    origin: true,
+    credentials: true,
+    maxAge: CORS_MAX_AGE,
+  }));
+}
+
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
+}));
+
+// 启用 gzip 压缩 - 优化传输性能
+app.use(compression({
+  level: 6, // 压缩级别 (1-9)，6 是性能和压缩率的平衡
+  filter: (req, res) => {
+    // 不压缩已经压缩的内容类型
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    // 使用默认的压缩过滤器
+    return compression.filter(req, res);
+  },
+  threshold: 1024, // 只有大于 1KB 的响应才压缩
 }));
 
 app.use(express.json());
@@ -200,11 +246,11 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 async function startServer() {
   await initSensitiveWords();
-  
+
   app.use((_req, res, next) => {
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com https://mapplugin.amap.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; font-src 'self' data:; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net https://*.picsum.photos https://*.googleusercontent.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://o4.amap.com https://mapplugin.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com https://*.music.126.net https://analysis.chatglm.cn https://gator.volces.com https://*.picsum.photos https://*.googleusercontent.com; worker-src 'self' blob:; media-src 'self' https://music.163.com https://*.music.163.com https://*.music.126.net;"
+      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://restapi.amap.com https://mapplugin.amap.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; font-src 'self' data:; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net https://picsum.photos https://*.picsum.photos https://*.googleusercontent.com; connect-src 'self' https://restapi.amap.com https://webapi.amap.com https://jsapi.amap.com https://jsapi-service.amap.com https://o4.amap.com https://mapplugin.amap.com https://jsapi-data1.amap.com https://jsapi-data2.amap.com https://jsapi-data3.amap.com https://jsapi-data4.amap.com https://jsapi-data5.amap.com https://*.music.126.net https://analysis.chatglm.cn https://gator.volces.com https://picsum.photos https://*.picsum.photos https://*.googleusercontent.com; worker-src 'self' blob:; media-src 'self' https://music.163.com https://*.music.163.com https://*.music.126.net;"
     );
     next();
   });

@@ -1333,7 +1333,17 @@ router.post('/branches/:branchId/pull-request', requireAuth, requireActiveUser, 
       return;
     }
 
-    const existingOpen = await prisma.wikiPullRequest.findFirst({ where: { branchId: branch.id, status: 'open' } });
+    const existingOpen = await prisma.wikiPullRequest.findFirst({
+      where: { branchId: branch.id, status: 'open' },
+      include: {
+        branch: {
+          include: {
+            page: { select: { slug: true, title: true, category: true } },
+          },
+        },
+        page: { select: { slug: true, title: true, category: true } },
+      },
+    });
     if (existingOpen) {
       res.json({ pullRequest: toWikiPullRequestResponse(existingOpen as WikiPullRequestWithRelations) });
       return;
@@ -1370,7 +1380,20 @@ router.post('/branches/:branchId/pull-request', requireAuth, requireActiveUser, 
       data: { status: 'pending_review' },
     });
 
-    res.status(201).json({ pullRequest: toWikiPullRequestResponse(pr as WikiPullRequestWithRelations) });
+    // 重新查询完整的 PR 数据，包括关系
+    const prWithRelations = await prisma.wikiPullRequest.findUnique({
+      where: { id: pr.id },
+      include: {
+        branch: {
+          include: {
+            page: { select: { slug: true, title: true, category: true } },
+          },
+        },
+        page: { select: { slug: true, title: true, category: true } },
+      },
+    });
+
+    res.status(201).json({ pullRequest: toWikiPullRequestResponse(prWithRelations as WikiPullRequestWithRelations) });
   } catch (error) {
     console.error('Create wiki pull request error:', error);
     res.status(500).json({ error: '提交 PR 失败' });

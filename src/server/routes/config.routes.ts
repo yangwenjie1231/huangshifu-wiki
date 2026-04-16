@@ -138,5 +138,5 @@ router.get('/s3/presign-delete/:key(*)', requireAuth, requireAdmin, async (req, 
 });
 
 export function registerConfigRoutes(app: Router) {
-  app.use(router);
+  app.use('/api/config', router);
 }

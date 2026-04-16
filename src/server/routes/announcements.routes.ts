@@ -1,16 +1,35 @@
 import { Router } from 'express';
 import { prisma } from '../prisma';
 import { requireAdmin } from '../middleware/auth';
+import { apiCache, CACHE_KEYS, CACHE_TTL } from '../utils/cache';
 
 const router = Router();
 
+// 清除公告缓存的辅助函数
+function clearAnnouncementCache(): void {
+  apiCache.delete(CACHE_KEYS.ANNOUNCEMENT_LATEST);
+}
+
 router.get('/latest', async (_req, res) => {
   try {
+    // 尝试从缓存获取
+    const cached = apiCache.get(CACHE_KEYS.ANNOUNCEMENT_LATEST);
+    if (cached) {
+      res.json(cached);
+      return;
+    }
+
     const announcement = await prisma.announcement.findFirst({
       where: { active: true },
       orderBy: { createdAt: 'desc' },
     });
-    res.json({ announcement });
+
+    const result = { announcement };
+
+    // 缓存结果
+    apiCache.set(CACHE_KEYS.ANNOUNCEMENT_LATEST, result, CACHE_TTL.ANNOUNCEMENT);
+
+    res.json(result);
   } catch (error) {
     console.error('Fetch latest announcement error:', error);
     res.status(500).json({ error: '获取公告失败' });
@@ -51,6 +70,9 @@ router.post('/', requireAdmin, async (req, res) => {
       },
     });
 
+    // 清除缓存
+    clearAnnouncementCache();
+
     res.status(201).json({ announcement });
   } catch (error) {
     console.error('Create announcement error:', error);
@@ -75,6 +97,9 @@ router.patch('/:id', requireAdmin, async (req, res) => {
       },
     });
 
+    // 清除缓存
+    clearAnnouncementCache();
+
     res.json({ announcement });
   } catch (error) {
     console.error('Update announcement error:', error);
@@ -87,6 +112,10 @@ router.delete('/:id', requireAdmin, async (req, res) => {
     await prisma.announcement.delete({
       where: { id: req.params.id },
     });
+
+    // 清除缓存
+    clearAnnouncementCache();
+
     res.json({ success: true });
   } catch (error) {
     console.error('Delete announcement error:', error);

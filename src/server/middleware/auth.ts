@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { UserRole as PrismaUserRole } from '@prisma/client';
 import type { ApiUser, SessionJwtPayload, UserStatus, AuthenticatedRequest } from '../types';
 import { prisma } from '../prisma';
+import { apiCache, CACHE_KEYS, CACHE_TTL } from '../utils/cache';
 
 const JWT_SECRET = process.env.JWT_SECRET || '';
 const AUTH_COOKIE_NAME = 'hsf_token';
@@ -101,6 +102,20 @@ function getTokenFromRequest(req: Request) {
   return token;
 }
 
+/**
+ * 获取用户缓存键
+ */
+function getUserCacheKey(uid: string): string {
+  return `${CACHE_KEYS.AUTH_USER}:${uid}`;
+}
+
+/**
+ * 清除用户缓存
+ */
+function clearUserCache(uid: string): void {
+  apiCache.delete(getUserCacheKey(uid));
+}
+
 async function authMiddleware(req: AuthenticatedRequest, _res: Response, next: NextFunction) {
   const token = getTokenFromRequest(req);
   if (!token) {
@@ -110,11 +125,26 @@ async function authMiddleware(req: AuthenticatedRequest, _res: Response, next: N
 
   try {
     const payload = jwt.verify(token, JWT_SECRET) as SessionJwtPayload;
-    const user = await prisma.user.findUnique({
-      where: { uid: payload.uid },
-    });
-    if (user) {
-      req.authUser = userToApiUser(user);
+
+    // 尝试从缓存获取用户
+    const cacheKey = getUserCacheKey(payload.uid);
+    let apiUser = apiCache.get<ApiUser>(cacheKey);
+
+    if (!apiUser) {
+      // 缓存未命中，从数据库获取
+      const user = await prisma.user.findUnique({
+        where: { uid: payload.uid },
+      });
+
+      if (user) {
+        apiUser = userToApiUser(user);
+        // 缓存用户数据
+        apiCache.set(cacheKey, apiUser, CACHE_TTL.AUTH_USER);
+      }
+    }
+
+    if (apiUser) {
+      req.authUser = apiUser;
     }
   } catch (error) {
     console.error('Invalid auth token:', error);
@@ -193,6 +223,8 @@ export {
   requireActiveUser,
   requireAdmin,
   requireSuperAdmin,
+  clearUserCache,
+  getUserCacheKey,
 };
 
 export type { AuthenticatedRequest };

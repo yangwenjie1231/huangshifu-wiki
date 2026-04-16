@@ -940,6 +940,141 @@ router.post('/backup/create', requireSuperAdmin, async (req, res) => {
   }
 });
 
+// GET /api/admin/backup/list - List backups (frontend compatible)
+router.get('/backup/list', requireSuperAdmin, async (_req, res) => {
+  try {
+    const files = fs.readdirSync(backupsDir)
+      .filter((f) => f.startsWith('backup_') && f.endsWith('.zip'))
+      .map((f) => {
+        const filePath = path.join(backupsDir, f);
+        const stat = fs.statSync(filePath);
+        return {
+          filename: f,
+          size: stat.size,
+          sizeFormatted: formatFileSize(stat.size),
+          createdAt: stat.mtime.toISOString(),
+        };
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    res.json({ backups: files });
+  } catch (error) {
+    console.error('List backups error:', error);
+    res.status(500).json({ error: '获取备份列表失败' });
+  }
+});
+
+// GET /api/admin/backup/:filename/download - Download backup
+router.get('/backup/:filename/download', requireSuperAdmin, async (req, res) => {
+  try {
+    const filename = req.params.filename;
+
+    if (!sanitizeFilename(filename)) {
+      res.status(400).json({ error: '无效的文件名' });
+      return;
+    }
+
+    const filePath = path.join(backupsDir, filename);
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ error: '备份文件不存在' });
+      return;
+    }
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+  } catch (error) {
+    console.error('Download backup error:', error);
+    res.status(500).json({ error: '下载备份失败' });
+  }
+});
+
+// POST /api/admin/backup/restore - Restore backup
+router.post('/backup/restore', requireSuperAdmin, uploadBackup.single('file'), async (req, res) => {
+  try {
+    const { password } = req.body as { password?: string };
+    const file = req.file;
+
+    if (!BACKUP_PASSWORD) {
+      res.status(500).json({ error: '未配置 BACKUP_PASSWORD 环境变量' });
+      return;
+    }
+
+    if (!password || !verifyBackupPassword(password)) {
+      res.status(401).json({ error: '备份密码错误' });
+      return;
+    }
+
+    if (!file) {
+      res.status(400).json({ error: '请上传备份文件' });
+      return;
+    }
+
+    const dbConfig = parseDatabaseUrl(process.env.DATABASE_URL || '');
+    if (!dbConfig) {
+      res.status(500).json({ error: 'DATABASE_URL 格式无效' });
+      return;
+    }
+
+    const AdmZip = (await import('adm-zip')).default;
+    const zip = new AdmZip(file.path);
+    const zipEntries = zip.getEntries();
+
+    const sqlEntry = zipEntries.find((e) => e.entryName.endsWith('.sql'));
+    if (!sqlEntry) {
+      fs.unlinkSync(file.path);
+      res.status(400).json({ error: '备份文件中未找到 SQL 数据' });
+      return;
+    }
+
+    const encryptedContent = sqlEntry.getData();
+
+    let sqlContent: Buffer;
+    try {
+      sqlContent = decryptBuffer(encryptedContent, password);
+    } catch {
+      fs.unlinkSync(file.path);
+      res.status(401).json({ error: '备份密码错误或文件已损坏' });
+      return;
+    }
+
+    const sqlContentStr = sqlContent.toString('utf-8');
+    if (!sqlContentStr.includes('PostgreSQL database dump') && !sqlContentStr.includes('pg_dump')) {
+      fs.unlinkSync(file.path);
+      res.status(400).json({ error: '备份文件格式无效' });
+      return;
+    }
+
+    const tempSqlPath = path.join(backupsDir, `restore_${Date.now()}.sql`);
+    fs.writeFileSync(tempSqlPath, sqlContent);
+
+    try {
+      const psqlArgs = [
+        '-h', dbConfig.host,
+        '-p', dbConfig.port,
+        '-U', dbConfig.user,
+        '-d', dbConfig.database,
+        '-f', tempSqlPath,
+      ];
+      const psqlEnv = { ...process.env, PGPASSWORD: dbConfig.password };
+
+      await execFileAsync('psql', psqlArgs, { env: psqlEnv, timeout: 600000 });
+    } finally {
+      fs.unlinkSync(tempSqlPath);
+      fs.unlinkSync(file.path);
+    }
+
+    res.json({ success: true, message: '数据库恢复成功' });
+  } catch (error) {
+    console.error('Restore backup error:', error);
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    res.status(500).json({ error: '恢复数据库失败: ' + (error instanceof Error ? error.message : String(error)) });
+  }
+});
+
 // GET /api/admin/backups - List backups
 router.get('/backups', requireSuperAdmin, async (_req, res) => {
   try {

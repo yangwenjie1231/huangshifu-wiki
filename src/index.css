@@ -114,12 +114,17 @@
 }
 
 @layer base {
+  /* 字体显示优化：避免 FOIT，使用 swap 策略确保文字立即显示 */
+  * {
+    font-display: swap;
+  }
+
   body {
     background: var(--color-theme-bg);
     color: var(--color-theme-text);
     font-family: var(--font-theme-main);
   }
-  
+
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-theme-serif);
   }

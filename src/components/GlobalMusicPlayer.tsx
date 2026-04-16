@@ -449,7 +449,6 @@ export const GlobalMusicPlayer = () => {
         ref={audioRef}
         src={resolvedPlayUrl || currentSong.playUrl || currentSong.audioUrl}
         preload="auto"
-        crossOrigin="anonymous"
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={onLoadedMetadata}
         onWaiting={onWaiting}

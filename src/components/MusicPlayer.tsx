@@ -6,7 +6,6 @@ import { clsx } from 'clsx';
 import { formatTime } from '../lib/formatUtils';
 import { Platform, PlatformIds } from '../types/PlatformIds';
 import { apiGet } from '../lib/apiClient';
-import type { MusicDetailResponse } from '../types/api';
 
 interface Song {
   id: string;
@@ -15,6 +14,21 @@ interface Song {
   artist: string;
   album: string;
   cover: string;
+  audioUrl: string;
+  playUrl?: string;
+  lyric?: string | null;
+  primaryPlatform?: Platform | null;
+  platformIds?: PlatformIds;
+}
+
+interface MusicSongApiResponse {
+  id: string;
+  docId?: string | null;
+  title: string;
+  artist: string;
+  album?: string;
+  cover: string;
+  coverUrl?: string;
   audioUrl: string;
   playUrl?: string;
   lyric?: string | null;
@@ -34,19 +48,20 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
     const fetchSong = async () => {
       setLoading(true);
       try {
-        const data = await apiGet<MusicDetailResponse>(`/api/music/song/${songId}`);
+        const apiSong = await apiGet<MusicSongApiResponse>(`/api/music/song/${songId}`);
         // 映射 API 返回的字段到本地 Song 类型
-        const apiSong = data.song;
         setSong({
           id: apiSong.id,
-          docId: apiSong.docId,
+          docId: apiSong.docId || undefined,
           title: apiSong.title,
           artist: apiSong.artist,
           album: apiSong.album || '',
-          cover: apiSong.coverUrl || '',
-          audioUrl: apiSong.playUrl || '',
+          cover: apiSong.cover || apiSong.coverUrl || '',
+          audioUrl: apiSong.playUrl || apiSong.audioUrl || '',
           playUrl: apiSong.playUrl,
-          lyric: null,
+          lyric: apiSong.lyric || null,
+          primaryPlatform: apiSong.primaryPlatform,
+          platformIds: apiSong.platformIds,
         });
       } catch (e) {
         console.error("Error fetching song:", e);

@@ -174,7 +174,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
       take: 100,
     });
 
-    res.json({ galleries: galleries.map(toGalleryResponse) });
+    res.json({ galleries: await Promise.all(galleries.map(toGalleryResponse)) });
   } catch (error) {
     console.error('Fetch galleries error:', error);
     res.status(500).json({ error: '获取图集失败' });
@@ -289,7 +289,7 @@ router.post('/upload', requireAuth, requireActiveUser, async (req: Authenticated
       console.error('Enqueue gallery image embeddings error:', error);
     }
 
-    res.status(201).json({ gallery: toGalleryResponse(gallery) });
+    res.status(201).json({ gallery: await toGalleryResponse(gallery) });
   } catch (error) {
     if (createdAssetIds.length > 0) {
       await prisma.mediaAsset.deleteMany({
@@ -421,7 +421,7 @@ router.post('/', requireAuth, requireActiveUser, async (req: AuthenticatedReques
         console.error('Enqueue gallery image embeddings error:', error);
       }
 
-      res.status(201).json({ gallery: toGalleryResponse(gallery) });
+      res.status(201).json({ gallery: await toGalleryResponse(gallery) });
       return;
     }
 
@@ -508,7 +508,7 @@ router.post('/', requireAuth, requireActiveUser, async (req: AuthenticatedReques
       console.error('Enqueue gallery image embeddings error:', error);
     }
 
-    res.status(201).json({ gallery: toGalleryResponse(gallery) });
+    res.status(201).json({ gallery: await toGalleryResponse(gallery) });
   } catch (error) {
     console.error('Create gallery error:', error);
     res.status(500).json({ error: '创建图集失败' });
@@ -757,7 +757,7 @@ router.patch('/:id', requireAuth, requireActiveUser, async (req: AuthenticatedRe
       );
     }
 
-    res.json({ gallery: toGalleryResponse(updated) });
+    res.json({ gallery: await toGalleryResponse(updated) });
   } catch (error) {
     console.error('Update gallery error:', error);
     res.status(500).json({ error: '更新图集失败' });
@@ -803,7 +803,7 @@ router.patch('/:id/publish', requireAuth, requireActiveUser, async (req: Authent
       },
     });
 
-    res.json({ gallery: toGalleryResponse(updated) });
+    res.json({ gallery: await toGalleryResponse(updated) });
   } catch (error) {
     console.error('Update gallery publish status error:', error);
     res.status(500).json({ error: '修改图集发布状态失败' });
@@ -930,7 +930,7 @@ router.post('/:id/images', requireAuth, requireActiveUser, async (req: Authentic
         console.error('Enqueue gallery image embeddings error:', error);
       }
 
-      res.json({ gallery: toGalleryResponse(updated) });
+      res.json({ gallery: await toGalleryResponse(updated) });
       return;
     }
 
@@ -1033,7 +1033,7 @@ router.delete('/:id/images/:imageId', requireAuth, requireActiveUser, async (req
       return;
     }
 
-    res.json({ gallery: toGalleryResponse(updated) });
+    res.json({ gallery: await toGalleryResponse(updated) });
   } catch (error) {
     console.error('Delete gallery image error:', error);
     res.status(500).json({ error: '删除图集图片失败' });
@@ -1113,7 +1113,7 @@ router.patch('/:id/images/reorder', requireAuth, requireActiveUser, async (req: 
       return;
     }
 
-    res.json({ gallery: toGalleryResponse(updated) });
+    res.json({ gallery: await toGalleryResponse(updated) });
   } catch (error) {
     console.error('Reorder gallery images error:', error);
     res.status(500).json({ error: '重排图集图片失败' });

@@ -379,32 +379,18 @@ router.get('/:docId/play-url', async (req, res) => {
 // Get instrumental targets
 router.get('/instrumental-targets', async (req, res) => {
   try {
-    const songs = await prismaAny.musicTrack.findMany({
-      where: {
-        isInstrumental: true,
-      },
+    const relations = await prismaAny.songInstrumentalRelation.findMany({
       select: {
-        docId: true,
-        id: true,
-        title: true,
-        artist: true,
-        cover: true,
+        songDocId: true,
       },
-      orderBy: { title: 'asc' },
+      distinct: ['songDocId'],
     });
-
     res.json({
-      songs: songs.map((song) => ({
-        docId: song.docId,
-        id: song.id,
-        title: song.title,
-        artist: song.artist,
-        cover: song.cover,
-      })),
+      docIds: relations.map((r: any) => r.songDocId),
     });
   } catch (error) {
     console.error('Fetch instrumental targets error:', error);
-    res.status(500).json({ error: '获取伴奏目标歌曲失败' });
+    res.status(500).json({ error: '获取伴奏列表失败' });
   }
 });
 

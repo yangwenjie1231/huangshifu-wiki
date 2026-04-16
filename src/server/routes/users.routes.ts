@@ -182,6 +182,40 @@ router.post('/avatar', requireAuth, requireActiveUser, async (req: Authenticated
   }
 });
 
+// GET /api/users/me - Get current user info
+router.get('/me', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { uid: req.authUser!.uid },
+      select: {
+        uid: true,
+        email: true,
+        displayName: true,
+        bio: true,
+        photoURL: true,
+        role: true,
+        status: true,
+        banReason: true,
+        bannedAt: true,
+        level: true,
+        preferences: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: '用户不存在' });
+      return;
+    }
+
+    res.json({ user: toUserResponse(user) });
+  } catch (error) {
+    console.error('Get current user error:', error);
+    res.status(500).json({ error: '获取用户信息失败' });
+  }
+});
+
 router.patch('/me', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
     const { displayName, bio, preferences } = req.body;

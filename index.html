@@ -8,7 +8,36 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#FFD700" />
+
+    <!-- 预连接到关键第三方域名，加速后续请求但不阻塞渲染 -->
+    <link rel="dns-prefetch" href="https://gator.volces.com" />
+    <link rel="dns-prefetch" href="https://analysis.chatglm.cn" />
+    <link rel="dns-prefetch" href="https://kimi.moonshot.cn" />
+    <link rel="dns-prefetch" href="https://webapi.amap.com" />
+    <link rel="dns-prefetch" href="https://restapi.amap.com" />
+
+    <!-- 预连接（不阻塞渲染） -->
+    <link rel="preconnect" href="https://webapi.amap.com" crossorigin="anonymous" />
+    <link rel="preconnect" href="https://restapi.amap.com" crossorigin="anonymous" />
+
     <link rel="manifest" href="/manifest.json" />
+
+    <!-- 关键资源预加载 - 首屏性能优化 -->
+    <!-- 预加载 favicon，避免浏览器自动请求延迟 -->
+    <link rel="preload" href="/favicon.ico" as="image" type="image/x-icon" fetchpriority="high" />
+    <!-- 预加载 SVG 图标，用于 PWA 和 Apple Touch Icon -->
+    <link rel="preload" href="/icons/icon.svg" as="image" type="image/svg+xml" fetchpriority="high" />
+    <!-- 预加载主入口 CSS（Vite 构建后生成） -->
+    <link rel="preload" href="/src/main.tsx" as="script" fetchpriority="high" />
+
+    <!--
+      字体加载优化策略：
+      1. 使用系统字体栈（system font stack），无需下载外部字体文件
+      2. CSS 中已设置 font-display: swap，避免 FOIT（Flash of Invisible Text）
+      3. 字体回退链：系统默认字体 → 中文字体 → 通用衬线/无衬线字体
+      4. 如需添加自定义字体，请在此处添加 <link rel="preload" href="/fonts/font.woff2" as="font" type="font/woff2" crossorigin />
+    -->
+
     <link rel="apple-touch-icon" href="/icons/icon.svg" />
     <title>黄诗扶wiki</title>
 
@@ -21,6 +50,120 @@
         </filter>
       </defs>
     </svg>
+
+    <!--
+      第三方脚本延迟加载策略：
+      1. 浏览器扩展脚本（如 Kimi、ChatGLM 扩展）无法直接控制
+      2. 对于应用主动加载的第三方脚本，使用以下策略：
+         - async/defer 属性避免阻塞解析
+         - requestIdleCallback 延迟非关键脚本
+         - 用户交互后再加载分析类脚本
+    -->
+    <script>
+      /**
+       * 第三方脚本加载管理器（内联精简版）
+       * 用于延迟加载非关键第三方脚本，避免阻塞首屏渲染
+       */
+      (function() {
+        'use strict';
+
+        // 标记已处理的脚本
+        var processedScripts = new Set();
+
+        /**
+         * 使用 requestIdleCallback 延迟执行回调
+         */
+        function runWhenIdle(callback, timeout) {
+          timeout = timeout || 2000;
+
+          if (typeof window.requestIdleCallback === 'function') {
+            var idleId = window.requestIdleCallback(callback, { timeout: timeout });
+            // 保底超时
+            setTimeout(function() {
+              window.cancelIdleCallback && window.cancelIdleCallback(idleId);
+              callback();
+            }, timeout);
+          } else {
+            // 降级方案
+            setTimeout(callback, timeout);
+          }
+        }
+
+        /**
+         * 延迟加载外部脚本
+         */
+        function loadScriptDeferred(src, options) {
+          options = options || {};
+
+          if (processedScripts.has(src)) return;
+          processedScripts.add(src);
+
+          runWhenIdle(function() {
+            var script = document.createElement('script');
+            script.src = src;
+            script.async = true;
+            script.defer = true;
+
+            if (options.id) script.id = options.id;
+            if (options.crossOrigin) script.crossOrigin = options.crossOrigin;
+
+            document.head.appendChild(script);
+          }, options.delay || 3000);
+        }
+
+        /**
+         * 用户首次交互后加载脚本
+         */
+        function loadScriptOnInteraction(src, options) {
+          options = options || {};
+
+          if (processedScripts.has(src)) return;
+
+          var loaded = false;
+          var events = ['click', 'touchstart', 'keydown', 'scroll'];
+
+          function handler() {
+            if (loaded) return;
+            loaded = true;
+
+            events.forEach(function(evt) {
+              window.removeEventListener(evt, handler, true);
+            });
+
+            if (!processedScripts.has(src)) {
+              processedScripts.add(src);
+              var script = document.createElement('script');
+              script.src = src;
+              script.async = true;
+              script.defer = true;
+              document.head.appendChild(script);
+            }
+          }
+
+          events.forEach(function(evt) {
+            window.addEventListener(evt, handler, { capture: true, passive: true });
+          });
+
+          // 保底：5秒后自动加载
+          setTimeout(handler, 5000);
+        }
+
+        // 暴露到全局
+        window.ThirdPartyLoader = {
+          loadDeferred: loadScriptDeferred,
+          loadOnInteraction: loadScriptOnInteraction,
+          runWhenIdle: runWhenIdle
+        };
+
+        // 页面加载完成后，延迟加载非关键资源
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', function() {
+            // DOM 已准备好，可以开始延迟加载第三方脚本
+            // 实际脚本加载由应用代码控制
+          });
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
@@ -34,4 +177,3 @@
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

@@ -5,6 +5,8 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { ToastProvider } from './components/Toast';
 import { randomId } from './lib/randomId';
 import { applyThemeToDocument, resolveTheme, setThemeMetaColor } from './lib/theme';
+import { initThirdPartyScripts } from './utils/scriptLoader';
+import { initWebVitals } from './utils/webVitals';
 import './index.css';
 
 if (globalThis.crypto && typeof globalThis.crypto.randomUUID !== 'function') {
@@ -23,6 +25,28 @@ setThemeMetaColor(initialTheme);
 
 if (typeof document !== 'undefined' && initialTheme === 'academy') {
   document.title = '从前书院 · 黄诗扶生日特别版';
+}
+
+// 初始化 Web Vitals 性能监控
+// 在开发环境自动输出到控制台，生产环境可选择性配置上报
+initWebVitals({
+  logToConsole: import.meta.env.DEV,
+  reportToEndpoint: false, // 设置为 true 并配置 endpointUrl 可启用数据上报
+  // endpointUrl: '/api/analytics/web-vitals',
+  // sampleRate: 0.5, // 采样率 50%
+});
+
+// 初始化第三方脚本延迟加载
+// 使用 requestIdleCallback 确保不阻塞首屏渲染
+if (typeof window !== 'undefined') {
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(() => {
+      initThirdPartyScripts();
+    }, { timeout: 3000 });
+  } else {
+    // 降级方案：延迟 3 秒后初始化
+    setTimeout(initThirdPartyScripts, 3000);
+  }
 }
 
 createRoot(document.getElementById('root')!).render(
