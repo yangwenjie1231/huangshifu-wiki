@@ -2593,7 +2593,6 @@ export {
   canManageWikiPullRequest,
   toPostResponse,
   toCommentResponse,
-  toGalleryResponse,
   toMusicResponse,
   toEditLockResponse,
   toUserResponse,

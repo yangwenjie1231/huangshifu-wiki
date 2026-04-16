@@ -7,7 +7,7 @@ Guidance for agentic coding assistants working in this repository.
 - Frontend: React 19 + TypeScript + Vite 6.
 - Styling: Tailwind CSS 4.
 - Server/dev entrypoint: `server.ts` (Express + Vite middleware in dev).
-- Data/auth: Firebase Auth + Firestore.
+- Data/auth: JWT-based custom auth + Prisma ORM with SQLite.
 - AI integration: Gemini (`@google/genai`).
 - Package manager: npm (`package-lock.json` is present).
 - ORM: Prisma (with SQLite database).
@@ -154,7 +154,7 @@ If any of these files appear later, treat them as high-priority instructions and
 
 ### 7) Error Handling
 
-- Wrap network/Firebase operations in `try/catch`.
+- Wrap network/API operations in `try/catch`.
 - Log actionable details with `console.error`.
 - Show safe, concise user-facing failures (no stack dumps in UI).
 - Preserve existing fallback behavior (e.g., `ErrorBoundary` patterns).
@@ -205,12 +205,13 @@ await execute(() => apiGet(`/api/wiki/${slug}`));
 - Zod schema 定义在 `@/lib/apiTypes.ts`（用于运行时验证）
 - 避免使用 `any` 类型，使用明确的 interface
 
-### 9) Firestore / Auth Conventions
+### 9) Auth / Database Conventions
 
-- Keep document/collection paths explicit.
-- Preserve permission checks (`isAdmin`, role checks, etc.).
-- Use `serverTimestamp()` for write metadata where already used.
+- Use Prisma ORM for database operations with proper type safety.
+- Preserve permission checks (`isAdmin`, role checks, etc.) in middleware.
+- Use `updatedAt` with `new Date()` for write metadata.
 - Keep write payload keys stable (`updatedAt`, editor identifiers, etc.).
+- JWT tokens are used for authentication, stored in HTTP-only cookies.
 
 ### 10) Markdown / Content Rendering
 

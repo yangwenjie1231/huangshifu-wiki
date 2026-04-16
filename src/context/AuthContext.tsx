@@ -7,6 +7,7 @@ import type { UserProfile } from '../types/entities';
 // 延迟加载 auth 模块，避免首屏阻塞
 // 使用动态导入实现真正的懒加载
 type AuthModule = typeof import('../lib/auth');
+// 注意：项目使用基于 JWT 的自定义认证系统，不是 Firebase
 
 interface AuthContextType {
   user: User | null;

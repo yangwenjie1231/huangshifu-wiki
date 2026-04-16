@@ -4,13 +4,36 @@ import {
   NetworkError,
   type ApiErrorContext,
 } from './errorHandler';
+import {
+  dedupedRequest,
+  generateRequestKey,
+  clearCache,
+  invalidateCache,
+  invalidateCacheByPrefix,
+  preloadCache,
+  getCacheStats,
+  type DedupOptions,
+} from '../utils/requestDedup';
 
 interface RequestOptions extends RequestInit {
   query?: Record<string, string | number | boolean | undefined | null>;
+  /** 是否启用请求去重，默认 true */
+  dedup?: boolean;
+  /** 去重和缓存选项 */
+  dedupOptions?: DedupOptions;
 }
 
 const API_JSON_HEADERS = {
   'Content-Type': 'application/json',
+};
+
+/**
+ * 默认去重选项
+ */
+const DEFAULT_DEDUP_OPTIONS: DedupOptions = {
+  staleTime: 30000, // 默认 30 秒缓存
+  swr: true,
+  swrCooldown: 5000,
 };
 
 function buildUrl(path: string, query?: RequestOptions['query']) {
@@ -26,10 +49,10 @@ function buildUrl(path: string, query?: RequestOptions['query']) {
 
 async function parseResponse<T>(response: Response, context?: Omit<ApiErrorContext, 'statusCode' | 'responseData'>): Promise<T> {
   const data = await response.json().catch(() => ({}));
-  
+
   if (!response.ok) {
     const error = classifyError(response.status, data);
-    
+
     // 记录详细错误日志
     if (context) {
       logApiError(error, {
@@ -44,17 +67,23 @@ async function parseResponse<T>(response: Response, context?: Omit<ApiErrorConte
         error: error.message,
       });
     }
-    
+
     throw error;
   }
-  
+
   return data as T;
 }
 
-export async function apiRequest<T>(path: string, options: RequestOptions = {}) {
-  const { query, headers, ...rest } = options;
+/**
+ * 执行实际请求
+ */
+async function executeRequest<T>(
+  path: string,
+  options: RequestOptions = {}
+): Promise<T> {
+  const { query, headers, dedup: _dedup, dedupOptions: _dedupOptions, ...rest } = options;
   const url = buildUrl(path, query);
-  
+
   const context: Omit<ApiErrorContext, 'statusCode' | 'responseData'> = {
     url: path,
     method: rest.method || 'GET',
@@ -73,14 +102,40 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}) 
   return parseResponse<T>(response, context);
 }
 
-export async function apiGet<T>(path: string, query?: RequestOptions['query']) {
-  return apiRequest<T>(path, { method: 'GET', query });
+/**
+ * 核心 API 请求函数（集成请求去重）
+ */
+export async function apiRequest<T>(path: string, options: RequestOptions = {}) {
+  const { dedup = true, dedupOptions, method = 'GET', body } = options;
+
+  // 只有 GET 请求默认启用去重
+  const shouldDedup = dedup && method.toUpperCase() === 'GET';
+
+  if (shouldDedup) {
+    const url = buildUrl(path, options.query);
+    const key = generateRequestKey(method, url, body);
+    const mergedOptions = { ...DEFAULT_DEDUP_OPTIONS, ...dedupOptions };
+
+    return dedupedRequest(
+      () => executeRequest<T>(path, options),
+      key,
+      mergedOptions
+    );
+  }
+
+  // 非 GET 请求或禁用去重，直接执行
+  return executeRequest<T>(path, options);
+}
+
+export async function apiGet<T>(path: string, query?: RequestOptions['query'], dedupOptions?: DedupOptions) {
+  return apiRequest<T>(path, { method: 'GET', query, dedup: true, dedupOptions });
 }
 
 export async function apiPost<T>(path: string, body?: unknown) {
   return apiRequest<T>(path, {
     method: 'POST',
     body: body === undefined ? undefined : JSON.stringify(body),
+    dedup: false, // POST 请求默认不去重
   });
 }
 
@@ -88,6 +143,7 @@ export async function apiPut<T>(path: string, body?: unknown) {
   return apiRequest<T>(path, {
     method: 'PUT',
     body: body === undefined ? undefined : JSON.stringify(body),
+    dedup: false,
   });
 }
 
@@ -95,11 +151,12 @@ export async function apiPatch<T>(path: string, body?: unknown) {
   return apiRequest<T>(path, {
     method: 'PATCH',
     body: body === undefined ? undefined : JSON.stringify(body),
+    dedup: false,
   });
 }
 
 export async function apiDelete<T>(path: string) {
-  return apiRequest<T>(path, { method: 'DELETE' });
+  return apiRequest<T>(path, { method: 'DELETE', dedup: false });
 }
 
 export interface ApiUploadOptions {
@@ -109,7 +166,7 @@ export interface ApiUploadOptions {
 
 export async function apiUpload<T>(path: string, formData: FormData, options?: ApiUploadOptions) {
   const { signal, onProgress } = options || {};
-  
+
   const context: Omit<ApiErrorContext, 'statusCode' | 'responseData'> = {
     url: path,
     method: 'POST',
@@ -175,7 +232,7 @@ export async function apiUpload<T>(path: string, formData: FormData, options?: A
     body: formData,
     signal,
   });
-  
+
   return parseResponse<T>(response, context);
 }
 
@@ -246,6 +303,41 @@ export async function apiUploadWithRetry<T>(
 
   throw lastError!;
 }
+
+// ============================================================================
+// 缓存管理工具导出
+// ============================================================================
+
+/**
+ * 清除 API 缓存
+ * @param key - 可选，指定缓存键清除；不传则清除所有缓存
+ */
+export { clearCache as clearApiCache };
+
+/**
+ * 使指定缓存失效
+ */
+export { invalidateCache as invalidateApiCache };
+
+/**
+ * 使匹配前缀的所有缓存失效
+ */
+export { invalidateCacheByPrefix as invalidateApiCacheByPrefix };
+
+/**
+ * 预加载数据到缓存
+ */
+export { preloadCache as preloadApiCache };
+
+/**
+ * 获取缓存统计信息
+ */
+export { getCacheStats as getApiCacheStats };
+
+/**
+ * 生成请求缓存键
+ */
+export { generateRequestKey as generateApiCacheKey };
 
 // ============================================================================
 // 导出错误类型供外部使用
