@@ -8,7 +8,6 @@ import {
 } from '../middleware/auth';
 import {
   prisma,
-  prismaAny,
   toWikiResponse,
   toPostResponse,
   toGalleryResponse,

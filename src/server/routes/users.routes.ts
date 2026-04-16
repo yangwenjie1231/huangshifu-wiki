@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { UserRole as PrismaUserRole } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 import { requireAuth, requireActiveUser, requireAdmin, requireSuperAdmin, userToApiUser } from '../middleware/auth';
 import { prisma, toUserResponse, buildPostVisibilityWhere, toPostResponse, toCommentResponse } from '../utils';
 import type { AuthenticatedRequest, UserStatus } from '../types';
@@ -40,19 +41,37 @@ router.get('/status', requireAuth, async (req: AuthenticatedRequest, res) => {
   }
 });
 
-router.put('/status', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+// 管理员修改用户状态 - 需要超级管理员权限
+router.put('/:userId/status', requireSuperAdmin, async (req: AuthenticatedRequest, res) => {
   try {
+    const targetUid = req.params.userId;
+    if (!targetUid) {
+      res.status(400).json({ error: '无效用户' });
+      return;
+    }
+
     const { status, banReason } = req.body as {
       status?: UserStatus;
       banReason?: string;
     };
 
+    if (!status || !['active', 'banned'].includes(status)) {
+      res.status(400).json({ error: '无效状态' });
+      return;
+    }
+
     const updateData: Record<string, unknown> = {};
-    if (status) updateData.status = status;
+    updateData.status = status;
     if (typeof banReason === 'string') updateData.banReason = banReason;
+    if (status === 'banned') {
+      updateData.bannedAt = new Date();
+    } else {
+      updateData.banReason = null;
+      updateData.bannedAt = null;
+    }
 
     const user = await prisma.user.update({
-      where: { uid: req.authUser!.uid },
+      where: { uid: targetUid },
       data: updateData,
       select: {
         uid: true,
@@ -67,6 +86,15 @@ router.put('/status', requireAuth, requireActiveUser, async (req: AuthenticatedR
         bio: true,
         createdAt: true,
         updatedAt: true,
+      },
+    });
+
+    await prisma.userBanLog.create({
+      data: {
+        targetUid,
+        operatorUid: req.authUser!.uid,
+        action: status === 'banned' ? 'ban' : 'unban',
+        note: banReason || (status === 'banned' ? '管理员封禁' : '管理员解封'),
       },
     });
 
@@ -131,7 +159,6 @@ router.put('/phone', requireAuth, requireActiveUser, async (req: AuthenticatedRe
 
 router.put('/password', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
-    const bcrypt = await import('bcryptjs');
     const { currentPassword, newPassword } = req.body as {
       currentPassword?: string;
       newPassword?: string;
@@ -152,13 +179,13 @@ router.put('/password', requireAuth, requireActiveUser, async (req: Authenticate
       return;
     }
 
-    const validPassword = await bcrypt.default.compare(currentPassword, user.passwordHash);
+    const validPassword = await bcrypt.compare(currentPassword, user.passwordHash);
     if (!validPassword) {
       res.status(401).json({ error: '当前密码不正确' });
       return;
     }
 
-    const passwordHash = await bcrypt.default.hash(newPassword, 12);
+    const passwordHash = await bcrypt.hash(newPassword, 12);
     await prisma.user.update({
       where: { uid: req.authUser!.uid },
       data: { passwordHash },

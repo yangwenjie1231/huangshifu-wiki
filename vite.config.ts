@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
 				}) as PluginOption,
 		].filter(Boolean),
 		build: {
-			target: "esnext",
+			target: "es2020",
 			// Enable CSS code splitting
 			cssCodeSplit: true,
 			// Optimize chunk size warnings threshold (500kb)

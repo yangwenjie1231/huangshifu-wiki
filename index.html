@@ -2,12 +2,13 @@
 <html lang="cn">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
     <meta name="theme-color" content="#FFD700" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#FFD700" />
+    <meta name="format-detection" content="telephone=no" />
 
     <!-- 预连接到关键第三方域名，加速后续请求但不阻塞渲染 -->
     <link rel="dns-prefetch" href="https://gator.volces.com" />
@@ -163,9 +164,28 @@
       <a href="https://img.lhl.one" target="_blank" rel="nofollow noopener noreferrer" style="color:#999; text-decoration:none; margin-right:16px;">Image Hub</a>
       <a href="http://www.freecdn.vip/?zzwz" target="_blank" rel="nofollow noopener noreferrer" style="color:#999; text-decoration:none;">LHL's Images</a>
     </footer>
-    <script>
-      document.getElementById('static-footer').style.display = 'block';
-    </script>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // 静态 fallback：仅在 React 加载超时（8秒）后显示，避免阻塞首屏
+      (function() {
+        var shown = false;
+        var staticFooter = document.getElementById('static-footer');
+        // 8秒超时后显示 fallback（适用于慢速网络/移动端）
+        var timer = setTimeout(function() {
+          if (!window.__REACT_MOUNTED__ && staticFooter && !shown) {
+            shown = true;
+            staticFooter.style.display = 'block';
+          }
+        }, 8000);
+
+        window.hideStaticFallback = function() {
+          clearTimeout(timer);
+          window.__REACT_MOUNTED__ = true;
+          if (staticFooter) {
+            staticFooter.style.display = 'none';
+          }
+        };
+      })();
+    </script>
   </body>
 </html>

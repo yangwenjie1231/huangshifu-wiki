@@ -71,7 +71,6 @@ import { prisma } from '../prisma';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const prismaAny = prisma as any;
 const defaultUploadsDir = path.join(__dirname, '..', '..', '..', 'uploads');
 const uploadsDir = process.env.UPLOADS_PATH || defaultUploadsDir;
 fs.mkdirSync(uploadsDir, { recursive: true });
@@ -1758,7 +1757,7 @@ function buildAlbumTracksPayload(relations: Array<{
 }
 
 async function applyAlbumTracksToRelations(albumDocId: string, tracks: ReturnType<typeof normalizeTrackDiscPayload>) {
-  await prismaAny.songAlbumRelation.deleteMany({ where: { albumDocId } });
+  await prisma.songAlbumRelation.deleteMany({ where: { albumDocId } });
 
   const createRows: Array<{
     songDocId: string;
@@ -1784,7 +1783,7 @@ async function applyAlbumTracksToRelations(albumDocId: string, tracks: ReturnTyp
     return;
   }
 
-  await prismaAny.songAlbumRelation.createMany({
+  await prisma.songAlbumRelation.createMany({
     data: createRows,
     skipDuplicates: true,
   });
@@ -1805,9 +1804,9 @@ async function addSongCoverFromAsset(songDocId: string, assetId: string, markDef
     throw new Error('媒体资源不存在或不可用');
   }
 
-  const currentCount = await prismaAny.songCover.count({ where: { songDocId } });
+  const currentCount = await prisma.songCover.count({ where: { songDocId } });
 
-  const cover = await prismaAny.songCover.create({
+  const cover = await prisma.songCover.create({
     data: {
       songDocId,
       assetId: asset.id,
@@ -1819,7 +1818,7 @@ async function addSongCoverFromAsset(songDocId: string, assetId: string, markDef
   });
 
   if (markDefault) {
-    await prismaAny.songCover.updateMany({
+    await prisma.songCover.updateMany({
       where: {
         songDocId,
         id: { not: cover.id },
@@ -1828,7 +1827,7 @@ async function addSongCoverFromAsset(songDocId: string, assetId: string, markDef
         isDefault: false,
       },
     });
-    await prismaAny.musicTrack.update({
+    await prisma.musicTrack.update({
       where: { docId: songDocId },
       data: {
         defaultCoverSource: `song_cover:${cover.id}`,
@@ -1854,9 +1853,9 @@ async function addAlbumCoverFromAsset(albumDocId: string, assetId: string, markD
     throw new Error('媒体资源不存在或不可用');
   }
 
-  const currentCount = await prismaAny.albumCover.count({ where: { albumDocId } });
+  const currentCount = await prisma.albumCover.count({ where: { albumDocId } });
 
-  const cover = await prismaAny.albumCover.create({
+  const cover = await prisma.albumCover.create({
     data: {
       albumDocId,
       assetId: asset.id,
@@ -1868,7 +1867,7 @@ async function addAlbumCoverFromAsset(albumDocId: string, assetId: string, markD
   });
 
   if (markDefault) {
-    await prismaAny.albumCover.updateMany({
+    await prisma.albumCover.updateMany({
       where: {
         albumDocId,
         id: { not: cover.id },
@@ -1877,7 +1876,7 @@ async function addAlbumCoverFromAsset(albumDocId: string, assetId: string, markD
         isDefault: false,
       },
     });
-    await prismaAny.album.update({
+    await prisma.album.update({
       where: { docId: albumDocId },
       data: {
         defaultCoverSource: `album_cover:${cover.id}`,
@@ -1898,7 +1897,7 @@ async function createOrUpdateImportedSong(params: {
   const sourceField = getPlatformSourceField(platform);
   const platformId = track.sourceId;
 
-  const existingByPlatformId = await prismaAny.musicTrack.findFirst({
+  const existingByPlatformId = await prisma.musicTrack.findFirst({
     where: {
       OR: [
         { [sourceField]: platformId },
@@ -1917,7 +1916,7 @@ async function createOrUpdateImportedSong(params: {
     const resolvedAudioUrl = (await resolveMetingAudioUrl(platform as ParsedMusicPlatform, track.urlId)) || '';
     const resolvedLyric = (await resolveMetingLyric(platform as ParsedMusicPlatform, track.lyricId)) || '';
 
-    const song = await prismaAny.musicTrack.update({
+    const song = await prisma.musicTrack.update({
       where: { docId: existingByPlatformId.docId },
       data: {
         id: existingByPlatformId.id || track.sourceId,
@@ -1944,7 +1943,7 @@ async function createOrUpdateImportedSong(params: {
   const artist = track.artist || '未知歌手';
   const album = track.album || albumNameFallback || '未知专辑';
 
-  const existingByTitleArtist = await prismaAny.musicTrack.findFirst({
+  const existingByTitleArtist = await prisma.musicTrack.findFirst({
     where: {
       AND: [
         { title: { equals: title } },
@@ -1969,7 +1968,7 @@ async function createOrUpdateImportedSong(params: {
   if (existingByTitleArtist) {
     const conflictPlatformId = (existingByTitleArtist as Record<string, string | null>)[sourceField];
     if (conflictPlatformId) {
-      const song = await prismaAny.musicTrack.create({
+      const song = await prisma.musicTrack.create({
         data: {
           id: track.sourceId,
           title,
@@ -1991,7 +1990,7 @@ async function createOrUpdateImportedSong(params: {
       };
     }
 
-    const updatedSong = await prismaAny.musicTrack.update({
+    const updatedSong = await prisma.musicTrack.update({
       where: { docId: existingByTitleArtist.docId },
       data: {
         id: existingByTitleArtist.id || track.sourceId,
@@ -2018,7 +2017,7 @@ async function createOrUpdateImportedSong(params: {
     };
   }
 
-  const song = await prismaAny.musicTrack.create({
+  const song = await prisma.musicTrack.create({
     data: {
       id: track.sourceId,
       title,
@@ -2074,7 +2073,7 @@ async function autoLinkInstrumental(
 
   if (!originalTitle) return;
 
-  const originalSong = await prismaAny.musicTrack.findFirst({
+  const originalSong = await prisma.musicTrack.findFirst({
     where: {
       title: originalTitle,
       artist: artist,
@@ -2084,7 +2083,7 @@ async function autoLinkInstrumental(
 
   if (!originalSong) return;
 
-  await prismaAny.songInstrumentalRelation.upsert({
+  await prisma.songInstrumentalRelation.upsert({
     where: {
       songDocId_targetSongDocId: {
         songDocId: songDocId,
@@ -2100,7 +2099,7 @@ async function autoLinkInstrumental(
 }
 
 async function fetchSongsWithRelations(where?: Record<string, unknown>) {
-  const songs = await prismaAny.musicTrack.findMany({
+  const songs = await prisma.musicTrack.findMany({
     where,
     include: {
       covers: {
@@ -2130,7 +2129,7 @@ async function fetchSongsWithRelations(where?: Record<string, unknown>) {
 }
 
 async function fetchSongWithRelationsByDocId(songDocId: string) {
-  const song = await prismaAny.musicTrack.findUnique({
+  const song = await prisma.musicTrack.findUnique({
     where: { docId: songDocId },
     include: {
       covers: {
@@ -2644,7 +2643,6 @@ function decryptBuffer(buffer: Buffer, password: string): Buffer {
 
 export {
   prisma,
-  prismaAny,
   uploadsDir,
   backupsDir,
   WIKI_RELATION_TYPE_LABELS,

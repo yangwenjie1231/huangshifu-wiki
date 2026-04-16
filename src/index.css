@@ -114,6 +114,21 @@
 }
 
 @layer base {
+  /* #root 容器：确保在移动端/iPad 正确撑开并可见 */
+  #root {
+    min-height: 100vh;
+    width: 100%;
+    visibility: visible;
+    overflow-x: hidden;
+  }
+
+  /* iPadOS 15 / iOS 旧版兼容：使用 -webkit-fill-available 作为回退 */
+  @supports (min-height: -webkit-fill-available) {
+    #root {
+      min-height: -webkit-fill-available;
+    }
+  }
+
   /* 字体显示优化：避免 FOIT，使用 swap 策略确保文字立即显示 */
   * {
     font-display: swap;
@@ -123,6 +138,8 @@
     background: var(--color-theme-bg);
     color: var(--color-theme-text);
     font-family: var(--font-theme-main);
+    margin: 0;
+    padding: 0;
   }
 
   h1, h2, h3, h4, h5, h6 {

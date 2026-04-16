@@ -12,6 +12,7 @@ export interface CacheStats {
   hits: number;
   misses: number;
   size: number;
+  maxSize: number;
   hitRate: number;
 }
 
@@ -20,9 +21,11 @@ class MemoryCache {
   private hits = 0;
   private misses = 0;
   private cleanupInterval: NodeJS.Timeout | null = null;
+  private readonly maxSize: number;
 
-  constructor(cleanupIntervalMs = 60000) {
-    // 每分钟清理一次过期缓存
+  constructor(options?: { cleanupIntervalMs?: number; maxSize?: number }) {
+    const cleanupIntervalMs = typeof options === 'object' ? options.cleanupIntervalMs ?? 60000 : 60000;
+    this.maxSize = typeof options === 'object' && options.maxSize !== undefined ? options.maxSize : 1000;
     this.cleanupInterval = setInterval(() => this.cleanup(), cleanupIntervalMs);
   }
 
@@ -53,6 +56,13 @@ class MemoryCache {
    * @param ttl 过期时间（毫秒），默认 5 分钟
    */
   set<T>(key: string, value: T, ttl = 300000): void {
+    if (this.cache.size >= this.maxSize) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey) {
+        this.cache.delete(oldestKey);
+      }
+    }
+
     this.cache.set(key, {
       value,
       expiresAt: Date.now() + ttl,
@@ -97,6 +107,7 @@ class MemoryCache {
       hits: this.hits,
       misses: this.misses,
       size: this.cache.size,
+      maxSize: this.maxSize,
       hitRate: total > 0 ? this.hits / total : 0,
     };
   }

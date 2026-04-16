@@ -26,7 +26,6 @@ import { getQdrantCollectionName, searchImageEmbeddingPoints } from '../vector/q
 import { createUploadStorageInfo } from '../uploadPath';
 
 const router = Router();
-const prismaAny = prisma as any;
 
 const IMAGE_SEARCH_RESULT_LIMIT = Math.max(1, Number(process.env.IMAGE_SEARCH_RESULT_LIMIT || 24));
 

@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { requireAuth, requireActiveUser, requireAdmin } from '../middleware/auth';
 import {
   prisma,
-  prismaAny,
   toSongResponse,
   fetchSongsWithRelations,
   fetchSongWithRelationsByDocId,
@@ -89,14 +88,14 @@ router.post('/', requireAdmin, async (req: AuthenticatedRequest, res) => {
       return;
     }
 
-    const existing = await prismaAny.musicTrack.findUnique({ where: { id } });
+    const existing = await prisma.musicTrack.findUnique({ where: { id } });
     if (existing) {
       res.status(409).json({ error: '该歌曲已存在' });
       return;
     }
 
     const sourceField = getPlatformSourceField(primaryPlatform);
-    const song = await prismaAny.musicTrack.create({
+    const song = await prisma.musicTrack.create({
       data: {
         id,
         title,
@@ -247,7 +246,7 @@ router.post('/import', requireAdmin, async (req: AuthenticatedRequest, res) => {
     }));
 
     if (tracksPayload.length) {
-      const existingAlbum = await prismaAny.album.findFirst({
+      const existingAlbum = await prisma.album.findFirst({
         where: {
           platform: preview.platform,
           sourceId: preview.id,
@@ -261,7 +260,7 @@ router.post('/import', requireAdmin, async (req: AuthenticatedRequest, res) => {
         if (newTracks.length) {
           const merged = [...existingTracks, ...newTracks];
           merged.sort((a, b) => a.disc - b.disc);
-          await prismaAny.album.update({
+          await prisma.album.update({
             where: { docId: existingAlbum.docId },
             data: {
               tracks: merged,
@@ -271,7 +270,7 @@ router.post('/import', requireAdmin, async (req: AuthenticatedRequest, res) => {
         }
       } else {
         const albumId = `${preview.platform}_${preview.type}_${preview.id}`;
-        await prismaAny.album.create({
+        await prisma.album.create({
           data: {
             id: albumId,
             docId: albumId,

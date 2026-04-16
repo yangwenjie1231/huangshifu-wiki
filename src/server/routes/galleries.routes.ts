@@ -21,8 +21,6 @@ import {
 import { enqueueGalleryImageEmbeddings } from '../vector/embeddingSync';
 import { prisma } from '../prisma';
 
-const prismaAny = prisma as any;
-
 function canViewGallery(gallery: { published: boolean; authorUid: string }, authUser?: ApiUser) {
   if (gallery.published) return true;
   if (!authUser) return false;

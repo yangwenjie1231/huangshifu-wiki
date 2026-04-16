@@ -58,3 +58,7 @@ createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </StrictMode>,
 );
+
+if (typeof window.hideStaticFallback === 'function') {
+  window.hideStaticFallback();
+}
