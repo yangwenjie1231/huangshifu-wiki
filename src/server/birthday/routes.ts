@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import * as birthdayService from './birthdayService';
 
 const router = Router();
@@ -37,7 +38,6 @@ function authenticateAdmin(req: AuthenticatedRequest, res: Response, next: () =>
     return;
   }
 
-  const jwt = require('jsonwebtoken');
   const JWT_SECRET = process.env.JWT_SECRET || '';
 
   try {

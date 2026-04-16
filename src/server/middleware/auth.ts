@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { Request, Response, NextFunction } from 'express';
-import * as jwt from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 import { UserRole as PrismaUserRole } from '@prisma/client';
 import type { ApiUser, SessionJwtPayload, UserStatus, AuthenticatedRequest } from '../types';
 import { prisma } from '../prisma';
