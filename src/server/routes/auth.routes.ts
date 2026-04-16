@@ -82,8 +82,25 @@ router.post('/register', async (req, res) => {
     });
 
     const apiUser = userToApiUser(user);
-    const token = createToken(apiUser);
-    setAuthCookie(req, res, token);
+    console.log('[Auth] Creating token for user:', { uid: user.uid });
+
+    let token: string;
+    try {
+      token = createToken(apiUser);
+      console.log('[Auth] Token created successfully');
+    } catch (tokenError) {
+      console.error('[Auth] Token creation failed:', tokenError);
+      throw tokenError;
+    }
+
+    console.log('[Auth] Setting auth cookie...');
+    try {
+      setAuthCookie(req, res, token);
+      console.log('[Auth] Cookie set successfully');
+    } catch (cookieError) {
+      console.error('[Auth] Cookie setting failed:', cookieError);
+      throw cookieError;
+    }
 
     console.log('[Auth] Register success:', { uid: user.uid, email: user.email });
     res.status(201).json({ user: apiUser });
@@ -131,8 +148,25 @@ router.post('/login', async (req, res) => {
     }
 
     const apiUser = userToApiUser(user);
-    const token = createToken(apiUser);
-    setAuthCookie(req, res, token);
+    console.log('[Auth] Creating token for login:', { uid: user.uid });
+
+    let token: string;
+    try {
+      token = createToken(apiUser);
+      console.log('[Auth] Token created successfully for login');
+    } catch (tokenError) {
+      console.error('[Auth] Token creation failed for login:', tokenError);
+      throw tokenError;
+    }
+
+    console.log('[Auth] Setting auth cookie for login...');
+    try {
+      setAuthCookie(req, res, token);
+      console.log('[Auth] Cookie set successfully for login');
+    } catch (cookieError) {
+      console.error('[Auth] Cookie setting failed for login:', cookieError);
+      throw cookieError;
+    }
 
     console.log('[Auth] Login success:', { uid: user.uid, email: user.email });
     res.json({ user: apiUser });
