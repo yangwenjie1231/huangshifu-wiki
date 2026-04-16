@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 import { requireAuth, requireAdmin, type AuthenticatedRequest } from '../middleware/auth';
 import {
   parseInteger,
@@ -44,7 +46,7 @@ const searchImageUpload = multer({
     fileSize: 10 * 1024 * 1024,
   },
   fileFilter: (_req, file, cb) => {
-    const ext = require('path').extname(file.originalname).toLowerCase();
+    const ext = path.extname(file.originalname).toLowerCase();
     const mime = (file.mimetype || '').toLowerCase();
     const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp']);
     const ALLOWED_IMAGE_MIME_TYPES = new Set([
@@ -246,7 +248,6 @@ router.get('/hot-keywords', async (_req, res) => {
 
 router.post('/by-image', searchImageUpload.single('image'), async (req: AuthenticatedRequest, res) => {
   const tempFile = req.file;
-  const fs = require('fs');
   try {
     const requestedLimit = parseInteger(req.body?.limit, IMAGE_SEARCH_RESULT_LIMIT, {
       min: 1,
