@@ -217,7 +217,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     res.json({
       wiki: wiki.map(toWikiResponse),
       posts: posts.map(toPostResponse),
-      galleries: galleries.map(toGalleryResponse),
+      galleries: await Promise.all(galleries.map(toGalleryResponse)),
       music: music.map(toMusicResponse),
       albums: albums.map(toAlbumResponse),
     });

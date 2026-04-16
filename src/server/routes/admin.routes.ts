@@ -1243,7 +1243,7 @@ router.get('/:tab', requireAdmin, async (req, res) => {
         orderBy: { updatedAt: 'desc' },
         take: 100,
       });
-      res.json({ data: data.map(toGalleryResponse) });
+      res.json({ data: await Promise.all(data.map(toGalleryResponse)) });
       return;
     }
 
@@ -1363,7 +1363,7 @@ router.get('/:tab/:id', requireAdmin, async (req, res) => {
         res.status(404).json({ error: '记录不存在' });
         return;
       }
-      res.json({ item: toGalleryResponse(item) });
+      res.json({ item: await toGalleryResponse(item) });
       return;
     }
 

@@ -16,6 +16,7 @@ import {
   uploadFileToS3,
   uploadFileToExternal,
   toCommentResponse,
+  toGalleryResponse,
 } from '../utils';
 import { enqueueGalleryImageEmbeddings } from '../vector/embeddingSync';
 import { prisma } from '../prisma';
@@ -33,115 +34,6 @@ function canManageGallery(gallery: { authorUid: string }, authUser?: ApiUser) {
   if (!authUser) return false;
   if (isAdminRole(authUser.role)) return true;
   return gallery.authorUid === authUser.uid;
-}
-
-async function toGalleryResponse(gallery: {
-  id: string;
-  title: string;
-  description: string;
-  authorUid: string;
-  authorName: string;
-  tags: unknown;
-  locationCode?: string | null;
-  copyright?: string | null;
-  published: boolean;
-  publishedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-  location?: { code: string; name: string; fullName: string } | null;
-  images: {
-    id: string;
-    url: string;
-    name: string;
-    sortOrder: number;
-    assetId?: string | null;
-    asset?: {
-      id: string;
-      publicUrl: string;
-      fileName: string;
-      mimeType: string;
-      sizeBytes: number;
-      status: string;
-      storageKey: string;
-    } | null;
-  }[];
-}) {
-  let storageStrategy: 'local' | 's3' | 'external' = 'local';
-  try {
-    const storageConfig = await prisma.siteConfig.findUnique({
-      where: { key: 'image_preference' },
-    });
-    const preference = storageConfig?.value as { strategy?: 'local' | 's3' | 'external' };
-    storageStrategy = preference?.strategy || 'local';
-  } catch (error) {
-    console.warn('Failed to get storage strategy:', error);
-  }
-
-  const storageKeys = gallery.images
-    .map(img => img.asset?.storageKey)
-    .filter((key): key is string => Boolean(key));
-
-  const imageMaps = storageKeys.length > 0
-    ? await prisma.imageMap.findMany({
-        where: {
-          localUrl: {
-            in: storageKeys.map(key => `/uploads/${key}`),
-          },
-        },
-      })
-    : [];
-
-  const imageMapByLocalUrl = new Map(imageMaps.map(im => [im.localUrl, im]));
-
-  return {
-    id: gallery.id,
-    title: gallery.title,
-    description: gallery.description,
-    authorUid: gallery.authorUid,
-    authorName: gallery.authorName,
-    tags: serializeTags(gallery.tags),
-    locationCode: gallery.locationCode || null,
-    locationName: gallery.location?.fullName || null,
-    copyright: gallery.copyright || null,
-    published: gallery.published,
-    publishedAt: gallery.publishedAt ? gallery.publishedAt.toISOString() : null,
-    createdAt: gallery.createdAt.toISOString(),
-    updatedAt: gallery.updatedAt.toISOString(),
-    images: gallery.images
-      .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map((image) => {
-        let url = image.asset?.publicUrl || image.url;
-
-        if (image.asset?.storageKey) {
-          const localUrl = `/uploads/${image.asset.storageKey}`;
-          const imageMap = imageMapByLocalUrl.get(localUrl);
-
-          if (imageMap) {
-            switch (storageStrategy) {
-              case 'external':
-                url = imageMap.externalUrl || imageMap.s3Url || imageMap.localUrl || url;
-                break;
-              case 's3':
-                url = imageMap.s3Url || imageMap.externalUrl || imageMap.localUrl || url;
-                break;
-              case 'local':
-              default:
-                url = imageMap.localUrl || url;
-                break;
-            }
-          }
-        }
-
-        return {
-          id: image.id,
-          assetId: image.assetId || image.asset?.id || null,
-          url,
-          name: image.asset?.fileName || image.name,
-          mimeType: image.asset?.mimeType || null,
-          sizeBytes: image.asset?.sizeBytes || null,
-        };
-      }),
-  };
 }
 
 const router = Router();
