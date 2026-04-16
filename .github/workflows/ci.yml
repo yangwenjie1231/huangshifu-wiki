@@ -43,10 +43,49 @@ jobs:
         run: |
           echo "Checking coverage thresholds..."
           if [ ! -f "coverage/coverage-summary.json" ]; then
-            echo "Coverage summary not found, skipping threshold check"
-            exit 0
+            echo "::error::Coverage summary not found"
+            exit 1
           fi
-          echo "Coverage report generated successfully"
+          node -e "
+          const fs = require('fs');
+          const summary = JSON.parse(fs.readFileSync('coverage/coverage-summary.json', 'utf8'));
+          const total = summary.total;
+          
+          const thresholds = {
+            lines: 25,
+            statements: 25,
+            functions: 65,
+            branches: 70
+          };
+          
+          const actual = {
+            lines: total.lines.pct,
+            statements: total.statements.pct,
+            functions: total.functions.pct,
+            branches: total.branches.pct
+          };
+          
+          console.log('=== Coverage Report Summary ===');
+          console.log('Metric      | Actual  | Threshold | Status');
+          console.log('------------|---------|-----------|--------');
+          
+          let failed = false;
+          for (const [key, threshold] of Object.entries(thresholds)) {
+            const value = actual[key];
+            const passed = value >= threshold;
+            const status = passed ? 'PASS' : 'FAIL';
+            if (!passed) failed = true;
+            console.log(\`\${key.padEnd(11)} | \${value.toFixed(1).padStart(5)}%  | \${threshold.toString().padStart(9)}% | \${status}\`);
+          }
+          console.log('===============================');
+          
+          if (failed) {
+            console.log('::error::Coverage thresholds not met!');
+            process.exit(1);
+          } else {
+            console.log('All coverage thresholds passed!');
+          }
+          "
 
       - name: Upload coverage artifact
         if: always()

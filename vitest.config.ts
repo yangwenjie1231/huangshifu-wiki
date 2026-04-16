@@ -15,7 +15,7 @@ export default defineConfig({
     include: ['tests/unit/**/*.test.ts'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'html'],
+      reporter: ['text', 'html', 'json-summary'],
       reportsDirectory: 'coverage',
       include: ['src/**/*.ts'],
       exclude: [
@@ -30,10 +30,10 @@ export default defineConfig({
         'src/server/**/routes.ts',
       ],
       thresholds: {
-        lines: 20,
-        functions: 60,
-        branches: 65,
-        statements: 20,
+        lines: 25,
+        functions: 65,
+        branches: 70,
+        statements: 25,
       },
     },
   },

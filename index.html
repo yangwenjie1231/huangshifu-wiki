@@ -22,14 +22,6 @@
 
     <link rel="manifest" href="/manifest.json" />
 
-    <!-- 关键资源预加载 - 首屏性能优化 -->
-    <!-- 预加载 favicon，避免浏览器自动请求延迟 -->
-    <link rel="preload" href="/favicon.ico" as="image" type="image/x-icon" fetchpriority="high" />
-    <!-- 预加载 SVG 图标，用于 PWA 和 Apple Touch Icon -->
-    <link rel="preload" href="/icons/icon.svg" as="image" type="image/svg+xml" fetchpriority="high" />
-    <!-- 预加载主入口 CSS（Vite 构建后生成） -->
-    <link rel="preload" href="/src/main.tsx" as="script" fetchpriority="high" />
-
     <!--
       字体加载优化策略：
       1. 使用系统字体栈（system font stack），无需下载外部字体文件
