@@ -15,8 +15,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import multer from 'multer';
-import { PrismaClient } from '@prisma/client';
 import { initSensitiveWords } from './src/lib/sensitiveWordFilter';
+import { prisma } from './src/server/prisma';
 import { createUploadStorageInfo } from './src/server/uploadPath';
 import { authMiddleware } from './src/server/middleware/auth';
 import { registerRegionRoutes } from './src/server/location/routes';
@@ -48,7 +48,6 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.set('trust proxy', 1);
 
-const prisma = new PrismaClient();
 const uploadsDir = process.env.UPLOADS_PATH || path.join(__dirname, 'uploads');
 fs.mkdirSync(uploadsDir, { recursive: true });
 const backupsDir = path.join(__dirname, 'backups');

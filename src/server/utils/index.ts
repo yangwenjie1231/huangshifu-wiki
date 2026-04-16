@@ -1,12 +1,10 @@
 import axios from 'axios';
 import crypto from 'crypto';
-import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import {
   Prisma,
-  PrismaClient,
   UserRole as PrismaUserRole,
 } from '@prisma/client';
 import {
@@ -68,8 +66,7 @@ import {
 import { userToApiUser, isAdminRole } from '../middleware/auth';
 import { prisma } from '../prisma';
 
-dotenv.config({ path: '.env.local' });
-dotenv.config();
+// 注意：此文件不加载 dotenv，依赖 server.ts 中已加载的环境变量
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
