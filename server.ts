@@ -177,6 +177,7 @@ if (CORS_ORIGIN) {
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: false,
 }));
 
 // 启用 gzip 压缩 - 优化传输性能

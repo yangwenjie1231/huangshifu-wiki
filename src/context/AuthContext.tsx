@@ -38,9 +38,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { isAcademy } = useTheme();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isInitialized, setIsInitialized] = useState(false);
   const authModuleRef = useRef<AuthModule | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
+  const isInitializedRef = useRef(false);
 
   // 清理订阅
   const cleanupSubscription = useCallback(() => {
@@ -53,13 +53,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // 初始化认证状态（延迟执行）
   const initializeAuth = useCallback(async (immediate = false) => {
     // 如果已经在初始化中或已完成，则跳过
-    if (isInitialized && !immediate) return;
+    if (isInitializedRef.current && !immediate) return;
 
     // Academy 模式下跳过认证
     if (isAcademy) {
       setUser(null);
       setLoading(false);
-      setIsInitialized(true);
+      isInitializedRef.current = true;
       return;
     }
 
@@ -77,22 +77,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubscribeRef.current = onAuthStateChanged(auth, async (user) => {
         setUser(user);
         setLoading(false);
-        setIsInitialized(true);
+        isInitializedRef.current = true;
       });
     } catch (error) {
       console.error('Failed to initialize auth:', error);
       setUser(null);
       setLoading(false);
-      setIsInitialized(true);
+      isInitializedRef.current = true;
     }
-  }, [isAcademy, isInitialized, cleanupSubscription]);
+  }, [isAcademy, cleanupSubscription]);
 
   // 延迟初始化 - 使用 requestIdleCallback 或 setTimeout
   useEffect(() => {
     if (isAcademy) {
       setUser(null);
       setLoading(false);
-      setIsInitialized(true);
+      isInitializedRef.current = true;
       return;
     }
 
@@ -121,15 +121,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (timeoutId !== null) {
         clearTimeout(timeoutId);
       }
+      // 组件卸载时才清理订阅
       cleanupSubscription();
     };
-  }, [isAcademy, initializeAuth, cleanupSubscription]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAcademy, cleanupSubscription, initializeAuth]);
 
   // 确保初始化完成（用于需要认证的操作）
   const ensureInitialized = useCallback(async () => {
-    if (isInitialized) return;
+    if (isInitializedRef.current) return;
     await initializeAuth(true);
-  }, [isInitialized, initializeAuth]);
+  }, [initializeAuth]);
 
   // 刷新认证状态
   const refreshAuth = useCallback(async () => {

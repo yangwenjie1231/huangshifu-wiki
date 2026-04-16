@@ -18,6 +18,7 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+// uploads.routes.ts 在 src/server/routes/ 下，向上3级到项目根目录
 const uploadsDir = process.env.UPLOADS_PATH || path.join(__dirname, '..', '..', '..', 'uploads');
 
 const router = Router();
@@ -203,6 +204,19 @@ router.post(
         },
       });
 
+      // 始终创建 ImageMap 记录，用于统一图片管理
+      const imageId = `${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+      await prisma.imageMap.create({
+        data: {
+          id: imageId,
+          md5: '', // 可以后续计算
+          localUrl: publicUrl,
+          s3Url: null,
+          externalUrl: null,
+          storageType: 'local',
+        },
+      });
+
       // 更新会话的上传文件计数
       await prisma.uploadSession.update({
         where: { id: session.id },
@@ -274,22 +288,18 @@ router.post(
           }
         }
 
-        // 创建 ImageMap 记录
-        if (s3Url || externalUrl) {
-          try {
-            await prisma.imageMap.create({
-              data: {
-                id: asset.id,
-                md5: '', // 可以后续计算
-                localUrl,
-                s3Url: s3Url || null,
-                externalUrl: externalUrl || null,
-                storageType: preference.strategy,
-              },
-            });
-          } catch (imageMapError) {
-            console.error('Create ImageMap failed:', imageMapError);
-          }
+        // 更新 ImageMap 记录
+        try {
+          await prisma.imageMap.update({
+            where: { id: imageId },
+            data: {
+              ...(s3Url && { s3Url }),
+              ...(externalUrl && { externalUrl }),
+              storageType: preference.strategy,
+            },
+          });
+        } catch (imageMapError) {
+          console.error('Update ImageMap failed:', imageMapError);
         }
 
         response.tripleStorage = {
