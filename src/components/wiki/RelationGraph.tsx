@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
+import { Network, DataSet } from 'vis-network/standalone';
 import { clsx } from 'clsx';
 
 export type WikiRelationType = 'related_person' | 'work_relation' | 'timeline_relation' | 'custom';
@@ -31,6 +32,13 @@ type RelationGraphProps = {
   onNodeClick?: (slug: string) => void;
 };
 
+const NODE_COLORS: Record<WikiRelationType, string> = {
+  related_person: '#6B8E23',
+  work_relation: '#CD853F',
+  timeline_relation: '#4682B4',
+  custom: '#9370DB',
+};
+
 const EDGE_COLORS: Record<WikiRelationType, string> = {
   related_person: '#6B8E23',
   work_relation: '#CD853F',
@@ -38,56 +46,164 @@ const EDGE_COLORS: Record<WikiRelationType, string> = {
   custom: '#9370DB',
 };
 
-function shortenLabel(value: string, max = 11) {
-  if (value.length <= max) return value;
-  return `${value.slice(0, max)}...`;
-}
-
-function ringPosition(index: number, total: number, radius: number, cx: number, cy: number, offset = -Math.PI / 2) {
-  if (!total) {
-    return { x: cx, y: cy };
-  }
-
-  const angle = offset + (Math.PI * 2 * index) / total;
-  return {
-    x: cx + radius * Math.cos(angle),
-    y: cy + radius * Math.sin(angle),
-  };
-}
-
 const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) => {
-  const width = 980;
-  const height = 600;
-  const centerX = width / 2;
-  const centerY = height / 2;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const networkRef = useRef<Network | null>(null);
 
-  const positions = useMemo(() => {
-    const map = new Map<string, { x: number; y: number }>();
-
-    const centerNode = graph.nodes.find((node) => node.slug === currentSlug) || graph.nodes.find((node) => node.isCenter);
-    if (!centerNode) {
-      return map;
+  const handleClick = useCallback((slug: string) => {
+    if (slug !== currentSlug && onNodeClick) {
+      onNodeClick(slug);
     }
+  }, [currentSlug, onNodeClick]);
 
-    map.set(centerNode.slug, { x: centerX, y: centerY });
+  useEffect(() => {
+    if (!containerRef.current || !graph.nodes.length) return;
 
-    const layerOne = graph.nodes
-      .filter((node) => node.depth === 1)
-      .sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'));
-    const layerTwo = graph.nodes
-      .filter((node) => node.depth === 2)
-      .sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'));
+    const nodes = new DataSet(
+      graph.nodes.map((node) => {
+        const isCenter = node.slug === currentSlug || node.isCenter;
+        const baseColor = isCenter ? '#6B8E23' : node.depth === 1 ? '#F4A460' : '#DEB887';
+        
+        return {
+          id: node.slug,
+          label: node.title.length > 12 ? node.title.slice(0, 12) + '...' : node.title,
+          title: node.title,
+          color: {
+            background: baseColor,
+            border: isCenter ? '#556B2F' : '#D2B48C',
+            highlight: {
+              background: isCenter ? '#8FBC8F' : node.depth === 1 ? '#FFA07A' : '#E6C89C',
+              border: isCenter ? '#6B8E23' : '#DAA520',
+            },
+          },
+          shape: 'dot',
+          size: isCenter ? 40 : node.depth === 1 ? 30 : 25,
+          font: {
+            color: isCenter ? '#ffffff' : '#2F2F2F',
+            size: isCenter ? 16 : 14,
+            face: 'serif',
+            strokeWidth: 0,
+          },
+          shadow: {
+            enabled: true,
+            color: 'rgba(0,0,0,0.2)',
+            size: 10,
+            x: 0,
+            y: 0,
+          },
+          borderWidth: isCenter ? 3 : 2,
+          fixed: isCenter,
+        };
+      })
+    );
 
-    layerOne.forEach((node, index) => {
-      map.set(node.slug, ringPosition(index, layerOne.length, 170, centerX, centerY));
+    const edges = new DataSet(
+      graph.edges.map((edge) => {
+        const edgeColor = EDGE_COLORS[edge.type] || '#7b8a70';
+        
+        return {
+          id: `${edge.sourceSlug}-${edge.targetSlug}-${edge.type}-${edge.label || 'none'}`,
+          from: edge.sourceSlug,
+          to: edge.targetSlug,
+          label: edge.label || edge.typeLabel,
+          color: {
+            color: edgeColor,
+            highlight: edgeColor,
+          },
+          dashes: edge.inferred,
+          arrows: 'to',
+          font: {
+            color: edgeColor,
+            size: 12,
+            face: 'sans',
+            strokeWidth: 2,
+            strokeColor: '#ffffff',
+            align: 'middle',
+          },
+          smooth: {
+            enabled: true,
+            type: 'continuous',
+            roundness: 0,
+          },
+          shadow: {
+            enabled: true,
+            color: 'rgba(0,0,0,0.1)',
+            size: 4,
+          },
+        };
+      })
+    );
+
+    const options = {
+      nodes: {
+        shape: 'dot',
+        scaling: {
+          min: 20,
+          max: 50,
+        },
+      },
+      edges: {
+        width: 2,
+        smooth: {
+          type: 'continuous',
+        },
+      },
+      layout: {
+        randomSeed: 42,
+      },
+      physics: {
+        enabled: true,
+        barnesHut: {
+          gravitationalConstant: -3000,
+          centralGravity: 0.3,
+          springLength: 150,
+          springConstant: 0.04,
+          damping: 0.09,
+        },
+        stabilization: {
+          enabled: true,
+          iterations: 150,
+          updateInterval: 50,
+        },
+      },
+      interaction: {
+        hover: true,
+        dragNodes: true,
+        dragView: true,
+        zoomView: true,
+        keyboard: false,
+        tooltipDelay: 200,
+      },
+      manipulation: false,
+    };
+
+    const network = new Network(containerRef.current, { nodes, edges }, options);
+    networkRef.current = network;
+
+    network.on('click', (params) => {
+      if (params.nodes.length > 0) {
+        const nodeId = params.nodes[0] as string;
+        handleClick(nodeId);
+      }
     });
 
-    layerTwo.forEach((node, index) => {
-      map.set(node.slug, ringPosition(index, layerTwo.length, 270, centerX, centerY, -Math.PI / 3));
+    network.on('hoverNode', () => {
+      if (containerRef.current) {
+        containerRef.current.style.cursor = 'pointer';
+      }
     });
 
-    return map;
-  }, [graph.nodes, currentSlug]);
+    network.on('blurNode', () => {
+      if (containerRef.current) {
+        containerRef.current.style.cursor = 'default';
+      }
+    });
+
+    return () => {
+      network.destroy();
+      networkRef.current = null;
+    };
+  }, [graph, currentSlug, handleClick]);
 
   if (!graph.nodes.length) {
     return <div className="text-sm text-gray-500">暂无可展示的关系图谱。</div>;
@@ -95,101 +211,12 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
 
   return (
     <div className="rounded-3xl border border-brand-olive/20 bg-gradient-to-br from-brand-cream/30 to-white p-6 sm:p-8 shadow-sm">
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-[400px] sm:h-[500px]" role="img" aria-label="Wiki 关系图谱">
-        <defs>
-          <marker id="wiki-relation-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#5f6f52" />
-          </marker>
-        </defs>
-
-        {graph.edges.map((edge) => {
-          const from = positions.get(edge.sourceSlug);
-          const to = positions.get(edge.targetSlug);
-          if (!from || !to) return null;
-
-          const midX = (from.x + to.x) / 2;
-          const midY = (from.y + to.y) / 2;
-          const edgeColor = EDGE_COLORS[edge.type] || '#7b8a70';
-
-          return (
-            <g key={`${edge.sourceSlug}-${edge.targetSlug}-${edge.type}-${edge.label || 'none'}`}>
-              <line
-                x1={from.x}
-                y1={from.y}
-                x2={to.x}
-                y2={to.y}
-                stroke={edgeColor}
-                strokeWidth={edge.inferred ? 2 : 3}
-                strokeDasharray={edge.inferred ? '6 5' : undefined}
-                markerEnd="url(#wiki-relation-arrow)"
-                opacity={0.75}
-              />
-              <text
-                x={midX}
-                y={midY - 6}
-                textAnchor="middle"
-                fill={edgeColor}
-                fontSize="13"
-                fontWeight={600}
-                style={{ textShadow: '0 1px 2px rgba(255,255,255,0.8)' }}
-              >
-                {shortenLabel(edge.label || edge.typeLabel, 14)}
-              </text>
-            </g>
-          );
-        })}
-
-        {graph.nodes.map((node) => {
-          const point = positions.get(node.slug);
-          if (!point) return null;
-
-          const isCenter = node.slug === currentSlug || node.isCenter;
-          const radius = isCenter ? 42 : node.depth === 1 ? 32 : 28;
-
-          return (
-            <g
-              key={node.slug}
-              transform={`translate(${point.x}, ${point.y})`}
-              className={clsx('transition-all duration-300', isCenter ? '' : 'hover:opacity-80 hover:scale-105')}
-              onClick={() => {
-                if (!isCenter && onNodeClick) {
-                  onNodeClick(node.slug);
-                }
-              }}
-              style={{ cursor: !isCenter && onNodeClick ? 'pointer' : 'default' }}
-            >
-              <circle
-                r={radius}
-                fill={isCenter ? '#6B8E23' : node.depth === 1 ? '#F4A460' : '#DEB88B'}
-                stroke={isCenter ? '#556B2F' : '#D2B48C'}
-                strokeWidth={isCenter ? 3 : 2}
-                filter={isCenter ? 'drop-shadow(0 2px 4px rgba(107, 142, 35, 0.3))' : 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))'}
-              />
-              <text
-                x={0}
-                y={-4}
-                textAnchor="middle"
-                fill={isCenter ? '#ffffff' : '#2F2F2F'}
-                fontSize={isCenter ? '15' : '14'}
-                fontWeight={700}
-                style={{ textShadow: isCenter ? '0 1px 2px rgba(0,0,0,0.2)' : 'none' }}
-              >
-                {shortenLabel(node.title, isCenter ? 12 : 11)}
-              </text>
-              <text
-                x={0}
-                y={16}
-                textAnchor="middle"
-                fill={isCenter ? '#F0F8FF' : '#5F5F5F'}
-                fontSize="11"
-                fontWeight={500}
-              >
-                {node.depth === 0 ? '当前页面' : `${node.depth}度关联`}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
+      <div
+        ref={containerRef}
+        className="w-full h-[400px] sm:h-[500px]"
+        role="img"
+        aria-label="Wiki 关系图谱"
+      />
 
       <div className="mt-6 flex flex-wrap gap-4 text-sm">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-brand-cream/50 rounded-full">
