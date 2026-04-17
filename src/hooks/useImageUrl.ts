@@ -57,7 +57,7 @@ export function useImageUrl(
       const pref = await getImagePreference();
       setPreference(pref);
 
-      const result = resolveImageUrl(image, pref, { forceType });
+      const result = await resolveImageUrl(image, pref, { forceType });
       setUrl(result.url);
       setStorageType(result.storageType);
       setBlurhash(result.blurhash);

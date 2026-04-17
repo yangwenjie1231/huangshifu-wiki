@@ -1,8 +1,82 @@
 import { Router } from 'express';
 import { requireAuth, requireAdmin, requireActiveUser } from '../middleware/auth';
-import { prisma } from '../utils';
+import { prisma, uploadsDir } from '../utils';
+import { isBlurhashEnabled, shouldAutoGenerate, generateBlurhashFromFile } from '../blurhashService';
+import { getS3BaseUrl, getPublicConfig } from '../s3/s3Service';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const router = Router();
+
+/**
+ * Infer the correct storage type from actual URL fields.
+ * The stored storageType may be stale; always derive from real data.
+ */
+function inferStorageType(item: {
+  s3Url: string | null;
+  externalUrl: string | null;
+  storageType: string;
+}): 'local' | 's3' | 'external' {
+  if (item.s3Url) return 's3';
+  if (item.externalUrl) return 'external';
+  return 'local';
+}
+
+/**
+ * Normalize an ImageMap record for API responses.
+ * Converts dates to ISO strings and overrides storageType with inferred value.
+ */
+function normalizeImageMap(item: {
+  id: string;
+  md5: string;
+  localUrl: string;
+  externalUrl: string | null;
+  s3Url: string | null;
+  storageType: string;
+  blurhash: string | null;
+  thumbhash: string | null;
+  createdAt: Date;
+}) {
+  return {
+    ...item,
+    storageType: inferStorageType(item),
+    createdAt: item.createdAt.toISOString(),
+  };
+}
+
+/**
+ * Convert a localUrl like "/uploads/general/2024/01/uuid.jpg" to an absolute file path.
+ * Returns null if the URL cannot be resolved safely.
+ */
+function localUrlToAbsoluteFile(localUrl: string | null | undefined): string | null {
+  if (!localUrl || typeof localUrl !== 'string') {
+    return null;
+  }
+
+  // localUrl starts with "/uploads/", strip that prefix
+  if (!localUrl.startsWith('/uploads/')) {
+    return null;
+  }
+
+  const relativePath = localUrl.slice('/uploads/'.length);
+  if (!relativePath) {
+    return null;
+  }
+
+  const resolvedBase = path.resolve(uploadsDir);
+  const resolvedTarget = path.resolve(resolvedBase, relativePath);
+
+  // Path traversal protection
+  if (!resolvedTarget.startsWith(resolvedBase)) {
+    return null;
+  }
+
+  return resolvedTarget;
+}
 
 // GET /api/image-maps - List image maps
 router.get('/', async (req, res) => {
@@ -16,10 +90,7 @@ router.get('/', async (req, res) => {
     });
 
     res.json({
-      items: items.map((item) => ({
-        ...item,
-        createdAt: item.createdAt.toISOString(),
-      })),
+      items: items.map(normalizeImageMap),
     });
   } catch (error) {
     console.error('Fetch image maps error:', error);
@@ -38,7 +109,7 @@ router.get('/export', requireAuth, requireAdmin, async (req, res) => {
     if (format === 'csv') {
       const headers = ['id', 'md5', 'localUrl', 'externalUrl', 's3Url', 'storageType', 'createdAt'];
       const csvRows = [headers.join(',')];
-      
+
       for (const item of items) {
         const row = [
           item.id,
@@ -46,7 +117,7 @@ router.get('/export', requireAuth, requireAdmin, async (req, res) => {
           `"${item.localUrl || ''}"`,
           `"${item.externalUrl || ''}"`,
           `"${item.s3Url || ''}"`,
-          `"${item.storageType || ''}"`,
+          `"${inferStorageType(item)}"`,
           item.createdAt.toISOString(),
         ];
         csvRows.push(row.join(','));
@@ -57,10 +128,7 @@ router.get('/export', requireAuth, requireAdmin, async (req, res) => {
       res.send(csvRows.join('\n'));
     } else {
       res.json({
-        items: items.map((item) => ({
-          ...item,
-          createdAt: item.createdAt.toISOString(),
-        })),
+        items: items.map(normalizeImageMap),
       });
     }
   } catch (error) {
@@ -72,18 +140,18 @@ router.get('/export', requireAuth, requireAdmin, async (req, res) => {
 // GET /api/image-maps/stats - Get image map statistics
 router.get('/stats', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const [total, withExternal, withS3] = await Promise.all([
+    const [total, withS3, withExternal] = await Promise.all([
       prisma.imageMap.count(),
+      prisma.imageMap.count({ where: { s3Url: { not: null } } }),
       prisma.imageMap.count({ where: { externalUrl: { not: null } } }),
-      prisma.imageMap.count({ where: { storageType: 's3' } }),
     ]);
 
     res.json({
       total,
       stats: {
-        local: total - withExternal - withS3,
-        external: withExternal,
         s3: withS3,
+        external: withExternal,
+        local: total - withS3 - withExternal,
       },
     });
   } catch (error) {
@@ -220,51 +288,41 @@ router.post('/refresh-all-blurhash', requireAuth, requireAdmin, async (req, res)
       return;
     }
 
-    try {
-      const { fetchBlurhashFromS3, fetchThumbhashFromS3 } = await import('../blurhashService');
+    let processed = 0;
+    let failed = 0;
 
-      let processed = 0;
-      let failed = 0;
+    for (const imageMap of imageMaps) {
+      // Prioritize localUrl for file-based blurhash generation
+      const filePath = localUrlToAbsoluteFile(imageMap.localUrl);
 
-      for (const imageMap of imageMaps) {
-        const urlToGenerateHash = imageMap.s3Url || imageMap.externalUrl || imageMap.localUrl;
-
-        if (!urlToGenerateHash) {
-          continue;
-        }
-
-        try {
-          const [blurhash, thumbhash] = await Promise.all([
-            fetchBlurhashFromS3(urlToGenerateHash),
-            fetchThumbhashFromS3(urlToGenerateHash),
-          ]);
-
-          await prisma.imageMap.update({
-            where: { id: imageMap.id },
-            data: {
-              ...(blurhash && { blurhash }),
-              ...(thumbhash && { thumbhash }),
-            },
-          });
-
-          processed++;
-          console.log(`[Refresh All Blurhash] Processed ${processed}/${imageMaps.length}:`, imageMap.id);
-        } catch (err) {
-          failed++;
-          console.error(`[Refresh All Blurhash] Failed for ${imageMap.id}:`, err);
-        }
+      if (!filePath) {
+        continue;
       }
 
-      res.json({
-        success: true,
-        processed,
-        failed,
-        total: imageMaps.length,
-      });
-    } catch (hashError) {
-      console.error('[Refresh All Blurhash] Failed to generate blurhash:', hashError);
-      res.status(500).json({ error: '批量生成 blurhash 失败' });
+      try {
+        const blurhash = await generateBlurhashFromFile(filePath);
+
+        await prisma.imageMap.update({
+          where: { id: imageMap.id },
+          data: {
+            ...(blurhash && { blurhash }),
+          },
+        });
+
+        processed++;
+        console.log(`[Refresh All Blurhash] Processed ${processed}/${imageMaps.length}:`, imageMap.id);
+      } catch (err) {
+        failed++;
+        console.error(`[Refresh All Blurhash] Failed for ${imageMap.id}:`, err);
+      }
     }
+
+    res.json({
+      success: true,
+      processed,
+      failed,
+      total: imageMaps.length,
+    });
   } catch (error) {
     console.error('Refresh all blurhash error:', error);
     res.status(500).json({ error: '刷新 blurhash 失败' });
@@ -284,10 +342,7 @@ router.get('/:id', async (req, res) => {
     }
 
     res.json({
-      item: {
-        ...item,
-        createdAt: item.createdAt.toISOString(),
-      },
+      item: normalizeImageMap(item),
     });
   } catch (error) {
     console.error('Fetch image map detail error:', error);
@@ -320,31 +375,19 @@ router.post('/', requireAuth, requireActiveUser, async (req, res) => {
     let blurhash: string | undefined;
     let thumbhash: string | undefined;
 
-    const urlToGenerateHash = s3Url || externalUrl || localUrl;
-    if (urlToGenerateHash) {
+    // Try to generate blurhash from local file path first
+    const filePath = localUrlToAbsoluteFile(localUrl);
+    if (filePath && isBlurhashEnabled() && shouldAutoGenerate()) {
       try {
-        const { fetchBlurhashFromS3, fetchThumbhashFromS3, isBlurhashEnabled, shouldAutoGenerate } = await import('../blurhashService');
+        console.log('[ImageMap] Auto-generating blurhash from local file:', filePath);
 
-        if (isBlurhashEnabled() && shouldAutoGenerate()) {
-          console.log('[ImageMap] Auto-generating blurhash for:', urlToGenerateHash);
+        blurhash = await generateBlurhashFromFile(filePath);
 
-          const [blur, thumb] = await Promise.all([
-            fetchBlurhashFromS3(urlToGenerateHash),
-            fetchThumbhashFromS3(urlToGenerateHash),
-          ]);
-
-          if (blur) {
-            blurhash = blur;
-            console.log('[ImageMap] Blurhash generated:', blur.substring(0, 20) + '...');
-          }
-
-          if (thumb) {
-            thumbhash = thumb;
-            console.log('[ImageMap] Thumbhash generated:', thumb.substring(0, 20) + '...');
-          }
+        if (blurhash) {
+          console.log('[ImageMap] Blurhash generated:', blurhash.substring(0, 20) + '...');
         }
       } catch (hashError) {
-        console.error('[ImageMap] Failed to generate blurhash:', hashError);
+        console.error('[ImageMap] Failed to generate blurhash from local file:', hashError);
       }
     }
 
@@ -413,10 +456,7 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
     });
 
     res.json({
-      item: {
-        ...item,
-        createdAt: item.createdAt.toISOString(),
-      },
+      item: normalizeImageMap(item),
     });
   } catch (error) {
     console.error('Update image map error:', error);
@@ -451,37 +491,29 @@ router.post('/:id/refresh-blurhash', requireAuth, requireAdmin, async (req, res)
       return;
     }
 
-    const urlToGenerateHash = imageMap.s3Url || imageMap.externalUrl || imageMap.localUrl;
+    // Use localUrl to generate blurhash from local file
+    const filePath = localUrlToAbsoluteFile(imageMap.localUrl);
 
-    if (!urlToGenerateHash) {
-      res.status(400).json({ error: '没有可用的图片 URL' });
+    if (!filePath) {
+      res.status(400).json({ error: '没有可用的本地图片路径' });
       return;
     }
 
     try {
-      const { fetchBlurhashFromS3, fetchThumbhashFromS3 } = await import('../blurhashService');
+      console.log('[Refresh Blurhash] Refreshing blurhash from local file:', filePath);
 
-      console.log('[Refresh Blurhash] Refreshing hashes for:', urlToGenerateHash);
-
-      const [blurhash, thumbhash] = await Promise.all([
-        fetchBlurhashFromS3(urlToGenerateHash),
-        fetchThumbhashFromS3(urlToGenerateHash),
-      ]);
+      const blurhash = await generateBlurhashFromFile(filePath);
 
       const updatedItem = await prisma.imageMap.update({
         where: { id },
         data: {
           ...(blurhash && { blurhash }),
-          ...(thumbhash && { thumbhash }),
         },
       });
 
       res.json({
         success: true,
-        item: {
-          ...updatedItem,
-          createdAt: updatedItem.createdAt.toISOString(),
-        },
+        item: normalizeImageMap(updatedItem),
       });
     } catch (hashError) {
       console.error('[Refresh Blurhash] Failed to generate blurhash:', hashError);
@@ -490,6 +522,129 @@ router.post('/:id/refresh-blurhash', requireAuth, requireAdmin, async (req, res)
   } catch (error) {
     console.error('Refresh blurhash error:', error);
     res.status(500).json({ error: '刷新 blurhash 失败' });
+  }
+});
+
+// POST /api/image-maps/migrate-to-s3 - Migrate local images to S3
+router.post('/migrate-to-s3', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { limit = '100' } = req.query as { limit?: string };
+    const limitNum = Math.max(1, Math.min(1000, parseInt(limit, 10) || 100));
+
+    // Check if S3 is enabled
+    const s3Config = getPublicConfig();
+    if (!s3Config.enabled) {
+      res.status(400).json({ error: 'S3 存储未启用，请先配置 S3' });
+      return;
+    }
+
+    // Query all ImageMap records where s3Url is null
+    const imageMaps = await prisma.imageMap.findMany({
+      where: {
+        s3Url: null,
+      },
+      take: limitNum,
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (imageMaps.length === 0) {
+      res.json({
+        success: true,
+        message: '没有需要迁移到 S3 的图片',
+        total: 0,
+        processed: 0,
+        failed: 0,
+        errors: [],
+      });
+      return;
+    }
+
+    const total = imageMaps.length;
+    const processed: number[] = [];
+    const errors: string[] = [];
+
+    for (const imageMap of imageMaps) {
+      try {
+        // Convert localUrl to absolute file path
+        const filePath = localUrlToAbsoluteFile(imageMap.localUrl);
+
+        if (!filePath) {
+          errors.push(`无法解析本地路径: ${imageMap.id} (${imageMap.localUrl})`);
+          continue;
+        }
+
+        // Check if file exists
+        if (!fs.existsSync(filePath)) {
+          errors.push(`本地文件不存在: ${imageMap.id} (${filePath})`);
+          continue;
+        }
+
+        // Read the file
+        const fileBuffer = await fs.promises.readFile(filePath);
+
+        // Generate object key from localUrl
+        const relativePath = imageMap.localUrl!.slice('/uploads/'.length);
+        const objectKey = `images/${relativePath}`;
+
+        // Detect content type from extension
+        const ext = path.extname(filePath).toLowerCase();
+        const contentTypeMap: Record<string, string> = {
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.png': 'image/png',
+          '.webp': 'image/webp',
+          '.gif': 'image/gif',
+          '.bmp': 'image/bmp',
+        };
+        const contentType = contentTypeMap[ext] || 'application/octet-stream';
+
+        // Upload to S3
+        const { uploadFileToS3 } = await import('../utils');
+        const s3Result = await uploadFileToS3(filePath, objectKey, contentType);
+
+        if (!s3Result.success || !s3Result.url) {
+          errors.push(`S3 上传失败: ${imageMap.id} - ${s3Result.error}`);
+          continue;
+        }
+
+        // Generate blurhash from local file
+        let blurhash: string | undefined;
+        if (isBlurhashEnabled() && shouldAutoGenerate()) {
+          try {
+            blurhash = await generateBlurhashFromFile(filePath);
+          } catch (blurhashError) {
+            console.error(`[Migrate to S3] Blurhash generation failed for ${imageMap.id}:`, blurhashError);
+          }
+        }
+
+        // Update the ImageMap with s3Url and blurhash
+        await prisma.imageMap.update({
+          where: { id: imageMap.id },
+          data: {
+            s3Url: s3Result.url,
+            storageType: 's3',
+            ...(blurhash && { blurhash }),
+          },
+        });
+
+        processed.push(processed.length + 1);
+        console.log(`[Migrate to S3] Processed ${processed.length}/${total}:`, imageMap.id);
+      } catch (err) {
+        errors.push(`处理失败: ${imageMap.id} - ${(err as Error).message}`);
+        console.error(`[Migrate to S3] Error for ${imageMap.id}:`, err);
+      }
+    }
+
+    res.json({
+      success: true,
+      total,
+      processed: processed.length,
+      failed: total - processed.length,
+      errors,
+    });
+  } catch (error) {
+    console.error('Migrate to S3 error:', error);
+    res.status(500).json({ error: '迁移到 S3 失败' });
   }
 });
 

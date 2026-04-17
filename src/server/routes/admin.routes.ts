@@ -980,6 +980,8 @@ router.post('/backup/create', requireSuperAdmin, async (req, res) => {
       '-d', dbConfig.database,
       '--no-owner',
       '--no-privileges',
+      '--clean',
+      '--if-exists',
       '--exclude-table-data=ImageEmbedding',
       '--exclude-table-data=_prisma_migrations',
       '-f', sqlFilePath,
@@ -1139,6 +1141,8 @@ router.post('/backup/restore', requireSuperAdmin, uploadBackup.single('file'), a
         '-p', dbConfig.port,
         '-U', dbConfig.user,
         '-d', dbConfig.database,
+        '--single-transaction',
+        '-v', 'ON_ERROR_STOP=1',
         '-f', tempSqlPath,
       ];
       const psqlEnv = { ...process.env, PGPASSWORD: dbConfig.password };

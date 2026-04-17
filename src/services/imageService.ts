@@ -17,7 +17,42 @@ export interface ImageMap {
 export interface ImagePreference {
   strategy: 'local' | 's3' | 'external';
   fallback: boolean;
+  s3BaseUrl?: string;
 }
+
+let cachedS3BaseUrl: string | null = null;
+
+export const getS3BaseUrl = async (): Promise<string> => {
+  if (cachedS3BaseUrl) {
+    return cachedS3BaseUrl;
+  }
+
+  try {
+    const response = await apiGet<{ s3BaseUrl?: string }>('/api/s3/config');
+    cachedS3BaseUrl = response.s3BaseUrl || '';
+    return cachedS3BaseUrl;
+  } catch (error) {
+    console.error('Failed to fetch S3 base URL:', error);
+    return '';
+  }
+};
+
+export const clearS3BaseUrlCache = () => {
+  cachedS3BaseUrl = null;
+};
+
+export const buildS3Url = (s3Url: string, s3BaseUrl: string): string => {
+  if (!s3Url) return '';
+  if (s3Url.startsWith('http://') || s3Url.startsWith('https://')) {
+    return s3Url;
+  }
+  if (!s3BaseUrl) {
+    return s3Url;
+  }
+  const trimmedBase = s3BaseUrl.replace(/\/+$/, '');
+  const trimmedUrl = s3Url.replace(/^\/+/, '');
+  return `${trimmedBase}${trimmedUrl}`;
+};
 
 export interface ImageUrlResult {
   url: string;
@@ -103,11 +138,11 @@ const getUrlByPreference = (map: ImageMap, preference: ImagePreference): string 
   return null;
 };
 
-export const resolveImageUrl = (
+export const resolveImageUrl = async (
   map: ImageMap,
   preference: ImagePreference,
   options: ResolveImageUrlOptions = {},
-): ImageUrlResult => {
+): Promise<ImageUrlResult> => {
   const { forceType } = options;
   const strategy = forceType || preference.strategy;
   const { fallback } = preference;
@@ -126,8 +161,13 @@ export const resolveImageUrl = (
 
   const primary = getPrimaryUrl();
   if (primary.url) {
+    let resolvedUrl = primary.url;
+    if (primary.type === 's3') {
+      const s3BaseUrl = preference.s3BaseUrl || await getS3BaseUrl();
+      resolvedUrl = buildS3Url(primary.url, s3BaseUrl);
+    }
     return {
-      url: primary.url,
+      url: resolvedUrl,
       storageType: primary.type,
       blurhash: map.blurhash,
       md5: map.md5,
@@ -151,8 +191,13 @@ export const resolveImageUrl = (
 
   if (fallbackUrls.length > 0) {
     const first = fallbackUrls[0];
+    let resolvedUrl = first.url;
+    if (first.type === 's3') {
+      const s3BaseUrl = preference.s3BaseUrl || await getS3BaseUrl();
+      resolvedUrl = buildS3Url(first.url, s3BaseUrl);
+    }
     return {
-      url: first.url,
+      url: resolvedUrl,
       storageType: first.type,
       blurhash: map.blurhash,
       md5: map.md5,

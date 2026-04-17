@@ -9,9 +9,11 @@ import {
   buildUploadPublicUrl,
   validateUploadedImage,
   uploadFileToS3,
-  uploadFileToExternal,
+  uploadToSuperbed,
+  deleteFromSuperbed,
   safeDeleteUploadFileByStorageKey,
 } from '../utils';
+import { isBlurhashEnabled, shouldAutoGenerate, generateBlurhashFromFile } from '../blurhashService';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -266,40 +268,76 @@ router.post(
             const s3Result = await uploadFileToS3(filePath, storageKey, mimeType);
             if (s3Result.success && s3Result.url) {
               s3Url = s3Result.url;
+
+              let blurhash: string | undefined;
+              if (isBlurhashEnabled() && shouldAutoGenerate()) {
+                try {
+                  const absolutePath = path.join(uploadsDir, file.filename);
+                  blurhash = await generateBlurhashFromFile(absolutePath);
+                  if (blurhash) {
+                    console.log('[Upload] Blurhash generated for S3 upload:', blurhash.substring(0, 20) + '...');
+                  }
+                } catch (blurhashError) {
+                  console.error('[Upload] Failed to generate blurhash:', blurhashError);
+                }
+              }
+
+              // 更新 ImageMap 记录
+              try {
+                await prisma.imageMap.update({
+                  where: { id: imageId },
+                  data: {
+                    s3Url,
+                    ...(blurhash && { blurhash }),
+                    storageType: preference.strategy,
+                  },
+                });
+              } catch (imageMapError) {
+                console.error('Update ImageMap failed:', imageMapError);
+              }
             }
           } catch (s3Error) {
             console.error('Upload to S3 failed:', s3Error);
           }
         }
 
-        // 上传到外部图床
+        // 上传到外部图床 (Superbed)
         if (preference.strategy === 'external') {
-          try {
-            const filePath = `uploads/${file.filename}`;
-            const externalConfig = {
-              apiUrl: 'https://api.imgur.com/3/image', // 示例配置，实际应从环境变量读取
-            };
-            const externalResult = await uploadFileToExternal(filePath, file.originalname, mimeType, externalConfig);
-            if (externalResult.success && externalResult.url) {
-              externalUrl = externalResult.url;
+          const superbedToken = process.env.SUPERBED_API_TOKEN || '';
+          
+          if (!superbedToken) {
+            console.warn('[Upload] Superbed API Token not configured, skipping external upload');
+          } else {
+            try {
+              const filePath = `uploads/${file.filename}`;
+              const superbedResult = await uploadToSuperbed(
+                filePath,
+                file.originalname,
+                mimeType,
+                superbedToken,
+              );
+              if (superbedResult.success && superbedResult.url) {
+                externalUrl = superbedResult.url;
+              }
+            } catch (externalError) {
+              console.error('Upload to Superbed failed:', externalError);
             }
-          } catch (externalError) {
-            console.error('Upload to external failed:', externalError);
           }
         }
 
-        // 更新 ImageMap 记录
-        try {
-          await prisma.imageMap.update({
-            where: { id: imageId },
-            data: {
-              ...(s3Url && { s3Url }),
-              ...(externalUrl && { externalUrl }),
-              storageType: preference.strategy,
-            },
-          });
-        } catch (imageMapError) {
-          console.error('Update ImageMap failed:', imageMapError);
+        // 如果 S3 上传失败或未执行，确保更新 ImageMap 的基本信息
+        if (!s3Url) {
+          try {
+            await prisma.imageMap.update({
+              where: { id: imageId },
+              data: {
+                ...(externalUrl && { externalUrl }),
+                storageType: preference.strategy,
+              },
+            });
+          } catch (imageMapError) {
+            console.error('Update ImageMap failed:', imageMapError);
+          }
         }
 
         response.tripleStorage = {
@@ -409,6 +447,43 @@ router.delete('/sessions/:sessionId', requireAuth, requireActiveUser, async (req
   } catch (error) {
     console.error('Delete upload session error:', error);
     res.status(500).json({ error: '删除上传会话失败' });
+  }
+});
+
+/**
+ * DELETE /api/uploads/superbed - 从 Superbed 删除图片
+ * Body: { imageIds: string[] }
+ */
+router.delete('/superbed', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { imageIds } = req.body as { imageIds?: string[] };
+
+    if (!imageIds || !Array.isArray(imageIds) || imageIds.length === 0) {
+      res.status(400).json({ error: '请提供要删除的图片 ID 列表' });
+      return;
+    }
+
+    if (imageIds.length > 1000) {
+      res.status(400).json({ error: '每次最多删除 1000 张图片' });
+      return;
+    }
+
+    const superbedToken = process.env.SUPERBED_API_TOKEN || '';
+    if (!superbedToken) {
+      res.status(400).json({ error: 'Superbed API Token 未配置' });
+      return;
+    }
+
+    const result = await deleteFromSuperbed(imageIds, superbedToken);
+
+    if (result.success) {
+      res.json({ success: true, deletedCount: imageIds.length });
+    } else {
+      res.status(500).json({ error: result.error || '删除图片失败' });
+    }
+  } catch (error) {
+    console.error('Delete from Superbed error:', error);
+    res.status(500).json({ error: '删除图片失败' });
   }
 });
 

@@ -99,7 +99,7 @@ export function useImageHandler(
 
     try {
       const preference = await getImagePreference();
-      const result = resolveImageUrl(image, preference, { forceType });
+      const result = await resolveImageUrl(image, preference, { forceType });
       
       setImageUrl(result.url);
       setStorageType(result.storageType);
@@ -164,7 +164,7 @@ export function useImageHandler(
 
         // 解析 URL
         const preference = await getImagePreference();
-        const urlResult = resolveImageUrl(imageMap, preference, { forceType });
+        const urlResult = await resolveImageUrl(imageMap, preference, { forceType });
 
         setImageUrl(urlResult.url);
         setStorageType(urlResult.storageType);

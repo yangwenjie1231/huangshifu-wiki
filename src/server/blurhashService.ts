@@ -1,3 +1,7 @@
+import fs from 'fs';
+import { encode } from 'blurhash';
+import sharp from 'sharp';
+
 export interface BlurhashConfig {
   enabled: boolean;
   autoGenerate: boolean;
@@ -68,110 +72,128 @@ function setCachedBlurhash(key: string, result: BlurhashResult): void {
   blurhashCache.set(`_timestamp_${key}`, Date.now() as any);
 }
 
-export async function fetchBlurhashFromS3(imageUrl: string): Promise<string | null> {
-  if (!imageUrl) {
-    console.warn('[Blurhash] Image URL is empty');
+async function extractPixels(buffer: Buffer): Promise<{ data: Uint8ClampedArray; width: number; height: number } | null> {
+  try {
+    const metadata = await sharp(buffer).metadata();
+
+    // Downsize very large images to keep encoding fast
+    const MAX_DIMENSION = 100;
+    let targetWidth = metadata.width ?? 64;
+    let targetHeight = metadata.height ?? 64;
+
+    if (metadata.width && metadata.height) {
+      const maxSide = Math.max(metadata.width, metadata.height);
+      if (maxSide > MAX_DIMENSION) {
+        const scale = MAX_DIMENSION / maxSide;
+        targetWidth = Math.max(1, Math.round(metadata.width * scale));
+        targetHeight = Math.max(1, Math.round(metadata.height * scale));
+      }
+    }
+
+    const { data, info } = await sharp(buffer)
+      .ensureAlpha()
+      .removeAlpha()
+      .resize(targetWidth, targetHeight, { fit: 'inside' })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    return {
+      data: new Uint8ClampedArray(data),
+      width: info.width,
+      height: info.height,
+    };
+  } catch (error) {
+    console.error('[Blurhash] Failed to extract pixels:', error);
+    return null;
+  }
+}
+
+export async function generateBlurhashFromBuffer(buffer: Buffer): Promise<string | null> {
+  if (!isBlurhashEnabled()) {
+    console.log('[Blurhash] Blurhash is disabled');
     return null;
   }
 
-  const cacheKey = `blurhash_${imageUrl}`;
+  if (!buffer || buffer.length === 0) {
+    console.warn('[Blurhash] Empty buffer provided');
+    return null;
+  }
+
+  const config = getBlurhashConfig();
+
+  try {
+    const pixels = await extractPixels(buffer);
+    if (!pixels) {
+      return null;
+    }
+
+    const blurhash = encode(pixels.data, pixels.width, pixels.height, config.componentsX, config.componentsY);
+
+    if (!blurhash || blurhash.length < 4) {
+      console.warn('[Blurhash] Invalid blurhash generated');
+      return null;
+    }
+
+    console.log(
+      `[Blurhash] Generated blurhash (${pixels.width}x${pixels.height}): ${blurhash.substring(0, 20)}...`
+    );
+    return blurhash;
+  } catch (error) {
+    console.error('[Blurhash] Error generating blurhash from buffer:', error);
+    return null;
+  }
+}
+
+export async function generateBlurhashFromFile(filePath: string): Promise<string | null> {
+  if (!isBlurhashEnabled()) {
+    console.log('[Blurhash] Blurhash is disabled');
+    return null;
+  }
+
+  if (!filePath) {
+    console.warn('[Blurhash] File path is empty');
+    return null;
+  }
+
+  const cacheKey = `blurhash_file_${filePath}`;
   const cached = getCachedBlurhash(cacheKey);
   if (cached?.blurhash) {
-    console.log('[Blurhash] Using cached blurhash for:', imageUrl);
+    console.log('[Blurhash] Using cached blurhash for:', filePath);
     return cached.blurhash;
   }
 
   try {
-    const blurhashUrl = `${imageUrl}?fmt=blurhash`;
-    console.log('[Blurhash] Fetching from:', blurhashUrl);
+    const buffer = fs.readFileSync(filePath);
+    const blurhash = await generateBlurhashFromBuffer(buffer);
 
-    const response = await fetch(blurhashUrl, {
-      method: 'GET',
-      headers: {
-        'Accept': 'text/plain',
-      },
-    });
-
-    if (!response.ok) {
-      console.error(`[Blurhash] Failed to fetch blurhash: ${response.status} ${response.statusText}`);
-      return null;
+    if (blurhash) {
+      const result: BlurhashResult = { blurhash };
+      setCachedBlurhash(cacheKey, result);
     }
 
-    const blurhash = await response.text();
-
-    if (!blurhash || blurhash.length < 10) {
-      console.warn('[Blurhash] Invalid blurhash received:', blurhash);
-      return null;
-    }
-
-    const result: BlurhashResult = { blurhash };
-    setCachedBlurhash(cacheKey, result);
-
-    console.log('[Blurhash] Successfully fetched blurhash:', blurhash.substring(0, 20) + '...');
     return blurhash;
   } catch (error) {
-    console.error('[Blurhash] Error fetching blurhash:', error);
+    console.error('[Blurhash] Error generating blurhash from file:', error);
     return null;
   }
 }
 
-export async function fetchThumbhashFromS3(imageUrl: string): Promise<string | null> {
-  if (!imageUrl) {
-    console.warn('[Thumbhash] Image URL is empty');
-    return null;
-  }
-
-  const cacheKey = `thumbhash_${imageUrl}`;
-  const cached = getCachedBlurhash(cacheKey);
-  if (cached?.thumbhash) {
-    console.log('[Thumbhash] Using cached thumbhash for:', imageUrl);
-    return cached.thumbhash;
-  }
-
-  try {
-    const thumbhashUrl = `${imageUrl}?fmt=thumbhash`;
-    console.log('[Thumbhash] Fetching from:', thumbhashUrl);
-
-    const response = await fetch(thumbhashUrl, {
-      method: 'GET',
-      headers: {
-        'Accept': 'text/plain',
-      },
-    });
-
-    if (!response.ok) {
-      console.error(`[Thumbhash] Failed to fetch thumbhash: ${response.status} ${response.statusText}`);
-      return null;
-    }
-
-    const thumbhash = await response.text();
-
-    if (!thumbhash || thumbhash.length < 10) {
-      console.warn('[Thumbhash] Invalid thumbhash received:', thumbhash);
-      return null;
-    }
-
-    const result: BlurhashResult = { thumbhash };
-    setCachedBlurhash(cacheKey, result);
-
-    console.log('[Thumbhash] Successfully fetched thumbhash:', thumbhash.substring(0, 20) + '...');
-    return thumbhash;
-  } catch (error) {
-    console.error('[Thumbhash] Error fetching thumbhash:', error);
-    return null;
-  }
+export async function generateThumbhashFromFile(_filePath: string): Promise<string | null> {
+  // Thumbhash generation is not prioritized; returning null as placeholder.
+  console.log('[Thumbhash] Thumbhash generation not yet implemented');
+  return null;
 }
 
-export async function generateImageHashes(imageUrl: string): Promise<BlurhashResult> {
+export async function generateImageHashesFromFile(filePath: string): Promise<BlurhashResult> {
   if (!isBlurhashEnabled()) {
     console.log('[Blurhash] Blurhash is disabled');
     return {};
   }
 
-  const cacheKey = `hashes_${imageUrl}`;
+  const cacheKey = `hashes_file_${filePath}`;
   const cached = getCachedBlurhash(cacheKey);
   if (cached) {
-    console.log('[Blurhash] Using cached hashes for:', imageUrl);
+    console.log('[Blurhash] Using cached hashes for:', filePath);
     return cached;
   }
 
@@ -179,19 +201,11 @@ export async function generateImageHashes(imageUrl: string): Promise<BlurhashRes
   const result: BlurhashResult = {};
 
   if (config.autoGenerate) {
-    console.log('[Blurhash] Auto-generating hashes for:', imageUrl);
+    console.log('[Blurhash] Auto-generating hashes for:', filePath);
 
-    const [blurhash, thumbhash] = await Promise.all([
-      fetchBlurhashFromS3(imageUrl),
-      fetchThumbhashFromS3(imageUrl),
-    ]);
-
+    const blurhash = await generateBlurhashFromFile(filePath);
     if (blurhash) {
       result.blurhash = blurhash;
-    }
-
-    if (thumbhash) {
-      result.thumbhash = thumbhash;
     }
 
     if (Object.keys(result).length > 0) {
@@ -202,13 +216,12 @@ export async function generateImageHashes(imageUrl: string): Promise<BlurhashRes
   return result;
 }
 
-export async function refreshImageHashes(imageUrl: string): Promise<BlurhashResult> {
-  const cacheKey = `hashes_${imageUrl}`;
+export async function refreshImageHashesFromFile(filePath: string): Promise<BlurhashResult> {
+  const cacheKey = `hashes_file_${filePath}`;
   blurhashCache.delete(cacheKey);
-  blurhashCache.delete(`blurhash_${imageUrl}`);
-  blurhashCache.delete(`thumbhash_${imageUrl}`);
+  blurhashCache.delete(`blurhash_file_${filePath}`);
 
-  return generateImageHashes(imageUrl);
+  return generateImageHashesFromFile(filePath);
 }
 
 export function clearBlurhashCache(): void {

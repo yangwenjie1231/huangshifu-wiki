@@ -32,7 +32,7 @@ export interface SmartImageProps {
    */
   fetchpriority?: 'high' | 'low' | 'auto' | 'auto-detect';
   /**
-   * 是否启用懒加载 - 默认 true
+   * 是否启用懒加载 - 默认 false
    * 当 fetchpriority='high' 时自动禁用懒加载
    */
   lazy?: boolean;
@@ -100,7 +100,7 @@ export const SmartImage: React.FC<SmartImageProps> = ({
   style = {},
   loading: loadingProp,
   fetchpriority = 'auto',
-  lazy = true,
+  lazy = false,
   formatOptimization = true,
   quality,
   sizes,
@@ -208,7 +208,7 @@ export const SmartImage: React.FC<SmartImageProps> = ({
 
       try {
         const preference = await getImagePreference();
-        const result = resolveImageUrl(imageInput, preference);
+        const result = await resolveImageUrl(imageInput, preference);
         setResolvedUrl(result.url);
       } catch (error) {
         console.error('Failed to resolve image URL:', error);

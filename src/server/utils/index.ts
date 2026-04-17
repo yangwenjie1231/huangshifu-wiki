@@ -2471,6 +2471,133 @@ async function uploadFileToExternal(
   }
 }
 
+async function uploadToSuperbed(
+  filePath: string,
+  fileName: string,
+  contentType: string,
+  token: string,
+  categories: string = '',
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    if (!token) {
+      return {
+        success: false,
+        error: 'Superbed API Token 未配置',
+      };
+    }
+
+    const FormData = (await import('form-data')).default;
+
+    const formData = new FormData();
+    formData.append('file', await fs.promises.readFile(filePath), {
+      filename: fileName,
+      contentType,
+    });
+    formData.append('token', token);
+    if (categories) {
+      formData.append('categories', categories);
+    }
+
+    const response = await fetch('https://api.superbed.cn/upload', {
+      method: 'POST',
+      headers: {
+        ...formData.getHeaders(),
+      },
+      body: formData as unknown as BodyInit,
+    });
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: `Superbed upload failed: ${response.status} ${response.statusText}`,
+      };
+    }
+
+    const data = await response.json();
+
+    let superbedUrl: string | undefined;
+    if (data.url) {
+      superbedUrl = data.url;
+    } else if (data.data?.url) {
+      superbedUrl = data.data.url;
+    } else if (data.image?.url) {
+      superbedUrl = data.image.url;
+    } else if (data.link) {
+      superbedUrl = data.link;
+    }
+
+    if (!superbedUrl) {
+      return { success: false, error: 'Failed to parse Superbed upload response' };
+    }
+
+    console.log('[Superbed Upload] Successfully uploaded:', fileName, '->', superbedUrl);
+    return { success: true, url: superbedUrl };
+  } catch (error) {
+    console.error('[Superbed Upload] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Superbed upload failed',
+    };
+  }
+}
+
+async function deleteFromSuperbed(
+  imageIds: string[],
+  token: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!token) {
+      return {
+        success: false,
+        error: 'Superbed API Token 未配置',
+      };
+    }
+
+    if (imageIds.length === 0) {
+      return { success: true };
+    }
+
+    const idsParam = imageIds.join(',');
+
+    const params = new URLSearchParams();
+    params.append('token', token);
+    params.append('ids', idsParam);
+
+    const response = await fetch('https://api.superbed.cn/delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    });
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: `Superbed delete failed: ${response.status} ${response.statusText}`,
+      };
+    }
+
+    const data = await response.json();
+
+    if (data.code && data.code !== 0) {
+      return {
+        success: false,
+        error: `Superbed delete failed: ${data.message || JSON.stringify(data)}`,
+      };
+    }
+
+    console.log('[Superbed Delete] Successfully deleted', imageIds.length, 'image(s)');
+    return { success: true };
+  } catch (error) {
+    console.error('[Superbed Delete] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Superbed delete failed',
+    };
+  }
+}
+
 async function validateUploadedImage(file: Express.Multer.File) {
   const ext = path.extname(file.originalname).toLowerCase();
   if (!ALLOWED_IMAGE_EXTENSIONS.has(ext)) {
@@ -2747,6 +2874,8 @@ export {
   safeDeleteUploadFileByUrl,
   uploadFileToS3,
   uploadFileToExternal,
+  uploadToSuperbed,
+  deleteFromSuperbed,
   validateUploadedImage,
   detectImageMimeType,
   getUploadFileStorageKey,

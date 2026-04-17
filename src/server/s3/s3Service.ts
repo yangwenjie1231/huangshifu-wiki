@@ -16,6 +16,7 @@ export interface S3PublicConfig {
   publicDomain?: string;
   maxFileSize?: number;
   allowedContentTypes?: string[];
+  s3BaseUrl: string;
 }
 
 const DEFAULT_EXPIRES_IN = 3600;
@@ -384,6 +385,7 @@ export function getPublicConfig(): S3PublicConfig {
     publicDomain: publicDomain || undefined,
     maxFileSize: enabled ? getMaxFileSize() : undefined,
     allowedContentTypes: enabled ? getAllowedContentTypes() : undefined,
+    s3BaseUrl: enabled ? getS3BaseUrl() : '',
   };
 }
 
@@ -430,6 +432,32 @@ export function validateS3Config(): { valid: boolean; errors: string[] } {
     valid: errors.length === 0,
     errors,
   };
+}
+
+export function getS3BaseUrl(): string {
+  const publicDomain = process.env.S3_PUBLIC_DOMAIN || '';
+  if (publicDomain) {
+    const trimmed = publicDomain.replace(/\/+$/, '');
+    return trimmed;
+  }
+
+  const endpointConfig = getEndpointConfig();
+  const bucketConfig = getPublicBucketConfig();
+
+  const endpoint = endpointConfig.url.replace(/\/+$/, '');
+  const bucket = bucketConfig.name;
+  const prefix = bucketConfig.prefix.replace(/^\/+/, '').replace(/\/+$/, '');
+
+  if (!bucket) {
+    return '';
+  }
+
+  let baseUrl = `${endpoint}/${bucket}`;
+  if (prefix) {
+    baseUrl += `/${prefix}`;
+  }
+
+  return baseUrl;
 }
 
 export function getS3Client() {
