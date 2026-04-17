@@ -859,6 +859,91 @@ router.put('/wiki-links/:id', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+// POST /api/admin/wiki-links/update - Batch update wiki links
+router.post('/wiki-links/update', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { mappings, dryRun } = req.body as {
+      mappings: Array<{ oldUrl: string; newUrl: string; useRegex?: boolean }>;
+      dryRun?: boolean;
+    };
+
+    if (!mappings || !Array.isArray(mappings) || mappings.length === 0) {
+      res.status(400).json({ error: '请提供链接映射规则' });
+      return;
+    }
+
+    const result = await batchUpdateWikiLinks(mappings, { dryRun });
+    res.json(result);
+  } catch (error) {
+    console.error('Batch update wiki links error:', error);
+    res.status(500).json({ error: '批量更新链接失败' });
+  }
+});
+
+// POST /api/admin/wiki-links/switch-storage - Switch wiki storage strategy
+router.post('/wiki-links/switch-storage', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { fromStorage, toStorage, config, dryRun } = req.body as {
+      fromStorage: 'local' | 's3' | 'external';
+      toStorage: 'local' | 's3' | 'external';
+      config: {
+        localBaseUrl?: string;
+        s3BaseUrl?: string;
+        externalBaseUrl?: string;
+      };
+      dryRun?: boolean;
+    };
+
+    if (!fromStorage || !toStorage) {
+      res.status(400).json({ error: '请提供源存储和目标存储' });
+      return;
+    }
+
+    if (fromStorage === toStorage) {
+      res.status(400).json({ error: '源存储和目标存储不能相同' });
+      return;
+    }
+
+    const result = await switchWikiStorage(fromStorage, toStorage, config, { dryRun });
+    res.json(result);
+  } catch (error) {
+    console.error('Switch wiki storage error:', error);
+    res.status(500).json({ error: '切换存储策略失败' });
+  }
+});
+
+// POST /api/admin/wiki-links/sync-with-imagemap - Sync wiki links with ImageMap
+router.post('/wiki-links/sync-with-imagemap', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { dryRun } = req.body as { dryRun?: boolean };
+
+    const imageMaps = await prisma.imageMap.findMany({});
+    if (imageMaps.length === 0) {
+      res.json({ message: 'ImageMap 为空，无需同步', result: null });
+      return;
+    }
+
+    const mappings = imageMaps
+      .filter(im => im.localUrl && im.externalUrl && im.localUrl !== im.externalUrl)
+      .map(im => ({
+        oldUrl: im.localUrl!,
+        newUrl: im.externalUrl!,
+        useRegex: false,
+      }));
+
+    if (mappings.length === 0) {
+      res.json({ message: '没有需要同步的链接', result: null });
+      return;
+    }
+
+    const result = await batchUpdateWikiLinks(mappings, { dryRun });
+    res.json({ message: dryRun ? '预览同步完成' : '同步完成', result });
+  } catch (error) {
+    console.error('Sync wiki links with ImageMap error:', error);
+    res.status(500).json({ error: '同步 ImageMap 失败' });
+  }
+});
+
 /**
  * ==========================
  * Backup Management Routes
