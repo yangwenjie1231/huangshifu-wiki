@@ -400,11 +400,14 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
     });
   };
 
-  const uploadFileToSession = async (sessionId: string, file: File, useTripleStorage = false) => {
+  const uploadFileToSession = async (sessionId: string, file: File) => {
     const formData = new FormData();
     formData.append('file', file);
 
-    // 构建 URL，可选启用三重存储模式
+    // 自动获取存储策略，决定是否启用三重存储
+    const preference = await getImagePreference();
+    const useTripleStorage = preference.strategy === 's3' || preference.strategy === 'external';
+
     const url = new URL(`/api/uploads/sessions/${sessionId}/files`, window.location.origin);
     if (useTripleStorage) {
       url.searchParams.set('tripleStorage', 'true');
@@ -417,10 +420,6 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
   const handleUpload = async () => {
     if (!user || files.length === 0) return show('请选择图片', { variant: 'error' });
     if (isBanned) return show('账号已被封禁，无法上传图集', { variant: 'error' });
-    
-    // 获取当前存储策略，决定是否启用三重存储
-    const preference = await getImagePreference();
-    const useTripleStorage = preference.strategy === 's3' || preference.strategy === 'external';
     
     // Group files by folder if possible
     const groups: { [key: string]: File[] } = {};
@@ -447,7 +446,7 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
         const batch = fileList.slice(i, i + MAX_CONCURRENT);
         const batchResults = await Promise.all(
           batch.map(async (file) => {
-            const uploadData = await uploadFileToSession(sessionId, file, useTripleStorage);
+            const uploadData = await uploadFileToSession(sessionId, file);
             onFileComplete();
             return uploadData.asset.id;
           })

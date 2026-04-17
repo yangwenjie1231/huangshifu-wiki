@@ -5,7 +5,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
-  Cloud,
   Eye,
   EyeOff,
   GripVertical,
@@ -25,6 +24,7 @@ import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { apiDelete, apiGet, apiPatch, apiPost, apiUpload } from '../lib/apiClient';
 import { splitTagsInput } from '../lib/contentUtils';
 import { formatDateTime, toDateValue } from '../lib/dateUtils';
+import { getImagePreference } from '../services/imageService';
 
 type GalleryImage = {
   id: string;
@@ -148,7 +148,6 @@ const GalleryDetail = () => {
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState<CommentItem | null>(null);
   const [submittingComment, setSubmittingComment] = useState(false);
-  const [tripleStorage, setTripleStorage] = useState(false);
 
   const addImagesInputRef = useRef<HTMLInputElement>(null);
   const draftRef = useRef<GalleryDraft | null>(null);
@@ -289,7 +288,7 @@ const GalleryDetail = () => {
         const assetIds: string[] = [];
 
         for (const image of pendingImages) {
-          const uploadResult = await uploadFileToSession(sessionId, image.pendingFile!, tripleStorage);
+          const uploadResult = await uploadFileToSession(sessionId, image.pendingFile!);
           assetIds.push(uploadResult.asset.id);
           assetIdByClientId.set(image.clientId, uploadResult.asset.id);
         }
@@ -368,11 +367,14 @@ const GalleryDetail = () => {
     }
   };
 
-  const uploadFileToSession = async (sessionId: string, file: File, useTripleStorage = false) => {
+  const uploadFileToSession = async (sessionId: string, file: File) => {
     const formData = new FormData();
     formData.append('file', file);
 
-    // 构建 URL，可选启用三重存储模式
+    // 自动获取存储策略，决定是否启用三重存储
+    const preference = await getImagePreference();
+    const useTripleStorage = preference.strategy === 's3' || preference.strategy === 'external';
+
     const url = new URL(`/api/uploads/sessions/${sessionId}/files`, window.location.origin);
     if (useTripleStorage) {
       url.searchParams.set('tripleStorage', 'true');
@@ -585,22 +587,6 @@ const GalleryDetail = () => {
               {(editing ? draft?.published : gallery.published) ? <Eye size={14} /> : <EyeOff size={14} />}
               {editing ? ((draft?.published ? '设为草稿' : '设为发布') as string) : (gallery.published ? '已发布' : '草稿中')}
             </button>
-            {editing && (
-              <button
-                onClick={() => setTripleStorage(!tripleStorage)}
-                disabled={saving || uploading}
-                className={clsx(
-                  'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold disabled:opacity-50',
-                  tripleStorage
-                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                    : 'bg-gray-50 text-gray-600 border border-gray-200',
-                )}
-                title="启用三重存储模式：同时上传到本地、S3 和外部图床"
-              >
-                <Cloud size={14} />
-                {tripleStorage ? '三重存储: 开' : '三重存储: 关'}
-              </button>
-            )}
             <input ref={addImagesInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handleAddImages} />
           </div>
         )}
@@ -608,13 +594,13 @@ const GalleryDetail = () => {
 
       <section className="bg-white rounded-[40px] border border-gray-100 shadow-sm overflow-hidden">
         <div className="relative bg-black/5">
-          <div className="aspect-[16/9] max-h-[70vh]">
+          <div className="relative aspect-[16/9] max-h-[70vh]">
             {activeImage ? (
               editing ? (
-                <SmartImage src={activeImage.url} alt={activeImage.name || gallery.title} className="w-full h-full object-contain bg-black/80" />
+                <SmartImage src={activeImage.url} alt={activeImage.name || gallery.title} className="w-full h-full object-contain bg-black/80" fetchpriority="high" lazy={false} />
               ) : (
-                <button onClick={() => handleOpenLightbox(activeIndex)} className="w-full h-full">
-                  <SmartImage src={activeImage.url} alt={activeImage.name || gallery.title} className="w-full h-full object-contain bg-black/80" />
+                <button onClick={() => handleOpenLightbox(activeIndex)} className="absolute inset-0 w-full h-full">
+                  <SmartImage src={activeImage.url} alt={activeImage.name || gallery.title} className="w-full h-full object-contain bg-black/80" fetchpriority="high" lazy={false} />
                 </button>
               )
             ) : (

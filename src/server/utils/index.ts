@@ -66,6 +66,8 @@ import {
 import { userToApiUser, isAdminRole } from '../middleware/auth';
 import { prisma } from '../prisma';
 
+const prismaAny = prisma as any;
+
 // 注意：此文件不加载 dotenv，依赖 server.ts 中已加载的环境变量
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1966,7 +1968,7 @@ async function createOrUpdateImportedSong(params: {
   const resolvedLyric = (await resolveMetingLyric(platform as ParsedMusicPlatform, track.lyricId)) || '';
 
   if (existingByTitleArtist) {
-    const conflictPlatformId = (existingByTitleArtist as Record<string, string | null>)[sourceField];
+    const conflictPlatformId = (existingByTitleArtist as unknown as Record<string, string | null>)[sourceField];
     if (conflictPlatformId) {
       const song = await prisma.musicTrack.create({
         data: {
@@ -2643,6 +2645,7 @@ function decryptBuffer(buffer: Buffer, password: string): Buffer {
 
 export {
   prisma,
+  prismaAny,
   uploadsDir,
   backupsDir,
   WIKI_RELATION_TYPE_LABELS,

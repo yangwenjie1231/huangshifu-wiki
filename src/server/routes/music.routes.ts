@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth, requireActiveUser, requireAdmin } from '../middleware/auth';
 import {
   prisma,
+  prismaAny,
   toSongResponse,
   fetchSongsWithRelations,
   fetchSongWithRelationsByDocId,
@@ -270,15 +271,17 @@ router.post('/import', requireAdmin, async (req: AuthenticatedRequest, res) => {
         }
       } else {
         const albumId = `${preview.platform}_${preview.type}_${preview.id}`;
+        const resourceType = preview.type === 'song' ? 'album' : preview.type;
         await prisma.album.create({
           data: {
             id: albumId,
             docId: albumId,
             platform: preview.platform,
-            resourceType: preview.type,
+            resourceType,
             sourceId: preview.id,
             title: preview.title,
             artist: preview.artist || 'Various Artists',
+            cover: '',
             tracks: tracksPayload,
           },
         });

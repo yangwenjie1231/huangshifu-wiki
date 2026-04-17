@@ -9,6 +9,12 @@ import { initThirdPartyScripts } from './utils/scriptLoader';
 import { initWebVitals } from './utils/webVitals';
 import './index.css';
 
+declare global {
+  interface Window {
+    hideStaticFallback?: () => void;
+  }
+}
+
 if (globalThis.crypto && typeof globalThis.crypto.randomUUID !== 'function') {
   globalThis.crypto.randomUUID = randomId as Crypto['randomUUID'];
 }

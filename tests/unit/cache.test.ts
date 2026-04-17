@@ -5,7 +5,7 @@ describe('MemoryCache', () => {
   let cache: MemoryCache;
 
   beforeEach(() => {
-    cache = new MemoryCache(1000); // 1秒清理间隔用于测试
+    cache = new MemoryCache({ cleanupIntervalMs: 1000 }); // 1秒清理间隔用于测试
   });
 
   afterEach(() => {
