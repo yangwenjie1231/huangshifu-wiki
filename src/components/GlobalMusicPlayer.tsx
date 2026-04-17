@@ -327,7 +327,11 @@ export const GlobalMusicPlayer = () => {
               <span>{formatTime(contextDuration)}</span>
             </div>
 
-            <div className="relative" onMouseEnter={handleVolumeMouseEnter} onMouseLeave={handleVolumeMouseLeave}>
+            <div 
+              className="relative hidden md:block"
+              onMouseEnter={handleVolumeMouseEnter}
+              onMouseLeave={handleVolumeMouseLeave}
+            >
               <button
                 onClick={contextToggleMute}
                 className="p-2 text-gray-400 hover:text-gray-900 transition-colors"
@@ -340,7 +344,7 @@ export const GlobalMusicPlayer = () => {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
-                    className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-white rounded-xl shadow-lg border border-gray-100 flex items-center gap-2"
+                    className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-white rounded-xl shadow-lg border border-gray-100 flex items-center gap-2 lg:flex"
                   >
                     <input
                       type="range"

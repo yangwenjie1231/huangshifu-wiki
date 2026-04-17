@@ -79,7 +79,7 @@ export const ConfirmModal = ({
 							{message}
 						</p>
 
-						<div className="flex gap-3 justify-end">
+						<div className="flex gap-3 justify-end pb-safe">
 							<button
 								type="button"
 								onClick={onClose}

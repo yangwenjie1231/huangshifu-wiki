@@ -102,7 +102,7 @@ export const SmartImage: React.FC<SmartImageProps> = ({
   fetchpriority = 'auto',
   lazy = true,
   formatOptimization = true,
-  quality = 80,
+  quality,
   sizes,
   srcSet,
   onLoad,
@@ -122,12 +122,28 @@ export const SmartImage: React.FC<SmartImageProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
+  // Mobile and slow connection detection
+  const isMobileDevice = typeof navigator !== 'undefined' && 
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const connectionInfo = typeof navigator !== 'undefined' && 'connection' in navigator 
+    ? (navigator as Navigator & { connection?: { effectiveType?: string; saveData?: boolean } }).connection 
+    : null;
+  const isSlowConnection = connectionInfo && (
+    (connectionInfo.effectiveType && ['slow-2g', '2g', '3g'].includes(connectionInfo.effectiveType)) ||
+    connectionInfo.saveData
+  );
+
+  // Default quality: lower for mobile/slow connections
+  const effectiveQuality = quality ?? (isMobileDevice || isSlowConnection ? 60 : 80);
+
   const imageInput = image || src;
 
   // 使用 Intersection Observer 检测是否在视口内
+  // 移动网络下减少预加载距离，降低并发
+  const lazyMargin = isSlowConnection ? '20px' : '100px';
   const { isIntersecting, hasIntersected } = useIntersectionObserver({
     threshold: 0,
-    rootMargin: '100px', // 提前 100px 开始加载
+    rootMargin: lazyMargin,
     triggerOnce: true,
   });
 
@@ -217,7 +233,7 @@ export const SmartImage: React.FC<SmartImageProps> = ({
       }
 
       if (globalFormatSupport?.supported) {
-        const optimized = convertToFormat(resolvedUrl, globalFormatSupport.format, quality);
+        const optimized = convertToFormat(resolvedUrl, globalFormatSupport.format, effectiveQuality);
         setOptimizedUrl(optimized);
       } else {
         setOptimizedUrl(resolvedUrl);

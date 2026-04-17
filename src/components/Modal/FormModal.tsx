@@ -35,7 +35,7 @@ export const FormModal = ({
 				{children}
 			</div>
 
-			<footer className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
+			<footer className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3 pb-safe">
 				<button
 					type="button"
 					onClick={onClose}

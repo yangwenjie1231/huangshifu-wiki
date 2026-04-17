@@ -70,9 +70,16 @@ export interface UploadFileResponse {
   asset: {
     id: string;
     url: string;
+    publicUrl?: string;
     fileName: string;
     mimeType: string;
     sizeBytes: number;
+    md5?: string;
+  };
+  tripleStorage?: {
+    localUrl: string;
+    s3Url?: string;
+    externalUrl?: string;
   };
 }
 

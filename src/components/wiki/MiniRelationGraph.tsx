@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useMemo, useState, useCallback, useRef } from "react";
 import { motion } from "motion/react";
 import { ZoomIn, ZoomOut, Maximize } from "lucide-react";
 import type { WikiRelationRecord } from "./types";
@@ -52,6 +52,14 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 	const [pan, setPan] = useState({ x: 0, y: 0 });
 	const [isDragging, setIsDragging] = useState(false);
 	const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+	const svgRef = useRef<SVGSVGElement>(null);
+	const touchState = useRef({
+		lastTouchX: 0,
+		lastTouchY: 0,
+		lastTouchDistance: 0,
+		isPinching: false,
+	});
 
 	const width = 600;
 
@@ -127,6 +135,83 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 		setIsDragging(false);
 	}, []);
 
+	// Touch event handlers for mobile
+	const handleTouchStart = useCallback(
+		(e: React.TouchEvent) => {
+			if (e.touches.length === 1) {
+				// Single finger - start drag
+				const touch = e.touches[0];
+				touchState.current.lastTouchX = touch.clientX;
+				touchState.current.lastTouchY = touch.clientY;
+				touchState.current.isPinching = false;
+			} else if (e.touches.length === 2) {
+				// Two fingers - start pinch zoom
+				const t1 = e.touches[0];
+				const t2 = e.touches[1];
+				const distance = Math.sqrt(
+					Math.pow(t2.clientX - t1.clientX, 2) +
+						Math.pow(t2.clientY - t1.clientY, 2)
+				);
+				touchState.current.lastTouchDistance = distance;
+				touchState.current.isPinching = true;
+				touchState.current.lastTouchX = (t1.clientX + t2.clientX) / 2;
+				touchState.current.lastTouchY = (t1.clientY + t2.clientY) / 2;
+			}
+		},
+		[pan],
+	);
+
+	const handleTouchMove = useCallback(
+		(e: React.TouchEvent) => {
+			if (e.touches.length === 1 && !touchState.current.isPinching) {
+				// Single finger drag
+				const touch = e.touches[0];
+				setPan({
+					x: touch.clientX - dragStart.x,
+					y: touch.clientY - dragStart.y,
+				});
+			} else if (e.touches.length === 2 && touchState.current.isPinching) {
+				// Pinch to zoom
+				e.preventDefault();
+				const t1 = e.touches[0];
+				const t2 = e.touches[1];
+				const distance = Math.sqrt(
+					Math.pow(t2.clientX - t1.clientX, 2) +
+						Math.pow(t2.clientY - t1.clientY, 2)
+				);
+
+				const scaleDelta =
+					(distance - touchState.current.lastTouchDistance) * 0.005;
+				setScale((s) => Math.max(0.5, Math.min(2, s + scaleDelta)));
+
+				// Pan while pinching (center of two fingers)
+				const centerX = (t1.clientX + t2.clientX) / 2;
+				const centerY = (t1.clientY + t2.clientY) / 2;
+				const panX = centerX - touchState.current.lastTouchX;
+				const panY = centerY - touchState.current.lastTouchY;
+				setPan((p) => ({ x: p.x + panX, y: p.y + panY }));
+
+				touchState.current.lastTouchDistance = distance;
+				touchState.current.lastTouchX = centerX;
+				touchState.current.lastTouchY = centerY;
+			}
+		},
+		[dragStart],
+	);
+
+	const handleTouchEnd = useCallback(() => {
+		touchState.current.isPinching = false;
+		touchState.current.lastTouchDistance = 0;
+		setIsDragging(false);
+	}, []);
+
+	// Wheel zoom support for desktop
+	const handleWheel = useCallback((e: React.WheelEvent) => {
+		e.preventDefault();
+		const delta = e.deltaY > 0 ? -0.1 : 0.1;
+		setScale((s) => Math.max(0.5, Math.min(2, s + delta)));
+	}, []);
+
 	const handleZoomIn = () => setScale((s) => Math.min(s + 0.2, 2));
 	const handleZoomOut = () => setScale((s) => Math.max(s - 0.2, 0.5));
 	const handleReset = () => {
@@ -163,13 +248,18 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 
 			{/* SVG 图谱 */}
 			<svg
+				ref={svgRef}
 				width={width}
 				height={height}
-				className="cursor-grab active:cursor-grabbing"
+				className="cursor-grab active:cursor-grabbing touch-none"
 				onMouseDown={handleMouseDown}
 				onMouseMove={handleMouseMove}
 				onMouseUp={handleMouseUp}
 				onMouseLeave={handleMouseUp}
+				onTouchStart={handleTouchStart}
+				onTouchMove={handleTouchMove}
+				onTouchEnd={handleTouchEnd}
+				onWheel={handleWheel}
 			>
 				<defs>
 					<marker

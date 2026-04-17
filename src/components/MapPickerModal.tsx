@@ -300,7 +300,7 @@ export const MapPickerModal = ({
           </div>
         )}
 
-        <div className="flex justify-end gap-2 px-4 py-3 border-t">
+        <div className="flex justify-end gap-2 px-4 py-3 border-t pb-safe">
           <button
             onClick={onClose}
             className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"

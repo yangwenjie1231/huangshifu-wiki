@@ -714,3 +714,309 @@ html {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-brand-primary);
 }
+
+/* ========================================
+   Task 1: Touch-Active Utility Classes
+   Provides visual feedback on touch devices
+   when an element is pressed/active.
+   ======================================== */
+.touch-active:active {
+  opacity: 0.7;
+  transform: scale(0.97);
+  transition: opacity 100ms ease, transform 100ms ease;
+}
+
+.touch-active-sm:active {
+  opacity: 0.8;
+  transform: scale(0.98);
+  transition: opacity 100ms ease, transform 100ms ease;
+}
+
+.touch-active-lg:active {
+  opacity: 0.6;
+  transform: scale(0.95);
+  transition: opacity 100ms ease, transform 100ms ease;
+}
+
+.touch-active-opacity:active {
+  opacity: 0.6;
+  transition: opacity 100ms ease;
+}
+
+.touch-active-scale:active {
+  transform: scale(0.96);
+  transition: transform 100ms ease;
+}
+
+.touch-active-brightness:active {
+  filter: brightness(0.92);
+  transition: filter 100ms ease;
+}
+
+/* ========================================
+   Task 6: Scroll-Hint for Tables
+   Indicates horizontal scrollability on
+   tables that overflow their container.
+   ======================================== */
+.table-scroll-wrapper {
+  position: relative;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll-wrapper::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 2rem;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--color-theme-bg)
+  );
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.table-scroll-wrapper.has-scroll::after {
+  opacity: 1;
+}
+
+/* Hide scroll hint when scrolled to end */
+.table-scroll-wrapper.scrolled-end::after {
+  opacity: 0;
+}
+
+/* Left scroll hint for RTL awareness */
+.table-scroll-wrapper::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 2rem;
+  background: linear-gradient(
+    to left,
+    transparent,
+    var(--color-theme-bg)
+  );
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 1;
+}
+
+.table-scroll-wrapper.scrolled-start::before {
+  opacity: 1;
+}
+
+/* Scroll hint animation for tables */
+@keyframes scroll-hint-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.table-scroll-wrapper.scroll-hint-animate::after {
+  animation: scroll-hint-pulse 2s ease-in-out 3;
+}
+
+/* ========================================
+   Task 8: Safari color-mix() Fallback
+   Older Safari versions (< 16.4) do not
+   support color-mix(). Provide solid color
+   fallbacks using @supports rule.
+   ======================================== */
+@supports not (background: color-mix(in srgb, red 50%, blue)) {
+  /* Fallback for academy theme color-mix usages */
+  [data-theme="academy"] .academy-nav-shell {
+    background: var(--color-theme-surface);
+  }
+
+  [data-theme="academy"] .academy-logo-medallion {
+    border-color: rgba(93, 64, 55, 0.4);
+  }
+
+  [data-theme="academy"] .academy-theme-toggle {
+    background: var(--color-theme-surface-alt);
+  }
+
+  [data-theme="academy"] .academy-highlight-card {
+    border-color: var(--color-theme-border);
+  }
+
+  [data-theme="academy"] .academy-easter-button {
+    border-color: rgba(93, 64, 55, 0.55);
+    background: var(--color-theme-surface-alt);
+  }
+
+  [data-theme="academy"] .academy-easter-panel {
+    border-color: var(--color-theme-border);
+  }
+
+  [data-theme="academy"] .academy-lecturer-card {
+    border-color: var(--color-theme-border);
+  }
+
+  [data-theme="academy"] .academy-mapping-table th,
+  [data-theme="academy"] .academy-mapping-table td {
+    border-color: var(--color-theme-border);
+  }
+
+  /* Generic fallback for any color-mix usage */
+  .color-mix-fallback {
+    background: var(--color-theme-surface, #ffffff);
+    border-color: var(--color-theme-border, #e5e5e5);
+  }
+}
+
+/* ========================================
+   Task 9: 320px Responsive Styles
+   Ultra-small screen optimizations for
+   devices with 320px viewport width
+   (iPhone SE 1st gen, small Android).
+   ======================================== */
+@media (max-width: 320px) {
+  /* Typography scaling for 320px screens */
+  h1 {
+    font-size: 1.5rem !important;
+    line-height: 1.25;
+  }
+
+  h2 {
+    font-size: 1.25rem !important;
+    line-height: 1.3;
+  }
+
+  h3 {
+    font-size: 1.125rem !important;
+    line-height: 1.35;
+  }
+
+  h4, h5, h6 {
+    font-size: 1rem !important;
+    line-height: 1.4;
+  }
+
+  p, span, div, li, td, th {
+    font-size: 0.875rem !important;
+  }
+
+  /* Reduce padding on common containers */
+  .container,
+  [class*="px-"],
+  [class*="p-"] {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  [class*="py-"] {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+
+  /* Stack flex layouts vertically */
+  .flex-row-320,
+  [class*="flex-row"] {
+    flex-direction: column !important;
+  }
+
+  /* Ensure images don't overflow */
+  img,
+  video,
+  canvas,
+  svg {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+
+  /* Reduce grid gaps */
+  [class*="gap-"] {
+    gap: 0.5rem !important;
+  }
+
+  /* Make cards full width */
+  [class*="card"],
+  .theme-surface,
+  .theme-surface-soft,
+  .liquidGlass-wrapper {
+    border-radius: 0.75rem !important;
+  }
+
+  /* Adjust bento grid for 320px */
+  .bento-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
+  }
+
+  .bento-item-large,
+  .bento-item-tall {
+    grid-column: span 1 !important;
+    grid-row: span 1 !important;
+  }
+
+  /* Reduce display text sizes */
+  .text-display {
+    font-size: 2rem !important;
+  }
+
+  .text-hero {
+    font-size: 1.5rem !important;
+  }
+
+  .text-section {
+    font-size: 1.25rem !important;
+  }
+
+  /* Navigation adjustments */
+  nav,
+  header,
+  .nav-bar,
+  [class*="navbar"] {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+
+  /* Buttons full width on 320px */
+  button,
+  .btn-cta,
+  [role="button"] {
+    width: 100% !important;
+    text-align: center;
+  }
+
+  /* Table adjustments */
+  table {
+    font-size: 0.75rem !important;
+  }
+
+  th, td {
+    padding: 0.375rem 0.5rem !important;
+  }
+
+  /* Form inputs */
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+    padding: 0.5rem !important;
+  }
+
+  /* Modal/dialog adjustments */
+  [role="dialog"],
+  .modal,
+  [class*="modal"] {
+    width: 100% !important;
+    margin: 0.5rem !important;
+    max-width: calc(100vw - 1rem) !important;
+  }
+
+  /* Safe area padding */
+  .pb-safe,
+  .pb-safe-inset,
+  .mobile-safe-bottom {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem) !important;
+  }
+}

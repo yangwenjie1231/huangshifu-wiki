@@ -169,10 +169,12 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
         },
       },
       interaction: {
-        hover: true,
+        hover: false,
         dragNodes: true,
         dragView: true,
         zoomView: true,
+        zoomSpeed: 0.5,
+        hideEdgesOnZoom: true,
         keyboard: false,
         tooltipDelay: 200,
       },
@@ -189,15 +191,18 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
       }
     });
 
-    network.on('hoverNode', () => {
+    // Set a consistent grab cursor for drag interactions
+    if (containerRef.current) {
+      containerRef.current.style.cursor = 'grab';
+    }
+    network.on('dragStart', () => {
       if (containerRef.current) {
-        containerRef.current.style.cursor = 'pointer';
+        containerRef.current.style.cursor = 'grabbing';
       }
     });
-
-    network.on('blurNode', () => {
+    network.on('dragEnd', () => {
       if (containerRef.current) {
-        containerRef.current.style.cursor = 'default';
+        containerRef.current.style.cursor = 'grab';
       }
     });
 

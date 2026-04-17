@@ -192,7 +192,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 							</button>
 						</form>
 
-						<div className="mt-4 flex items-center justify-between gap-2 text-sm">
+						<div className="mt-4 flex items-center justify-between gap-2 text-sm pb-safe">
 							<button
 								type="button"
 								onClick={() =>
