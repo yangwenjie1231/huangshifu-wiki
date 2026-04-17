@@ -305,12 +305,19 @@ export const SmartImage: React.FC<SmartImageProps> = ({
   const containerStyle: React.CSSProperties = useMemo(() => {
     const baseStyle: React.CSSProperties = {
       position: 'relative',
-      display: 'inline-block',
-      width: width || 'auto',
-      height: height || 'auto',
       overflow: 'hidden',
       backgroundColor: placeholderColor,
     };
+
+    // 只在明确传递 width 时设置宽度
+    if (width) {
+      baseStyle.width = typeof width === 'number' ? `${width}px` : width;
+    }
+
+    // 只在明确传递 height 时设置高度
+    if (height) {
+      baseStyle.height = typeof height === 'number' ? `${height}px` : height;
+    }
 
     // 添加 aspect-ratio 防止 CLS
     if (aspectRatio) {
