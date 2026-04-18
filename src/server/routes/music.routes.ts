@@ -289,9 +289,11 @@ router.post('/import', requireAdmin, async (req: AuthenticatedRequest, res) => {
     }
 
     res.json({
-      imported,
-      skipped,
-      failed,
+      summary: {
+        imported,
+        skipped,
+        failed,
+      },
       linked,
       linkedSongs,
       importedSongs,

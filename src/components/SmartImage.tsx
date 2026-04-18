@@ -123,10 +123,10 @@ export const SmartImage: React.FC<SmartImageProps> = ({
   const imageRef = useRef<HTMLImageElement>(null);
 
   // Mobile and slow connection detection
-  const isMobileDevice = typeof navigator !== 'undefined' && 
+  const isMobileDevice = typeof navigator !== 'undefined' &&
     /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  const connectionInfo = typeof navigator !== 'undefined' && 'connection' in navigator 
-    ? (navigator as Navigator & { connection?: { effectiveType?: string; saveData?: boolean } }).connection 
+  const connectionInfo = typeof navigator !== 'undefined' && 'connection' in navigator
+    ? (navigator as Navigator & { connection?: { effectiveType?: string; saveData?: boolean } }).connection
     : null;
   const isSlowConnection = connectionInfo && (
     (connectionInfo.effectiveType && ['slow-2g', '2g', '3g'].includes(connectionInfo.effectiveType)) ||
@@ -145,6 +145,7 @@ export const SmartImage: React.FC<SmartImageProps> = ({
     threshold: 0,
     rootMargin: lazyMargin,
     triggerOnce: true,
+    externalRef: containerRef as React.RefObject<HTMLElement | null>,
   });
 
   // 提取 blurhash

@@ -1692,7 +1692,7 @@ function normalizeMusicImportTracks(input: unknown) {
   }
 
   return input
-    .map((item) => {
+    .map((item): ImportSongInput | null => {
       if (!item || typeof item !== 'object') {
         return null;
       }
@@ -1712,6 +1712,7 @@ function normalizeMusicImportTracks(input: unknown) {
         lyricId: typeof record.lyricId === 'string' ? record.lyricId.trim() : sourceId,
         cover: typeof record.cover === 'string' ? record.cover.trim() : '',
         sourceUrl: typeof record.sourceUrl === 'string' ? record.sourceUrl.trim() : '',
+        isInstrumental: typeof record.isInstrumental === 'boolean' ? record.isInstrumental : undefined,
       };
     })
     .filter((item): item is ImportSongInput => Boolean(item));
@@ -2034,6 +2035,8 @@ async function createOrUpdateImportedSong(params: {
       addedBy: userUid,
     },
   });
+
+  await autoLinkInstrumental(song.docId, title, artist, track.isInstrumental);
 
   return {
     song,

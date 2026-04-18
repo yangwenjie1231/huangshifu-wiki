@@ -81,6 +81,15 @@ function normalizeText(value: unknown, fallback = '') {
   return normalized || fallback;
 }
 
+function normalizeImageUrl(value: unknown, fallback = '') {
+  const url = normalizeText(value, fallback);
+  if (!url) {
+    return url;
+  }
+  // Upgrade HTTP to HTTPS to avoid Mixed Content warnings
+  return url.replace(/^http:\/\//i, 'https://');
+}
+
 function normalizeArtist(value: unknown, fallback = '未知歌手') {
   if (Array.isArray(value)) {
     const names = value
@@ -139,10 +148,10 @@ async function resolvePicById(platform: MusicPlatform, picId: string, fallback =
     const parsed = parseJsonSafe<unknown>(raw, {});
     if (Array.isArray(parsed)) {
       const first = parsed[0] as { url?: string } | undefined;
-      return normalizeText(first?.url, fallback);
+      return normalizeImageUrl(first?.url, fallback);
     }
     if (parsed && typeof parsed === 'object') {
-      return normalizeText((parsed as { url?: string }).url, fallback);
+      return normalizeImageUrl((parsed as { url?: string }).url, fallback);
     }
   } catch {
     return fallback;
@@ -222,10 +231,10 @@ function normalizePreviewMeta(value: unknown) {
       normalizeArtist(record.artist, '') ||
       normalizeArtist((record.creator as Record<string, unknown> | undefined)?.nickname, ''),
     cover:
-      normalizeText(record.cover) ||
-      normalizeText(record.coverImgUrl) ||
-      normalizeText((record.album as Record<string, unknown> | undefined)?.picUrl) ||
-      normalizeText((record.album as Record<string, unknown> | undefined)?.blurPicUrl),
+      normalizeImageUrl(record.cover) ||
+      normalizeImageUrl(record.coverImgUrl) ||
+      normalizeImageUrl((record.album as Record<string, unknown> | undefined)?.picUrl) ||
+      normalizeImageUrl((record.album as Record<string, unknown> | undefined)?.blurPicUrl),
     description:
       normalizeText(record.description) ||
       normalizeText(record.briefDesc),

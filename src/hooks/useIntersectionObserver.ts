@@ -10,6 +10,10 @@ export interface UseIntersectionObserverOptions {
   root?: Element | null;
   rootMargin?: string;
   triggerOnce?: boolean;
+  /**
+   * 可选的外部 ref，用于与组件内部的 ref 共享
+   */
+  externalRef?: React.RefObject<HTMLElement | null>;
 }
 
 export interface UseIntersectionObserverReturn {
@@ -30,13 +34,17 @@ export function useIntersectionObserver(
     root = null,
     rootMargin = '0px',
     triggerOnce = false,
+    externalRef,
   } = options;
 
   const [isIntersecting, setIsIntersecting] = useState(false);
   const [hasIntersected, setHasIntersected] = useState(false);
   const [entry, setEntry] = useState<IntersectionObserverEntry | null>(null);
-  const ref = useRef<HTMLElement>(null);
+  const internalRef = useRef<HTMLElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
+
+  // 使用外部 ref 或内部 ref
+  const ref = externalRef || internalRef;
 
   useEffect(() => {
     const element = ref.current;
@@ -71,7 +79,7 @@ export function useIntersectionObserver(
         observerRef.current.disconnect();
       }
     };
-  }, [threshold, root, rootMargin, triggerOnce]);
+  }, [threshold, root, rootMargin, triggerOnce, ref]);
 
   return { isIntersecting, hasIntersected, entry, ref };
 }
