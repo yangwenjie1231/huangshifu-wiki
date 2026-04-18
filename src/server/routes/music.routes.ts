@@ -24,6 +24,7 @@ import {
   parsePostSort,
   toPostResponse,
   canViewPost,
+  applyAlbumTracksToRelations,
 } from '../utils';
 import { parseMusicUrl } from '../music/musicUrlParser';
 import { getMusicResourcePreview, searchMusicResources, type MusicResourcePreview } from '../music/metingService';
@@ -268,11 +269,32 @@ router.post('/import', requireAdmin, async (req: AuthenticatedRequest, res) => {
               updatedAt: new Date(),
             },
           });
+          await applyAlbumTracksToRelations(existingAlbum.docId, merged);
+        }
+        // 增量导入时更新专辑信息（封面、描述等）
+        const updateData: Record<string, unknown> = {};
+        if (preview.cover && !existingAlbum.cover) {
+          updateData.cover = preview.cover;
+        }
+        if (preview.description && !existingAlbum.description) {
+          updateData.description = preview.description;
+        }
+        if (preview.platformUrl && !existingAlbum.platformUrl) {
+          updateData.platformUrl = preview.platformUrl;
+        }
+        if (preview.artist && preview.artist !== '未知歌手' && existingAlbum.artist === 'Various Artists') {
+          updateData.artist = preview.artist;
+        }
+        if (Object.keys(updateData).length > 0) {
+          await prisma.album.update({
+            where: { docId: existingAlbum.docId },
+            data: updateData,
+          });
         }
       } else {
         const albumId = `${preview.platform}_${preview.type}_${preview.id}`;
         const resourceType = preview.type === 'song' ? 'album' : preview.type;
-        await prisma.album.create({
+        const createdAlbum = await prisma.album.create({
           data: {
             id: albumId,
             docId: albumId,
@@ -285,8 +307,21 @@ router.post('/import', requireAdmin, async (req: AuthenticatedRequest, res) => {
             tracks: tracksPayload,
           },
         });
+        await applyAlbumTracksToRelations(createdAlbum.docId, tracksPayload);
       }
     }
+
+    const album = await prismaAny.album.findFirst({
+      where: {
+        platform: preview.platform,
+        sourceId: preview.id,
+      },
+      select: {
+        docId: true,
+        title: true,
+        resourceType: true,
+      },
+    });
 
     res.json({
       summary: {
@@ -297,6 +332,11 @@ router.post('/import', requireAdmin, async (req: AuthenticatedRequest, res) => {
       linked,
       linkedSongs,
       importedSongs,
+      collection: album ? {
+        docId: album.docId,
+        title: album.title,
+        resourceType: album.resourceType,
+      } : null,
     });
   } catch (error) {
     console.error('Import music error:', error);

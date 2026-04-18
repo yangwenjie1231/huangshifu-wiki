@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Clock, ExternalLink, Heart, Link2, MessageSquare, Play } from 'lucide-react';
+import { ArrowLeft, Clock, ExternalLink, Heart, Link2, MessageSquare, Play, ChevronDown, ChevronUp } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 
@@ -93,6 +93,7 @@ const MusicDetail = () => {
   const [favoriting, setFavoriting] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [customPlatforms, setCustomPlatforms] = useState<CustomPlatformConfig[]>([]);
+  const [descExpanded, setDescExpanded] = useState(false);
   const { user, isAdmin } = useAuth();
   const { setCurrentSong, setIsPlaying, setPlaylist } = useMusic();
   const { show } = useToast();
@@ -324,9 +325,21 @@ const MusicDetail = () => {
       {song?.description && (
         <section className="bg-white rounded-[32px] border border-gray-100 p-6 sm:p-8 shadow-sm">
           <h2 className="text-xl font-serif font-bold text-gray-900 mb-4">歌曲描述</h2>
-          <div className="prose prose-sm max-w-none text-gray-600 whitespace-pre-wrap">
+          <div className={clsx('prose prose-sm max-w-none text-gray-600 whitespace-pre-wrap', !descExpanded && 'line-clamp-6')}>
             {song.description}
           </div>
+          {song.description.length > 200 ? (
+            <button
+              onClick={() => setDescExpanded(!descExpanded)}
+              className="text-sm text-brand-primary hover:underline mt-3 inline-flex items-center gap-1"
+            >
+              {descExpanded ? (
+                <>收起 <ChevronUp size={14} /></>
+              ) : (
+                <>展开 <ChevronDown size={14} /></>
+              )}
+            </button>
+          ) : null}
         </section>
       )}
 

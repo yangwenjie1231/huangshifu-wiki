@@ -301,43 +301,45 @@ export const MusicImportModal = ({ open, onClose, onImported }: MusicImportModal
                 </div>
               ) : null}
 
-              {!importResult && !confirmingImport ? (
-                <button
-                  onClick={() => {
-                    if (!selectedCount) {
-                      setError('请至少选择一首歌曲');
-                      return;
-                    }
-                    setConfirmingImport(true);
-                    setError('');
-                  }}
-                  className="w-full md:w-auto px-6 py-3 rounded-2xl bg-brand-primary text-gray-900 font-bold hover:brightness-95"
-                >
-                  下一步：确认导入
-                </button>
-              ) : !importResult ? (
-                <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-4 space-y-3">
-                  <p className="text-sm text-amber-800 flex items-center gap-2">
-                    <AlertTriangle size={16} />
-                    即将导入 {selectedCount} 首歌曲，确认后将写入数据库。
-                  </p>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <button
-                      onClick={handleFinalImport}
-                      disabled={importing}
-                      className="px-5 py-2.5 rounded-xl bg-gray-900 text-white font-semibold hover:bg-gray-800 disabled:opacity-50 inline-flex items-center gap-2"
-                    >
-                      {importing ? <Loader2 size={16} className="animate-spin" /> : null}
-                      {importing ? '导入中' : '最终确认导入'}
-                    </button>
-                    <button
-                      onClick={() => setConfirmingImport(false)}
-                      className="px-5 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-white"
-                    >
-                      返回修改
-                    </button>
+              {!importResult ? (
+                !confirmingImport ? (
+                  <button
+                    onClick={() => {
+                      if (!selectedCount) {
+                        setError('请至少选择一首歌曲');
+                        return;
+                      }
+                      setConfirmingImport(true);
+                      setError('');
+                    }}
+                    className="w-full md:w-auto px-6 py-3 rounded-2xl bg-brand-primary text-gray-900 font-bold hover:brightness-95"
+                  >
+                    下一步：确认导入
+                  </button>
+                ) : (
+                  <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-4 space-y-3">
+                    <p className="text-sm text-amber-800 flex items-center gap-2">
+                      <AlertTriangle size={16} />
+                      即将导入 {selectedCount} 首歌曲，确认后将写入数据库。
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        onClick={handleFinalImport}
+                        disabled={importing}
+                        className="px-5 py-2.5 rounded-xl bg-gray-900 text-white font-semibold hover:bg-gray-800 disabled:opacity-50 inline-flex items-center gap-2"
+                      >
+                        {importing ? <Loader2 size={16} className="animate-spin" /> : null}
+                        {importing ? '导入中' : '最终确认导入'}
+                      </button>
+                      <button
+                        onClick={() => setConfirmingImport(false)}
+                        className="px-5 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-white"
+                      >
+                        返回修改
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )
               ) : null}
             </section>
           ) : null}

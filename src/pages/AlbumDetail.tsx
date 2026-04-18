@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Disc3, Play, Heart, ExternalLink, Link2 } from 'lucide-react';
+import { ArrowLeft, Disc3, Play, Heart, ExternalLink, Link2, ChevronDown, ChevronUp } from 'lucide-react';
 import { clsx } from 'clsx';
 
 import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
@@ -45,6 +45,7 @@ const AlbumDetail = () => {
   const [loading, setLoading] = useState(true);
   const [album, setAlbum] = useState<AlbumResponse['album'] | null>(null);
   const [favoriting, setFavoriting] = useState<string | null>(null);
+  const [descExpanded, setDescExpanded] = useState(false);
   const { user, isAdmin } = useAuth();
   const { currentSong, playAlbumTracks } = useMusic();
   const { show } = useToast();
@@ -153,7 +154,25 @@ const AlbumDetail = () => {
             <div className="min-w-0">
               <h1 className="text-3xl font-serif font-bold text-gray-900 truncate">{album.title}</h1>
               <p className="text-sm text-gray-500">{album.artist} · {album.tracks.length} 首歌曲</p>
-              {album.description ? <p className="text-xs text-gray-400 mt-1 line-clamp-2">{album.description}</p> : null}
+              {album.description ? (
+                <div className="mt-1">
+                  <p className={clsx('text-xs text-gray-400', !descExpanded && 'line-clamp-2')}>
+                    {album.description}
+                  </p>
+                  {album.description.length > 60 ? (
+                    <button
+                      onClick={() => setDescExpanded(!descExpanded)}
+                      className="text-xs text-brand-olive hover:underline mt-1 inline-flex items-center gap-0.5"
+                    >
+                      {descExpanded ? (
+                        <>收起 <ChevronUp size={12} /></>
+                      ) : (
+                        <>展开 <ChevronDown size={12} /></>
+                      )}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
 
