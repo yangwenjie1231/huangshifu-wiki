@@ -27,7 +27,6 @@ const DEFAULT_ALLOWED_CONTENT_TYPES = [
   'image/png',
   'image/gif',
   'image/webp',
-  'image/svg+xml',
   'image/bmp',
 ];
 

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { UserRole as PrismaUserRole } from '@prisma/client';
 import { requireAuth, requireActiveUser, userToApiUser, createToken, setAuthCookie, clearAuthCookie } from '../middleware/auth';
+import { authRateLimiter } from '../middleware/rateLimiter';
 import { exchangeWechatLoginCode, buildUniqueWechatEmail } from '../utils';
 import { prisma } from '../prisma';
 import type { AuthenticatedRequest } from '../types';
@@ -38,7 +39,7 @@ router.get('/me', async (req: AuthenticatedRequest, res) => {
   });
 });
 
-router.post('/register', async (req, res) => {
+router.post('/register', authRateLimiter, async (req, res) => {
   try {
     const { email, password, displayName } = req.body as {
       email?: string;
@@ -48,6 +49,11 @@ router.post('/register', async (req, res) => {
 
     if (!email || !password) {
       res.status(400).json({ error: '邮箱和密码不能为空' });
+      return;
+    }
+
+    if (password.length < 8) {
+      res.status(400).json({ error: '密码至少8个字符' });
       return;
     }
 
@@ -114,7 +120,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', authRateLimiter, async (req, res) => {
   try {
     const { email, password } = req.body as {
       email?: string;

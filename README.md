@@ -1,13 +1,13 @@
 
 # 诗扶小筑 - 本地运行与部署
 
-本项目已迁移为 **Vite + React + Express + Prisma + MySQL** 架构，登录与数据均走本地后端 API。
+本项目已迁移为 **Vite + React + Express + Prisma + PostgreSQL** 架构，登录与数据均走本地后端 API。
 
 ## 技术栈
 
 - Frontend: React 19 + TypeScript + Vite
 - Backend: Express (`server.ts`)
-- Database: MySQL + Prisma
+- Database: PostgreSQL + Prisma
 - Auth: 本地账号密码（JWT + HttpOnly Cookie）
 - Upload: 本地 `uploads/` 目录
 
@@ -16,7 +16,7 @@
 **Prerequisites:**
 
 - Node.js 20+
-- MySQL 8+
+- PostgreSQL
 
 ### 1) 安装依赖
 
@@ -30,7 +30,7 @@ npm install
 
 ```env
 VITE_GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
-DATABASE_URL="mysql://root:password@127.0.0.1:3306/huangshifu_wiki"
+DATABASE_URL="postgresql://postgres:password@127.0.0.1:5432/huangshifu_wiki"
 JWT_SECRET="replace_with_random_long_secret"
 SEED_SUPER_ADMIN_EMAIL="admin@example.com"
 SEED_SUPER_ADMIN_PASSWORD="replace_with_strong_password"
@@ -112,7 +112,7 @@ ssh root@23.224.49.72
 ### 2) 安装环境（一次）
 
 - 安装 Node.js 20+
-- 安装 MySQL 8+
+- 安装 PostgreSQL
 - 创建数据库：`huangshifu_wiki`
 
 ### 3) 上传并准备项目

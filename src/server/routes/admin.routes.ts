@@ -1054,8 +1054,9 @@ router.get('/backup/list', requireSuperAdmin, async (_req, res) => {
 router.get('/backup/:filename/download', requireSuperAdmin, async (req, res) => {
   try {
     const filename = req.params.filename;
+    const normalized = path.normalize(filename);
 
-    if (!sanitizeFilename(filename)) {
+    if (normalized.includes('..') || !sanitizeFilename(filename)) {
       res.status(400).json({ error: '无效的文件名' });
       return;
     }
@@ -1192,6 +1193,7 @@ router.delete('/backup/:filename', requireSuperAdmin, async (req, res) => {
   try {
     const { password } = req.query as { password?: string };
     const filename = req.params.filename;
+    const normalized = path.normalize(filename);
 
     if (!BACKUP_PASSWORD) {
       res.status(500).json({ error: '未配置 BACKUP_PASSWORD 环境变量' });
@@ -1203,7 +1205,7 @@ router.delete('/backup/:filename', requireSuperAdmin, async (req, res) => {
       return;
     }
 
-    if (!sanitizeFilename(filename)) {
+    if (normalized.includes('..') || !sanitizeFilename(filename)) {
       res.status(400).json({ error: '无效的文件名' });
       return;
     }
@@ -1227,6 +1229,7 @@ router.delete('/backups/:filename', requireSuperAdmin, async (req, res) => {
   try {
     const { password } = req.query as { password?: string };
     const filename = req.params.filename;
+    const normalized = path.normalize(filename);
 
     if (!BACKUP_PASSWORD) {
       res.status(500).json({ error: '未配置 BACKUP_PASSWORD 环境变量' });
@@ -1238,7 +1241,7 @@ router.delete('/backups/:filename', requireSuperAdmin, async (req, res) => {
       return;
     }
 
-    if (!sanitizeFilename(filename)) {
+    if (normalized.includes('..') || !sanitizeFilename(filename)) {
       res.status(400).json({ error: '无效的文件名' });
       return;
     }

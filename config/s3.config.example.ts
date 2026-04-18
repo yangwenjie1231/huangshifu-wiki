@@ -162,7 +162,7 @@ S3_SIGNATURE_VERSION="v4"
 S3_MAX_FILE_SIZE="10485760"
 
 # 允许的文件类型（逗号分隔），默认图片类型
-S3_ALLOWED_CONTENT_TYPES="image/jpeg,image/png,image/gif,image/webp,image/svg+xml,image/bmp"
+S3_ALLOWED_CONTENT_TYPES="image/jpeg,image/png,image/gif,image/webp,image/bmp"
 
 # 是否启用 MD5 校验（推荐启用）
 # 启用后，上传时必须提供 Content-MD5 头

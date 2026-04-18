@@ -152,4 +152,23 @@ describe('auth module', () => {
     await logoutRequest();
     expect(auth.currentUser).toBeNull();
   });
+
+  describe('password strength validation', () => {
+    it('returns 400 when registering with password shorter than 8 characters', async () => {
+      const { register } = await loadAuthModule();
+      fetchMock.mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: '密码至少8个字符' }), { status: 400 }),
+      );
+
+      await expect(register('test@example.com', 'short', '测试用户')).rejects.toThrow('密码至少8个字符');
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/auth/register',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ email: 'test@example.com', password: 'short', displayName: '测试用户' }),
+        }),
+      );
+    });
+  });
 });
