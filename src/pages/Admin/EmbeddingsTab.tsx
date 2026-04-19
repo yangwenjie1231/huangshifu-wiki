@@ -219,6 +219,9 @@ export const EmbeddingsTab = () => {
     );
   }
 
+  // 使用 normalizeSummary 处理数据兼容性
+  const summary = status ? normalizeSummary(status.summary) : null;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -231,7 +234,7 @@ export const EmbeddingsTab = () => {
         </button>
       </div>
 
-      {status && (
+      {status && summary && (
         <>
           {/* Gallery 统计 */}
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
@@ -242,7 +245,7 @@ export const EmbeddingsTab = () => {
                   <BarChart3 size={16} className="text-gray-400" />
                   <span className="text-sm text-gray-500">等待中</span>
                 </div>
-                <p className="text-2xl font-bold text-gray-900">{status.summary.gallery.pending}</p>
+                <p className="text-2xl font-bold text-gray-900">{summary.gallery.pending}</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
@@ -277,7 +280,7 @@ export const EmbeddingsTab = () => {
                   <BarChart3 size={16} className="text-gray-400" />
                   <span className="text-sm text-gray-500">等待中</span>
                 </div>
-                <p className="text-2xl font-bold text-gray-900">{status.summary.wiki.pending}</p>
+                <p className="text-2xl font-bold text-gray-900">{summary.wiki.pending}</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
@@ -312,7 +315,7 @@ export const EmbeddingsTab = () => {
                   <BarChart3 size={16} className="text-gray-400" />
                   <span className="text-sm text-gray-500">等待中</span>
                 </div>
-                <p className="text-2xl font-bold text-gray-900">{status.summary.post.pending}</p>
+                <p className="text-2xl font-bold text-gray-900">{summary.post.pending}</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
