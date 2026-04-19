@@ -13,6 +13,7 @@ import {
 	Calendar,
 	Camera,
 	Music,
+	Layers,
 } from "lucide-react";
 import { useUserPreferences } from "../context/UserPreferencesContext";
 import { ViewModeSelector } from "../components/ViewModeSelector";
@@ -27,13 +28,10 @@ import { useTheme } from "../context/ThemeContext";
 import { withThemeSearch, mergeSearchParamsWithTheme } from "../lib/theme";
 import type { ThemeName } from "../lib/theme";
 import type { WikiItem, PostItem, GalleryItem, SongItem, AlbumItem } from "../types/entities";
+import { MixedSearchResultCard } from "../components/MixedSearchResultCard";
+import type { MixedSearchResult, SearchSuggestion } from "../hooks/useSearch";
 
-type SearchSuggestion = {
-	type: "keyword" | "wiki" | "post" | "music" | "album";
-	text: string;
-	subtext?: string;
-	id?: string;
-};
+type SearchSuggestionType = SearchSuggestion;
 
 interface SearchWikiCardProps {
 	page: WikiItem;
@@ -304,12 +302,12 @@ const SearchAlbumCard = React.memo(({ album, viewMode, theme }: SearchAlbumCardP
 ));
 
 interface SearchResults {
-		wiki: WikiItem[];
-		posts: PostItem[];
-		galleries: GalleryItem[];
-		music: SongItem[];
-		albums: AlbumItem[];
-	}
+	wiki: WikiItem[];
+	posts: PostItem[];
+	galleries: GalleryItem[];
+	music: SongItem[];
+	albums: AlbumItem[];
+}
 
 const Search = () => {
 	const [searchParams, setSearchParams] = useSearchParams();
@@ -320,7 +318,7 @@ const Search = () => {
 	const [loading, setLoading] = useState(false);
 	const [hasSearched, setHasSearched] = useState(Boolean(initialQuery));
 	const [activeTab, setActiveTab] = useState<
-		"all" | "wiki" | "posts" | "galleries" | "music" | "albums"
+		"all" | "wiki" | "posts" | "galleries" | "music" | "albums" | "semantic"
 	>("all");
 	const { preferences, setViewMode } = useUserPreferences();
 	const { theme } = useTheme();
@@ -346,10 +344,14 @@ const Search = () => {
 	const [hotKeywords, setHotKeywords] = useState<string[]>([]);
 
 	// Suggest Dropdown
-	const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
+	const [suggestions, setSuggestions] = useState<SearchSuggestionType[]>([]);
 	const [showSuggest, setShowSuggest] = useState(false);
 	const [suggestLoading, setSuggestLoading] = useState(false);
 	const suggestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	// Mixed Semantic Search Results
+	const [mixedResults, setMixedResults] = useState<MixedSearchResult[]>([]);
+	const [isMixedSearch, setIsMixedSearch] = useState(false);
 
 	useEffect(() => {
 		const fetchHotKeywords = async () => {
@@ -379,7 +381,7 @@ const Search = () => {
 		}
 		setSuggestLoading(true);
 		try {
-			const data = await apiGet<{ suggestions: SearchSuggestion[] }>(
+			const data = await apiGet<{ suggestions: SearchSuggestionType[] }>(
 				"/api/search/suggest",
 				{ q },
 			);
@@ -397,6 +399,26 @@ const Search = () => {
 		setSearchQuery(val);
 		if (suggestTimeoutRef.current) clearTimeout(suggestTimeoutRef.current);
 		suggestTimeoutRef.current = setTimeout(() => fetchSuggestions(val), 300);
+	};
+
+	/**
+	 * 执行混合语义搜索
+	 */
+	const performMixedSearch = async (q: string, limit = 24) => {
+		try {
+			const data = await apiGet<{
+				mode: string;
+				totalMatches: number;
+				results: MixedSearchResult[];
+			}>("/api/search/semantic-search", {
+				q: q.trim(),
+				limit,
+			});
+			return data.results || [];
+		} catch (err) {
+			console.error("Mixed search error:", err);
+			return [];
+		}
 	};
 
 	const handleSearch = async (q: string, filtersOverride?: any) => {
@@ -417,6 +439,20 @@ const Search = () => {
 		};
 
 		try {
+			// 如果启用了语义图片搜索，执行混合搜索
+			if (filters.semanticImageSearch && currentQuery) {
+				setIsMixedSearch(true);
+				const mixedSearchResults = await performMixedSearch(currentQuery, 24);
+				setMixedResults(mixedSearchResults);
+				setActiveTab("semantic");
+				setLoading(false);
+				return;
+			}
+
+			// 否则执行传统搜索
+			setIsMixedSearch(false);
+			setMixedResults([]);
+
 			const typeMap: Record<string, string> = {
 				wiki: "wiki",
 				posts: "posts",
@@ -444,7 +480,7 @@ const Search = () => {
 				...(filters.dateRange.end ? { endDate: filters.dateRange.end } : {}),
 			});
 
-			let allResults = {
+			const allResults = {
 				wiki: data.wiki || [],
 				posts: data.posts || [],
 				galleries: data.galleries || [],
@@ -452,33 +488,10 @@ const Search = () => {
 				albums: data.albums || [],
 			};
 
-			if (filters.semanticImageSearch && currentQuery) {
-				try {
-					const semanticData = await apiGet<{ galleries: any[] }>(
-						"/api/search/semantic-galleries",
-						{
-							q: currentQuery,
-							limit: 24,
-						},
-					);
-					if (semanticData.galleries && semanticData.galleries.length > 0) {
-						const existingGalleryIds = new Set(
-							allResults.galleries.map((g: any) => g.id),
-						);
-						const newGalleries = semanticData.galleries.filter(
-							(g: any) => !existingGalleryIds.has(g.id),
-						);
-						allResults.galleries = [...allResults.galleries, ...newGalleries];
-					}
-				} catch (semanticErr) {
-					console.error("Semantic search error:", semanticErr);
-				}
-			}
-
 			const filterFn = (item: any) => {
 				const matchesTags =
 					filters.selectedTags.length === 0 ||
-					filters.selectedTags.every((tag) => (item.tags || []).includes(tag));
+					filters.selectedTags.every((tag: string) => (item.tags || []).includes(tag));
 				return matchesTags;
 			};
 
@@ -509,22 +522,18 @@ const Search = () => {
 			formData.append("image", file);
 			formData.append("limit", "24");
 
-			const data = await apiUpload<{ galleries: any[] }>(
-				"/api/search/by-image",
-				formData,
-			);
+			const data = await apiUpload<{
+				mode: string;
+				totalMatches: number;
+				results: MixedSearchResult[];
+			}>("/api/search/by-image", formData);
 
-			setResults({
-				wiki: [],
-				posts: [],
-				galleries: data.galleries || [],
-				music: [],
-				albums: [],
-			});
-			setActiveTab("galleries");
+			setIsMixedSearch(true);
+			setMixedResults(data.results || []);
+			setActiveTab("semantic");
 		} catch (err) {
 			console.error("Semantic image search error:", err);
-			setResults({ wiki: [], posts: [], galleries: [], music: [], albums: [] });
+			setMixedResults([]);
 		} finally {
 			e.target.value = "";
 			setLoading(false);
@@ -544,6 +553,13 @@ const Search = () => {
 		results.galleries.length +
 		results.music.length +
 		results.albums.length;
+
+	/**
+	 * 按 sourceType 统计混合搜索结果
+	 */
+	const getMixedResultsCount = (type: "gallery" | "wiki" | "post") => {
+		return mixedResults.filter((r) => r.sourceType === type).length;
+	};
 
 	return (
 		<div className="max-w-7xl mx-auto px-4 py-12">
@@ -858,201 +874,303 @@ const Search = () => {
 				dateRange.end ? (
 				<div className="space-y-12">
 					<div className="flex flex-wrap gap-4 border-b border-gray-100 pb-6">
-						{[
-							{ id: "all", label: "全部", count: totalResults },
-							{ id: "wiki", label: "百科", count: results.wiki.length },
-							{ id: "posts", label: "帖子", count: results.posts.length },
-							{
-								id: "galleries",
-								label: "图集",
-								count: results.galleries.length,
-							},
-							{ id: "music", label: "音乐", count: results.music.length },
-							{ id: "albums", label: "专辑", count: results.albums.length },
-						].map((tab) => (
-							<button
-								key={tab.id}
-								onClick={() => setActiveTab(tab.id as any)}
-								className={clsx(
-									"px-6 py-2 rounded-full text-sm font-bold transition-all flex items-center gap-2",
-									activeTab === tab.id
-										? "bg-brand-olive text-white"
-										: "bg-white text-gray-400 border border-gray-100 hover:border-brand-olive/20",
-								)}
-							>
-								{tab.label}{" "}
-								<span className="text-[10px] opacity-60 bg-black/10 px-1.5 py-0.5 rounded-full">
-									{tab.count}
-								</span>
-							</button>
-						))}
+						{isMixedSearch ? (
+							// 混合搜索结果标签
+							<>
+								{[
+									{
+										id: "semantic",
+										label: "智能匹配",
+										icon: Sparkles,
+										count: mixedResults.length,
+									},
+									{
+										id: "gallery",
+										label: "图库",
+										icon: ImageIcon,
+										count: getMixedResultsCount("gallery"),
+									},
+									{
+										id: "wiki",
+										label: "百科",
+										icon: Book,
+										count: getMixedResultsCount("wiki"),
+									},
+									{
+										id: "post",
+										label: "帖子",
+										icon: MessageSquare,
+										count: getMixedResultsCount("post"),
+									},
+								].map((tab) => (
+									<button
+										key={tab.id}
+										onClick={() => setActiveTab(tab.id as any)}
+										className={clsx(
+											"px-6 py-2 rounded-full text-sm font-bold transition-all flex items-center gap-2",
+											activeTab === tab.id
+												? "bg-brand-olive text-white"
+												: "bg-white text-gray-400 border border-gray-100 hover:border-brand-olive/20",
+										)}
+									>
+										<tab.icon size={14} />
+										{tab.label}{" "}
+										<span className="text-[10px] opacity-60 bg-black/10 px-1.5 py-0.5 rounded-full">
+											{tab.count}
+										</span>
+									</button>
+								))}
+							</>
+						) : (
+							// 传统搜索结果标签
+							<>
+								{[
+									{ id: "all", label: "全部", count: totalResults },
+									{ id: "wiki", label: "百科", count: results.wiki.length },
+									{ id: "posts", label: "帖子", count: results.posts.length },
+									{
+										id: "galleries",
+										label: "图集",
+										count: results.galleries.length,
+									},
+									{ id: "music", label: "音乐", count: results.music.length },
+									{ id: "albums", label: "专辑", count: results.albums.length },
+								].map((tab) => (
+									<button
+										key={tab.id}
+										onClick={() => setActiveTab(tab.id as any)}
+										className={clsx(
+											"px-6 py-2 rounded-full text-sm font-bold transition-all flex items-center gap-2",
+											activeTab === tab.id
+												? "bg-brand-olive text-white"
+												: "bg-white text-gray-400 border border-gray-100 hover:border-brand-olive/20",
+										)}
+									>
+										{tab.label}{" "}
+										<span className="text-[10px] opacity-60 bg-black/10 px-1.5 py-0.5 rounded-full">
+											{tab.count}
+										</span>
+									</button>
+								))}
+							</>
+						)}
 					</div>
 
 					<div className="space-y-8">
 						<AnimatePresence mode="wait">
-							{(activeTab === "all" || activeTab === "wiki") &&
-								results.wiki.length > 0 && (
-									<motion.section
-										initial={{ opacity: 0, y: 20 }}
-										animate={{ opacity: 1, y: 0 }}
-										exit={{ opacity: 0, y: -20 }}
-										className="space-y-4"
+							{/* 混合搜索结果展示 */}
+							{isMixedSearch && mixedResults.length > 0 && (
+								<motion.section
+									initial={{ opacity: 0, y: 20 }}
+									animate={{ opacity: 1, y: 0 }}
+									exit={{ opacity: 0, y: -20 }}
+									className="space-y-4"
+								>
+									<div
+										className={clsx(
+											"grid",
+											VIEW_MODE_CONFIG[viewMode].gridCols,
+											VIEW_MODE_CONFIG[viewMode].gap,
+										)}
 									>
-										<h2 className="text-sm font-bold text-brand-olive uppercase tracking-widest flex items-center gap-2">
-											<Book size={16} /> 百科页面
-										</h2>
-										<div
-											className={clsx(
-												"grid",
-												VIEW_MODE_CONFIG[viewMode].gridCols,
-												VIEW_MODE_CONFIG[viewMode].gap,
-											)}
-										>
-											{results.wiki.map((page) => (
-												<SearchWikiCard
-													key={page.id}
-													page={page}
+										{mixedResults
+											.filter((result) => {
+												if (activeTab === "semantic") return true;
+												return result.sourceType === activeTab;
+											})
+											.map((result, index) => (
+												<MixedSearchResultCard
+													key={`${result.sourceType}-${result.sourceId}-${index}`}
+													result={result}
 													viewMode={viewMode}
 													theme={theme}
+													showSimilarity={true}
 												/>
 											))}
-										</div>
-									</motion.section>
+									</div>
+								</motion.section>
 								)}
 
-							{(activeTab === "all" || activeTab === "posts") &&
-								results.posts.length > 0 && (
-									<motion.section
-										initial={{ opacity: 0, y: 20 }}
-										animate={{ opacity: 1, y: 0 }}
-										exit={{ opacity: 0, y: -20 }}
-										className="space-y-4"
-									>
-										<h2 className="text-sm font-bold text-brand-olive uppercase tracking-widest flex items-center gap-2">
-											<MessageSquare size={16} /> 社区帖子
-										</h2>
-										<div className="space-y-4">
-											{results.posts.map((post) => (
-												<Link
-													key={post.id}
-													to={withThemeSearch(`/forum/${post.id}`, theme)}
-													className="block bg-white p-6 rounded-3xl border border-gray-100 hover:border-brand-olive/20 hover:shadow-lg transition-all group"
+							{/* 传统搜索结果展示 */}
+							{!isMixedSearch && (
+								<>
+									{(activeTab === "all" || activeTab === "wiki") &&
+										results.wiki.length > 0 && (
+											<motion.section
+												initial={{ opacity: 0, y: 20 }}
+												animate={{ opacity: 1, y: 0 }}
+												exit={{ opacity: 0, y: -20 }}
+												className="space-y-4"
+											>
+												<h2 className="text-sm font-bold text-brand-olive uppercase tracking-widest flex items-center gap-2">
+													<Book size={16} /> 百科页面
+												</h2>
+												<div
+													className={clsx(
+														"grid",
+														VIEW_MODE_CONFIG[viewMode].gridCols,
+														VIEW_MODE_CONFIG[viewMode].gap,
+													)}
 												>
-													<div className="flex items-center gap-2 mb-2">
-														<span className="px-2 py-0.5 bg-brand-cream text-brand-olive text-[10px] font-bold uppercase tracking-wider rounded">
-															{post.section}
-														</span>
-														<span className="text-[10px] text-gray-400 flex items-center gap-1">
-															<Clock size={10} />{" "}
-															{toDateValue(post.updatedAt)
-																? format(
-																		toDateValue(post.updatedAt)!,
-																		"yyyy-MM-dd",
-																	)
-																: "刚刚"}
-														</span>
-													</div>
-													<h3 className="text-xl font-serif font-bold group-hover:text-brand-olive transition-colors">
-														{post.title}
-													</h3>
-												</Link>
-											))}
-										</div>
-									</motion.section>
-								)}
+													{results.wiki.map((page) => (
+														<SearchWikiCard
+															key={page.id}
+															page={page}
+															viewMode={viewMode}
+															theme={theme}
+														/>
+													))}
+												</div>
+											</motion.section>
+										)}
 
-							{(activeTab === "all" || activeTab === "galleries") &&
-								results.galleries.length > 0 && (
-									<motion.section
-										initial={{ opacity: 0, y: 20 }}
-										animate={{ opacity: 1, y: 0 }}
-										exit={{ opacity: 0, y: -20 }}
-										className="space-y-4"
-									>
-										<h2 className="text-sm font-bold text-brand-olive uppercase tracking-widest flex items-center gap-2">
-											<ImageIcon size={16} /> 图集馆
-										</h2>
-										<div
-											className={clsx(
-												"grid",
-												VIEW_MODE_CONFIG[viewMode].gridCols,
-												VIEW_MODE_CONFIG[viewMode].gap,
-											)}
-										>
-											{results.galleries.map((gallery) => (
-												<SearchGalleryCard
-													key={gallery.id}
-													gallery={gallery}
-													viewMode={viewMode}
-													theme={theme}
-												/>
-											))}
-										</div>
-									</motion.section>
-								)}
+									{(activeTab === "all" || activeTab === "posts") &&
+										results.posts.length > 0 && (
+											<motion.section
+												initial={{ opacity: 0, y: 20 }}
+												animate={{ opacity: 1, y: 0 }}
+												exit={{ opacity: 0, y: -20 }}
+												className="space-y-4"
+											>
+												<h2 className="text-sm font-bold text-brand-olive uppercase tracking-widest flex items-center gap-2">
+													<MessageSquare size={16} /> 社区帖子
+												</h2>
+												<div className="space-y-4">
+													{results.posts.map((post) => (
+														<Link
+															key={post.id}
+															to={withThemeSearch(`/forum/${post.id}`, theme)}
+															className="block bg-white p-6 rounded-3xl border border-gray-100 hover:border-brand-olive/20 hover:shadow-lg transition-all group"
+														>
+															<div className="flex items-center gap-2 mb-2">
+																<span className="px-2 py-0.5 bg-brand-cream text-brand-olive text-[10px] font-bold uppercase tracking-wider rounded">
+																	{post.section}
+																</span>
+																<span className="text-[10px] text-gray-400 flex items-center gap-1">
+																	<Clock size={10} />{" "}
+																	{toDateValue(post.updatedAt)
+																		? format(
+																				toDateValue(post.updatedAt)!,
+																				"yyyy-MM-dd",
+																			)
+																		: "刚刚"}
+																</span>
+															</div>
+															<h3 className="text-xl font-serif font-bold group-hover:text-brand-olive transition-colors">
+																{post.title}
+															</h3>
+														</Link>
+													))}
+												</div>
+											</motion.section>
+										)}
 
-							{(activeTab === "all" || activeTab === "music") &&
-								results.music.length > 0 && (
-									<motion.section
-										initial={{ opacity: 0, y: 20 }}
-										animate={{ opacity: 1, y: 0 }}
-										exit={{ opacity: 0, y: -20 }}
-										className="space-y-4"
-									>
-										<h2 className="text-sm font-bold text-brand-olive uppercase tracking-widest flex items-center gap-2">
-											<Music size={16} /> 音乐曲目
-										</h2>
-										<div
-											className={clsx(
-												"grid",
-												VIEW_MODE_CONFIG[viewMode].gridCols,
-												VIEW_MODE_CONFIG[viewMode].gap,
-											)}
-										>
-											{results.music.map((track) => (
-												<SearchMusicCard
-													key={track.docId}
-													track={track}
-													viewMode={viewMode}
-													theme={theme}
-												/>
-											))}
-										</div>
-									</motion.section>
-								)}
+									{(activeTab === "all" || activeTab === "galleries") &&
+										results.galleries.length > 0 && (
+											<motion.section
+												initial={{ opacity: 0, y: 20 }}
+												animate={{ opacity: 1, y: 0 }}
+												exit={{ opacity: 0, y: -20 }}
+												className="space-y-4"
+											>
+												<h2 className="text-sm font-bold text-brand-olive uppercase tracking-widest flex items-center gap-2">
+													<ImageIcon size={16} /> 图集馆
+												</h2>
+												<div
+													className={clsx(
+														"grid",
+														VIEW_MODE_CONFIG[viewMode].gridCols,
+														VIEW_MODE_CONFIG[viewMode].gap,
+													)}
+												>
+													{results.galleries.map((gallery) => (
+														<SearchGalleryCard
+															key={gallery.id}
+															gallery={gallery}
+															viewMode={viewMode}
+															theme={theme}
+														/>
+													))}
+												</div>
+											</motion.section>
+										)}
 
-							{(activeTab === "all" || activeTab === "albums") &&
-								results.albums.length > 0 && (
-									<motion.section
-										initial={{ opacity: 0, y: 20 }}
-										animate={{ opacity: 1, y: 0 }}
-										exit={{ opacity: 0, y: -20 }}
-										className="space-y-4"
-									>
-										<h2 className="text-sm font-bold text-brand-olive uppercase tracking-widest flex items-center gap-2">
-											<Music size={16} /> 音乐专辑
-										</h2>
-										<div
-											className={clsx(
-												"grid",
-												VIEW_MODE_CONFIG[viewMode].gridCols,
-												VIEW_MODE_CONFIG[viewMode].gap,
-											)}
-										>
-											{results.albums.map((album) => (
-												<SearchAlbumCard
-													key={album.docId}
-													album={album}
-													viewMode={viewMode}
-													theme={theme}
-												/>
-											))}
-										</div>
-									</motion.section>
-								)}
+									{(activeTab === "all" || activeTab === "music") &&
+										results.music.length > 0 && (
+											<motion.section
+												initial={{ opacity: 0, y: 20 }}
+												animate={{ opacity: 1, y: 0 }}
+												exit={{ opacity: 0, y: -20 }}
+												className="space-y-4"
+											>
+												<h2 className="text-sm font-bold text-brand-olive uppercase tracking-widest flex items-center gap-2">
+													<Music size={16} /> 音乐曲目
+												</h2>
+												<div
+													className={clsx(
+														"grid",
+														VIEW_MODE_CONFIG[viewMode].gridCols,
+														VIEW_MODE_CONFIG[viewMode].gap,
+													)}
+												>
+													{results.music.map((track) => (
+														<SearchMusicCard
+															key={track.docId}
+															track={track}
+															viewMode={viewMode}
+															theme={theme}
+														/>
+													))}
+												</div>
+											</motion.section>
+										)}
+
+									{(activeTab === "all" || activeTab === "albums") &&
+										results.albums.length > 0 && (
+											<motion.section
+												initial={{ opacity: 0, y: 20 }}
+												animate={{ opacity: 1, y: 0 }}
+												exit={{ opacity: 0, y: -20 }}
+												className="space-y-4"
+											>
+												<h2 className="text-sm font-bold text-brand-olive uppercase tracking-widest flex items-center gap-2">
+													<Music size={16} /> 音乐专辑
+												</h2>
+												<div
+													className={clsx(
+														"grid",
+														VIEW_MODE_CONFIG[viewMode].gridCols,
+														VIEW_MODE_CONFIG[viewMode].gap,
+													)}
+												>
+													{results.albums.map((album) => (
+														<SearchAlbumCard
+															key={album.docId}
+															album={album}
+															viewMode={viewMode}
+															theme={theme}
+														/>
+													))}
+												</div>
+											</motion.section>
+										)}
+								</>
+							)}
 						</AnimatePresence>
 
-						{totalResults === 0 && !loading && (
+						{/* 空状态 */}
+						{isMixedSearch && mixedResults.length === 0 && !loading && (
+							<div className="bg-white p-20 rounded-[40px] border border-gray-100 text-center">
+								<Sparkles
+									size={48}
+									className="mx-auto text-brand-olive/20 mb-6"
+								/>
+								<p className="text-gray-400 italic">未找到语义匹配的结果</p>
+								<p className="text-gray-300 text-sm mt-2">尝试使用其他关键词或上传图片搜索</p>
+							</div>
+						)}
+
+						{!isMixedSearch && totalResults === 0 && !loading && (
 							<div className="bg-white p-20 rounded-[40px] border border-gray-100 text-center">
 								<SearchIcon
 									size={48}

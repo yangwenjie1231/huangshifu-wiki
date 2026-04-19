@@ -17,12 +17,11 @@ import {
   toGalleryResponse,
   toMusicResponse,
   toAlbumResponse,
-  toEmbeddingPayload,
   parseDate,
 } from '../utils';
 import { prisma } from '../prisma';
 import { getEmbeddingModelName, getEmbeddingVectorSize, generateImageEmbedding, generateTextEmbedding } from '../vector/clipEmbedding';
-import { getQdrantCollectionName, searchImageEmbeddingPoints } from '../vector/qdrantService';
+import { getQdrantCollectionName, searchImageEmbeddingPoints, toEmbeddingPayload, type ImageSourceType, type ImageEmbeddingPayload } from '../vector/qdrantService';
 import { createUploadStorageInfo } from '../uploadPath';
 
 const router = Router();
@@ -62,6 +61,196 @@ const searchImageUpload = multer({
     cb(null, true);
   },
 });
+
+/**
+ * 语义搜索结果项类型
+ */
+interface SemanticSearchResult {
+  sourceType: ImageSourceType;
+  sourceId: string;
+  imageUrl: string;
+  similarity: number;
+  data: unknown;
+}
+
+/**
+ * 获取 Gallery 数据
+ */
+async function fetchGalleryData(galleryIds: string[]): Promise<Map<string, Awaited<ReturnType<typeof toGalleryResponse>>>> {
+  if (!galleryIds.length) {
+    return new Map();
+  }
+
+  const galleryRows = await prisma.gallery.findMany({
+    where: {
+      id: { in: galleryIds },
+    },
+    include: {
+      images: {
+        include: {
+          asset: true,
+        },
+        orderBy: { sortOrder: 'asc' },
+      },
+    },
+  });
+
+  const result = new Map<string, Awaited<ReturnType<typeof toGalleryResponse>>>();
+  for (const gallery of galleryRows) {
+    result.set(gallery.id, await toGalleryResponse(gallery));
+  }
+  return result;
+}
+
+/**
+ * 获取 WikiPage 数据
+ */
+async function fetchWikiData(slugs: string[]): Promise<Map<string, ReturnType<typeof toWikiResponse>>> {
+  if (!slugs.length) {
+    return new Map();
+  }
+
+  const wikiRows = await prisma.wikiPage.findMany({
+    where: {
+      slug: { in: slugs },
+    },
+    include: {
+      location: true,
+    },
+  });
+
+  const result = new Map<string, ReturnType<typeof toWikiResponse>>();
+  for (const wiki of wikiRows) {
+    result.set(wiki.slug, toWikiResponse(wiki));
+  }
+  return result;
+}
+
+/**
+ * 获取 Post 数据
+ */
+async function fetchPostData(ids: string[]): Promise<Map<string, ReturnType<typeof toPostResponse>>> {
+  if (!ids.length) {
+    return new Map();
+  }
+
+  const postRows = await prisma.post.findMany({
+    where: {
+      id: { in: ids },
+    },
+    include: {
+      location: true,
+    },
+  });
+
+  const result = new Map<string, ReturnType<typeof toPostResponse>>();
+  for (const post of postRows) {
+    result.set(post.id, toPostResponse(post));
+  }
+  return result;
+}
+
+/**
+ * 处理语义搜索结果，根据 sourceType 分别查询数据并合并
+ */
+async function processSemanticSearchResults(
+  matches: Array<{ id: string | number; score: number; payload: ImageEmbeddingPayload | null }>,
+  options?: { visibilityCheck?: { wiki: ReturnType<typeof buildWikiVisibilityWhere>; post: ReturnType<typeof buildPostVisibilityWhere> } }
+): Promise<SemanticSearchResult[]> {
+  // 按 sourceType 分组
+  const galleryIds: string[] = [];
+  const wikiSlugs: string[] = [];
+  const postIds: string[] = [];
+
+  // 记录每个 sourceId 的最高相似度分数
+  const scoreBySourceId = new Map<string, number>();
+  // 记录每个 sourceId 对应的图片 URL
+  const imageUrlBySourceId = new Map<string, string>();
+
+  for (const match of matches) {
+    if (!match.payload) continue;
+
+    const score = typeof match.score === 'number' ? match.score : 0;
+    const { sourceType, sourceId, imageUrl } = match.payload;
+
+    if (!sourceId) continue;
+
+    // 更新最高分数
+    const previousBest = scoreBySourceId.get(`${sourceType}:${sourceId}`);
+    if (previousBest === undefined || score > previousBest) {
+      scoreBySourceId.set(`${sourceType}:${sourceId}`, score);
+      if (imageUrl) {
+        imageUrlBySourceId.set(`${sourceType}:${sourceId}`, imageUrl);
+      }
+    }
+
+    // 去重收集 ID
+    if (sourceType === 'gallery' && !galleryIds.includes(sourceId)) {
+      galleryIds.push(sourceId);
+    } else if (sourceType === 'wiki' && !wikiSlugs.includes(sourceId)) {
+      wikiSlugs.push(sourceId);
+    } else if (sourceType === 'post' && !postIds.includes(sourceId)) {
+      postIds.push(sourceId);
+    }
+  }
+
+  // 并行获取各类数据
+  const [galleryData, wikiData, postData] = await Promise.all([
+    fetchGalleryData(galleryIds),
+    fetchWikiData(wikiSlugs),
+    fetchPostData(postIds),
+  ]);
+
+  // 构建结果数组
+  const results: SemanticSearchResult[] = [];
+
+  // 处理 Gallery 结果
+  for (const galleryId of galleryIds) {
+    const data = galleryData.get(galleryId);
+    if (data) {
+      results.push({
+        sourceType: 'gallery',
+        sourceId: galleryId,
+        imageUrl: imageUrlBySourceId.get(`gallery:${galleryId}`) || '',
+        similarity: Number((scoreBySourceId.get(`gallery:${galleryId}`) ?? 0).toFixed(4)),
+        data,
+      });
+    }
+  }
+
+  // 处理 Wiki 结果
+  for (const slug of wikiSlugs) {
+    const data = wikiData.get(slug);
+    if (data) {
+      results.push({
+        sourceType: 'wiki',
+        sourceId: slug,
+        imageUrl: imageUrlBySourceId.get(`wiki:${slug}`) || '',
+        similarity: Number((scoreBySourceId.get(`wiki:${slug}`) ?? 0).toFixed(4)),
+        data,
+      });
+    }
+  }
+
+  // 处理 Post 结果
+  for (const postId of postIds) {
+    const data = postData.get(postId);
+    if (data) {
+      results.push({
+        sourceType: 'post',
+        sourceId: postId,
+        imageUrl: imageUrlBySourceId.get(`post:${postId}`) || '',
+        similarity: Number((scoreBySourceId.get(`post:${postId}`) ?? 0).toFixed(4)),
+        data,
+      });
+    }
+  }
+
+  // 按相似度排序
+  results.sort((a, b) => b.similarity - a.similarity);
+
+  return results;
+}
 
 router.get('/', async (req: AuthenticatedRequest, res) => {
   try {
@@ -287,76 +476,13 @@ router.post('/by-image', searchImageUpload.single('image'), async (req: Authenti
       minScore,
     });
 
-    const seenGalleryIds = new Set<string>();
-    const seenImageIds = new Set<string>();
-    const orderedGalleryIds: string[] = [];
-    const scoreByGalleryId = new Map<string, number>();
-
-    matches.forEach((match) => {
-      const parsed = toEmbeddingPayload(match.payload);
-      if (!parsed) {
-        return;
-      }
-
-      if (!seenImageIds.has(parsed.galleryImageId)) {
-        seenImageIds.add(parsed.galleryImageId);
-      }
-
-      const score = typeof match.score === 'number' ? match.score : 0;
-      const previousBest = scoreByGalleryId.get(parsed.galleryId);
-      if (previousBest === undefined || score > previousBest) {
-        scoreByGalleryId.set(parsed.galleryId, score);
-      }
-
-      if (!seenGalleryIds.has(parsed.galleryId)) {
-        seenGalleryIds.add(parsed.galleryId);
-        orderedGalleryIds.push(parsed.galleryId);
-      }
-    });
-
-    if (!orderedGalleryIds.length) {
-      res.json({
-        mode: 'semantic_image',
-        totalMatches: 0,
-        totalGalleries: 0,
-        galleries: [],
-      });
-      return;
-    }
-
-    const galleryRows = await prisma.gallery.findMany({
-      where: {
-        id: { in: orderedGalleryIds },
-      },
-      include: {
-        images: {
-          include: {
-            asset: true,
-          },
-          orderBy: { sortOrder: 'asc' },
-        },
-      },
-    });
-
-    const galleryById = new Map(galleryRows.map((gallery) => [gallery.id, gallery]));
-    const galleries = orderedGalleryIds
-      .map((galleryId) => {
-        const gallery = galleryById.get(galleryId);
-        if (!gallery) {
-          return null;
-        }
-        return {
-          ...toGalleryResponse(gallery),
-          similarity: Number((scoreByGalleryId.get(galleryId) ?? 0).toFixed(4)),
-        };
-      })
-      .filter((item): item is ReturnType<typeof toGalleryResponse> & { similarity: number } => item !== null);
+    // 处理搜索结果
+    const results = await processSemanticSearchResults(matches);
 
     res.json({
       mode: 'semantic_image',
-      totalMatches: seenImageIds.size,
-      totalGalleries: galleries.length,
-      galleries,
+      totalMatches: results.length,
+      results,
     });
   } catch (error) {
     console.error('Image semantic search error:', error);
@@ -368,6 +494,49 @@ router.post('/by-image', searchImageUpload.single('image'), async (req: Authenti
   }
 });
 
+/**
+ * 新的语义搜索接口 - 支持混合结果
+ */
+router.get('/semantic-search', async (req: AuthenticatedRequest, res) => {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const requestedLimit = parseInteger(req.query.limit as string, IMAGE_SEARCH_RESULT_LIMIT, {
+      min: 1,
+      max: 60,
+    });
+    const minScore = parseMinSimilarityScore(req.query.minScore);
+
+    if (!q) {
+      res.status(400).json({ error: '请提供搜索文字 (q 参数)' });
+      return;
+    }
+
+    const queryVector = await generateTextEmbedding(q);
+    const matches = await searchImageEmbeddingPoints({
+      vector: queryVector,
+      limit: requestedLimit,
+      minScore,
+    });
+
+    // 处理搜索结果
+    const results = await processSemanticSearchResults(matches);
+
+    res.json({
+      mode: 'semantic_text',
+      query: q,
+      totalMatches: results.length,
+      results,
+    });
+  } catch (error) {
+    console.error('Semantic search error:', error);
+    res.status(500).json({ error: '语义搜索失败' });
+  }
+});
+
+/**
+ * 旧的语义搜索接口 - 保持向后兼容
+ * @deprecated 请使用 /semantic-search
+ */
 router.get('/semantic-galleries', async (req: AuthenticatedRequest, res) => {
   try {
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
@@ -389,34 +558,38 @@ router.get('/semantic-galleries', async (req: AuthenticatedRequest, res) => {
       minScore,
     });
 
-    const seenGalleryIds = new Set<string>();
-    const seenImageIds = new Set<string>();
-    const orderedGalleryIds: string[] = [];
+    // 只返回 gallery 类型的结果，保持旧接口行为
+    const galleryIds: string[] = [];
     const scoreByGalleryId = new Map<string, number>();
+    const seenImageIds = new Set<string>();
 
     matches.forEach((match) => {
-      const parsed = toEmbeddingPayload(match.payload);
-      if (!parsed) {
-        return;
-      }
+      const parsed = match.payload;
+      if (!parsed) return;
 
-      if (!seenImageIds.has(parsed.galleryImageId)) {
+      // 只处理 gallery 类型
+      if (parsed.sourceType !== 'gallery') return;
+
+      // 向后兼容：使用 galleryId 作为 sourceId
+      const galleryId = parsed.galleryId || parsed.sourceId;
+      if (!galleryId) return;
+
+      if (parsed.galleryImageId) {
         seenImageIds.add(parsed.galleryImageId);
       }
 
       const score = typeof match.score === 'number' ? match.score : 0;
-      const previousBest = scoreByGalleryId.get(parsed.galleryId);
+      const previousBest = scoreByGalleryId.get(galleryId);
       if (previousBest === undefined || score > previousBest) {
-        scoreByGalleryId.set(parsed.galleryId, score);
+        scoreByGalleryId.set(galleryId, score);
       }
 
-      if (!seenGalleryIds.has(parsed.galleryId)) {
-        seenGalleryIds.add(parsed.galleryId);
-        orderedGalleryIds.push(parsed.galleryId);
+      if (!galleryIds.includes(galleryId)) {
+        galleryIds.push(galleryId);
       }
     });
 
-    if (!orderedGalleryIds.length) {
+    if (!galleryIds.length) {
       res.json({
         mode: 'semantic_text',
         query: q,
@@ -429,7 +602,7 @@ router.get('/semantic-galleries', async (req: AuthenticatedRequest, res) => {
 
     const galleryRows = await prisma.gallery.findMany({
       where: {
-        id: { in: orderedGalleryIds },
+        id: { in: galleryIds },
       },
       include: {
         images: {
@@ -442,18 +615,18 @@ router.get('/semantic-galleries', async (req: AuthenticatedRequest, res) => {
     });
 
     const galleryById = new Map(galleryRows.map((gallery) => [gallery.id, gallery]));
-    const galleries = orderedGalleryIds
-      .map((galleryId) => {
+    const galleries = (await Promise.all(
+      galleryIds.map(async (galleryId) => {
         const gallery = galleryById.get(galleryId);
         if (!gallery) {
           return null;
         }
         return {
-          ...toGalleryResponse(gallery),
+          ...(await toGalleryResponse(gallery)),
           similarity: Number((scoreByGalleryId.get(galleryId) ?? 0).toFixed(4)),
         };
       })
-      .filter((item): item is ReturnType<typeof toGalleryResponse> & { similarity: number } => item !== null);
+    )).filter((item): item is Awaited<ReturnType<typeof toGalleryResponse>> & { similarity: number } => item !== null);
 
     res.json({
       mode: 'semantic_text',

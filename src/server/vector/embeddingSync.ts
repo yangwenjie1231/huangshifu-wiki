@@ -72,7 +72,62 @@ function resolveUploadPathByStorageKey(storageKey: string, uploadsDir: string) {
   return target;
 }
 
-function resolveLocalImagePath(galleryImage: GalleryImageRecord, uploadsDir: string) {
+function localUrlToAbsoluteFile(localUrl: string, uploadsDir: string): string | null {
+  if (!localUrl || typeof localUrl !== 'string') {
+    return null;
+  }
+
+  if (!localUrl.startsWith('/uploads/')) {
+    return null;
+  }
+
+  const relativePath = localUrl.slice('/uploads/'.length);
+  if (!relativePath) {
+    return null;
+  }
+
+  const base = path.resolve(uploadsDir);
+  const target = path.resolve(base, relativePath);
+
+  // 路径遍历保护
+  if (target !== base && !target.startsWith(`${base}${path.sep}`)) {
+    return null;
+  }
+
+  return target;
+}
+
+function resolveLocalImagePath(
+  galleryImage: GalleryImageRecord,
+  uploadsDir: string,
+  imageMapByUrl?: Map<string, { localUrl: string; s3Url: string | null; externalUrl: string | null }>
+) {
+  // 优先使用 ImageMap 的 localUrl（最直接的路径）
+  if (imageMapByUrl) {
+    // 尝试通过 publicUrl 查找 ImageMap
+    if (galleryImage.asset?.publicUrl) {
+      const im = imageMapByUrl.get(galleryImage.asset.publicUrl);
+      if (im?.localUrl) {
+        const imageMapPath = localUrlToAbsoluteFile(im.localUrl, uploadsDir);
+        if (imageMapPath) {
+          console.log(`[EmbeddingSync] 使用 ImageMap 路径: ${imageMapPath}`);
+          return imageMapPath;
+        }
+      }
+    }
+
+    // 尝试通过 url 查找 ImageMap
+    const im = imageMapByUrl.get(galleryImage.url);
+    if (im?.localUrl) {
+      const imageMapPath = localUrlToAbsoluteFile(im.localUrl, uploadsDir);
+      if (imageMapPath) {
+        console.log(`[EmbeddingSync] 使用 ImageMap 路径: ${imageMapPath}`);
+        return imageMapPath;
+      }
+    }
+  }
+
+  // 回退到 MediaAsset storageKey 解析
   if (galleryImage.asset?.storageKey) {
     return resolveUploadPathByStorageKey(galleryImage.asset.storageKey, uploadsDir);
   }
@@ -221,6 +276,35 @@ export async function syncImageEmbeddingBatch(
     take: limit,
   });
 
+  // 批量获取 ImageMap 数据
+  const storageKeys = candidates
+    .map((item) => item.galleryImage.asset?.storageKey)
+    .filter((key): key is string => Boolean(key));
+
+  const imageMaps = storageKeys.length > 0
+    ? await prisma.imageMap.findMany({
+        where: {
+          OR: [
+            { localUrl: { in: storageKeys.map((k) => `/uploads/${k}`) } },
+            { s3Url: { in: candidates.map((item) => item.galleryImage.asset?.publicUrl).filter(Boolean) } },
+          ],
+        },
+        select: {
+          localUrl: true,
+          s3Url: true,
+          externalUrl: true,
+        },
+      })
+    : [];
+
+  // 构建 ImageMap 查找映射
+  const imageMapByUrl = new Map<string, typeof imageMaps[0]>();
+  for (const im of imageMaps) {
+    if (im.localUrl) imageMapByUrl.set(im.localUrl, im);
+    if (im.s3Url) imageMapByUrl.set(im.s3Url, im);
+    if (im.externalUrl) imageMapByUrl.set(im.externalUrl, im);
+  }
+
   if (candidates.length === 0) {
     return {
       requested: limit,
@@ -253,7 +337,7 @@ export async function syncImageEmbeddingBatch(
 
   for (const item of candidates) {
     const galleryImage = item.galleryImage as GalleryImageRecord;
-    const localPath = resolveLocalImagePath(galleryImage, uploadsDir);
+    const localPath = resolveLocalImagePath(galleryImage, uploadsDir, imageMapByUrl);
 
     if (!localPath) {
       const reason = '无法定位本地图片文件';
@@ -291,13 +375,13 @@ export async function syncImageEmbeddingBatch(
       await upsertImageEmbeddingPoint({
         pointId: buildQdrantPointId(item.galleryImageId),
         vector,
-        payload: {
-          galleryImageId: item.galleryImageId,
-          galleryId: galleryImage.galleryId,
-          imageUrl: galleryImage.asset?.publicUrl || galleryImage.url,
-          imageName: galleryImage.asset?.fileName || galleryImage.name,
-          updatedAt: new Date().toISOString(),
-        },
+        sourceType: 'gallery',
+        sourceId: item.galleryImageId,
+        imageUrl: galleryImage.asset?.publicUrl || galleryImage.url,
+        galleryId: galleryImage.galleryId,
+        galleryImageId: item.galleryImageId,
+        imageName: galleryImage.asset?.fileName || galleryImage.name,
+        updatedAt: new Date().toISOString(),
       });
 
       await prisma.imageEmbedding.update({

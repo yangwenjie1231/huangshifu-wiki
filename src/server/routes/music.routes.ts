@@ -303,7 +303,7 @@ router.post('/import', requireAdmin, async (req: AuthenticatedRequest, res) => {
             sourceId: preview.id,
             title: preview.title,
             artist: preview.artist || 'Various Artists',
-            cover: '',
+            cover: preview.cover || '',
             tracks: tracksPayload,
           },
         });

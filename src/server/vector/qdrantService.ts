@@ -71,20 +71,106 @@ export async function ensureQdrantCollection() {
   return ensureCollectionPromise;
 }
 
+/**
+ * 图片来源类型
+ */
+export type ImageSourceType = 'gallery' | 'wiki' | 'post';
+
+/**
+ * 图片向量嵌入的 Payload 类型
+ * 支持多种来源：图库(gallery)、维基(wiki)、帖子(post)
+ */
+export interface ImageEmbeddingPayload {
+  // 通用字段
+  sourceType: ImageSourceType;
+  sourceId: string;
+  imageUrl: string;
+  updatedAt: string;
+
+  // Gallery 类型特有字段
+  galleryId?: string;
+  imageName?: string;
+
+  // Wiki 类型特有字段
+  wikiPageSlug?: string;
+
+  // Post 类型特有字段
+  postId?: string;
+
+  // 向后兼容：旧数据可能只有这些字段
+  /** @deprecated 使用 sourceType 和 sourceId 替代 */
+  galleryImageId?: string;
+}
+
+/**
+ * 将 Qdrant 返回的 payload 解析为 ImageEmbeddingPayload
+ * 处理向后兼容逻辑
+ */
+export function toEmbeddingPayload(payload: Record<string, unknown> | null | undefined): ImageEmbeddingPayload | null {
+  if (!payload) {
+    return null;
+  }
+
+  // 如果已有 sourceType，直接返回
+  if (payload.sourceType) {
+    return payload as unknown as ImageEmbeddingPayload;
+  }
+
+  // 向后兼容：旧数据只有 galleryImageId 等字段
+  if (payload.galleryImageId && !payload.sourceType) {
+    return {
+      sourceType: 'gallery',
+      sourceId: String(payload.galleryImageId),
+      imageUrl: String(payload.imageUrl || ''),
+      updatedAt: String(payload.updatedAt || new Date().toISOString()),
+      galleryId: payload.galleryId ? String(payload.galleryId) : undefined,
+      galleryImageId: String(payload.galleryImageId),
+      imageName: payload.imageName ? String(payload.imageName) : undefined,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * 创建图片向量嵌入点
+ * 支持多种来源：gallery、wiki、post
+ */
 export async function upsertImageEmbeddingPoint(params: {
   pointId: number;
   vector: number[];
-  payload: {
-    galleryImageId: string;
-    galleryId: string;
-    imageUrl: string;
-    imageName: string;
-    updatedAt: string;
-  };
+  sourceType: ImageSourceType;
+  sourceId: string;
+  imageUrl: string;
+  galleryId?: string;
+  galleryImageId?: string;
+  wikiPageSlug?: string;
+  postId?: string;
+  imageName?: string;
+  updatedAt: string;
 }) {
   await ensureQdrantCollection();
   const client = getQdrantClient();
   const collectionName = getQdrantCollectionName();
+
+  // 构建 payload
+  const payload: ImageEmbeddingPayload = {
+    sourceType: params.sourceType,
+    sourceId: params.sourceId,
+    imageUrl: params.imageUrl,
+    updatedAt: params.updatedAt,
+  };
+
+  // 根据来源类型添加特定字段
+  if (params.sourceType === 'gallery') {
+    payload.galleryId = params.galleryId;
+    payload.galleryImageId = params.galleryImageId || params.sourceId;
+    payload.imageName = params.imageName;
+  } else if (params.sourceType === 'wiki') {
+    payload.wikiPageSlug = params.wikiPageSlug || params.sourceId;
+  } else if (params.sourceType === 'post') {
+    payload.postId = params.postId || params.sourceId;
+  }
 
   await client.upsert(collectionName, {
     wait: true,
@@ -92,12 +178,16 @@ export async function upsertImageEmbeddingPoint(params: {
       {
         id: params.pointId,
         vector: params.vector,
-        payload: params.payload,
+        payload: payload as unknown as Record<string, unknown>,
       },
     ],
   });
 }
 
+/**
+ * 搜索图片向量嵌入点
+ * 返回的结果包含完整的来源信息
+ */
 export async function searchImageEmbeddingPoints(params: {
   vector: number[];
   limit: number;
@@ -107,11 +197,32 @@ export async function searchImageEmbeddingPoints(params: {
   const client = getQdrantClient();
   const collectionName = getQdrantCollectionName();
 
-  return client.search(collectionName, {
+  const results = await client.search(collectionName, {
     vector: params.vector,
     limit: params.limit,
     score_threshold: params.minScore,
     with_payload: true,
     with_vector: false,
+  });
+
+  // 转换结果为包含解析后 payload 的格式
+  return results.map((result) => ({
+    id: result.id,
+    score: result.score,
+    payload: toEmbeddingPayload(result.payload as Record<string, unknown> | undefined),
+  }));
+}
+
+/**
+ * 删除图片向量嵌入点
+ */
+export async function deleteImageEmbeddingPoint(pointId: number) {
+  await ensureQdrantCollection();
+  const client = getQdrantClient();
+  const collectionName = getQdrantCollectionName();
+
+  await client.delete(collectionName, {
+    wait: true,
+    points: [pointId],
   });
 }

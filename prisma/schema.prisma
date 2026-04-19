@@ -586,6 +586,38 @@ model ImageEmbedding {
   @@index([status, updatedAt])
 }
 
+model WikiImageEmbedding {
+  id           String          @id @default(cuid())
+  wikiPageSlug String
+  imageUrl     String
+  modelName    String          @default("Xenova/clip-vit-base-patch32")
+  vectorSize   Int             @default(512)
+  status       EmbeddingStatus @default(pending)
+  lastError    String?
+  embeddedAt   DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@unique([wikiPageSlug, imageUrl])
+  @@index([status, updatedAt])
+}
+
+model PostImageEmbedding {
+  id        String          @id @default(cuid())
+  postId    String
+  imageUrl  String
+  modelName String          @default("Xenova/clip-vit-base-patch32")
+  vectorSize Int            @default(512)
+  status    EmbeddingStatus @default(pending)
+  lastError String?
+  embeddedAt DateTime?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([postId, imageUrl])
+  @@index([status, updatedAt])
+}
+
 model Album {
   docId              String              @id @default(cuid())
   id                 String              @unique
