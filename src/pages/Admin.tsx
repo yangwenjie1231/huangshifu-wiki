@@ -135,6 +135,8 @@ const Admin = () => {
       return;
     }
     setLoading(true);
+    // 切换标签时先清空数据，避免显示旧数据
+    setData([]);
     try {
       if (activeTab === 'locks') {
         const result = await apiGet<{ locks: EditLockItem[] }>('/api/admin/locks');
@@ -805,7 +807,7 @@ const Admin = () => {
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-[36px] border border-gray-100 shadow-sm overflow-hidden">
+        <div key={activeTab} className="bg-white rounded-[36px] border border-gray-100 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>

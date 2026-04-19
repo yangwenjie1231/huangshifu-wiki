@@ -17,6 +17,7 @@ import { isBlurhashEnabled, shouldAutoGenerate, generateBlurhashFromFile } from 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -208,10 +209,11 @@ router.post(
 
       // 始终创建 ImageMap 记录，用于统一图片管理
       const imageId = `${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+      const imageMd5 = crypto.randomUUID(); // 生成唯一的 MD5 占位符
       await prisma.imageMap.create({
         data: {
           id: imageId,
-          md5: '', // 可以后续计算
+          md5: imageMd5, // 使用唯一值避免冲突
           localUrl: publicUrl,
           s3Url: null,
           externalUrl: null,
@@ -264,7 +266,7 @@ router.post(
         // 上传到 S3
         if (preference.strategy === 's3' || preference.strategy === 'external') {
           try {
-            const filePath = `uploads/${file.filename}`;
+            const filePath = path.join(uploadsDir, file.filename);
             const s3Result = await uploadFileToS3(filePath, storageKey, mimeType);
             if (s3Result.success && s3Result.url) {
               s3Url = s3Result.url;
@@ -309,7 +311,7 @@ router.post(
             console.warn('[Upload] Superbed API Token not configured, skipping external upload');
           } else {
             try {
-              const filePath = `uploads/${file.filename}`;
+              const filePath = path.join(uploadsDir, file.filename);
               const superbedResult = await uploadToSuperbed(
                 filePath,
                 file.originalname,

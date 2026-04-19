@@ -132,7 +132,7 @@ router.get('/errors', requireAdmin, async (req: AuthenticatedRequest, res) => {
     });
 
     res.json({
-      items: failed.map((item) => ({
+      errors: failed.map((item) => ({
         id: item.id,
         galleryImageId: item.galleryImageId,
         galleryId: item.galleryImage.galleryId,
@@ -141,10 +141,17 @@ router.get('/errors', requireAdmin, async (req: AuthenticatedRequest, res) => {
         modelName: item.modelName,
         vectorSize: item.vectorSize,
         status: item.status,
-        lastError: item.lastError,
+        errorMessage: item.lastError,
+        retryCount: 0,
         embeddedAt: item.embeddedAt ? item.embeddedAt.toISOString() : null,
+        createdAt: item.createdAt.toISOString(),
         updatedAt: item.updatedAt.toISOString(),
+        gallery: {
+          id: item.galleryImage.gallery.id,
+          title: item.galleryImage.gallery.title,
+        },
       })),
+      total: failed.length,
     });
   } catch (error) {
     console.error('Fetch embedding errors error:', error);

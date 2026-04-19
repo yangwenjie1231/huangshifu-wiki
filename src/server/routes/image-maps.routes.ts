@@ -367,11 +367,6 @@ router.post('/', requireAuth, requireActiveUser, async (req, res) => {
       return;
     }
 
-    if (storageType === 's3' && !s3Url) {
-      res.status(400).json({ error: 'S3 存储类型需要提供 s3Url' });
-      return;
-    }
-
     let blurhash: string | undefined;
     let thumbhash: string | undefined;
 
@@ -437,11 +432,6 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
       blurhash?: string | null;
       thumbhash?: string | null;
     };
-
-    if (storageType === 's3' && !s3Url) {
-      res.status(400).json({ error: 'S3 存储类型需要提供 s3Url' });
-      return;
-    }
 
     const item = await prisma.imageMap.update({
       where: { id: req.params.id },
