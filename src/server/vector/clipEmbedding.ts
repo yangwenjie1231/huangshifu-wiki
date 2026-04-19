@@ -107,32 +107,104 @@ function getModelLocalPath(modelName: string): string | null {
 
 async function downloadFromModelScope(modelName: string): Promise<string> {
   console.log(`[CLIP] 尝试使用 ModelScope 下载模型: ${modelName}`);
-  
+
   const targetDir = path.join(MODEL_CACHE_DIR, modelName);
-  
+
   // 检查是否已存在
   if (fs.existsSync(targetDir) && fs.readdirSync(targetDir).length > 0) {
     console.log(`[CLIP] 模型已存在于: ${targetDir}`);
+    isUsingModelScope = true;
     return targetDir;
   }
-  
-  // 确保目录存在
-  fs.mkdirSync(targetDir, { recursive: true });
-  
+
+  // 确保父目录存在
+  fs.mkdirSync(path.dirname(targetDir), { recursive: true });
+
+  const errors: string[] = [];
+
+  // 方法1: 尝试使用 modelscope CLI 下载
   try {
-    // 尝试使用 modelscope CLI 下载
-    console.log(`[CLIP] 使用 modelscope CLI 下载模型...`);
+    console.log(`[CLIP] 方法1: 使用 modelscope CLI 下载模型...`);
     execSync(`modelscope download --model ${modelName} --local_dir "${targetDir}"`, {
-      stdio: 'inherit',
+      stdio: 'pipe',
       timeout: 300000, // 5分钟超时
     });
-    console.log(`[CLIP] ModelScope 下载成功: ${targetDir}`);
+    console.log(`[CLIP] ModelScope CLI 下载成功: ${targetDir}`);
     isUsingModelScope = true;
     return targetDir;
   } catch (error) {
-    console.error(`[CLIP] ModelScope CLI 下载失败:`, error);
-    throw new Error(`ModelScope 下载失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    const msg = error instanceof Error ? error.message : '未知错误';
+    console.warn(`[CLIP] ModelScope CLI 下载失败: ${msg}`);
+    errors.push(`CLI: ${msg}`);
   }
+
+  // 方法2: 尝试使用 Python SDK 下载
+  try {
+    console.log(`[CLIP] 方法2: 使用 Python SDK 下载模型...`);
+    const pythonScript = `
+import sys
+sys.path.insert(0, '/usr/local/lib/python3.10/dist-packages')
+sys.path.insert(0, '/usr/lib/python3/dist-packages')
+from modelscope import snapshot_download
+import os
+model_dir = snapshot_download('${modelName}', cache_dir='${path.dirname(targetDir)}')
+print(f"DOWNLOADED_TO: {model_dir}")
+`;
+    const result = execSync(`python3 -c "${pythonScript}"`, {
+      stdio: 'pipe',
+      timeout: 600000, // 10分钟超时
+      encoding: 'utf-8',
+    });
+
+    // 解析下载路径
+    const match = result.match(/DOWNLOADED_TO:\s*(.+)/);
+    if (match) {
+      const downloadedPath = match[1].trim();
+      console.log(`[CLIP] Python SDK 下载成功: ${downloadedPath}`);
+      isUsingModelScope = true;
+      return downloadedPath;
+    }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : '未知错误';
+    console.warn(`[CLIP] Python SDK 下载失败: ${msg}`);
+    errors.push(`Python SDK: ${msg}`);
+  }
+
+  // 方法3: 尝试使用 Git LFS 克隆
+  try {
+    console.log(`[CLIP] 方法3: 使用 Git LFS 克隆模型...`);
+    // 清理之前的失败尝试
+    if (fs.existsSync(targetDir)) {
+      fs.rmSync(targetDir, { recursive: true, force: true });
+    }
+
+    execSync(`git lfs install`, { stdio: 'pipe' });
+    execSync(`git clone https://www.modelscope.cn/${modelName}.git "${targetDir}"`, {
+      stdio: 'pipe',
+      timeout: 600000, // 10分钟超时
+    });
+
+    if (fs.existsSync(targetDir) && fs.readdirSync(targetDir).length > 0) {
+      console.log(`[CLIP] Git LFS 克隆成功: ${targetDir}`);
+      isUsingModelScope = true;
+      return targetDir;
+    }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : '未知错误';
+    console.warn(`[CLIP] Git LFS 克隆失败: ${msg}`);
+    errors.push(`Git: ${msg}`);
+  }
+
+  // 所有方法都失败了
+  throw new Error(
+    `ModelScope 下载失败，已尝试以下方法:\n` +
+    errors.map((e, i) => `  ${i + 1}. ${e}`).join('\n') +
+    `\n\n请手动下载模型:\n` +
+    `1. 安装 ModelScope: pip install modelscope\n` +
+    `2. 下载模型: modelscope download --model ${modelName} --local_dir "${targetDir}"\n` +
+    `3. 或使用 Git: git clone https://www.modelscope.cn/${modelName}.git "${targetDir}"\n` +
+    `4. 或使用 Hugging Face 镜像: https://hf-mirror.com/${modelName}`
+  );
 }
 
 async function loadModelWithFallback<T>(

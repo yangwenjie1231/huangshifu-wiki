@@ -2382,21 +2382,24 @@ async function uploadFileToS3(
 
     const fileBuffer = await fs.promises.readFile(filePath);
 
-    // 对 objectKey 进行 URI 编码，处理中文字符等特殊字符
-    const encodedKey = encodeURIComponent(objectKey).replace(/%2F/g, '/');
+    // S3 Key 应该是原始字符串，不需要 encodeURIComponent
+    // AWS SDK 会自动处理 UTF-8 字符
+    const s3Key = objectKey;
 
     await s3Client.send(
       new PutObjectCommand({
         Bucket: config.bucket,
-        Key: encodedKey,
+        Key: s3Key,
         Body: fileBuffer,
         ContentType: contentType,
       })
     );
 
+    // URL 中的 key 需要编码
+    const encodedKeyForUrl = encodeURIComponent(s3Key).replace(/%2F/g, '/');
     const url = config.publicDomain
-      ? `${config.publicDomain}/${encodedKey}`
-      : `${config.endpoint}/${config.bucket}/${encodedKey}`;
+      ? `${config.publicDomain}/${encodedKeyForUrl}`
+      : `${config.endpoint}/${config.bucket}/${encodedKeyForUrl}`;
 
     return { success: true, url };
   } catch (error) {
