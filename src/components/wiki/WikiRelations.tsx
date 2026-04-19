@@ -49,6 +49,120 @@ const parseInternalLink = (
 	return null;
 };
 
+/**
+ * 从显示文本推断关联类型
+ * 基于常见的命名规则和关键词
+ */
+const inferRelationType = (displayText: string): WikiRelationType => {
+	const text = displayText.toLowerCase();
+
+	// 时间线相关关键词
+	const timelineKeywords = [
+		"年",
+		"月",
+		"日",
+		"时间线",
+		"timeline",
+		"历史",
+		"时期",
+		"年代",
+		"纪元",
+		"事件",
+		"活动",
+	];
+	if (timelineKeywords.some((kw) => text.includes(kw))) {
+		return "timeline_relation";
+	}
+
+	// 作品相关关键词
+	const workKeywords = [
+		"专辑",
+		"歌曲",
+		"音乐",
+		"作品",
+		"单曲",
+		"ep",
+		"唱片",
+		"演唱会",
+		"演出",
+		"mv",
+		"video",
+		"film",
+		"电影",
+		"剧集",
+	];
+	if (workKeywords.some((kw) => text.includes(kw))) {
+		return "work_relation";
+	}
+
+	// 人物相关关键词
+	const personKeywords = [
+		"歌手",
+		"音乐人",
+		"作曲",
+		"作词",
+		"编曲",
+		"制作",
+		"导演",
+		"演员",
+		"艺人",
+		"明星",
+		"乐队",
+		"组合",
+		"团体",
+	];
+	if (personKeywords.some((kw) => text.includes(kw))) {
+		return "related_person";
+	}
+
+	// 默认返回相关人物
+	return "related_person";
+};
+
+/**
+ * 从 URL 路径推断关联类型
+ */
+const inferTypeFromPath = (path: string): WikiRelationType => {
+	if (path.includes("/music/")) return "work_relation";
+	if (path.includes("/album/")) return "work_relation";
+	if (path.includes("/timeline/")) return "timeline_relation";
+	if (path.includes("/event/")) return "timeline_relation";
+	return "related_person";
+};
+
+/**
+ * 解析外部链接，提取 slug 和类型
+ * 支持格式：https://domain.com/wiki/slug 或 https://domain.com/music/slug 等
+ */
+const parseExternalLink = (
+	input: string,
+): { slug: string; type: WikiRelationType } | null => {
+	try {
+		// 检查是否是 URL
+		if (!input.startsWith("http://") && !input.startsWith("https://")) {
+			return null;
+		}
+
+		const url = new URL(input);
+		const pathParts = url.pathname.split("/").filter(Boolean);
+
+		// 支持的路径格式：/wiki/slug, /music/slug, /album/slug, /timeline/slug, /event/slug
+		if (pathParts.length >= 2) {
+			const category = pathParts[0];
+			const slug = pathParts[pathParts.length - 1];
+
+			// 根据路径推断类型
+			const type = inferTypeFromPath(url.pathname);
+
+			return { slug, type };
+		}
+
+		return null;
+	} catch {
+		return null;
+	}
+};
+
 interface WikiRelationsProps {
 	relations: WikiRelationRecord[];
 	onRelationsChange: (relations: WikiRelationRecord[]) => void;
@@ -132,19 +246,40 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 		useState<WikiRelationRecord | null>(null);
 
 	const handleRelationInputChange = useCallback(
-		(input: string) => {
+		(input: string, isPaste = false) => {
+			// 1. 首先检查是否是内链格式 [[slug]] 或 [[显示文本|slug]]
 			const internalLink = parseInternalLink(input);
 			if (internalLink) {
 				const shouldSetLabel =
 					!newRelation.label && internalLink.displayText !== internalLink.slug;
+				// 如果是粘贴操作，自动推断关联类型
+				const inferredType = isPaste
+					? inferRelationType(internalLink.displayText)
+					: newRelation.type;
 				setNewRelation((prev) => ({
 					...prev,
 					targetSlug: internalLink.slug,
 					label: shouldSetLabel ? internalLink.displayText : prev.label,
+					type: inferredType,
 				}));
 				setRelationSearchResults([]);
 				setShowRelationDropdown(false);
 				return;
+			}
+
+			// 2. 检查是否是外部链接（粘贴时）
+			if (isPaste) {
+				const externalLink = parseExternalLink(input);
+				if (externalLink) {
+					setNewRelation((prev) => ({
+						...prev,
+						targetSlug: externalLink.slug,
+						type: externalLink.type,
+					}));
+					setRelationSearchResults([]);
+					setShowRelationDropdown(false);
+					return;
+				}
 			}
 
 			setNewRelation((prev) => ({
@@ -178,7 +313,7 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 				}
 			}, 300);
 		},
-		[newRelation.label],
+		[newRelation.label, newRelation.type],
 	);
 
 	useEffect(() => {
@@ -606,9 +741,14 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 							type="text"
 							value={newRelation.targetSlug}
 							onChange={(e) => {
-								handleRelationInputChange(e.target.value);
+								handleRelationInputChange(e.target.value, false);
 							}}
-							placeholder="输入 [[页面标题]] 或直接输入 slug"
+							onPaste={(e) => {
+								e.preventDefault();
+								const pastedText = e.clipboardData.getData("text");
+								handleRelationInputChange(pastedText, true);
+							}}
+							placeholder="粘贴链接或 [[页面标题]]"
 							className="w-full px-4 py-2 bg-white rounded-xl border border-gray-200 text-sm"
 							onKeyDown={(e) => {
 								if (!showRelationDropdown) return;
