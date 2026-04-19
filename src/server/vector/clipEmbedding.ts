@@ -254,9 +254,12 @@ async function getImageExtractor() {
     imageExtractorPromise = loadModelWithFallback(
       modelName,
       async (modelPath) => {
+        // 判断是否是本地路径（包含 / 且目录存在）
+        const isLocalPath = modelPath.includes('/') && fs.existsSync(modelPath);
+        console.log(`[CLIP] 加载图像模型，路径: ${modelPath}, 本地模式: ${isLocalPath}`);
         const extractor = await pipeline('image-feature-extraction', modelPath, {
           cache_dir: MODEL_CACHE_DIR,
-          local_files_only: !modelPath.includes('/') || fs.existsSync(modelPath),
+          local_files_only: isLocalPath,
         });
         return extractor as ExtractorFunc;
       },
@@ -301,9 +304,11 @@ async function getTextModel() {
     textModelPromise = loadModelWithFallback(
       modelName,
       async (modelPath) => {
+        const isLocalPath = modelPath.includes('/') && fs.existsSync(modelPath);
+        console.log(`[CLIP] 加载文本模型，路径: ${modelPath}, 本地模式: ${isLocalPath}`);
         return await CLIPTextModelWithProjection.from_pretrained(modelPath, {
           cache_dir: MODEL_CACHE_DIR,
-          local_files_only: !modelPath.includes('/') || fs.existsSync(modelPath),
+          local_files_only: isLocalPath,
         });
       },
       '文本模型'
@@ -334,9 +339,11 @@ async function getTextTokenizer() {
     textTokenizerPromise = loadModelWithFallback(
       modelName,
       async (modelPath) => {
+        const isLocalPath = modelPath.includes('/') && fs.existsSync(modelPath);
+        console.log(`[CLIP] 加载分词器，路径: ${modelPath}, 本地模式: ${isLocalPath}`);
         return await CLIPTokenizer.from_pretrained(modelPath, {
           cache_dir: MODEL_CACHE_DIR,
-          local_files_only: !modelPath.includes('/') || fs.existsSync(modelPath),
+          local_files_only: isLocalPath,
         });
       },
       '文本分词器'
