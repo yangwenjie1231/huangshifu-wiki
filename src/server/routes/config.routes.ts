@@ -8,6 +8,12 @@ import {
   getPublicConfig,
   validateS3Config,
 } from '../s3/s3Service';
+import {
+  startSyncTask,
+  getLatestSyncTask,
+  getSyncTask,
+  cancelSyncTask,
+} from '../services/imageSyncService';
 
 const router = Router();
 
@@ -33,10 +39,20 @@ router.get('/image-preference', async (_req, res) => {
 // PATCH /api/config/image-preference - Update image preference
 router.patch('/image-preference', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { strategy, fallback } = req.body as {
+    const { strategy, fallback, autoSync = true } = req.body as {
       strategy?: 'local' | 's3' | 'external';
       fallback?: boolean;
+      autoSync?: boolean;
     };
+
+    // 获取当前配置
+    const currentConfig = await prisma.siteConfig.findUnique({
+      where: { key: 'image_preference' },
+    });
+    const currentPreference = currentConfig?.value as {
+      strategy?: 'local' | 's3' | 'external';
+      fallback?: boolean;
+    } || { strategy: 'local', fallback: true };
 
     const value = {
       ...(strategy && { strategy }),
@@ -49,10 +65,118 @@ router.patch('/image-preference', requireAuth, requireAdmin, async (req, res) =>
       create: { key: 'image_preference', value },
     });
 
-    res.json({ success: true, preference: value });
+    // 如果切换到 S3 或 external 策略，自动启动同步任务
+    let syncTask = null;
+    if (autoSync && strategy && strategy !== 'local' && strategy !== currentPreference.strategy) {
+      try {
+        syncTask = startSyncTask(strategy);
+        console.log(`[Config] 存储策略切换到 ${strategy}，自动启动图片同步任务: ${syncTask.id}`);
+      } catch (syncError) {
+        console.error('[Config] 自动启动同步任务失败:', syncError);
+        // 同步任务启动失败不影响配置更新
+      }
+    }
+
+    res.json({
+      success: true,
+      preference: value,
+      syncTask: syncTask
+        ? {
+            id: syncTask.id,
+            status: syncTask.status,
+            strategy: syncTask.strategy,
+            total: syncTask.total,
+          }
+        : null,
+    });
   } catch (error) {
     console.error('Update image preference error:', error);
     res.status(500).json({ error: '更新图片偏好设置失败' });
+  }
+});
+
+// GET /api/config/image-sync - Get image sync task status
+router.get('/image-sync', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { taskId } = req.query as { taskId?: string };
+
+    let task;
+    if (taskId) {
+      task = getSyncTask(taskId);
+    } else {
+      task = getLatestSyncTask();
+    }
+
+    if (!task) {
+      res.json({ task: null });
+      return;
+    }
+
+    res.json({
+      task: {
+        id: task.id,
+        status: task.status,
+        strategy: task.strategy,
+        total: task.total,
+        processed: task.processed,
+        succeeded: task.succeeded,
+        failed: task.failed,
+        errors: task.errors.slice(0, 20), // 只返回前20个错误
+        startedAt: task.startedAt.toISOString(),
+        completedAt: task.completedAt?.toISOString(),
+        progress: task.total > 0 ? Math.round((task.processed / task.total) * 100) : 0,
+      },
+    });
+  } catch (error) {
+    console.error('Get image sync status error:', error);
+    res.status(500).json({ error: '获取同步状态失败' });
+  }
+});
+
+// POST /api/config/image-sync - Start image sync task manually
+router.post('/image-sync', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { strategy } = req.body as { strategy?: 's3' | 'external' };
+
+    if (!strategy || (strategy !== 's3' && strategy !== 'external')) {
+      res.status(400).json({ error: '请指定有效的同步策略: s3 或 external' });
+      return;
+    }
+
+    const task = startSyncTask(strategy);
+
+    res.json({
+      success: true,
+      task: {
+        id: task.id,
+        status: task.status,
+        strategy: task.strategy,
+        total: task.total,
+      },
+    });
+  } catch (error) {
+    console.error('Start image sync error:', error);
+    const message = error instanceof Error ? error.message : '启动同步任务失败';
+    res.status(500).json({ error: message });
+  }
+});
+
+// DELETE /api/config/image-sync/:taskId - Cancel image sync task
+router.delete('/image-sync/:taskId', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { taskId } = req.params;
+
+    const success = cancelSyncTask(taskId);
+
+    if (!success) {
+      res.status(400).json({ error: '任务不存在或已完成/失败' });
+      return;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Cancel image sync error:', error);
+    res.status(500).json({ error: '取消同步任务失败' });
   }
 });
 

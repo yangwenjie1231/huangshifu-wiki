@@ -103,6 +103,41 @@ export const clearImagePreferenceCache = () => {
   cachedPreference = null;
 };
 
+export interface UpdateImagePreferenceOptions {
+  strategy?: 'local' | 's3' | 'external';
+  fallback?: boolean;
+  autoSync?: boolean;
+}
+
+export interface UpdateImagePreferenceResult {
+  success: boolean;
+  preference: ImagePreference;
+  syncTask?: {
+    id: string;
+    status: string;
+    strategy: string;
+    total: number;
+  } | null;
+}
+
+/**
+ * 更新图片存储偏好设置
+ * 当切换到 S3 或 external 策略时，会自动启动图片同步任务
+ */
+export const updateImagePreference = async (
+  options: UpdateImagePreferenceOptions
+): Promise<UpdateImagePreferenceResult> => {
+  const response = await apiPost<UpdateImagePreferenceResult>(
+    '/api/config/image-preference',
+    options
+  );
+
+  // 清除缓存，下次获取时会重新加载
+  clearImagePreferenceCache();
+
+  return response;
+};
+
 const getUrlByPreference = (map: ImageMap, preference: ImagePreference): string | null => {
   const { strategy, fallback } = preference;
 

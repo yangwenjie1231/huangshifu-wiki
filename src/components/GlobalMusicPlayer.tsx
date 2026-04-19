@@ -94,11 +94,26 @@ export const GlobalMusicPlayer = () => {
       stallCount: 0,
       readyState: 0
     });
-  }, [resolvedPlayUrl, seekTo]);
+    // 当resolvedPlayUrl变化（新歌曲URL已解析完成），如果应该是播放状态则开始播放
+    if (isPlaying && resolvedPlayUrl) {
+      const audio = audioRef.current;
+      // 短暂延迟确保音频元素已更新src
+      setTimeout(() => {
+        audio.play().catch(e => {
+          console.error("Playback failed:", e);
+          setIsPlaying(false);
+        });
+      }, 50);
+    }
+  }, [resolvedPlayUrl, seekTo, isPlaying, setIsPlaying]);
 
   useEffect(() => {
     if (audioRef.current) {
       if (isPlaying) {
+        // 只有在resolvedPlayUrl已设置的情况下才播放
+        if (!resolvedPlayUrl) {
+          return;
+        }
         // 检查缓冲是否足够再播放
         const audio = audioRef.current;
         const canPlay = audio.readyState >= 3 || // HAVE_FUTURE_DATA
@@ -129,7 +144,7 @@ export const GlobalMusicPlayer = () => {
         audioRef.current.pause();
       }
     }
-  }, [isPlaying, currentSong, setIsPlaying]);
+  }, [isPlaying, setIsPlaying, resolvedPlayUrl]);
 
   useEffect(() => {
     if (audioRef.current) {
