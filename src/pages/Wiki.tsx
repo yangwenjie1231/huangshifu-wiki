@@ -818,7 +818,7 @@ const WikiPageView = () => {
 						<h1 className="min-w-0 flex-1 text-5xl sm:text-6xl font-serif font-bold text-brand-olive leading-tight">
 							{page.title}
 						</h1>
-						<div className="flex flex-wrap items-center gap-2 sm:justify-end">
+						<div className="flex flex-wrap items-center justify-end gap-2">
 							<button
 								onClick={handleToggleFavorite}
 								disabled={!user || favoriting}

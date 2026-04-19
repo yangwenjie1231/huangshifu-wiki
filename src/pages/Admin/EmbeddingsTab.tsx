@@ -13,6 +13,7 @@ type EmbeddingsStatus = {
   modelCacheDir: string;
   modelLoaded: boolean;
   modelError: string | null;
+  usingModelScope: boolean;
   summary: {
     pending: number;
     processing: number;
@@ -256,6 +257,9 @@ export const EmbeddingsTab = () => {
                     未加载
                   </span>
                 )}
+                <span className="text-xs text-gray-400">
+                  ({status.usingModelScope ? 'ModelScope 镜像' : 'Hugging Face'})
+                </span>
               </div>
               {status.modelError && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-xl mt-2">

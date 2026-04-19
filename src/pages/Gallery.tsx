@@ -17,6 +17,7 @@ import { toDateValue } from '../lib/dateUtils';
 import { LocationTagInput } from '../components/LocationTagInput';
 import Pagination from '../components/Pagination';
 import { GallerySkeleton } from '../components/GallerySkeleton';
+import { extractGpsFromMultipleFiles, findMostFrequentGpsCoordinates } from '../services/exifService';
 import type { GalleryItem } from '../types/entities';
 import type { UploadSessionResponse, UploadFileResponse, GalleryCreateResponse } from '../types/api';
 
@@ -352,6 +353,44 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
     onClose();
   };
 
+  const extractLocationFromImages = async (imageFiles: File[]) => {
+    // 如果已经设置了地点，不再自动提取
+    if (locationName) return;
+
+    try {
+      // 提取 GPS 信息
+      const gpsResults = await extractGpsFromMultipleFiles(imageFiles);
+      const mostFrequentGps = findMostFrequentGpsCoordinates(gpsResults);
+
+      if (mostFrequentGps) {
+        // 调用 API 解析经纬度为行政区划
+        const data = await apiPost<{
+          result?: {
+            adcode: string;
+            province: string;
+            city: string;
+            district: string;
+          }
+        }>('/api/regions/resolve', {
+          lng: mostFrequentGps.longitude,
+          lat: mostFrequentGps.latitude,
+        });
+
+        if (data.result) {
+          const { adcode, province, city, district } = data.result;
+          const fullName = `${province}${city}${district}`.replace(/^(内蒙古自治区|宁夏回族自治区|广西壮族自治区|新疆维吾尔自治区|西藏自治区|特别行政区)/g, (m: string) => m);
+
+          setLocationName(fullName);
+          setLocationCode(adcode);
+          show(`已自动识别地点：${fullName}`, { variant: 'success' });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to extract location from images:', error);
+      // 静默失败，不影响用户上传体验
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -386,6 +425,9 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
           const folderName = path.split('/')[0];
           if (folderName) setTitle(folderName);
         }
+
+        // 尝试从图片 EXIF 中提取地点信息
+        extractLocationFromImages(validFiles.map(f => f.file));
       }
     }
   };
