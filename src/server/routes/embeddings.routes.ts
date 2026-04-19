@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { requireAdmin, type AuthenticatedRequest } from '../middleware/auth';
 import { parseInteger, parseBoolean } from '../utils';
 import { prisma } from '../prisma';
-import { getEmbeddingModelName, getEmbeddingVectorSize } from '../vector/clipEmbedding';
+import { getEmbeddingModelName, getEmbeddingVectorSize, getModelCacheDir, isModelLoaded, getModelLoadError } from '../vector/clipEmbedding';
 import { getQdrantCollectionName } from '../vector/qdrantService';
 import { enqueueMissingImageEmbeddings, syncImageEmbeddingBatch } from '../vector/embeddingSync';
 
@@ -27,10 +27,17 @@ router.get('/status', requireAdmin, async (_req: AuthenticatedRequest, res) => {
       total: pending + processing + ready + failed,
     };
 
+    // 获取模型加载状态
+    const modelLoaded = isModelLoaded();
+    const modelError = getModelLoadError();
+
     res.json({
       modelName: getEmbeddingModelName(),
       vectorSize: getEmbeddingVectorSize(),
       qdrantCollection: getQdrantCollectionName(),
+      modelCacheDir: getModelCacheDir(),
+      modelLoaded,
+      modelError: modelError ? modelError.message : null,
       summary,
     });
   } catch (error) {

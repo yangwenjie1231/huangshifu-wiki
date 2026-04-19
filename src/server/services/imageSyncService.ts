@@ -91,23 +91,37 @@ export function cleanupOldSyncTasks(): void {
  */
 function localUrlToAbsoluteFile(localUrl: string | null | undefined): string | null {
   if (!localUrl || typeof localUrl !== 'string') {
+    console.log(`[ImageSync] localUrl 为空或不是字符串: ${localUrl}`);
     return null;
   }
 
+  console.log(`[ImageSync] 解析 localUrl: ${localUrl}`);
+
   if (!localUrl.startsWith('/uploads/')) {
+    console.log(`[ImageSync] localUrl 不以 /uploads/ 开头`);
     return null;
   }
 
   const relativePath = localUrl.slice('/uploads/'.length);
   if (!relativePath) {
+    console.log(`[ImageSync] relativePath 为空`);
     return null;
   }
+
+  console.log(`[ImageSync] relativePath: ${relativePath}`);
+  console.log(`[ImageSync] uploadsDir: ${uploadsDir}`);
 
   const resolvedBase = path.resolve(uploadsDir);
   const resolvedTarget = path.resolve(resolvedBase, relativePath);
 
+  console.log(`[ImageSync] resolvedBase: ${resolvedBase}`);
+  console.log(`[ImageSync] resolvedTarget: ${resolvedTarget}`);
+
   // 路径遍历保护
-  if (!resolvedTarget.startsWith(resolvedBase)) {
+  // 在 Linux 上，需要确保路径分隔符一致
+  const baseWithSep = resolvedBase.endsWith(path.sep) ? resolvedBase : resolvedBase + path.sep;
+  if (!resolvedTarget.startsWith(baseWithSep) && resolvedTarget !== resolvedBase) {
+    console.log(`[ImageSync] 路径遍历检查失败: target=${resolvedTarget}, base=${baseWithSep}`);
     return null;
   }
 
@@ -124,19 +138,28 @@ async function syncImageToS3(imageMap: {
   blurhash: string | null;
 }): Promise<{ success: boolean; error?: string; s3Url?: string }> {
   try {
+    console.log(`[ImageSync] 开始同步图片到S3: ${imageMap.id}, localUrl: ${imageMap.localUrl}`);
+
     // 如果已经有S3 URL，跳过
     if (imageMap.s3Url) {
+      console.log(`[ImageSync] 图片已有S3 URL，跳过: ${imageMap.id}`);
       return { success: true, s3Url: imageMap.s3Url };
     }
 
     const filePath = localUrlToAbsoluteFile(imageMap.localUrl);
     if (!filePath) {
+      console.error(`[ImageSync] 无法解析本地路径: ${imageMap.localUrl}`);
       return { success: false, error: `无法解析本地路径: ${imageMap.localUrl}` };
     }
 
+    console.log(`[ImageSync] 解析到文件路径: ${filePath}`);
+
     if (!fs.existsSync(filePath)) {
+      console.error(`[ImageSync] 本地文件不存在: ${filePath}`);
       return { success: false, error: `本地文件不存在: ${filePath}` };
     }
+
+    console.log(`[ImageSync] 文件存在，开始上传: ${filePath}`);
 
     // 检测文件类型
     const ext = path.extname(filePath).toLowerCase();
@@ -155,9 +178,12 @@ async function syncImageToS3(imageMap: {
     const objectKey = `images/${relativePath}`;
 
     // 上传到S3
+    console.log(`[ImageSync] 上传文件到S3: ${objectKey}, contentType: ${contentType}`);
     const s3Result = await uploadFileToS3(filePath, objectKey, contentType);
+    console.log(`[ImageSync] S3上传结果:`, s3Result);
 
     if (!s3Result.success || !s3Result.url) {
+      console.error(`[ImageSync] S3上传失败: ${s3Result.error}`);
       return { success: false, error: s3Result.error || 'S3上传失败' };
     }
 
@@ -172,14 +198,21 @@ async function syncImageToS3(imageMap: {
     }
 
     // 更新数据库
-    await prisma.imageMap.update({
-      where: { id: imageMap.id },
-      data: {
-        s3Url: s3Result.url,
-        storageType: 's3',
-        ...(blurhash && { blurhash }),
-      },
-    });
+    console.log(`[ImageSync] 更新ImageMap: ${imageMap.id}, s3Url: ${s3Result.url}`);
+    try {
+      await prisma.imageMap.update({
+        where: { id: imageMap.id },
+        data: {
+          s3Url: s3Result.url,
+          storageType: 's3',
+          ...(blurhash && { blurhash }),
+        },
+      });
+      console.log(`[ImageSync] ImageMap更新成功: ${imageMap.id}`);
+    } catch (dbError) {
+      console.error(`[ImageSync] ImageMap更新失败: ${imageMap.id}`, dbError);
+      return { success: false, error: `数据库更新失败: ${dbError instanceof Error ? dbError.message : '未知错误'}` };
+    }
 
     return { success: true, s3Url: s3Result.url };
   } catch (error) {
@@ -356,6 +389,12 @@ export async function executeSyncTask(taskId: string): Promise<void> {
     task.completedAt = new Date();
 
     console.log(`[ImageSync] 任务完成: ${taskId}, 成功: ${task.succeeded}, 失败: ${task.failed}`);
+
+    // 打印错误信息
+    if (task.errors.length > 0) {
+      console.log(`[ImageSync] 错误详情:`);
+      task.errors.forEach((err) => console.log(`  - ${err}`));
+    }
 
     // 清理旧任务
     cleanupOldSyncTasks();

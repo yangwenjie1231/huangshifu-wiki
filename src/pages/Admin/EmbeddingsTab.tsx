@@ -10,6 +10,9 @@ type EmbeddingsStatus = {
   modelName: string;
   vectorSize: number;
   qdrantCollection: string;
+  modelCacheDir: string;
+  modelLoaded: boolean;
+  modelError: string | null;
   summary: {
     pending: number;
     processing: number;
@@ -103,10 +106,10 @@ export const EmbeddingsTab = () => {
   const handleEnqueueMissing = async () => {
     setActionLoading('enqueue');
     try {
-      const response = await apiPost<{ enqueued: number }>('/api/embeddings/enqueue-missing', {
+      const response = await apiPost<{ queued: number }>('/api/embeddings/enqueue-missing', {
         limit: enqueueLimit,
       });
-      show(`已加入队列 ${response.enqueued} 个`);
+      show(`已加入队列 ${response.queued} 个`);
       fetchStatus();
     } catch (error) {
       console.error('Enqueue missing embeddings failed:', error);
@@ -137,8 +140,8 @@ export const EmbeddingsTab = () => {
 
     setActionLoading('retry');
     try {
-      const response = await apiPost<{ retried: number }>('/api/embeddings/retry-failed');
-      show(`已重试 ${response.retried} 个任务`);
+      const response = await apiPost<{ resetCount: number }>('/api/embeddings/retry-failed');
+      show(`已重置 ${response.resetCount} 个失败任务`);
       fetchStatus();
       if (showErrors) {
         fetchErrors();
@@ -235,6 +238,33 @@ export const EmbeddingsTab = () => {
               <div>
                 <span className="text-gray-500">集合名称：</span>
                 <span className="font-medium text-gray-900">{status.qdrantCollection}</span>
+              </div>
+            </div>
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm text-gray-500">模型状态：</span>
+                {status.modelLoaded ? (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">
+                    已加载
+                  </span>
+                ) : status.modelError ? (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                    加载失败
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-600">
+                    未加载
+                  </span>
+                )}
+              </div>
+              {status.modelError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl mt-2">
+                  <p className="text-xs text-red-600 font-medium mb-1">模型加载错误：</p>
+                  <p className="text-xs text-red-500">{status.modelError}</p>
+                </div>
+              )}
+              <div className="mt-2 text-xs text-gray-400">
+                缓存目录：{status.modelCacheDir}
               </div>
             </div>
           </div>
