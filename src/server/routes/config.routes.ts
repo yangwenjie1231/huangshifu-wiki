@@ -68,12 +68,29 @@ router.patch('/image-preference', requireAuth, requireAdmin, async (req, res) =>
     // 如果切换到 S3 或 external 策略，自动启动同步任务
     let syncTask = null;
     if (autoSync && strategy && strategy !== 'local' && strategy !== currentPreference.strategy) {
-      try {
-        syncTask = startSyncTask(strategy);
-        console.log(`[Config] 存储策略切换到 ${strategy}，自动启动图片同步任务: ${syncTask.id}`);
-      } catch (syncError) {
-        console.error('[Config] 自动启动同步任务失败:', syncError);
-        // 同步任务启动失败不影响配置更新
+      // 检查 S3 是否启用
+      if (strategy === 's3') {
+        const s3Config = getPublicConfig();
+        if (!s3Config.enabled) {
+          console.log('[Config] S3 未启用，跳过自动同步任务');
+        } else {
+          try {
+            syncTask = startSyncTask(strategy);
+            console.log(`[Config] 存储策略切换到 ${strategy}，自动启动图片同步任务: ${syncTask.id}`);
+          } catch (syncError) {
+            console.error('[Config] 自动启动同步任务失败:', syncError);
+            // 同步任务启动失败不影响配置更新
+          }
+        }
+      } else {
+        // external 策略直接启动
+        try {
+          syncTask = startSyncTask(strategy);
+          console.log(`[Config] 存储策略切换到 ${strategy}，自动启动图片同步任务: ${syncTask.id}`);
+        } catch (syncError) {
+          console.error('[Config] 自动启动同步任务失败:', syncError);
+          // 同步任务启动失败不影响配置更新
+        }
       }
     }
 

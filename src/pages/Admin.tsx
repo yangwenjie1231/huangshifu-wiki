@@ -853,7 +853,7 @@ const Admin = () => {
                               {activeTab === 'locks' ? (
                                 <>
                                   <p className="font-bold text-gray-700">{item.collection} / {item.recordId}</p>
-                                  <p className="text-xs text-gray-400">{item.username} ({item.userId.slice(0, 8)})</p>
+                                  <p className="text-xs text-gray-400">{item.username} ({item.userId?.slice(0, 8) ?? '未知'})</p>
                                 </>
                               ) : (
                                 <>

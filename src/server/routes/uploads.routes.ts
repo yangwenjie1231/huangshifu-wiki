@@ -33,8 +33,10 @@ const upload = multer({
       cb(null, uploadsDir);
     },
     filename: (_req, file, cb) => {
-      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
-      cb(null, `${uniqueSuffix}-${file.originalname}`);
+      // 使用随机文件名，避免中文和特殊字符问题
+      const ext = path.extname(file.originalname).toLowerCase();
+      const randomName = `${crypto.randomUUID()}${ext}`;
+      cb(null, randomName);
     },
   }),
   limits: {
