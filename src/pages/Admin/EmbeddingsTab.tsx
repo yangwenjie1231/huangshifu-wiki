@@ -15,11 +15,27 @@ type EmbeddingsStatus = {
   modelError: string | null;
   usingModelScope: boolean;
   summary: {
-    pending: number;
-    processing: number;
-    ready: number;
-    failed: number;
-    total: number;
+    gallery: {
+      pending: number;
+      processing: number;
+      ready: number;
+      failed: number;
+      total: number;
+    };
+    wiki: {
+      pending: number;
+      processing: number;
+      ready: number;
+      failed: number;
+      total: number;
+    };
+    post: {
+      pending: number;
+      processing: number;
+      ready: number;
+      failed: number;
+      total: number;
+    };
   };
 };
 
@@ -107,10 +123,28 @@ export const EmbeddingsTab = () => {
   const handleEnqueueMissing = async () => {
     setActionLoading('enqueue');
     try {
-      const response = await apiPost<{ queued: number }>('/api/embeddings/enqueue-missing', {
+      const response = await apiPost<{
+        gallery?: { requested: number; queued: number };
+        wiki?: { requested: number; queued: number };
+        post?: { requested: number; queued: number };
+        limit: number;
+        type: string;
+      }>('/api/embeddings/enqueue-missing', {
         limit: enqueueLimit,
       });
-      show(`已加入队列 ${response.queued} 个`);
+
+      const parts: string[] = [];
+      if (response.gallery) {
+        parts.push(`图库 ${response.gallery.queued} 个`);
+      }
+      if (response.wiki) {
+        parts.push(`百科 ${response.wiki.queued} 个`);
+      }
+      if (response.post) {
+        parts.push(`帖子 ${response.post.queued} 个`);
+      }
+
+      show(parts.length > 0 ? `已加入队列: ${parts.join(', ')}` : '没有需要加入队列的任务');
       fetchStatus();
     } catch (error) {
       console.error('Enqueue missing embeddings failed:', error);
@@ -194,34 +228,108 @@ export const EmbeddingsTab = () => {
 
       {status && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white rounded-2xl border border-gray-100 p-5">
-              <div className="flex items-center gap-2 mb-2">
-                <BarChart3 size={16} className="text-gray-400" />
-                <span className="text-sm text-gray-500">等待中</span>
+          {/* Gallery 统计 */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-5">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">图库图片</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <BarChart3 size={16} className="text-gray-400" />
+                  <span className="text-sm text-gray-500">等待中</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">{status.summary.gallery.pending}</p>
               </div>
-              <p className="text-3xl font-bold text-gray-900">{status.summary.pending}</p>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <RefreshCw size={16} className="text-blue-400 animate-spin" />
+                  <span className="text-sm text-gray-500">处理中</span>
+                </div>
+                <p className="text-2xl font-bold text-blue-600">{status.summary.gallery.processing}</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <BarChart3 size={16} className="text-green-400" />
+                  <span className="text-sm text-gray-500">就绪</span>
+                </div>
+                <p className="text-2xl font-bold text-green-600">{status.summary.gallery.ready}</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle size={16} className="text-red-400" />
+                  <span className="text-sm text-gray-500">失败</span>
+                </div>
+                <p className="text-2xl font-bold text-red-600">{status.summary.gallery.failed}</p>
+              </div>
             </div>
-            <div className="bg-white rounded-2xl border border-gray-100 p-5">
-              <div className="flex items-center gap-2 mb-2">
-                <RefreshCw size={16} className="text-blue-400 animate-spin" />
-                <span className="text-sm text-gray-500">处理中</span>
+          </div>
+
+          {/* Wiki 统计 */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-5">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">百科图片</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <BarChart3 size={16} className="text-gray-400" />
+                  <span className="text-sm text-gray-500">等待中</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">{status.summary.wiki.pending}</p>
               </div>
-              <p className="text-3xl font-bold text-blue-600">{status.summary.processing}</p>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <RefreshCw size={16} className="text-blue-400 animate-spin" />
+                  <span className="text-sm text-gray-500">处理中</span>
+                </div>
+                <p className="text-2xl font-bold text-blue-600">{status.summary.wiki.processing}</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <BarChart3 size={16} className="text-green-400" />
+                  <span className="text-sm text-gray-500">就绪</span>
+                </div>
+                <p className="text-2xl font-bold text-green-600">{status.summary.wiki.ready}</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle size={16} className="text-red-400" />
+                  <span className="text-sm text-gray-500">失败</span>
+                </div>
+                <p className="text-2xl font-bold text-red-600">{status.summary.wiki.failed}</p>
+              </div>
             </div>
-            <div className="bg-white rounded-2xl border border-gray-100 p-5">
-              <div className="flex items-center gap-2 mb-2">
-                <BarChart3 size={16} className="text-green-400" />
-                <span className="text-sm text-gray-500">就绪</span>
+          </div>
+
+          {/* Post 统计 */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-5">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">帖子图片</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <BarChart3 size={16} className="text-gray-400" />
+                  <span className="text-sm text-gray-500">等待中</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">{status.summary.post.pending}</p>
               </div>
-              <p className="text-3xl font-bold text-green-600">{status.summary.ready}</p>
-            </div>
-            <div className="bg-white rounded-2xl border border-gray-100 p-5">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle size={16} className="text-red-400" />
-                <span className="text-sm text-gray-500">失败</span>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <RefreshCw size={16} className="text-blue-400 animate-spin" />
+                  <span className="text-sm text-gray-500">处理中</span>
+                </div>
+                <p className="text-2xl font-bold text-blue-600">{status.summary.post.processing}</p>
               </div>
-              <p className="text-3xl font-bold text-red-600">{status.summary.failed}</p>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <BarChart3 size={16} className="text-green-400" />
+                  <span className="text-sm text-gray-500">就绪</span>
+                </div>
+                <p className="text-2xl font-bold text-green-600">{status.summary.post.ready}</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle size={16} className="text-red-400" />
+                  <span className="text-sm text-gray-500">失败</span>
+                </div>
+                <p className="text-2xl font-bold text-red-600">{status.summary.post.failed}</p>
+              </div>
             </div>
           </div>
 
@@ -316,12 +424,12 @@ export const EmbeddingsTab = () => {
                 )}
               >
                 <AlertTriangle size={14} />
-                查看错误 ({status.summary.failed})
+                查看错误 ({status.summary.gallery.failed + status.summary.wiki.failed + status.summary.post.failed})
               </button>
 
               <button
                 onClick={handleRetryFailed}
-                disabled={actionLoading !== null || status.summary.failed === 0}
+                disabled={actionLoading !== null || (status.summary.gallery.failed + status.summary.wiki.failed + status.summary.post.failed) === 0}
                 className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 inline-flex items-center gap-2"
               >
                 {actionLoading === 'retry' ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
