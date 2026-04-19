@@ -6,6 +6,14 @@ import { clsx } from 'clsx';
 import { apiGet, apiPost } from '../../lib/apiClient';
 import { useToast } from '../../components/Toast';
 
+type EmbeddingsStatusSummary = {
+  pending: number;
+  processing: number;
+  ready: number;
+  failed: number;
+  total: number;
+};
+
 type EmbeddingsStatus = {
   modelName: string;
   vectorSize: number;
@@ -14,30 +22,27 @@ type EmbeddingsStatus = {
   modelLoaded: boolean;
   modelError: string | null;
   usingModelScope: boolean;
-  summary: {
-    gallery: {
-      pending: number;
-      processing: number;
-      ready: number;
-      failed: number;
-      total: number;
-    };
-    wiki: {
-      pending: number;
-      processing: number;
-      ready: number;
-      failed: number;
-      total: number;
-    };
-    post: {
-      pending: number;
-      processing: number;
-      ready: number;
-      failed: number;
-      total: number;
-    };
+  summary: EmbeddingsStatusSummary | {
+    gallery: EmbeddingsStatusSummary;
+    wiki: EmbeddingsStatusSummary;
+    post: EmbeddingsStatusSummary;
   };
 };
+
+// 兼容新旧数据格式
+function normalizeSummary(summary: EmbeddingsStatus['summary']) {
+  // 新格式：包含 gallery/wiki/post
+  if ('gallery' in summary) {
+    return summary as { gallery: EmbeddingsStatusSummary; wiki: EmbeddingsStatusSummary; post: EmbeddingsStatusSummary };
+  }
+  // 旧格式：直接是统计数据，包装成 gallery 格式
+  const oldSummary = summary as EmbeddingsStatusSummary;
+  return {
+    gallery: oldSummary,
+    wiki: { pending: 0, processing: 0, ready: 0, failed: 0, total: 0 },
+    post: { pending: 0, processing: 0, ready: 0, failed: 0, total: 0 },
+  };
+}
 
 type EmbeddingsError = {
   id: string;
