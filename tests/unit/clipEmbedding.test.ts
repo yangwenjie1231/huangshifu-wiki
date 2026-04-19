@@ -8,6 +8,11 @@ vi.mock('@xenova/transformers', () => ({
     read: readMock,
   },
   pipeline: pipelineMock,
+  env: {
+    cacheDir: '',
+    allowRemoteModels: true,
+    allowLocalModels: false,
+  },
 }));
 
 describe('clipEmbedding', () => {
@@ -46,7 +51,13 @@ describe('clipEmbedding', () => {
     const module = await import('../../src/server/vector/clipEmbedding');
     const vector = await module.generateImageEmbedding(Buffer.from([1, 2, 3]));
 
-    expect(pipelineMock).toHaveBeenCalledWith('image-feature-extraction', 'Xenova/clip-vit-base-patch32');
+    expect(pipelineMock).toHaveBeenCalledWith(
+      'image-feature-extraction',
+      'Xenova/clip-vit-base-patch32',
+      expect.objectContaining({
+        cache_dir: expect.any(String),
+      })
+    );
     expect(readMock).toHaveBeenCalledTimes(1);
     expect(extractorMock).toHaveBeenCalledWith(
       { kind: 'image' },
