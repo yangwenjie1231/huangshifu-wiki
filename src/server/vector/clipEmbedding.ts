@@ -2,6 +2,7 @@ import { RawImage, pipeline, CLIPTextModelWithProjection, CLIPTokenizer, env } f
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { execSync } from 'child_process';
 
 const DEFAULT_MODEL_NAME = 'Xenova/clip-vit-base-patch32';
 const DEFAULT_VECTOR_SIZE = 512;
@@ -16,14 +17,6 @@ if (process.env.TRANSFORMERS_OFFLINE === 'true') {
   env.allowRemoteModels = false;
   env.allowLocalModels = true;
 }
-
-// 保存原始配置用于自动回退
-const ORIGINAL_REMOTE_HOST = env.remoteHost;
-const ORIGINAL_REMOTE_PATH_TEMPLATE = env.remotePathTemplate;
-
-// ModelScope 配置
-const MODELSCOPE_HOST = 'https://www.modelscope.cn';
-const MODELSCOPE_PATH_TEMPLATE = 'models/{model}/resolve/master/{file}';
 
 type TensorLike = {
   data?: ArrayLike<number>;
@@ -83,24 +76,6 @@ export function isModelScopeActive() {
   return isUsingModelScope;
 }
 
-function switchToModelScope() {
-  if (!isUsingModelScope) {
-    console.log('[CLIP] 切换到 ModelScope 镜像源');
-    env.remoteHost = MODELSCOPE_HOST;
-    env.remotePathTemplate = MODELSCOPE_PATH_TEMPLATE;
-    isUsingModelScope = true;
-  }
-}
-
-function resetToHuggingFace() {
-  if (isUsingModelScope) {
-    console.log('[CLIP] 重置到 Hugging Face 源');
-    env.remoteHost = ORIGINAL_REMOTE_HOST;
-    env.remotePathTemplate = ORIGINAL_REMOTE_PATH_TEMPLATE;
-    isUsingModelScope = false;
-  }
-}
-
 function isNetworkError(error: Error): boolean {
   const errorMessage = error.message?.toLowerCase() || '';
   return (
@@ -114,105 +89,84 @@ function isNetworkError(error: Error): boolean {
   );
 }
 
-async function loadImageExtractorWithFallback(modelName: string): Promise<ExtractorFunc> {
-  // 首先尝试 Hugging Face
-  if (!isUsingModelScope) {
-    try {
-      console.log(`[CLIP] 尝试从 Hugging Face 加载模型`);
-      resetToHuggingFace();
-      const extractor = await pipeline('image-feature-extraction', modelName, {
-        cache_dir: MODEL_CACHE_DIR,
-      });
-      console.log(`[CLIP] 从 Hugging Face 加载模型成功`);
-      return extractor as ExtractorFunc;
-    } catch (error) {
-      if (isNetworkError(error as Error)) {
-        console.warn(`[CLIP] 从 Hugging Face 加载失败，准备切换到 ModelScope`);
-      } else {
-        throw error;
-      }
-    }
+function getModelLocalPath(modelName: string): string | null {
+  // 检查模型是否已存在于本地缓存
+  const modelDir = path.join(MODEL_CACHE_DIR, 'models--' + modelName.replace('/', '--'));
+  if (fs.existsSync(modelDir)) {
+    return modelDir;
   }
+  
+  // 检查 ModelScope 下载的模型路径
+  const modelScopeDir = path.join(MODEL_CACHE_DIR, modelName);
+  if (fs.existsSync(modelScopeDir)) {
+    return modelScopeDir;
+  }
+  
+  return null;
+}
 
-  // 切换到 ModelScope 重试
-  switchToModelScope();
+async function downloadFromModelScope(modelName: string): Promise<string> {
+  console.log(`[CLIP] 尝试使用 ModelScope 下载模型: ${modelName}`);
+  
+  const targetDir = path.join(MODEL_CACHE_DIR, modelName);
+  
+  // 检查是否已存在
+  if (fs.existsSync(targetDir) && fs.readdirSync(targetDir).length > 0) {
+    console.log(`[CLIP] 模型已存在于: ${targetDir}`);
+    return targetDir;
+  }
+  
+  // 确保目录存在
+  fs.mkdirSync(targetDir, { recursive: true });
+  
   try {
-    console.log(`[CLIP] 尝试从 ModelScope 加载模型`);
-    const extractor = await pipeline('image-feature-extraction', modelName, {
-      cache_dir: MODEL_CACHE_DIR,
+    // 尝试使用 modelscope CLI 下载
+    console.log(`[CLIP] 使用 modelscope CLI 下载模型...`);
+    execSync(`modelscope download --model ${modelName} --local_dir "${targetDir}"`, {
+      stdio: 'inherit',
+      timeout: 300000, // 5分钟超时
     });
-    console.log(`[CLIP] 从 ModelScope 加载模型成功`);
-    return extractor as ExtractorFunc;
+    console.log(`[CLIP] ModelScope 下载成功: ${targetDir}`);
+    isUsingModelScope = true;
+    return targetDir;
   } catch (error) {
-    console.error(`[CLIP] 从 ModelScope 加载也失败:`, error);
-    throw error;
+    console.error(`[CLIP] ModelScope CLI 下载失败:`, error);
+    throw new Error(`ModelScope 下载失败: ${error instanceof Error ? error.message : '未知错误'}`);
   }
 }
 
-async function loadTextModelWithFallback(modelName: string): Promise<CLIPTextModelWithProjection> {
-  if (!isUsingModelScope) {
+async function loadModelWithFallback<T>(
+  modelName: string,
+  loadFn: (modelPath: string) => Promise<T>,
+  modelType: string
+): Promise<T> {
+  // 首先检查本地是否已有模型
+  const localPath = getModelLocalPath(modelName);
+  if (localPath) {
+    console.log(`[CLIP] 使用本地模型: ${localPath}`);
     try {
-      console.log(`[CLIP] 尝试从 Hugging Face 加载文本模型`);
-      resetToHuggingFace();
-      const model = await CLIPTextModelWithProjection.from_pretrained(modelName, {
-        cache_dir: MODEL_CACHE_DIR,
-      });
-      console.log(`[CLIP] 从 Hugging Face 加载文本模型成功`);
-      return model;
+      return await loadFn(localPath);
     } catch (error) {
-      if (isNetworkError(error as Error)) {
-        console.warn(`[CLIP] 从 Hugging Face 加载文本模型失败，准备切换到 ModelScope`);
-      } else {
-        throw error;
-      }
+      console.warn(`[CLIP] 本地模型加载失败，尝试重新下载:`, error);
     }
   }
-
-  switchToModelScope();
+  
+  // 尝试从 Hugging Face 下载
   try {
-    console.log(`[CLIP] 尝试从 ModelScope 加载文本模型`);
-    const model = await CLIPTextModelWithProjection.from_pretrained(modelName, {
-      cache_dir: MODEL_CACHE_DIR,
-    });
-    console.log(`[CLIP] 从 ModelScope 加载文本模型成功`);
-    return model;
+    console.log(`[CLIP] 尝试从 Hugging Face 加载${modelType}`);
+    isUsingModelScope = false;
+    return await loadFn(modelName);
   } catch (error) {
-    console.error(`[CLIP] 从 ModelScope 加载文本模型也失败:`, error);
-    throw error;
-  }
-}
-
-async function loadTextTokenizerWithFallback(modelName: string): Promise<CLIPTokenizer> {
-  if (!isUsingModelScope) {
-    try {
-      console.log(`[CLIP] 尝试从 Hugging Face 加载分词器`);
-      resetToHuggingFace();
-      const tokenizer = await CLIPTokenizer.from_pretrained(modelName, {
-        cache_dir: MODEL_CACHE_DIR,
-      });
-      console.log(`[CLIP] 从 Hugging Face 加载分词器成功`);
-      return tokenizer;
-    } catch (error) {
-      if (isNetworkError(error as Error)) {
-        console.warn(`[CLIP] 从 Hugging Face 加载分词器失败，准备切换到 ModelScope`);
-      } else {
-        throw error;
-      }
+    if (!isNetworkError(error as Error)) {
+      throw error;
     }
+    console.warn(`[CLIP] 从 Hugging Face 加载${modelType}失败，准备使用 ModelScope`);
   }
-
-  switchToModelScope();
-  try {
-    console.log(`[CLIP] 尝试从 ModelScope 加载分词器`);
-    const tokenizer = await CLIPTokenizer.from_pretrained(modelName, {
-      cache_dir: MODEL_CACHE_DIR,
-    });
-    console.log(`[CLIP] 从 ModelScope 加载分词器成功`);
-    return tokenizer;
-  } catch (error) {
-    console.error(`[CLIP] 从 ModelScope 加载分词器也失败:`, error);
-    throw error;
-  }
+  
+  // 使用 ModelScope 下载并加载
+  const modelScopePath = await downloadFromModelScope(modelName);
+  console.log(`[CLIP] 从 ModelScope 加载${modelType}: ${modelScopePath}`);
+  return await loadFn(modelScopePath);
 }
 
 async function getImageExtractor() {
@@ -225,7 +179,17 @@ async function getImageExtractor() {
     console.log(`[CLIP] 正在加载图像特征提取模型: ${modelName}`);
     console.log(`[CLIP] 模型缓存目录: ${MODEL_CACHE_DIR}`);
 
-    imageExtractorPromise = loadImageExtractorWithFallback(modelName)
+    imageExtractorPromise = loadModelWithFallback(
+      modelName,
+      async (modelPath) => {
+        const extractor = await pipeline('image-feature-extraction', modelPath, {
+          cache_dir: MODEL_CACHE_DIR,
+          local_files_only: !modelPath.includes('/') || fs.existsSync(modelPath),
+        });
+        return extractor as ExtractorFunc;
+      },
+      '图像特征提取模型'
+    )
       .then((extractor) => {
         console.log(`[CLIP] 图像特征提取模型加载成功`);
         modelLoadError = null;
@@ -239,8 +203,11 @@ async function getImageExtractor() {
         // 提供更友好的错误信息
         if (isNetworkError(error)) {
           throw new Error(
-            `模型下载失败: 无法连接到 Hugging Face 或 ModelScope 服务器。` +
-            `请检查网络连接，或设置 TRANSFORMERS_OFFLINE=true 使用本地模型。` +
+            `模型下载失败: 无法连接到 Hugging Face 或 ModelScope 服务器。\n` +
+            `请检查网络连接，或手动下载模型:\n` +
+            `1. 安装 ModelScope: pip install modelscope\n` +
+            `2. 下载模型: modelscope download --model ${modelName} --local_dir "${path.join(MODEL_CACHE_DIR, modelName)}"\n` +
+            `3. 或使用 Git: git clone https://www.modelscope.cn/${modelName}.git\n` +
             `原始错误: ${error.message}`
           );
         }
@@ -259,7 +226,16 @@ async function getTextModel() {
     const modelName = getEmbeddingModelName();
     console.log(`[CLIP] 正在加载文本模型: ${modelName}`);
 
-    textModelPromise = loadTextModelWithFallback(modelName)
+    textModelPromise = loadModelWithFallback(
+      modelName,
+      async (modelPath) => {
+        return await CLIPTextModelWithProjection.from_pretrained(modelPath, {
+          cache_dir: MODEL_CACHE_DIR,
+          local_files_only: !modelPath.includes('/') || fs.existsSync(modelPath),
+        });
+      },
+      '文本模型'
+    )
       .then((model) => {
         console.log(`[CLIP] 文本模型加载成功`);
         return model;
@@ -283,7 +259,16 @@ async function getTextTokenizer() {
     const modelName = getEmbeddingModelName();
     console.log(`[CLIP] 正在加载文本分词器: ${modelName}`);
 
-    textTokenizerPromise = loadTextTokenizerWithFallback(modelName)
+    textTokenizerPromise = loadModelWithFallback(
+      modelName,
+      async (modelPath) => {
+        return await CLIPTokenizer.from_pretrained(modelPath, {
+          cache_dir: MODEL_CACHE_DIR,
+          local_files_only: !modelPath.includes('/') || fs.existsSync(modelPath),
+        });
+      },
+      '文本分词器'
+    )
       .then((tokenizer) => {
         console.log(`[CLIP] 文本分词器加载成功`);
         return tokenizer;

@@ -13,7 +13,6 @@ import { useToast } from "../../components/Toast";
 import type { WikiRelationType, WikiRelationRecord } from "./types";
 import { RELATION_TYPE_LABELS } from "./types";
 import RelationPreview from "./RelationPreview";
-import { calculateRelationQuality } from "../../lib/relationQuality";
 import {
 	filterAndSortRelations,
 	type SortStrategy,
@@ -21,7 +20,6 @@ import {
 	DEFAULT_FILTER_OPTIONS,
 	DEFAULT_SORT_STRATEGY,
 	getTypeLabel,
-	getQualityFilterLabel,
 	getSortStrategyLabel,
 	type RelationWithMetadata,
 } from "../../lib/relationSorter";
@@ -206,14 +204,13 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 	const relationsWithMetadata: RelationWithMetadata[] = useMemo(() => {
 		return relations.map((relation) => {
 			const metadata = metadataMap.get(relation.targetSlug) || null;
-			const quality = calculateRelationQuality(relation, currentPage, metadata);
 			return {
 				...relation,
 				metadata,
-				qualityScore: quality.total,
+				qualityScore: 0,
 			};
 		});
-	}, [relations, metadataMap, currentPage]);
+	}, [relations, metadataMap]);
 
 	// 筛选和排序后的关联
 	const filteredAndSortedRelations = useMemo(() => {
@@ -401,28 +398,6 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 					</select>
 				</div>
 
-				{/* 质量筛选 */}
-				<div>
-					<label className="block text-xs font-bold text-brand-olive/60 mb-1">
-						质量筛选
-					</label>
-					<select
-						value={filterOptions.quality}
-						onChange={(e) =>
-							setFilterOptions({
-								...filterOptions,
-								quality: e.target.value as FilterOptions["quality"],
-							})
-						}
-						className="w-full px-3 py-2 bg-white rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-olive/20"
-					>
-						<option value="all">全部质量</option>
-						<option value="excellent">优秀 85+</option>
-						<option value="good">良好 70+</option>
-						<option value="fair">一般 55+</option>
-					</select>
-				</div>
-
 				{/* 排序方式 */}
 				<div>
 					<label className="block text-xs font-bold text-brand-olive/60 mb-1">
@@ -478,7 +453,6 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 					/ {relations.length} 个关联
 				</span>
 				{(filterOptions.type !== "all" ||
-					filterOptions.quality !== "all" ||
 					filterOptions.search ||
 					sortStrategy !== DEFAULT_SORT_STRATEGY) && (
 					<button
@@ -559,19 +533,22 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 								r.type === relation.type,
 						);
 
-							return (
-								<RelationPreview
-									key={`${relation.targetSlug}-${relation.type}`}
-									relation={{
-										...relation,
-										metadata: relation.metadata || undefined,
-									}}
-									currentPage={currentPage || ({} as WikiItem)}
-									onEdit={() => handleEditRelation(originalIndex)}
-									onRemove={() => handleRemoveRelation(originalIndex)}
-									isEditing={editingIndex === originalIndex}
-								/>
-							);
+						// 如果找不到原始索引，跳过渲染
+						if (originalIndex === -1) return null;
+
+						return (
+							<RelationPreview
+								key={`${relation.targetSlug}-${relation.type}`}
+								relation={{
+									...relation,
+									metadata: relation.metadata || undefined,
+								}}
+								currentPage={currentPage || ({} as WikiItem)}
+								onEdit={() => handleEditRelation(originalIndex)}
+								onRemove={() => handleRemoveRelation(originalIndex)}
+								isEditing={editingIndex === originalIndex}
+							/>
+						);
 					})}
 				</div>
 			)}
@@ -584,7 +561,10 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 						<button
 							type="button"
 							onClick={() => {
-								setFilterOptions(DEFAULT_FILTER_OPTIONS);
+								setFilterOptions({
+									...DEFAULT_FILTER_OPTIONS,
+									quality: "all" as const,
+								});
 								setSortStrategy(DEFAULT_SORT_STRATEGY);
 							}}
 							className="mt-2 text-brand-primary hover:underline text-sm"
