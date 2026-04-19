@@ -437,7 +437,7 @@ export const EmbeddingsTab = () => {
 
               <button
                 onClick={handleRetryFailed}
-                disabled={actionLoading !== null || (status.summary.gallery.failed + status.summary.wiki.failed + status.summary.post.failed) === 0}
+                disabled={actionLoading !== null || (summary.gallery.failed + summary.wiki.failed + summary.post.failed) === 0}
                 className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 inline-flex items-center gap-2"
               >
                 {actionLoading === 'retry' ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
