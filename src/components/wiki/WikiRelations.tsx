@@ -240,8 +240,7 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 	const relationSearchRef = useRef<HTMLDivElement>(null);
 	const relationSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-	// 编辑状态 - 使用 relation id 或唯一标识来跟踪，而不是索引
-	const [editingRelationId, setEditingRelationId] = useState<string | null>(null);
+	// 编辑状态
 	const [editingRelation, setEditingRelation] =
 		useState<WikiRelationRecord | null>(null);
 
@@ -353,29 +352,25 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 		onRelationsChange(relations.filter((_, i) => i !== index));
 	};
 
-	// 生成关联的唯一标识
-	const getRelationId = useCallback((relation: WikiRelationRecord) => {
-		return `${relation.targetSlug}-${relation.type}`;
-	}, []);
+	// 编辑状态 - 使用原始索引来跟踪，避免 type 变化导致 ID 变化的问题
+	const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
 	const handleEditRelation = (index: number) => {
-		const relation = relations[index];
-		setEditingRelationId(getRelationId(relation));
-		setEditingRelation({ ...relation });
+		setEditingIndex(index);
+		setEditingRelation({ ...relations[index] });
 	};
 
 	const handleSaveEdit = () => {
-		if (!editingRelation || editingRelationId === null) return;
-		const updated = relations.map((r) =>
-			getRelationId(r) === editingRelationId ? editingRelation : r,
-		);
+		if (!editingRelation || editingIndex === null) return;
+		const updated = [...relations];
+		updated[editingIndex] = editingRelation;
 		onRelationsChange(updated);
-		setEditingRelationId(null);
+		setEditingIndex(null);
 		setEditingRelation(null);
 	};
 
 	const handleCancelEdit = () => {
-		setEditingRelationId(null);
+		setEditingIndex(null);
 		setEditingRelation(null);
 	};
 
@@ -564,10 +559,9 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 								r.type === relation.type,
 						);
 
-						const relationId = getRelationId(relation);
 							return (
 								<RelationPreview
-									key={relationId}
+									key={`${relation.targetSlug}-${relation.type}`}
 									relation={{
 										...relation,
 										metadata: relation.metadata || undefined,
@@ -575,7 +569,7 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 									currentPage={currentPage || ({} as WikiItem)}
 									onEdit={() => handleEditRelation(originalIndex)}
 									onRemove={() => handleRemoveRelation(originalIndex)}
-									isEditing={editingRelationId === relationId}
+									isEditing={editingIndex === originalIndex}
 								/>
 							);
 					})}
@@ -602,7 +596,7 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 
 			{/* 编辑关联弹窗 */}
 			<AnimatePresence>
-				{editingRelation && editingRelationId !== null && (
+				{editingRelation && editingIndex !== null && (
 					<motion.div
 						initial={{ opacity: 0 }}
 						animate={{ opacity: 1 }}
