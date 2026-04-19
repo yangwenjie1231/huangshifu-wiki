@@ -814,11 +814,11 @@ const WikiPageView = () => {
 							{formatDate(page.updatedAt, "yyyy-MM-dd HH:mm")}
 						</span>
 					</div>
-					<div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-						<h1 className="min-w-0 flex-1 text-5xl sm:text-6xl font-serif font-bold text-brand-olive leading-tight">
-							{page.title}
-						</h1>
-						<div className="flex flex-wrap items-center justify-end gap-2">
+					<div className="flex flex-col gap-4">
+					<h1 className="text-5xl sm:text-6xl font-serif font-bold text-brand-olive leading-tight">
+						{page.title}
+					</h1>
+					<div className="flex flex-wrap items-center gap-2">
 							<button
 								onClick={handleToggleFavorite}
 								disabled={!user || favoriting}
@@ -893,10 +893,10 @@ const WikiPageView = () => {
 								)}
 								title={showGraph ? "收起图谱" : "展开图谱"}
 							>
-								<Link2 size={20} />
-								<span className="text-xs font-bold hidden sm:inline">
-									{showGraph ? "收起图谱" : "展开图谱"}
-								</span>
+								<Network size={20} />
+							<span className="text-xs font-bold hidden sm:inline">
+								{showGraph ? "收起图谱" : "展开图谱"}
+							</span>
 							</button>
 							<button
 								onClick={async () => {

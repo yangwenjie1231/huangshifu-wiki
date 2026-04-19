@@ -20,6 +20,7 @@ import {
 } from '../utils';
 import { enqueueGalleryImageEmbeddings } from '../vector/embeddingSync';
 import { prisma } from '../prisma';
+import { syncGalleryImageToImageMap } from '../services/galleryImageSyncService';
 
 function canViewGallery(gallery: { published: boolean; authorUid: string }, authUser?: ApiUser) {
   if (gallery.published) return true;
@@ -179,6 +180,15 @@ router.post('/upload', requireAuth, requireActiveUser, async (req: Authenticated
       console.error('Enqueue gallery image embeddings error:', error);
     }
 
+    // 同步图片到 ImageMap
+    try {
+      for (const entry of validatedFiles) {
+        await syncGalleryImageToImageMap(entry.asset.publicUrl, entry.asset.storageKey);
+      }
+    } catch (error) {
+      console.error('Sync gallery images to ImageMap error:', error);
+    }
+
     res.status(201).json({ gallery: await toGalleryResponse(gallery) });
   } catch (error) {
     if (createdAssetIds.length > 0) {
@@ -311,6 +321,15 @@ router.post('/', requireAuth, requireActiveUser, async (req: AuthenticatedReques
         console.error('Enqueue gallery image embeddings error:', error);
       }
 
+      // 同步图片到 ImageMap
+      try {
+        for (const asset of orderedAssets) {
+          await syncGalleryImageToImageMap(asset.publicUrl, asset.storageKey);
+        }
+      } catch (error) {
+        console.error('Sync gallery images to ImageMap error:', error);
+      }
+
       res.status(201).json({ gallery: await toGalleryResponse(gallery) });
       return;
     }
@@ -396,6 +415,20 @@ router.post('/', requireAuth, requireActiveUser, async (req: AuthenticatedReques
       );
     } catch (error) {
       console.error('Enqueue gallery image embeddings error:', error);
+    }
+
+    // 同步图片到 ImageMap
+    try {
+      for (const asset of fallbackAssets) {
+        const assetRecord = await prisma.mediaAsset.findUnique({
+          where: { id: asset.id },
+        });
+        if (assetRecord) {
+          await syncGalleryImageToImageMap(assetRecord.publicUrl, assetRecord.storageKey);
+        }
+      }
+    } catch (error) {
+      console.error('Sync gallery images to ImageMap error:', error);
     }
 
     res.status(201).json({ gallery: await toGalleryResponse(gallery) });
@@ -818,6 +851,15 @@ router.post('/:id/images', requireAuth, requireActiveUser, async (req: Authentic
         );
       } catch (error) {
         console.error('Enqueue gallery image embeddings error:', error);
+      }
+
+      // 同步新添加的图片到 ImageMap
+      try {
+        for (const asset of orderedAssets) {
+          await syncGalleryImageToImageMap(asset.publicUrl, asset.storageKey);
+        }
+      } catch (error) {
+        console.error('Sync gallery images to ImageMap error:', error);
       }
 
       res.json({ gallery: await toGalleryResponse(updated) });

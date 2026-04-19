@@ -615,7 +615,7 @@ const WikiEditor = () => {
 						>
 							<div className="flex items-center gap-2">
 								<SparklesIcon size={18} />
-								<span>🤖 AI 推荐</span>
+								<span>AI 推荐</span>
 							</div>
 							<div className="flex items-center gap-2">
 								{isRecommending ? (

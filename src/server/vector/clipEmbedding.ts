@@ -90,18 +90,60 @@ function isNetworkError(error: Error): boolean {
 }
 
 function getModelLocalPath(modelName: string): string | null {
-  // 检查模型是否已存在于本地缓存
-  const modelDir = path.join(MODEL_CACHE_DIR, 'models--' + modelName.replace('/', '--'));
-  if (fs.existsSync(modelDir)) {
-    return modelDir;
+  console.log(`[CLIP] 查找本地模型: ${modelName}`);
+  console.log(`[CLIP] 缓存目录: ${MODEL_CACHE_DIR}`);
+  
+  // 检查模型是否已存在于本地缓存 (Hugging Face 格式)
+  const hfModelDir = path.join(MODEL_CACHE_DIR, 'models--' + modelName.replace('/', '--'));
+  console.log(`[CLIP] 检查 Hugging Face 格式路径: ${hfModelDir}, 存在: ${fs.existsSync(hfModelDir)}`);
+  if (fs.existsSync(hfModelDir)) {
+    console.log(`[CLIP] 找到 Hugging Face 格式模型: ${hfModelDir}`);
+    return hfModelDir;
   }
   
   // 检查 ModelScope 下载的模型路径
   const modelScopeDir = path.join(MODEL_CACHE_DIR, modelName);
+  console.log(`[CLIP] 检查 ModelScope 格式路径: ${modelScopeDir}, 存在: ${fs.existsSync(modelScopeDir)}`);
+  
   if (fs.existsSync(modelScopeDir)) {
-    return modelScopeDir;
+    // 检查目录内容，确保模型文件存在
+    try {
+      const files = fs.readdirSync(modelScopeDir);
+      console.log(`[CLIP] 模型目录内容: ${files.join(', ')}`);
+      
+      const hasConfig = files.includes('config.json');
+      const onnxPath = path.join(modelScopeDir, 'onnx');
+      const hasOnnx = files.includes('onnx') && fs.existsSync(onnxPath);
+      
+      console.log(`[CLIP] 文件检查: config.json=${hasConfig}, onnx目录=${hasOnnx}`);
+      
+      if (hasConfig && hasOnnx) {
+        console.log(`[CLIP] 找到完整 ModelScope 格式模型: ${modelScopeDir}`);
+        return modelScopeDir;
+      } else {
+        console.warn(`[CLIP] 模型目录存在但文件不完整`);
+        console.warn(`[CLIP] 缺失: config.json=${!hasConfig}, onnx=${!hasOnnx}`);
+      }
+    } catch (err) {
+      console.error(`[CLIP] 读取模型目录失败:`, err);
+    }
   }
   
+  // 额外检查：直接检查 Xenova/clip-vit-base-patch32 路径
+  const directPath = path.join(MODEL_CACHE_DIR, 'Xenova', 'clip-vit-base-patch32');
+  console.log(`[CLIP] 检查直接路径: ${directPath}, 存在: ${fs.existsSync(directPath)}`);
+  if (fs.existsSync(directPath)) {
+    const files = fs.readdirSync(directPath);
+    const hasConfig = files.includes('config.json');
+    const hasOnnx = files.includes('onnx');
+    
+    if (hasConfig && hasOnnx) {
+      console.log(`[CLIP] 找到直接路径模型: ${directPath}`);
+      return directPath;
+    }
+  }
+  
+  console.log(`[CLIP] 未找到本地模型`);
   return null;
 }
 
