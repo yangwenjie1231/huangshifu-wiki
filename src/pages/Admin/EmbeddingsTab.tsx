@@ -252,21 +252,21 @@ export const EmbeddingsTab = () => {
                   <RefreshCw size={16} className="text-blue-400 animate-spin" />
                   <span className="text-sm text-gray-500">处理中</span>
                 </div>
-                <p className="text-2xl font-bold text-blue-600">{status.summary.gallery.processing}</p>
+                <p className="text-2xl font-bold text-blue-600">{summary.gallery.processing}</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <BarChart3 size={16} className="text-green-400" />
                   <span className="text-sm text-gray-500">就绪</span>
                 </div>
-                <p className="text-2xl font-bold text-green-600">{status.summary.gallery.ready}</p>
+                <p className="text-2xl font-bold text-green-600">{summary.gallery.ready}</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <AlertTriangle size={16} className="text-red-400" />
                   <span className="text-sm text-gray-500">失败</span>
                 </div>
-                <p className="text-2xl font-bold text-red-600">{status.summary.gallery.failed}</p>
+                <p className="text-2xl font-bold text-red-600">{summary.gallery.failed}</p>
               </div>
             </div>
           </div>
@@ -287,21 +287,21 @@ export const EmbeddingsTab = () => {
                   <RefreshCw size={16} className="text-blue-400 animate-spin" />
                   <span className="text-sm text-gray-500">处理中</span>
                 </div>
-                <p className="text-2xl font-bold text-blue-600">{status.summary.wiki.processing}</p>
+                <p className="text-2xl font-bold text-blue-600">{summary.wiki.processing}</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <BarChart3 size={16} className="text-green-400" />
                   <span className="text-sm text-gray-500">就绪</span>
                 </div>
-                <p className="text-2xl font-bold text-green-600">{status.summary.wiki.ready}</p>
+                <p className="text-2xl font-bold text-green-600">{summary.wiki.ready}</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <AlertTriangle size={16} className="text-red-400" />
                   <span className="text-sm text-gray-500">失败</span>
                 </div>
-                <p className="text-2xl font-bold text-red-600">{status.summary.wiki.failed}</p>
+                <p className="text-2xl font-bold text-red-600">{summary.wiki.failed}</p>
               </div>
             </div>
           </div>
@@ -322,21 +322,21 @@ export const EmbeddingsTab = () => {
                   <RefreshCw size={16} className="text-blue-400 animate-spin" />
                   <span className="text-sm text-gray-500">处理中</span>
                 </div>
-                <p className="text-2xl font-bold text-blue-600">{status.summary.post.processing}</p>
+                <p className="text-2xl font-bold text-blue-600">{summary.post.processing}</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <BarChart3 size={16} className="text-green-400" />
                   <span className="text-sm text-gray-500">就绪</span>
                 </div>
-                <p className="text-2xl font-bold text-green-600">{status.summary.post.ready}</p>
+                <p className="text-2xl font-bold text-green-600">{summary.post.ready}</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <AlertTriangle size={16} className="text-red-400" />
                   <span className="text-sm text-gray-500">失败</span>
                 </div>
-                <p className="text-2xl font-bold text-red-600">{status.summary.post.failed}</p>
+                <p className="text-2xl font-bold text-red-600">{summary.post.failed}</p>
               </div>
             </div>
           </div>
@@ -432,7 +432,7 @@ export const EmbeddingsTab = () => {
                 )}
               >
                 <AlertTriangle size={14} />
-                查看错误 ({status.summary.gallery.failed + status.summary.wiki.failed + status.summary.post.failed})
+                查看错误 ({summary.gallery.failed + summary.wiki.failed + summary.post.failed})
               </button>
 
               <button
