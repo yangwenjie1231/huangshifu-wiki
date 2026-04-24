@@ -51,22 +51,29 @@ const AlbumDetail = () => {
   const { currentSong, playAlbumTracks } = useMusic();
   const { show } = useToast();
 
-  const fetchAlbum = async () => {
-    if (!albumId) return;
-    setLoading(true);
-    try {
-      const response = await apiGet<AlbumResponse>(`/api/albums/${albumId}`);
-      setAlbum(response.album || null);
-    } catch (error) {
-      console.error('Fetch album detail error:', error);
-      setAlbum(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchAlbum();
+    const mockAlbum: AlbumResponse['album'] = {
+      id: albumId || 'album-mock-001',
+      title: '汉宫秋月',
+      artist: '黄诗扶',
+      cover: 'https://via.placeholder.com/300/f0ece3/c8951e?text=Cover',
+      description: '《汉宫秋月》是黄诗扶精心打造的一张古风概念专辑，以汉代宫廷为背景，通过十首风格各异的曲目，描绘了一幅幅历史画卷。专辑融合了传统民族乐器与现代编曲手法，既有大气磅礴的宫廷乐章，也有细腻婉约的个人独白。',
+      platformUrl: 'https://example.com/album',
+      tracks: [
+        { docId: 's001', id: '1001', title: '汉宫秋月', artist: '黄诗扶', album: '汉宫秋月', cover: '', audioUrl: '', sourceUrl: '', lyric: '', trackOrder: 0, favoritedByMe: false, primaryPlatform: null, platformIds: {} },
+        { docId: 's002', id: '1002', title: '白头吟', artist: '黄诗扶', album: '汉宫秋月', cover: '', audioUrl: '', sourceUrl: '', lyric: '', trackOrder: 1, favoritedByMe: true, primaryPlatform: null, platformIds: {} },
+        { docId: 's003', id: '1003', title: '长门赋', artist: '黄诗扶', album: '汉宫秋月', cover: '', audioUrl: '', sourceUrl: '', lyric: '', trackOrder: 2, favoritedByMe: false, primaryPlatform: null, platformIds: {} },
+        { docId: 's004', id: '1004', title: '凤求凰', artist: '黄诗扶', album: '汉宫秋月', cover: '', audioUrl: '', sourceUrl: '', lyric: '', trackOrder: 3, favoritedByMe: false, primaryPlatform: null, platformIds: {} },
+        { docId: 's005', id: '1005', title: '子衿', artist: '黄诗扶', album: '汉宫秋月', cover: '', audioUrl: '', sourceUrl: '', lyric: '', trackOrder: 4, favoritedByMe: false, primaryPlatform: null, platformIds: {} },
+        { docId: 's006', id: '1006', title: '采薇', artist: '黄诗扶', album: '汉宫秋月', cover: '', audioUrl: '', sourceUrl: '', lyric: '', trackOrder: 5, favoritedByMe: false, primaryPlatform: null, platformIds: {} },
+        { docId: 's007', id: '1007', title: '黍离', artist: '黄诗扶', album: '汉宫秋月', cover: '', audioUrl: '', sourceUrl: '', lyric: '', trackOrder: 6, favoritedByMe: false, primaryPlatform: null, platformIds: {} },
+        { docId: 's008', id: '1008', title: '蒹葭', artist: '黄诗扶', album: '汉宫秋月', cover: '', audioUrl: '', sourceUrl: '', lyric: '', trackOrder: 7, favoritedByMe: false, primaryPlatform: null, platformIds: {} },
+        { docId: 's009', id: '1009', title: '鹿鸣', artist: '黄诗扶', album: '汉宫秋月', cover: '', audioUrl: '', sourceUrl: '', lyric: '', trackOrder: 8, favoritedByMe: false, primaryPlatform: null, platformIds: {} },
+        { docId: 's010', id: '1010', title: '关雎', artist: '黄诗扶', album: '汉宫秋月', cover: '', audioUrl: '', sourceUrl: '', lyric: '', trackOrder: 9, favoritedByMe: false, primaryPlatform: null, platformIds: {} },
+      ],
+    };
+    setAlbum(mockAlbum);
+    setLoading(false);
   }, [albumId]);
 
   const handlePlay = (index = 0) => {
