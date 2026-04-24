@@ -203,35 +203,17 @@ const MainLayout = () => {
 			<GlobalMusicPlayer />
 			<BottomNav />
 			<footer
-				className={clsx(
-					"bg-brand-paper border-t border-gray-100 py-12 mt-20",
-					currentSong ? "mb-36 md:mb-20" : "mb-20 md:mb-0",
-				)}
+				className="text-center"
+				style={{
+					background: '#f0ece3',
+					padding: '40px 24px',
+					color: '#9e968e',
+					fontSize: '0.8125rem',
+					letterSpacing: '0.08em',
+					marginBottom: currentSong ? '80px' : '0',
+				}}
 			>
-				<div className="max-w-7xl mx-auto px-4 text-center">
-					<p className="font-serif italic text-brand-olive text-lg mb-2">
-						"诗情画意，扶摇直上"
-					</p>
-					<p className="text-gray-400 text-sm">
-						© 2026 诗扶小筑 - 黄诗扶粉丝Wiki与社区 by ywj x miaopan
-					</p>
-					<a
-						target="_blank"
-						rel="nofollow noopener noreferrer"
-						href="https://img.lhl.one"
-						className="text-gray-400 text-sm hover:text-gray-600 mt-2 inline-block mr-4"
-					>
-						Image Hub
-					</a>
-					<a
-						target="_blank"
-						rel="nofollow noopener noreferrer"
-						href="http://www.freecdn.vip/?zzwz"
-						className="text-gray-400 text-sm hover:text-gray-600 mt-2 inline-block"
-					>
-						LHL's Images
-					</a>
-				</div>
+				<p>© 2026 诗扶小筑 - 黄诗扶粉丝Wiki与社区</p>
 			</footer>
 		</div>
 	);
