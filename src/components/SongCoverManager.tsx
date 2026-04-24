@@ -133,7 +133,7 @@ export const SongCoverManager = ({ songDocId, currentCover, onCoverUpdated }: So
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="px-4 py-2 rounded-full border border-gray-200 text-sm text-gray-600 hover:text-brand-primary hover:border-brand-primary/40 transition-colors"
+        className="px-5 py-2 rounded border border-[#e0dcd3] text-sm text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-colors"
       >
         封面管理
       </button>
