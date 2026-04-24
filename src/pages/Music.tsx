@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useMusic } from '../context/MusicContext';
 import { Search, Plus, List, Sparkles, X, Heart, MessageSquare, Link2 } from 'lucide-react';
-import { useUserPreferences } from '../context/UserPreferencesContext';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MusicPlayer } from '../components/MusicPlayer';
@@ -104,8 +103,6 @@ const Music = () => {
   const { user, isAdmin, isBanned } = useAuth();
   const { currentSong, setCurrentSong, setIsPlaying, setPlaylist, playSongAtIndex } = useMusic();
   const { show } = useToast();
-  const { preferences, setViewMode } = useUserPreferences();
-  const viewMode = preferences.viewMode;
   const { t } = useI18n();
 
   const fetchInstrumentalTargets = async () => {
@@ -599,38 +596,9 @@ const Music = () => {
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8 items-start">
           {/* Main Content */}
           <div>
-            {/* Sub Nav */}
-            <div className="flex gap-6 border-b border-[#e0dcd3] pb-0.5 mb-6">
-              <button
-                onClick={() => setActiveTab('music')}
-                className={clsx(
-                  "text-[1.125rem] pb-2.5 relative tracking-[0.05em] transition-all",
-                  activeTab === 'music'
-                    ? "text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-[-2px] after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]"
-                    : "text-[#9e968e] hover:text-[#c8951e]"
-                )}
-              >
-                {t('music.tabMusic')}
-              </button>
-              <button
-                onClick={() => setActiveTab('albums')}
-                className={clsx(
-                  "text-[1.125rem] pb-2.5 relative tracking-[0.05em] transition-all",
-                  activeTab === 'albums'
-                    ? "text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-[-2px] after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]"
-                    : "text-[#9e968e] hover:text-[#c8951e]"
-                )}
-              >
-                {t('music.tabAlbums')}
-              </button>
-            </div>
-
-            {/* Filters + Search */}
             <MusicFilters
               activeTab={activeTab}
               onTabChange={setActiveTab}
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
               isAdmin={isAdmin}
               onCreateAlbum={() => {
                 setEditingAlbum(null);
@@ -640,8 +608,6 @@ const Music = () => {
               onSortByChange={(value) => { setSortBy(value); setPage(1); }}
               sortOrder={sortOrder}
               onSortOrderChange={setSortOrder}
-              filterPlatform={filterPlatform}
-              onFilterPlatformChange={(value) => { setFilterPlatform(value); setPage(1); }}
               showAccompaniments={showAccompaniments}
               onShowAccompanimentsChange={setShowAccompaniments}
               musicCount={displaySongs.length}
