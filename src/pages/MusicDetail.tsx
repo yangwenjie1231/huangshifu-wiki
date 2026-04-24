@@ -289,30 +289,29 @@ const MusicDetail = () => {
 
             {/* Lyrics */}
             <div className="mb-10">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3 mb-4">
                 <h2 className="text-base font-semibold text-[#2c2c2c] tracking-[0.12em] flex items-center gap-2">
                   <span className="w-[3px] h-4 bg-[#c8951e] rounded-[1px] opacity-60 inline-block" />
                   歌词
                 </h2>
                 {song?.lyric && (
-                  <div className="flex items-center gap-3 text-xs text-[#9e968e]">
+                  <div className="flex items-center gap-2">
                     <button
                       onClick={handleCopyLyrics}
-                      className="hover:text-[#c8951e] transition-colors"
+                      className="text-xs px-3 py-1.5 border border-[#e0dcd3] text-[#9e968e] hover:text-[#c8951e] hover:border-[#c8951e] rounded transition-all duration-300"
                     >
                       {lyricsCopied ? '已复制' : '复制歌词'}
                     </button>
-                    <span className="text-[#e0dcd3]">|</span>
                     <button
                       onClick={() => setLyricsExpanded(!lyricsExpanded)}
-                      className="hover:text-[#c8951e] transition-colors"
+                      className="text-xs px-3 py-1.5 border border-[#e0dcd3] text-[#9e968e] hover:text-[#c8951e] hover:border-[#c8951e] rounded transition-all duration-300"
                     >
                       {lyricsExpanded ? '收起' : '展开'}
                     </button>
                   </div>
                 )}
               </div>
-              <div
+                <div
                 className={clsx(
                   'text-lg leading-normal text-[#6b6560] whitespace-pre-line tracking-[0.04em] py-3 px-1 overflow-hidden transition-all',
                   !lyricsExpanded && 'max-h-[300px]'
@@ -335,7 +334,7 @@ const MusicDetail = () => {
                 {song.description.length > 200 ? (
                   <button
                     onClick={() => setDescExpanded(!descExpanded)}
-                    className="text-sm text-[#c8951e] hover:underline mt-3 inline-flex items-center gap-1"
+                    className="text-xs px-3 py-1.5 border border-[#e0dcd3] text-[#9e968e] hover:text-[#c8951e] hover:border-[#c8951e] rounded transition-all duration-300 mt-3 inline-flex items-center gap-1"
                   >
                     {descExpanded ? (
                       <>收起 <ChevronUp size={14} /></>
@@ -354,10 +353,10 @@ const MusicDetail = () => {
                   <span className="w-[3px] h-4 bg-[#c8951e] rounded-[1px] opacity-60 inline-block" />
                   关联乐评
                 </h2>
-                <Link
-                  to={`/forum/new?musicDocId=${song.docId}&musicTitle=${encodeURIComponent(song.title)}`}
-                  className="px-4 py-2 bg-[#c8951e] text-white rounded text-xs font-semibold hover:bg-[#dca828] transition-all"
-                >
+                  <Link
+                    to={`/forum/new?musicDocId=${song.docId}&musicTitle=${encodeURIComponent(song.title)}`}
+                    className="px-4 py-2 bg-[#c8951e] text-white rounded text-xs font-semibold hover:bg-[#dca828] transition-all"
+                  >
                   发表乐评
                 </Link>
               </div>

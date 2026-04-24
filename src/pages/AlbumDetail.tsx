@@ -180,7 +180,7 @@ const AlbumDetail = () => {
                 {album.description.length > 60 ? (
                   <button
                     onClick={() => setDescExpanded(!descExpanded)}
-                    className="text-xs text-[#c8951e] hover:underline mt-1 inline-flex items-center gap-0.5"
+                    className="text-xs px-3 py-1.5 border border-[#e0dcd3] text-[#9e968e] hover:text-[#c8951e] hover:border-[#c8951e] rounded transition-all duration-300 mt-1 inline-flex items-center gap-0.5"
                   >
                     {descExpanded ? (
                       <>收起 <ChevronUp size={12} /></>
