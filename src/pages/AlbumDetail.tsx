@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Disc3, Play, Heart, ExternalLink, Link2, ChevronDown, ChevronUp } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -47,7 +47,15 @@ const AlbumDetail = () => {
   const [album, setAlbum] = useState<AlbumResponse['album'] | null>(null);
   const [favoriting, setFavoriting] = useState<string | null>(null);
   const [descExpanded, setDescExpanded] = useState(false);
+  const [descNeedExpand, setDescNeedExpand] = useState(false);
+  const descRef = useRef<HTMLDivElement>(null);
   const { user, isAdmin } = useAuth();
+
+  useEffect(() => {
+    if (descRef.current && !descExpanded) {
+      setDescNeedExpand(descRef.current.scrollHeight > descRef.current.clientHeight + 1);
+    }
+  }, [album?.description, descExpanded]);
   const { currentSong, playAlbumTracks } = useMusic();
   const { show } = useToast();
 
@@ -170,40 +178,20 @@ const AlbumDetail = () => {
         </Link>
 
         {/* Detail Header */}
-        <div className="flex flex-col md:flex-row gap-7 mb-9 pb-8 border-b border-[#e0dcd3]">
+        <div className="flex flex-col md:flex-row gap-5 mb-6 pb-6 border-b border-[#e0dcd3]">
           <SmartImage
             src={album.cover}
             alt={album.title}
-            className="w-48 h-48 md:w-52 md:h-52 object-cover flex-shrink-0 rounded-lg bg-[#f0ece3]"
+            className="w-40 h-40 md:w-44 md:h-44 object-cover flex-shrink-0 rounded-lg bg-[#f0ece3]"
           />
           <div className="flex-1 flex flex-col justify-center min-w-0">
-            <h1 className="text-[2rem] font-bold text-[#2c2c2c] tracking-[0.15em] mb-2">{album.title}</h1>
-            <p className="text-[1.125rem] text-[#6b6560] tracking-[0.1em] mb-4">{album.artist} · {album.tracks.length} 首歌曲</p>
-            {album.description ? (
-              <div className="mb-5">
-                <p className={clsx('text-sm text-[#9e968e]', !descExpanded && 'line-clamp-2')}>
-                  {album.description}
-                </p>
-                {album.description.length > 60 ? (
-                  <button
-                    onClick={() => setDescExpanded(!descExpanded)}
-                    className="text-xs px-3 py-1.5 border border-[#e0dcd3] text-[#9e968e] hover:text-[#c8951e] hover:border-[#c8951e] rounded transition-all duration-300 mt-1 inline-flex items-center gap-0.5"
-                  >
-                    {descExpanded ? (
-                      <>收起 <ChevronUp size={12} /></>
-                    ) : (
-                      <>展开 <ChevronDown size={12} /></>
-                    )}
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
+            <h1 className="text-[1.75rem] font-bold text-[#2c2c2c] tracking-[0.12em] mb-1.5">{album.title}</h1>
+            <p className="text-base text-[#6b6560] tracking-[0.08em] mb-4">{album.artist} · {album.tracks.length} 首歌曲</p>
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => handlePlay(0)}
                 disabled={album.tracks.length === 0}
-                className="inline-flex items-center gap-2 px-7 py-2.5 bg-[#c8951e] text-white rounded-full text-[0.9375rem] tracking-[0.1em] hover:bg-[#dca828] transition-all disabled:opacity-50"
-                style={{ boxShadow: '0 4px 12px rgba(200,149,30,0.25)' }}
+                className="inline-flex items-center gap-2 px-6 py-2 bg-[#c8951e] text-white rounded text-[0.9375rem] tracking-[0.08em] hover:bg-[#dca828] transition-all disabled:opacity-50"
               >
                 <Play size={16} /> 播放专辑
               </button>
@@ -227,9 +215,34 @@ const AlbumDetail = () => {
           </div>
         </div>
 
+        {/* Description */}
+        {album.description ? (
+          <div className="mb-10">
+            <h2 className="text-base font-semibold text-[#2c2c2c] tracking-[0.12em] mb-4 flex items-center gap-2">
+              <span className="w-[3px] h-4 bg-[#c8951e] rounded-[1px] opacity-60 inline-block" />
+              专辑简介
+            </h2>
+            <div ref={descRef} className={clsx('text-[#6b6560] leading-relaxed whitespace-pre-wrap', !descExpanded && 'line-clamp-3')}>
+              {album.description}
+            </div>
+            {descNeedExpand && (
+              <button
+                onClick={() => setDescExpanded(!descExpanded)}
+                className="text-xs px-3 py-1.5 border border-[#e0dcd3] text-[#9e968e] hover:text-[#c8951e] hover:border-[#c8951e] rounded transition-all duration-300 mt-3 inline-flex items-center gap-0.5"
+              >
+                {descExpanded ? (
+                  <>收起 <ChevronUp size={12} /></>
+                ) : (
+                  <>展开 <ChevronDown size={12} /></>
+                )}
+              </button>
+            )}
+          </div>
+        ) : null}
+
         {/* Track List */}
         <div className="mb-10">
-          <h2 className="text-base font-semibold text-[#2c2c2c] tracking-[0.12em] mb-4 pb-2.5 border-b border-[#e0dcd3] flex items-center gap-2">
+          <h2 className="text-base font-semibold text-[#2c2c2c] tracking-[0.12em] mb-4 flex items-center gap-2">
             <span className="w-[3px] h-4 bg-[#c8951e] rounded-[1px] opacity-60 inline-block" />
             曲目列表
           </h2>
@@ -279,7 +292,7 @@ const AlbumDetail = () => {
         {/* Admin */}
         {isAdmin && albumId && (
           <div className="mb-10">
-            <h2 className="text-base font-semibold text-[#2c2c2c] tracking-[0.12em] mb-4 pb-2.5 border-b border-[#e0dcd3] flex items-center gap-2">
+            <h2 className="text-base font-semibold text-[#2c2c2c] tracking-[0.12em] mb-4 flex items-center gap-2">
               <span className="w-[3px] h-4 bg-[#c8951e] rounded-[1px] opacity-60 inline-block" />
               管理功能
             </h2>

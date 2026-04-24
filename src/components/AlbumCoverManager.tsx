@@ -145,7 +145,7 @@ export const AlbumCoverManager = ({ albumDocId, currentCover, onCoverUpdated }: 
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="px-4 py-2 rounded-full border border-gray-200 text-sm text-gray-600 hover:text-brand-primary hover:border-brand-primary/40 transition-colors"
+        className="px-5 py-2 border border-[#e0dcd3] text-sm text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] rounded transition-all"
       >
         封面管理
       </button>
