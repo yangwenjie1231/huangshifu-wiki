@@ -19,7 +19,6 @@ export const GlobalMusicPlayer = () => {
     currentTime: contextCurrentTime, duration: contextDuration, volume: contextVolume, isMuted: contextIsMuted,
     seekTo, setVolume: contextSetVolume, toggleMute: contextToggleMute, setDuration: contextSetDuration
   } = useMusic();
-  const [isExpanded, setIsExpanded] = useState(false);
   const [resolvedPlayUrl, setResolvedPlayUrl] = useState('');
   const [resolvingPlayUrl, setResolvingPlayUrl] = useState(false);
   const [playUrlError, setPlayUrlError] = useState('');
@@ -33,7 +32,6 @@ export const GlobalMusicPlayer = () => {
   const volumeHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const timeUpdateRef = useRef<number>(0);
-  const stallCheckRef = useRef<number>(0);
 
   useEffect(() => {
     const resolvePlayUrl = async () => {

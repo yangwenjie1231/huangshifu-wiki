@@ -3,7 +3,7 @@ import { auth } from '../lib/auth';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useMusic } from '../context/MusicContext';
-import { Music as MusicIcon, Search, Plus, List, Sparkles, ChevronRight, X, Heart, MessageSquare, Link2 } from 'lucide-react';
+import { Search, Plus, List, Sparkles, X, Heart, MessageSquare, Link2 } from 'lucide-react';
 import { useUserPreferences } from '../context/UserPreferencesContext';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -430,35 +430,15 @@ const Music = () => {
         .gufeng-song-item:nth-child(4) { animation-delay: 0.08s; }
         .gufeng-song-item:nth-child(5) { animation-delay: 0.10s; }
         .gufeng-song-item:nth-child(6) { animation-delay: 0.12s; }
-        .gufeng-link {
-          position: relative;
-          text-decoration: none;
-          color: inherit;
-          transition: all 0.3s ease;
-        }
-        .gufeng-link::after {
-          content: '';
-          position: absolute;
-          left: 0;
-          bottom: -2px;
-          width: 0;
-          height: 1.5px;
-          background: linear-gradient(90deg, #c8951e, #dca828);
-          transition: width 0.3s ease;
-          border-radius: 1px;
-        }
-        .gufeng-link:hover { color: #c8951e; }
-        .gufeng-link:hover::after { width: 100%; }
+        .gufeng-btn { transition: all 0.3s ease; }
+        .gufeng-btn:hover { background-color: #f0ece3; color: #c8951e; }
       `}</style>
 
       <div className="max-w-[1100px] mx-auto px-6 py-8 pb-32 md:pb-32">
         {/* Header */}
         <header className="mb-7">
           <div className="flex items-end justify-between flex-wrap gap-3">
-            <div className="flex items-baseline gap-4">
-              <h1 className="text-[1.75rem] font-semibold tracking-[0.12em] text-[#2c2c2c]">{t('music.title')}</h1>
-              <span className="text-[0.9375rem] text-[#9e968e] tracking-[0.05em]">{t('music.description')}</span>
-            </div>
+            <h1 className="text-[1.75rem] font-semibold tracking-[0.12em] text-[#2c2c2c]">{t('music.title')}</h1>
             {isAdmin && (
               <div className="flex flex-wrap gap-3">
                 <button
@@ -467,12 +447,12 @@ const Music = () => {
                     setIsBatchMode(!isBatchMode);
                     setSelectedSongs(new Set());
                   }}
-                  className={clsx(
-                    "px-4 py-2 text-[0.9375rem] rounded-full border transition-all",
-                    isBatchMode
-                      ? "bg-[#c8951e] text-white border-[#c8951e]"
-                      : "bg-transparent text-[#6b6560] border-[#e0dcd3] hover:text-[#c8951e] hover:border-[#c8951e]"
-                  )}
+                   className={clsx(
+                     "px-4 py-2 text-[0.9375rem] rounded border transition-all",
+                     isBatchMode
+                       ? "bg-[#c8951e] text-white border-[#c8951e]"
+                       : "bg-transparent text-[#6b6560] border-[#e0dcd3] hover:text-[#c8951e] hover:border-[#c8951e]"
+                   )}
                 >
                   <List size={16} className="inline mr-1.5 -mt-0.5" />
                   {isBatchMode ? t('music.batchExit') : t('music.batchManage')}
@@ -482,7 +462,7 @@ const Music = () => {
                     if (isBanned) { show('账号已被封禁，无法执行此操作', { variant: 'error' }); return; }
                     setIsImportModalOpen(true);
                   }}
-                  className="px-4 py-2 text-[0.9375rem] rounded-full border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all"
+                  className="px-4 py-2 text-[0.9375rem] rounded border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all"
                 >
                   <Search size={16} className="inline mr-1.5 -mt-0.5" />
                   {t('music.linkImport')}
@@ -492,14 +472,14 @@ const Music = () => {
                     if (isBanned) { show('账号已被封禁，无法执行此操作', { variant: 'error' }); return; }
                     setIsAdding(!isAdding);
                   }}
-                  className="px-4 py-2 text-[0.9375rem] rounded-full bg-[#2c2c2c] text-white hover:bg-[#3d3d3d] transition-all"
+                  className="px-4 py-2 text-[0.9375rem] rounded bg-[#2c2c2c] text-white hover:bg-[#3d3d3d] transition-all"
                 >
                   {isAdding ? <X size={16} className="inline mr-1.5 -mt-0.5" /> : <Plus size={16} className="inline mr-1.5 -mt-0.5" />}
                   {isAdding ? t('music.cancelAdd') : t('music.addMusic')}
                 </button>
                 <Link
                   to="/music/links"
-                  className="px-4 py-2 text-[0.9375rem] rounded-full border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all"
+                  className="px-4 py-2 text-[0.9375rem] rounded border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all"
                 >
                   <Link2 size={16} className="inline mr-1.5 -mt-0.5" />
                   {t('music.linkManage')}
@@ -549,8 +529,7 @@ const Music = () => {
                   <button
                     onClick={handleAddSong}
                     disabled={loading}
-                    className="px-8 py-3 bg-[#c8951e] text-white rounded-full text-[0.9375rem] font-semibold hover:bg-[#dca828] transition-all disabled:opacity-50"
-                    style={{ boxShadow: '0 4px 12px rgba(200,149,30,0.25)' }}
+                    className="px-8 py-3 bg-[#c8951e] text-white rounded text-[0.9375rem] font-semibold hover:bg-[#dca828] transition-all disabled:opacity-50"
                   >
                     {loading ? t('music.processing') : t('music.getAndAdd')}
                   </button>
@@ -600,13 +579,13 @@ const Music = () => {
                 <div className="flex gap-4">
                   <button
                     onClick={() => setConfirmModal({ show: false, type: 'single' })}
-                    className="flex-1 px-6 py-3 bg-[#f0ece3] text-[#6b6560] rounded-lg font-semibold hover:bg-[#e0dcd3] transition-all"
+                    className="flex-1 px-6 py-3 bg-[#f0ece3] text-[#6b6560] rounded font-semibold hover:bg-[#e0dcd3] transition-all"
                   >
                     {t('music.cancel')}
                   </button>
                   <button
                     onClick={() => confirmModal.type === 'single' ? handleDeleteSong(confirmModal.id!) : handleBatchDelete()}
-                    className="flex-1 px-6 py-3 bg-[#c8951e] text-white rounded-lg font-semibold hover:bg-[#dca828] transition-all"
+                    className="flex-1 px-6 py-3 bg-[#c8951e] text-white rounded font-semibold hover:bg-[#dca828] transition-all"
                   >
                     {t('music.confirmDeleteButton')}
                   </button>
@@ -811,29 +790,13 @@ const Music = () => {
                   <MusicPlayer songId={currentSong.id} />
                 </div>
               ) : (
-                <div className="text-center py-6">
-                  <div className="w-12 h-12 bg-[#f0ece3] rounded-full flex items-center justify-center mx-auto mb-3 text-[#c8951e]">
-                    <MusicIcon size={24} />
-                  </div>
-                  <p className="text-[#9e968e] italic text-sm">{t('music.selectSongToPlay')}</p>
+                <div className="py-5 text-center">
+                  <p className="text-sm text-[#9e968e]">{t('music.selectSongToPlay')}</p>
                 </div>
               )}
             </div>
 
-            {/* Stats / Tips */}
-            <div className="py-5 border-b border-[#e0dcd3]">
-              <h3 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-3.5">
-                {t('music.tips.title')}
-              </h3>
-              <p className="text-sm text-[#9e968e] leading-relaxed">
-                {t('music.tips.content')}
-              </p>
-              <button className="mt-4 text-[#c8951e] font-semibold text-sm flex items-center gap-1 hover:underline">
-                {t('music.tips.learnMore')} <ChevronRight size={16} />
-              </button>
-            </div>
-
-            {/* Quick Stats */}
+            {/* Stats */}
             <div className="py-5">
               <h3 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-3.5">
                 统计

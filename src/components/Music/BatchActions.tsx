@@ -31,7 +31,7 @@ const BatchActions: React.FC<BatchActionsProps> = ({
 				</button>
 				<button
 					onClick={onBatchDelete}
-					className="px-5 py-1.5 bg-[#c8951e] text-white rounded-full text-sm font-semibold hover:bg-[#dca828] transition-all"
+					className="px-5 py-1.5 bg-[#c8951e] text-white rounded text-sm font-semibold hover:bg-[#dca828] transition-all"
 				>
 					{t('music.batchDelete')}
 				</button>

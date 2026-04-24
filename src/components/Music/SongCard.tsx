@@ -113,12 +113,12 @@ const SongCard = React.memo(function SongCard({
 				{isBatchMode ? (
 					<button
 						onClick={() => onToggleSelect(song.docId)}
-						className={clsx(
-							"px-3 py-1.5 rounded-full text-xs font-semibold transition-all",
-							isSelected
-								? "bg-[#c8951e] text-white"
-								: "bg-[#f0ece3] text-[#6b6560] hover:text-[#c8951e]"
-						)}
+					className={clsx(
+						"px-3 py-1.5 rounded text-xs font-semibold transition-all",
+						isSelected
+							? "bg-[#c8951e] text-white"
+							: "bg-[#f0ece3] text-[#6b6560] hover:text-[#c8951e]"
+					)}
 					>
 						{isSelected ? t('music.selected') : t('music.select')}
 					</button>

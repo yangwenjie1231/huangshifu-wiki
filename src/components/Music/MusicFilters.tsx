@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Album, Grid3X3 } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { clsx } from 'clsx';
 import { ViewModeSelector } from '../ViewModeSelector';
 import { useI18n } from '../../lib/i18n';
