@@ -3,9 +3,8 @@ import { auth } from '../lib/auth';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useMusic } from '../context/MusicContext';
-import { Music as MusicIcon, Search, Plus, Disc, List, Sparkles, ChevronRight, Headphones, X, Heart, MessageSquare, Link2 } from 'lucide-react';
+import { Music as MusicIcon, Search, Plus, List, Sparkles, ChevronRight, X, Heart, MessageSquare, Link2 } from 'lucide-react';
 import { useUserPreferences } from '../context/UserPreferencesContext';
-import { VIEW_MODE_CONFIG } from '../lib/viewModes';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MusicPlayer } from '../components/MusicPlayer';
@@ -236,7 +235,6 @@ const Music = () => {
       return;
     }
     
-    // Split by comma, space or newline for batch processing
     const ids = searchId.split(/[\s,\n]+/).map(s => {
       let id = s.trim();
       if (id.includes('id=')) {
@@ -398,182 +396,257 @@ const Music = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 md:py-12">
-      <header className="mb-8 md:mb-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-6">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-brand-primary text-gray-900 rounded-xl shadow-lg">
-              <Headphones size={24} />
+    <div
+      className="gufeng-music-page min-h-screen"
+      style={{
+        backgroundColor: '#f7f5f0',
+        color: '#2c2c2c',
+        fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif",
+        lineHeight: 1.8,
+      }}
+    >
+      <style>{`
+        .gufeng-music-page ::selection {
+          background-color: #fdf5d8;
+          color: #c8951e;
+        }
+        .gufeng-music-page ::-webkit-scrollbar { width: 6px; }
+        .gufeng-music-page ::-webkit-scrollbar-track { background: transparent; }
+        .gufeng-music-page ::-webkit-scrollbar-thumb { background: #e0dcd3; border-radius: 3px; }
+        .gufeng-music-page ::-webkit-scrollbar-thumb:hover { background: #9e968e; }
+        @keyframes gufengFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .gufeng-fade-in {
+          animation: gufengFadeIn 0.4s ease forwards;
+        }
+        .gufeng-song-item {
+          animation: gufengFadeIn 0.3s ease forwards;
+        }
+        .gufeng-song-item:nth-child(1) { animation-delay: 0.02s; }
+        .gufeng-song-item:nth-child(2) { animation-delay: 0.04s; }
+        .gufeng-song-item:nth-child(3) { animation-delay: 0.06s; }
+        .gufeng-song-item:nth-child(4) { animation-delay: 0.08s; }
+        .gufeng-song-item:nth-child(5) { animation-delay: 0.10s; }
+        .gufeng-song-item:nth-child(6) { animation-delay: 0.12s; }
+        .gufeng-link {
+          position: relative;
+          text-decoration: none;
+          color: inherit;
+          transition: all 0.3s ease;
+        }
+        .gufeng-link::after {
+          content: '';
+          position: absolute;
+          left: 0;
+          bottom: -2px;
+          width: 0;
+          height: 1.5px;
+          background: linear-gradient(90deg, #c8951e, #dca828);
+          transition: width 0.3s ease;
+          border-radius: 1px;
+        }
+        .gufeng-link:hover { color: #c8951e; }
+        .gufeng-link:hover::after { width: 100%; }
+      `}</style>
+
+      <div className="max-w-[1100px] mx-auto px-6 py-8 pb-32 md:pb-32">
+        {/* Header */}
+        <header className="mb-7">
+          <div className="flex items-end justify-between flex-wrap gap-3">
+            <div className="flex items-baseline gap-4">
+              <h1 className="text-[1.75rem] font-semibold tracking-[0.12em] text-[#2c2c2c]">{t('music.title')}</h1>
+              <span className="text-[0.9375rem] text-[#9e968e] tracking-[0.05em]">{t('music.description')}</span>
             </div>
-            <h1 className="text-4xl md:text-5xl font-serif font-bold text-gray-900">{t('music.title')}</h1>
-          </div>
-          <p className="text-gray-500 italic">{t('music.description')}</p>
-        </div>
-        
-        {isAdmin && (
-          <div className="flex flex-wrap gap-3 md:gap-4">
-            <button 
-              onClick={() => {
-                if (isBanned) {
-                  show('账号已被封禁，无法执行此操作', { variant: 'error' });
-                  return;
-                }
-                setIsBatchMode(!isBatchMode);
-                setSelectedSongs(new Set());
-              }}
-              aria-label={isBatchMode ? t('music.batchExit') : t('music.batchManage')}
-              className={clsx(
-                "px-4 md:px-6 py-3 md:py-4 rounded-full font-bold transition-all flex items-center gap-2 shadow-lg md:shadow-xl",
-                isBatchMode ? "bg-brand-primary text-gray-900" : "bg-white text-gray-500 border border-gray-100"
-              )}
-            >
-              <List size={18} />
-              <span className="hidden sm:inline">{isBatchMode ? t('music.batchExit') : t('music.batchManage')}</span>
-            </button>
-            <button
-              onClick={() => {
-                if (isBanned) {
-                  show('账号已被封禁，无法执行此操作', { variant: 'error' });
-                  return;
-                }
-                setIsImportModalOpen(true);
-              }}
-              aria-label={t('music.linkImport')}
-              className="px-4 md:px-6 py-3 md:py-4 bg-brand-primary text-gray-900 rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-lg md:shadow-xl touch-target-lg"
-            >
-              <Search size={18} />
-              <span className="hidden sm:inline">{t('music.linkImport')}</span>
-            </button>
-            <button 
-              onClick={() => {
-                if (isBanned) {
-                  show('账号已被封禁，无法执行此操作', { variant: 'error' });
-                  return;
-                }
-                setIsAdding(!isAdding);
-              }}
-              aria-label={isAdding ? t('music.cancelAdd') : t('music.addMusic')}
-              className="px-4 md:px-6 py-3 md:py-4 bg-gray-900 text-white rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-lg md:shadow-xl touch-target-lg"
-            >
-              {isAdding ? <X size={18} /> : <Plus size={18} />}
-              <span className="hidden sm:inline">{isAdding ? t('music.cancelAdd') : t('music.addMusic')}</span>
-            </button>
-            <Link
-              to="/music/links"
-              aria-label={t('music.linkManage')}
-              className="px-4 md:px-6 py-3 md:py-4 bg-white text-gray-900 border border-gray-200 rounded-full font-bold hover:scale-105 transition-all flex items-center gap-2 shadow-lg md:shadow-xl touch-target-lg"
-            >
-              <Link2 size={18} />
-              <span className="hidden sm:inline">{t('music.linkManage')}</span>
-            </Link>
-          </div>
-        )}
-      </header>
-
-      <AnimatePresence>
-        {isAdding && (
-          <motion.div 
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="mb-8 md:mb-12 p-5 md:p-8 bg-brand-cream/30 rounded-2xl md:rounded-3xl border border-brand-primary/10"
-          >
-            <h3 className="text-xl font-serif font-bold text-gray-900 mb-6 flex items-center gap-2">
-              <Sparkles size={20} className="text-brand-primary" /> {t('music.inputMusicId')}
-            </h3>
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center gap-4">
-                <label className="text-sm font-bold text-gray-600">{t('music.selectPlatform')}：</label>
-                <select
-                  value={selectedPlatform}
-                  onChange={e => setSelectedPlatform(e.target.value as typeof selectedPlatform)}
-                  className="px-4 py-2 bg-white rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-primary/20 shadow-sm"
+            {isAdmin && (
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => {
+                    if (isBanned) { show('账号已被封禁，无法执行此操作', { variant: 'error' }); return; }
+                    setIsBatchMode(!isBatchMode);
+                    setSelectedSongs(new Set());
+                  }}
+                  className={clsx(
+                    "px-4 py-2 text-[0.9375rem] rounded-full border transition-all",
+                    isBatchMode
+                      ? "bg-[#c8951e] text-white border-[#c8951e]"
+                      : "bg-transparent text-[#6b6560] border-[#e0dcd3] hover:text-[#c8951e] hover:border-[#c8951e]"
+                  )}
                 >
-                  <option value="netease">{t('music.platforms.netease')}</option>
-                  <option value="qq">{t('music.platforms.tencent')}</option>
-                  <option value="kugou">{t('music.platforms.kugou')}</option>
-                  <option value="baidu">{t('music.platforms.baidu')}</option>
-                  <option value="kuwo">{t('music.platforms.kuwo')}</option>
-                </select>
+                  <List size={16} className="inline mr-1.5 -mt-0.5" />
+                  {isBatchMode ? t('music.batchExit') : t('music.batchManage')}
+                </button>
+                <button
+                  onClick={() => {
+                    if (isBanned) { show('账号已被封禁，无法执行此操作', { variant: 'error' }); return; }
+                    setIsImportModalOpen(true);
+                  }}
+                  className="px-4 py-2 text-[0.9375rem] rounded-full border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all"
+                >
+                  <Search size={16} className="inline mr-1.5 -mt-0.5" />
+                  {t('music.linkImport')}
+                </button>
+                <button
+                  onClick={() => {
+                    if (isBanned) { show('账号已被封禁，无法执行此操作', { variant: 'error' }); return; }
+                    setIsAdding(!isAdding);
+                  }}
+                  className="px-4 py-2 text-[0.9375rem] rounded-full bg-[#2c2c2c] text-white hover:bg-[#3d3d3d] transition-all"
+                >
+                  {isAdding ? <X size={16} className="inline mr-1.5 -mt-0.5" /> : <Plus size={16} className="inline mr-1.5 -mt-0.5" />}
+                  {isAdding ? t('music.cancelAdd') : t('music.addMusic')}
+                </button>
+                <Link
+                  to="/music/links"
+                  className="px-4 py-2 text-[0.9375rem] rounded-full border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all"
+                >
+                  <Link2 size={16} className="inline mr-1.5 -mt-0.5" />
+                  {t('music.linkManage')}
+                </Link>
               </div>
-              <textarea 
-                value={searchId}
-                onChange={e => setSearchId(e.target.value)}
-                placeholder={`${t('music.inputPlaceholder')} ${selectedPlatform === 'netease' ? t('music.platforms.netease') : selectedPlatform === 'qq' ? t('music.platforms.tencent') : selectedPlatform === 'kugou' ? t('music.platforms.kugou') : selectedPlatform === 'baidu' ? t('music.platforms.baidu') : t('music.platforms.kuwo')} ${t('music.idOrLinkList')}`}
-                className="w-full px-6 py-4 bg-white rounded-3xl border-none focus:ring-2 focus:ring-brand-primary/20 shadow-sm min-h-[120px]"
-              />
-              <div className="flex justify-end">
-                <button 
-                  onClick={handleAddSong}
-                  disabled={loading}
-                  className="px-10 py-4 bg-brand-primary text-gray-900 rounded-3xl font-bold hover:scale-105 transition-all shadow-md disabled:opacity-50"
-                >
-                  {loading ? t('music.processing') : t('music.getAndAdd')}
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            )}
+          </div>
+        </header>
 
-      <MusicImportModal
-        open={isImportModalOpen}
-        onClose={() => setIsImportModalOpen(false)}
-        onImported={fetchSongs}
-      />
-
-      <AlbumEditModal
-        open={isAlbumModalOpen}
-        onClose={() => setIsAlbumModalOpen(false)}
-        onSuccess={fetchAlbums}
-        album={editingAlbum}
-      />
-
-      {isBatchMode && (
-        <BatchActions
-          selectedCount={selectedSongs.size}
-          onCancelSelect={() => setSelectedSongs(new Set())}
-          onBatchDelete={() => setConfirmModal({ show: true, type: 'batch' })}
-        />
-      )}
-
-      <AnimatePresence>
-        {confirmModal.show && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-[40px] p-8 max-w-md w-full shadow-2xl"
+        {/* Add Panel */}
+        <AnimatePresence>
+          {isAdding && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="mb-7 p-6 md:p-8 bg-white rounded-lg border border-[#ebe8e0]"
+              style={{ boxShadow: '0 2px 12px rgba(44,30,20,0.06)' }}
             >
-              <h3 className="text-2xl font-serif font-bold text-gray-900 mb-4">{t('music.confirmDelete')}</h3>
-              <p className="text-gray-500 mb-8">
-                {confirmModal.type === 'single' 
-                  ? t('music.confirmDeleteSingle') 
-                  : t('music.confirmDeleteBatch', { count: selectedSongs.size })}
-              </p>
-              <div className="flex gap-4">
-                <button 
-                  onClick={() => setConfirmModal({ show: false, type: 'single' })}
-                  className="flex-grow px-6 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-all"
-                >
-                  {t('music.cancel')}
-                </button>
-                <button 
-                  onClick={() => confirmModal.type === 'single' ? handleDeleteSong(confirmModal.id!) : handleBatchDelete()}
-                  className="flex-grow px-6 py-4 bg-red-500 text-white rounded-2xl font-bold hover:bg-red-600 transition-all"
-                >
-                  {t('music.confirmDeleteButton')}
-                </button>
+              <h3 className="text-lg font-semibold text-[#2c2c2c] mb-5 flex items-center gap-2">
+                <Sparkles size={18} className="text-[#c8951e]" /> {t('music.inputMusicId')}
+              </h3>
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-4">
+                  <label className="text-sm font-bold text-[#6b6560]">{t('music.selectPlatform')}：</label>
+                  <select
+                    value={selectedPlatform}
+                    onChange={e => setSelectedPlatform(e.target.value as typeof selectedPlatform)}
+                    className="px-4 py-2 bg-[#faf8f4] rounded border border-[#e0dcd3] text-[0.9375rem] focus:outline-none focus:border-[#c8951e]"
+                    style={{ fontFamily: "inherit" }}
+                  >
+                    <option value="netease">{t('music.platforms.netease')}</option>
+                    <option value="qq">{t('music.platforms.tencent')}</option>
+                    <option value="kugou">{t('music.platforms.kugou')}</option>
+                    <option value="baidu">{t('music.platforms.baidu')}</option>
+                    <option value="kuwo">{t('music.platforms.kuwo')}</option>
+                  </select>
+                </div>
+                <textarea
+                  value={searchId}
+                  onChange={e => setSearchId(e.target.value)}
+                  placeholder={`${t('music.inputPlaceholder')} ${selectedPlatform === 'netease' ? t('music.platforms.netease') : selectedPlatform === 'qq' ? t('music.platforms.tencent') : selectedPlatform === 'kugou' ? t('music.platforms.kugou') : selectedPlatform === 'baidu' ? t('music.platforms.baidu') : t('music.platforms.kuwo')} ${t('music.idOrLinkList')}`}
+                  className="w-full px-5 py-4 bg-[#faf8f4] rounded-lg border border-[#e0dcd3] focus:outline-none focus:border-[#c8951e] min-h-[120px] text-[0.9375rem]"
+                  style={{ fontFamily: "inherit" }}
+                />
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleAddSong}
+                    disabled={loading}
+                    className="px-8 py-3 bg-[#c8951e] text-white rounded-full text-[0.9375rem] font-semibold hover:bg-[#dca828] transition-all disabled:opacity-50"
+                    style={{ boxShadow: '0 4px 12px rgba(200,149,30,0.25)' }}
+                  >
+                    {loading ? t('music.processing') : t('music.getAndAdd')}
+                  </button>
+                </div>
               </div>
             </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-12">
-        <div className="lg:col-span-2">
-          <div className="bg-white rounded-2xl md:rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+        <MusicImportModal
+          open={isImportModalOpen}
+          onClose={() => setIsImportModalOpen(false)}
+          onImported={fetchSongs}
+        />
+
+        <AlbumEditModal
+          open={isAlbumModalOpen}
+          onClose={() => setIsAlbumModalOpen(false)}
+          onSuccess={fetchAlbums}
+          album={editingAlbum}
+        />
+
+        {isBatchMode && (
+          <BatchActions
+            selectedCount={selectedSongs.size}
+            onCancelSelect={() => setSelectedSongs(new Set())}
+            onBatchDelete={() => setConfirmModal({ show: true, type: 'batch' })}
+          />
+        )}
+
+        <AnimatePresence>
+          {confirmModal.show && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}>
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-white rounded-lg p-8 max-w-md w-full"
+                style={{ boxShadow: '0 8px 24px rgba(44,30,20,0.1)' }}
+              >
+                <h3 className="text-xl font-semibold text-[#2c2c2c] mb-4 tracking-wide">{t('music.confirmDelete')}</h3>
+                <p className="text-[#6b6560] mb-8 text-[0.9375rem]">
+                  {confirmModal.type === 'single'
+                    ? t('music.confirmDeleteSingle')
+                    : t('music.confirmDeleteBatch', { count: selectedSongs.size })}
+                </p>
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => setConfirmModal({ show: false, type: 'single' })}
+                    className="flex-1 px-6 py-3 bg-[#f0ece3] text-[#6b6560] rounded-lg font-semibold hover:bg-[#e0dcd3] transition-all"
+                  >
+                    {t('music.cancel')}
+                  </button>
+                  <button
+                    onClick={() => confirmModal.type === 'single' ? handleDeleteSong(confirmModal.id!) : handleBatchDelete()}
+                    className="flex-1 px-6 py-3 bg-[#c8951e] text-white rounded-lg font-semibold hover:bg-[#dca828] transition-all"
+                  >
+                    {t('music.confirmDeleteButton')}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Two Column Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8 items-start">
+          {/* Main Content */}
+          <div>
+            {/* Sub Nav */}
+            <div className="flex gap-6 border-b border-[#e0dcd3] pb-0.5 mb-6">
+              <button
+                onClick={() => setActiveTab('music')}
+                className={clsx(
+                  "text-[1.125rem] pb-2.5 relative tracking-[0.05em] transition-all",
+                  activeTab === 'music'
+                    ? "text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-[-2px] after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]"
+                    : "text-[#9e968e] hover:text-[#c8951e]"
+                )}
+              >
+                {t('music.tabMusic')}
+              </button>
+              <button
+                onClick={() => setActiveTab('albums')}
+                className={clsx(
+                  "text-[1.125rem] pb-2.5 relative tracking-[0.05em] transition-all",
+                  activeTab === 'albums'
+                    ? "text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-[-2px] after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]"
+                    : "text-[#9e968e] hover:text-[#c8951e]"
+                )}
+              >
+                {t('music.tabAlbums')}
+              </button>
+            </div>
+
+            {/* Filters + Search */}
             <MusicFilters
               activeTab={activeTab}
               onTabChange={setActiveTab}
@@ -585,65 +658,40 @@ const Music = () => {
                 setIsAlbumModalOpen(true);
               }}
               sortBy={sortBy}
-              onSortByChange={(value) => {
-                setSortBy(value);
-                setPage(1);
-              }}
+              onSortByChange={(value) => { setSortBy(value); setPage(1); }}
               sortOrder={sortOrder}
               onSortOrderChange={setSortOrder}
               filterPlatform={filterPlatform}
-              onFilterPlatformChange={(value) => {
-                setFilterPlatform(value);
-                setPage(1);
-              }}
+              onFilterPlatformChange={(value) => { setFilterPlatform(value); setPage(1); }}
               showAccompaniments={showAccompaniments}
               onShowAccompanimentsChange={setShowAccompaniments}
               musicCount={displaySongs.length}
               albumCount={albums.length}
             />
 
+            {/* Content */}
             {activeTab === 'music' ? (
-              <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6">
-                {loading ? (
-                  <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
-                    {[1, 2, 3, 4, 5, 6].map(i => (
-                      <div key={i} className={clsx(
-                        viewMode === 'list' ? 'h-20' : 'rounded-xl md:rounded-2xl border border-gray-100 p-3 md:p-4 animate-pulse',
-                        viewMode !== 'list' && 'bg-white'
-                      )}>
-                        <div className={clsx(viewMode === 'list' ? 'flex gap-3 md:gap-4' : '')}>
-                          <div className={clsx(viewMode === 'list' ? 'w-14 h-14 md:w-16 md:h-16 rounded-lg bg-gray-100 flex-shrink-0' : 'aspect-square rounded-xl md:rounded-2xl bg-gray-100')} />
-                          <div className={clsx(viewMode === 'list' ? 'flex-1' : '')}>
-                            <div className={viewMode === 'list' ? 'mt-2 h-4 bg-gray-100 rounded w-1/3' : 'mt-3 md:mt-4 h-4 bg-gray-100 rounded w-2/3'} />
-                            <div className={viewMode === 'list' ? 'mt-1 h-3 bg-gray-100 rounded w-1/4' : 'mt-2 h-3 bg-gray-100 rounded w-1/2'} />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : songs.length > 0 ? (
+              <div className="flex flex-col mt-6">
+                {paginatedSongs.length > 0 ? (
                   <>
-                    <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
-                      {paginatedSongs.map((song) => (
-                        <SongCard
-                          key={song.docId}
-                          song={song}
-                          viewMode={viewMode}
-                          isBatchMode={isBatchMode}
-                          isSelected={selectedSongs.has(song.docId)}
-                          isCurrentSong={currentSong?.docId === song.docId}
-                          isFavoriting={favoriting === song.docId}
-                          isAdmin={isAdmin}
-                          isPostsSelected={selectedSongForPosts?.docId === song.docId}
-                          onPlay={playSong}
-                          onToggleSelect={toggleSelect}
-                          onToggleFavorite={handleToggleFavorite}
-                          onCopyLink={handleCopySongLink}
-                          onDelete={(docId) => setConfirmModal({ show: true, type: 'single', id: docId })}
-                          onShowPosts={handleShowPosts}
-                        />
-                      ))}
-                    </div>
+                    {paginatedSongs.map((song) => (
+                      <SongCard
+                        key={song.docId}
+                        song={song}
+                        isBatchMode={isBatchMode}
+                        isSelected={selectedSongs.has(song.docId)}
+                        isCurrentSong={currentSong?.docId === song.docId}
+                        isFavoriting={favoriting === song.docId}
+                        isAdmin={isAdmin}
+                        isPostsSelected={selectedSongForPosts?.docId === song.docId}
+                        onPlay={playSong}
+                        onToggleSelect={toggleSelect}
+                        onToggleFavorite={handleToggleFavorite}
+                        onCopyLink={handleCopySongLink}
+                        onDelete={(docId) => setConfirmModal({ show: true, type: 'single', id: docId })}
+                        onShowPosts={handleShowPosts}
+                      />
+                    ))}
 
                     <AnimatePresence>
                       {selectedSongForPosts && (
@@ -651,128 +699,157 @@ const Music = () => {
                           initial={{ opacity: 0, y: 12 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: 12 }}
-                          className="border border-gray-100 rounded-3xl overflow-hidden"
+                          className="border border-[#e0dcd3] rounded-lg overflow-hidden mt-6 bg-white"
+                          style={{ boxShadow: '0 2px 12px rgba(44,30,20,0.06)' }}
                         >
-                          <div className="p-6 bg-brand-cream/20">
-                            <div className="flex items-center justify-between mb-4">
-                              <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                                <MessageSquare size={18} />
+                          <div className="p-5 bg-[#faf8f4]">
+                            <div className="flex items-center justify-between mb-3">
+                              <h3 className="font-semibold text-[#2c2c2c] flex items-center gap-2 text-[0.9375rem]">
+                                <MessageSquare size={16} />
                                 {t('music.relatedPosts')}
                               </h3>
                               <button
                                 onClick={() => setSelectedSongForPosts(null)}
-                                className="p-2 hover:bg-black/5 rounded-full transition-colors"
+                                className="p-1.5 hover:bg-[#f0ece3] rounded transition-colors"
                               >
-                                <X size={16} />
+                                <X size={16} className="text-[#9e968e]" />
                               </button>
                             </div>
                           </div>
-                          <div className="divide-y divide-gray-50">
+                          <div className="divide-y divide-[#ebe8e0]">
                             {loadingPosts ? (
-                              <div className="p-8 text-center text-gray-400">{t('music.loading')}</div>
+                              <div className="p-8 text-center text-[#9e968e] italic">{t('music.loading')}</div>
                             ) : songPosts.length > 0 ? (
                               songPosts.map((post) => (
-                                <div key={post.id} className="p-6 hover:bg-black/5 transition-colors">
-                                  <div className="flex items-center gap-3 mb-2">
-                                    <span className="font-bold text-sm">{post.title}</span>
-                                    <span className="text-xs text-gray-400">by {post.authorUid?.substring(0, 6)}</span>
+                                <div key={post.id} className="p-5 hover:bg-[#faf8f4] transition-colors">
+                                  <div className="flex items-center gap-3 mb-1.5">
+                                    <span className="font-semibold text-sm text-[#2c2c2c]">{post.title}</span>
+                                    <span className="text-xs text-[#9e968e]">by {post.authorUid?.substring(0, 6)}</span>
                                   </div>
-                                  <p className="text-sm text-gray-600 line-clamp-2">{post.content}</p>
-                                  <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
+                                  <p className="text-sm text-[#6b6560] line-clamp-2">{post.content}</p>
+                                  <div className="flex items-center gap-4 mt-2 text-xs text-[#9e968e]">
                                     <span className="flex items-center gap-1"><Heart size={12} /> {post.likesCount}</span>
                                     <span className="flex items-center gap-1"><MessageSquare size={12} /> {post.commentsCount}</span>
                                   </div>
                                 </div>
                               ))
                             ) : (
-                              <div className="p-8 text-center text-gray-400">{t('music.noPosts')}</div>
+                              <div className="p-8 text-center text-[#9e968e] italic">{t('music.noPosts')}</div>
                             )}
                           </div>
                         </motion.div>
                       )}
                     </AnimatePresence>
+
                     {totalMusicPages > 1 && (
-                      <Pagination
-                        page={page}
-                        totalPages={totalMusicPages}
-                        onPageChange={handleMusicPageChange}
-                        pageSize={pageSize}
-                        onPageSizeChange={handlePageSizeChange}
-                        showPageSizeSelector
-                      />
+                      <div className="mt-8">
+                        <Pagination
+                          page={page}
+                          totalPages={totalMusicPages}
+                          onPageChange={handleMusicPageChange}
+                          pageSize={pageSize}
+                          onPageSizeChange={handlePageSizeChange}
+                          showPageSizeSelector
+                        />
+                      </div>
                     )}
                   </>
                 ) : (
-                  <div className="py-20 text-center text-gray-400 italic">{t('music.noMusic')}</div>
+                  <div className="py-20 text-center text-[#9e968e] italic tracking-[0.1em]">{t('music.noMusic')}</div>
                 )}
               </div>
             ) : (
-              <div className="p-6 md:p-8">
+              <div className="mt-6">
                 {loadingAlbums ? (
-                  <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
-                    {[1, 2, 3, 4, 5, 6].map(i => (
-                      <div key={i} className={clsx(
-                        viewMode === 'list' ? 'h-20' : 'rounded-3xl border border-gray-100 p-4 animate-pulse',
-                        viewMode !== 'list' && 'bg-white'
-                      )}>
-                        <div className={clsx(viewMode === 'list' ? 'flex gap-4' : '')}>
-                          <div className={clsx(viewMode === 'list' ? 'w-16 h-16 rounded-lg bg-gray-100 flex-shrink-0' : 'aspect-square rounded-2xl bg-gray-100')} />
-                          <div className={clsx(viewMode === 'list' ? 'flex-1' : '')}>
-                            <div className={viewMode === 'list' ? 'mt-2 h-4 bg-gray-100 rounded w-1/3' : 'mt-4 h-4 bg-gray-100 rounded w-2/3'} />
-                            <div className={viewMode === 'list' ? 'mt-1 h-3 bg-gray-100 rounded w-1/4' : 'mt-2 h-3 bg-gray-100 rounded w-1/3'} />
-                          </div>
-                        </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
+                    {[1,2,3,4,5,6].map(i => (
+                      <div key={i} className="animate-pulse">
+                        <div className="aspect-square rounded bg-[#f0ece3] mb-2.5" />
+                        <div className="h-4 bg-[#f0ece3] rounded w-2/3 mb-1.5" />
+                        <div className="h-3 bg-[#f0ece3] rounded w-1/2" />
                       </div>
                     ))}
                   </div>
                 ) : albums.length > 0 ? (
-                  <div className={clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-6">
                     {albums.map((album) => (
                       <AlbumCard
                         key={album.docId || album.id}
                         album={album}
-                        viewMode={viewMode}
                         onCopyLink={handleCopyAlbumLink}
                       />
                     ))}
                   </div>
                 ) : (
-                  <div className="py-20 text-center text-gray-400 italic">{t('music.noAlbums')}</div>
+                  <div className="py-20 text-center text-[#9e968e] italic tracking-[0.1em]">{t('music.noAlbums')}</div>
                 )}
               </div>
             )}
           </div>
-        </div>
 
-        <div className="lg:col-span-1">
-          <div className="sticky top-24">
-            <h2 className="text-2xl font-serif font-bold text-gray-900 mb-6 flex items-center gap-2">
-              <Disc size={24} className="text-brand-primary" /> {t('music.playing')}
-            </h2>
-            {currentSong ? (
-              <MusicPlayer songId={currentSong.id} />
-            ) : (
-              <div className="bg-white rounded-[40px] p-12 border border-gray-100 shadow-sm text-center">
-                <div className="w-20 h-20 bg-brand-cream rounded-full flex items-center justify-center mx-auto mb-6 text-brand-primary">
-                  <MusicIcon size={40} />
+          {/* Sidebar */}
+          <aside className="lg:sticky lg:top-20">
+            {/* Now Playing */}
+            <div className="py-5 border-b border-[#e0dcd3]">
+              <h3 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-3.5">
+                {t('music.playing')}
+              </h3>
+              {currentSong ? (
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <img
+                      src={currentSong.cover}
+                      alt=""
+                      className="w-10 h-10 rounded object-cover bg-[#f0ece3] flex-shrink-0"
+                      referrerPolicy="no-referrer"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-[0.875rem] text-[#2c2c2c] truncate font-medium">{currentSong.title}</p>
+                      <p className="text-xs text-[#9e968e] truncate">{currentSong.artist}</p>
+                    </div>
+                  </div>
+                  <MusicPlayer songId={currentSong.id} />
                 </div>
-                <p className="text-gray-400 italic">{t('music.selectSongToPlay')}</p>
-              </div>
-            )}
-            
-            <div className="mt-8 p-8 bg-gray-900 rounded-[40px] text-white shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-8 opacity-10">
-                <Sparkles size={120} />
-              </div>
-              <h3 className="text-xl font-serif font-bold mb-4 relative z-10">{t('music.tips.title')}</h3>
-              <p className="text-gray-400 text-sm leading-relaxed relative z-10">
+              ) : (
+                <div className="text-center py-6">
+                  <div className="w-12 h-12 bg-[#f0ece3] rounded-full flex items-center justify-center mx-auto mb-3 text-[#c8951e]">
+                    <MusicIcon size={24} />
+                  </div>
+                  <p className="text-[#9e968e] italic text-sm">{t('music.selectSongToPlay')}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Stats / Tips */}
+            <div className="py-5 border-b border-[#e0dcd3]">
+              <h3 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-3.5">
+                {t('music.tips.title')}
+              </h3>
+              <p className="text-sm text-[#9e968e] leading-relaxed">
                 {t('music.tips.content')}
               </p>
-              <button className="mt-6 text-brand-primary font-bold text-sm flex items-center gap-1 hover:underline relative z-10">
+              <button className="mt-4 text-[#c8951e] font-semibold text-sm flex items-center gap-1 hover:underline">
                 {t('music.tips.learnMore')} <ChevronRight size={16} />
               </button>
             </div>
-          </div>
+
+            {/* Quick Stats */}
+            <div className="py-5">
+              <h3 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-3.5">
+                统计
+              </h3>
+              <div className="flex flex-col gap-2.5">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[#9e968e]">单曲</span>
+                  <span className="text-[#2c2c2c] font-medium">{songs.length}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[#9e968e]">专辑</span>
+                  <span className="text-[#2c2c2c] font-medium">{albums.length}</span>
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
       </div>
     </div>
