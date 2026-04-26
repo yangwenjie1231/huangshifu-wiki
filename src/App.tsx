@@ -33,15 +33,19 @@ import AlbumDetail from "./pages/AlbumDetail";
 import MusicDetail from "./pages/MusicDetail";
 import MusicLinks from "./pages/MusicLinks";
 import Search from "./pages/Search";
-import Admin from "./pages/Admin";
+import AdminRoutes from "./pages/Admin/AdminRoutes";
 
 const MainLayout = () => {
 	const { currentSong } = useMusic();
 	const { isAcademy } = useTheme();
 	const location = useLocation();
+	const path = location.pathname;
+
+	if (path.startsWith("/admin")) {
+		return <AdminRoutes />;
+	}
 
 	if (isAcademy) {
-		const path = location.pathname;
 		const forumWritePath =
 			path === "/forum/new" || /\/forum\/[^/]+\/edit$/.test(path);
 		const wikiWritePath =
@@ -102,7 +106,6 @@ const MainLayout = () => {
 					<Route path="/album/:albumId" element={<AlbumDetail />} />
 					<Route path="/search" element={<Search />} />
 					<Route path="/profile" element={<Profile />} />
-					<Route path="/admin" element={<Admin />} />
 				</Routes>
 			</main>
 			<GlobalMusicPlayer />
