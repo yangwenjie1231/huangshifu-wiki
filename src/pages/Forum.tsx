@@ -1290,7 +1290,7 @@ const PostEditor = () => {
 				>
 					<div className="space-y-2">
 						<label className="text-xs font-bold uppercase tracking-widest text-[#9e968e]">
-							标题
+							标题 <span className="text-red-500">*</span>
 						</label>
 						<input
 							type="text"
@@ -1306,7 +1306,7 @@ const PostEditor = () => {
 
 					<div className="space-y-2">
 						<label className="text-xs font-bold uppercase tracking-widest text-[#9e968e]">
-							板块
+							板块 <span className="text-red-500">*</span>
 						</label>
 						<select
 							value={formData.section}
@@ -1364,7 +1364,7 @@ const PostEditor = () => {
 
 					<div className="space-y-2">
 						<label className="text-xs font-bold uppercase tracking-widest text-[#9e968e]">
-							内容 (Markdown)
+							内容 (Markdown) <span className="text-red-500">*</span>
 						</label>
 						<div className="border border-[#e0dcd3] rounded overflow-hidden bg-white">
 							<MdEditor
