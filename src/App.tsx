@@ -213,7 +213,7 @@ const MainLayout = () => {
 					marginBottom: currentSong ? '80px' : '0',
 				}}
 			>
-				<p>© 2026 诗扶小筑 - 黄诗扶粉丝Wiki与社区</p>
+				<p>黄诗扶 Wiki</p>
 			</footer>
 		</div>
 	);
