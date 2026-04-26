@@ -15,13 +15,12 @@ import {
 import { apiGet } from '../../lib/apiClient';
 import { useTheme } from '../../context/ThemeContext';
 import { withThemeSearch } from '../../lib/theme';
-import { HomeSkeleton } from '../../components/HomeSkeleton';
+// import { HomeSkeleton } from '../../components/HomeSkeleton';
 import type { HomeFeedResponse } from '../../types/home';
 
 export const DefaultHome = () => {
   const { theme } = useTheme();
   const [, setFeed] = useState<HomeFeedResponse | null>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchFeed = async () => {
@@ -31,14 +30,9 @@ export const DefaultHome = () => {
       } catch (e) {
         console.error('Error fetching home feed:', e);
       }
-      setLoading(false);
     };
     fetchFeed();
   }, []);
-
-  if (loading) {
-    return <HomeSkeleton />;
-  }
 
   const navCards = [
     { title: '百科', icon: <Book size={18} />, link: '/wiki' },

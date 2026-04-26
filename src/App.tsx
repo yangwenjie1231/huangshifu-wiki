@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from "react";
+import React from "react";
 import {
 	BrowserRouter as Router,
 	Navigate,
@@ -21,51 +21,19 @@ import {
 	isMiniProgramWebView,
 } from "./lib/miniProgram";
 
-// High-traffic entry pages: static import so chunk is preloadable at first request.
-// Low-traffic / deep pages: lazy import to keep first-load JS small.
 import Home from "./pages/Home";
 import Wiki from "./pages/Wiki";
 import Profile from "./pages/Profile";
 import Recruit from "./pages/Recruit";
-
-// Route-level code splitting for non-critical pages
-// These pages are lazy loaded to reduce initial bundle size
-const Forum = lazy(() => import("./pages/Forum"));
-const Music = lazy(() => import("./pages/Music"));
-const Gallery = lazy(() => import("./pages/Gallery"));
-const GalleryDetail = lazy(() => import("./pages/GalleryDetail"));
-const AlbumDetail = lazy(() => import("./pages/AlbumDetail"));
-const MusicDetail = lazy(() => import("./pages/MusicDetail"));
-const MusicLinks = lazy(() => import("./pages/MusicLinks"));
-const Search = lazy(() => import("./pages/Search"));
-const Admin = lazy(() => import("./pages/Admin"));
-
-// Enhanced skeleton screen for route loading fallback
-const PageSkeleton = () => (
-	<div className="min-h-[60vh] animate-pulse">
-		{/* Header skeleton */}
-		<div className="max-w-7xl mx-auto px-4 py-8">
-			<div className="h-8 bg-gray-200 rounded-lg w-1/3 mb-4" />
-			<div className="h-4 bg-gray-100 rounded w-1/2" />
-		</div>
-		{/* Content skeleton */}
-		<div className="max-w-7xl mx-auto px-4 py-6 space-y-4">
-			<div className="h-32 bg-gray-100 rounded-2xl" />
-			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-				<div className="h-48 bg-gray-100 rounded-2xl" />
-				<div className="h-48 bg-gray-100 rounded-2xl" />
-				<div className="h-48 bg-gray-100 rounded-2xl" />
-			</div>
-			<div className="h-64 bg-gray-100 rounded-2xl" />
-		</div>
-	</div>
-);
-
-const PageLoader = () => (
-	<div className="flex items-center justify-center min-h-[60vh]">
-		<div className="w-8 h-8 border-2 border-brand-olive border-t-transparent rounded-full animate-spin" />
-	</div>
-);
+import Forum from "./pages/Forum";
+import Music from "./pages/Music";
+import Gallery from "./pages/Gallery";
+import GalleryDetail from "./pages/GalleryDetail";
+import AlbumDetail from "./pages/AlbumDetail";
+import MusicDetail from "./pages/MusicDetail";
+import MusicLinks from "./pages/MusicLinks";
+import Search from "./pages/Search";
+import Admin from "./pages/Admin";
 
 const MainLayout = () => {
 	const { currentSong } = useMusic();
@@ -125,79 +93,16 @@ const MainLayout = () => {
 					<Route path="/" element={<Home />} />
 					<Route path="/recruit" element={<Recruit />} />
 					<Route path="/wiki/*" element={<Wiki />} />
-					<Route
-						path="/forum/*"
-						element={
-							<Suspense fallback={<PageSkeleton />}>
-								<Forum />
-							</Suspense>
-						}
-					/>
-					<Route
-						path="/gallery"
-						element={
-							<Suspense fallback={<PageSkeleton />}>
-								<Gallery />
-							</Suspense>
-						}
-					/>
-					<Route
-						path="/gallery/:galleryId"
-						element={
-							<Suspense fallback={<PageSkeleton />}>
-								<GalleryDetail />
-							</Suspense>
-						}
-					/>
-					<Route
-						path="/music"
-						element={
-							<Suspense fallback={<PageSkeleton />}>
-								<Music />
-							</Suspense>
-						}
-					/>
-					<Route
-						path="/music/:songId"
-						element={
-							<Suspense fallback={<PageSkeleton />}>
-								<MusicDetail />
-							</Suspense>
-						}
-					/>
-					<Route
-						path="/music/links"
-						element={
-							<Suspense fallback={<PageSkeleton />}>
-								<MusicLinks />
-							</Suspense>
-						}
-					/>
-					<Route
-						path="/album/:albumId"
-						element={
-							<Suspense fallback={<PageSkeleton />}>
-								<AlbumDetail />
-							</Suspense>
-						}
-					/>
-					<Route
-						path="/search"
-						element={
-							<Suspense fallback={<PageSkeleton />}>
-								<Search />
-							</Suspense>
-						}
-					/>
+					<Route path="/forum/*" element={<Forum />} />
+					<Route path="/gallery" element={<Gallery />} />
+					<Route path="/gallery/:galleryId" element={<GalleryDetail />} />
+					<Route path="/music" element={<Music />} />
+					<Route path="/music/:songId" element={<MusicDetail />} />
+					<Route path="/music/links" element={<MusicLinks />} />
+					<Route path="/album/:albumId" element={<AlbumDetail />} />
+					<Route path="/search" element={<Search />} />
 					<Route path="/profile" element={<Profile />} />
-					<Route
-						path="/admin"
-						element={
-							<Suspense fallback={<PageSkeleton />}>
-								<Admin />
-							</Suspense>
-						}
-					/>
+					<Route path="/admin" element={<Admin />} />
 				</Routes>
 			</main>
 			<GlobalMusicPlayer />
