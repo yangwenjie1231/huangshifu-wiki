@@ -10,8 +10,6 @@ import {
 	Pin,
 } from "lucide-react";
 import { formatDate } from "../../lib/dateUtils";
-import { withThemeSearch } from "../../lib/theme";
-import { useTheme } from "../../context/ThemeContext";
 
 const getCategoryLabel = (category: string): string => {
 	switch (category) {
@@ -37,12 +35,11 @@ interface WikiCardProps {
 }
 
 const WikiCard = React.memo(({ page, viewMode, onCopyLink }: WikiCardProps) => {
-	const { theme } = useTheme();
 
 	return (
 		<div className={clsx("relative group", viewMode === "list" && "flex")}>
 			<Link
-				to={withThemeSearch(`/wiki/${page.slug}`, theme)}
+				to={`/wiki/${page.slug}`}
 				className={clsx(
 					viewMode === "list"
 						? "flex gap-4 p-4 bg-white rounded border border-[#e0dcd3] hover:border-[#c8951e] transition-all w-full"

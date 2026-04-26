@@ -2,11 +2,8 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { Music, Book, MessageSquare, Image as ImageIcon, Search, Home } from 'lucide-react';
 import { clsx } from 'clsx';
-import { useTheme } from '../context/ThemeContext';
-import { withThemeSearch } from '../lib/theme';
 
 export const BottomNav = () => {
-  const { theme } = useTheme();
 
   const items = [
     { to: '/', icon: Home, label: '首页' },
@@ -26,7 +23,7 @@ export const BottomNav = () => {
         {items.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
-            to={withThemeSearch(to, theme)}
+            to={to}
             className={({ isActive }) => clsx(
               'flex flex-col items-center gap-0.5 transition-all',
               isActive ? 'text-[#c8951e]' : 'text-[#9e968e]'

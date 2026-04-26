@@ -1,7 +1,5 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import type { ThemeName } from '../../lib/theme';
-import { withThemeSearch } from '../../lib/theme';
 
 interface CategoryCardProps {
   cat: {
@@ -10,12 +8,11 @@ interface CategoryCardProps {
     desc: string;
     link: string;
   };
-  theme: ThemeName;
 }
 
-export const CategoryCard: React.FC<CategoryCardProps> = React.memo(({ cat, theme }) => (
+export const CategoryCard: React.FC<CategoryCardProps> = React.memo(({ cat }) => (
   <Link
-    to={withThemeSearch(cat.link, theme)}
+    to={cat.link}
     className="flex items-start gap-4 p-4 rounded-2xl hover:bg-gray-50 transition-all group"
   >
     <div className="text-brand-primary group-hover:scale-110 transition-transform">

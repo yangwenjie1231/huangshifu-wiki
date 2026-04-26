@@ -3,8 +3,6 @@ import { Bell } from "lucide-react";
 import { clsx } from "clsx";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiGet, apiPost } from "../../lib/apiClient";
-import { withThemeSearch } from "../../lib/theme";
-import type { ThemeName } from "../../lib/theme";
 import { useAuth } from "../../context/AuthContext";
 import type { NotificationItem } from "../../types/entities";
 import type { NotificationsResponse } from "../../types/api";
@@ -18,11 +16,10 @@ interface ReviewNotificationPayload {
 }
 
 interface NotificationPanelProps {
-	theme: ThemeName;
 	onNavigate: (link: string) => void;
 }
 
-export const NotificationPanel = ({ theme, onNavigate }: NotificationPanelProps) => {
+export const NotificationPanel = ({ onNavigate }: NotificationPanelProps) => {
 	const { user } = useAuth();
 	const [notifPanelOpen, setNotifPanelOpen] = useState(false);
 	const [notifications, setNotifications] = useState<NotificationItem[]>(
@@ -204,7 +201,6 @@ export const NotificationPanel = ({ theme, onNavigate }: NotificationPanelProps)
 													markNotificationRead(notif.id);
 												const link = getNotificationLink(notif);
 												if (link) {
-													onNavigate(withThemeSearch(link, theme));
 												}
 												setNotifPanelOpen(false);
 											}}

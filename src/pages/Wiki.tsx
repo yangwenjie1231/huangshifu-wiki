@@ -40,7 +40,6 @@ import {
 	Pin,
 } from "lucide-react";
 import { useUserPreferences } from "../context/UserPreferencesContext";
-import { useTheme } from "../context/ThemeContext";
 import { ViewModeSelector } from "../components/ViewModeSelector";
 import { VIEW_MODE_CONFIG } from "../lib/viewModes";
 import { clsx } from "clsx";
@@ -55,7 +54,6 @@ import {
 	splitTagsInput,
 } from "../lib/contentUtils";
 import { formatDate } from "../lib/dateUtils";
-import { withThemeSearch } from "../lib/theme";
 import WikiLinkPreview from "../components/WikiLinkPreview";
 import RelationGraph, {
 	RelationGraphData,
@@ -80,32 +78,6 @@ type WikiRelationResolved = WikiRelationRecord & {
 	sourceSlug: string;
 	sourceTitle: string;
 };
-
-const academyWikiLecturers = [
-	{
-		name: "馆籍讲师 · 明弦",
-		focus: "人物卷",
-		desc: "负责人物卷条目整理与出处校验，帮助新读者快速建立阅读顺序。",
-	},
-	{
-		name: "编年讲师 · 微雨",
-		focus: "时间轴",
-		desc: "维护关键事件时间线，将散落资料归入统一年表。",
-	},
-];
-
-const academyWikiCopyMappings = [
-	{
-		field: "分类标签",
-		defaultCopy: "人物介绍 / 音乐作品 / 专辑一览",
-		academyCopy: "卷目 / 曲目 / 案卷，采用书院编目口径",
-	},
-	{
-		field: "时间轴入口",
-		defaultCopy: "时间轴视图",
-		academyCopy: "编年卷轴",
-	},
-];
 
 type WikiItem = WikiItemWithRelations;
 
@@ -219,7 +191,6 @@ const getPrStatusText = (status: WikiPullRequestStatus) => {
 
 // --- Wiki Internal Linking Component ---
 const WikiMarkdown = ({ content }: { content: string }) => {
-	const { theme, isAcademy } = useTheme();
 	// Pre-process internal links [[display|slug]] or [[slug]] to standard markdown links
 	// This is safer than overriding the 'p' component which can break with HTML
 	const processedContent = useMemo(() => {
@@ -228,10 +199,10 @@ const WikiMarkdown = ({ content }: { content: string }) => {
 			(match, p1, p2) => {
 				const display = p1.trim();
 				const slug = p2 ? p2.trim() : p1.trim();
-				return `[${display}](${withThemeSearch(`/wiki/${slug}`, theme)})`;
+				return `[${display}](${`/wiki/${slug}`})`;
 			},
 		);
-	}, [content, theme]);
+	}, [content]);
 
 	return (
 		<ReactMarkdown
@@ -260,7 +231,7 @@ const WikiMarkdown = ({ content }: { content: string }) => {
 					if (href?.startsWith("/wiki/")) {
 						const rawSlug = href.replace("/wiki/", "");
 						const slug = rawSlug.split("?")[0];
-						const themedHref = withThemeSearch(href, theme);
+						const themedHref = href;
 						return (
 							<WikiLinkPreview slug={slug}>
 								<Link
@@ -321,7 +292,6 @@ const WikiList = () => {
 	const [searchParams] = useSearchParams();
 	const category = searchParams.get("category") || "all";
 	const tag = searchParams.get("tag");
-	const { theme, isAcademy } = useTheme();
 	const [pages, setPages] = useState<WikiItem[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [page, setPage] = useState(1);
@@ -394,9 +364,9 @@ const WikiList = () => {
 					</h1>
 					</div>
 					<div className="flex items-center gap-3">
-						{user && !isBanned && !isAcademy && (
+						{user && !isBanned && (
 							<Link
-								to={withThemeSearch("/wiki/new", theme)}
+								to={"/wiki/new"}
 								className="px-5 py-2 bg-[#c8951e] text-white text-sm rounded hover:bg-[#dca828] transition-all flex items-center gap-2"
 							>
 								<Plus size={15} /> 创建页面
@@ -411,7 +381,7 @@ const WikiList = () => {
 							(cat) => (
 								<Link
 									key={cat}
-									to={withThemeSearch(`/wiki?category=${cat}`, theme)}
+									to={`/wiki?category=${cat}`}
 									className={clsx(
 										"text-[1.125rem] pb-2 relative tracking-[0.05em] transition-all cursor-pointer",
 										category === cat
@@ -436,7 +406,7 @@ const WikiList = () => {
 							),
 						)}
 						<Link
-							to={withThemeSearch("/wiki/timeline", theme)}
+							to={"/wiki/timeline"}
 							className="text-[0.8125rem] text-[#c8951e] font-medium hover:text-[#dca828] transition-colors flex items-center gap-1 self-center mb-1 cursor-pointer"
 						>
 							<Calendar size={14} /> 时间轴
@@ -449,52 +419,7 @@ const WikiList = () => {
 					</div>
 				</div>
 
-			{isAcademy && (
-				<section className="theme-surface theme-card p-6 mb-10 space-y-6">
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-						{academyWikiLecturers.map((lecturer) => (
-							<article
-								key={lecturer.name}
-								className="academy-lecturer-card rounded p-5"
-							>
-								<p className="text-xs uppercase tracking-[0.2em] text-[color:var(--color-theme-muted)] mb-2">
-									{lecturer.focus}
-								</p>
-								<h3 className="text-lg font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
-									{lecturer.name}
-								</h3>
-								<p className="text-sm text-[color:var(--color-theme-text)]/90 leading-relaxed">
-									{lecturer.desc}
-								</p>
-							</article>
-						))}
-					</div>
-					<div className="overflow-x-auto">
-						<table className="academy-mapping-table w-full border-collapse rounded-lg overflow-hidden text-sm">
-							<thead>
-								<tr>
-									<th className="border px-3 py-2 text-left">映射项</th>
-									<th className="border px-3 py-2 text-left">默认</th>
-									<th className="border px-3 py-2 text-left">书院</th>
-								</tr>
-							</thead>
-							<tbody>
-								{academyWikiCopyMappings.map((row) => (
-									<tr key={row.field}>
-										<td className="border px-3 py-2 font-medium">
-											{row.field}
-										</td>
-										<td className="border px-3 py-2 text-[color:var(--color-theme-muted)]">
-											{row.defaultCopy}
-										</td>
-										<td className="border px-3 py-2">{row.academyCopy}</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
-				</section>
-			)}
+			
 
 			{loading ? (
 				<div
@@ -560,7 +485,6 @@ const WikiList = () => {
 const WikiPageView = () => {
 	const { slug } = useParams();
 	const navigate = useNavigate();
-	const { theme, isAcademy } = useTheme();
 	const [page, setPage] = useState<WikiItem | null>(null);
 	const [loading, setLoading] = useState(true);
 	const { user, isAdmin, isBanned } = useAuth();
@@ -812,7 +736,7 @@ const WikiPageView = () => {
 			<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32 wiki-detail-page">
 				{/* Breadcrumb */}
 				<Link
-					to={withThemeSearch("/wiki", theme)}
+					to={"/wiki"}
 					className="inline-flex items-center gap-2 text-sm text-[#9e968e] hover:text-[#c8951e] transition-colors mb-5"
 				>
 					<ArrowLeft size={18} /> 返回百科列表
@@ -825,25 +749,25 @@ const WikiPageView = () => {
 							{page.title}
 						</h1>
 						<div className="flex flex-wrap gap-2">
-							{isOwner && !isAcademy && (page.category !== "music" || isAdmin) && (
+							{isOwner && (page.category !== "music" || isAdmin) && (
 								<Link
-									to={withThemeSearch(`/wiki/${slug}/edit`, theme)}
+									to={`/wiki/${slug}/edit`}
 									className="px-4 py-2 text-[0.9375rem] rounded bg-[#c8951e] text-white hover:bg-[#dca828] transition-all flex items-center gap-2"
 								>
 									<Edit3 size={16} /> 编辑
 								</Link>
 							)}
-							{isOwner && !isAcademy && (page.category !== "music" || isAdmin) && (
+							{isOwner && (page.category !== "music" || isAdmin) && (
 								<Link
-									to={withThemeSearch(`/wiki/${slug}/history`, theme)}
+									to={`/wiki/${slug}/history`}
 									className="px-4 py-2 text-[0.9375rem] rounded border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all flex items-center gap-2"
 								>
 									<History size={16} /> 历史
 								</Link>
 							)}
-							{user && !isBanned && !isAcademy && (
+							{user && !isBanned && (
 								<Link
-									to={withThemeSearch(`/wiki/${slug}/branches`, theme)}
+									to={`/wiki/${slug}/branches`}
 									className="px-4 py-2 text-[0.9375rem] rounded border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all flex items-center gap-2"
 								>
 									<GitBranch size={16} /> 分支
@@ -945,7 +869,7 @@ const WikiPageView = () => {
 											graph={relationGraph}
 											currentSlug={slug || ""}
 											onNodeClick={(nodeSlug) =>
-												navigate(withThemeSearch(`/wiki/${nodeSlug}`, theme))
+												navigate(`/wiki/${nodeSlug}`)
 											}
 										/>
 									</div>
@@ -962,7 +886,7 @@ const WikiPageView = () => {
 												(relation: WikiRelationRecord, index: number) => (
 													<Link
 														key={`${relation.targetSlug}-${index}`}
-														to={withThemeSearch(`/wiki/${relation.targetSlug}`, theme)}
+														to={`/wiki/${relation.targetSlug}`}
 														className="p-3 bg-white border border-[#e0dcd3] rounded hover:border-[#c8951e] transition-all group"
 													>
 														<p className="text-xs text-[#c8951e] font-medium uppercase tracking-wider mb-1">
@@ -993,7 +917,7 @@ const WikiPageView = () => {
 											{backlinks.map((link) => (
 												<Link
 													key={link.id}
-													to={withThemeSearch(`/wiki/${link.slug}`, theme)}
+													to={`/wiki/${link.slug}`}
 													className="p-3 bg-white border border-[#e0dcd3] rounded hover:border-[#c8951e] transition-all group"
 												>
 													<p className="font-medium text-[#2c2c2c] group-hover:text-[#c8951e] group-hover:underline underline-offset-4 transition-colors">
@@ -1149,12 +1073,9 @@ const WikiPageView = () => {
 										<span
 											key={tag}
 											onClick={() =>
-												navigate(
-													withThemeSearch(
-														`/wiki?tag=${encodeURIComponent(tag)}`,
-														theme,
-													),
-												)
+											navigate(
+												`/wiki?tag=${encodeURIComponent(tag)}`,
+											)
 											}
 											className="cursor-pointer px-2 py-1 bg-white border border-[#e0dcd3] text-[#6b6560] text-xs rounded hover:text-[#c8951e] hover:border-[#c8951e] transition-all"
 										>
@@ -1188,7 +1109,6 @@ const WikiPageView = () => {
 const WikiBranchWorkspace = () => {
 	const { slug } = useParams();
 	const navigate = useNavigate();
-	const { theme } = useTheme();
 	const { user, isAdmin, isBanned } = useAuth();
 
 	const [page, setPage] = useState<WikiItem | null>(null);
@@ -1411,14 +1331,14 @@ const WikiBranchWorkspace = () => {
 		<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32 space-y-6">
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<Link
-					to={withThemeSearch(`/wiki/${slug}`, theme)}
+					to={`/wiki/${slug}`}
 					className="inline-flex items-center gap-2 text-sm text-[#9e968e] hover:text-[#c8951e] transition-colors"
 				>
 					<ArrowLeft size={18} /> 返回百科页面
 				</Link>
 				<div className="flex gap-2">
 					<Link
-						to={withThemeSearch(`/wiki/${slug}/prs`, theme)}
+						to={`/wiki/${slug}/prs`}
 						className="px-5 py-2 border border-[#e0dcd3] text-sm text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] rounded transition-all"
 					>
 						查看 PR 列表
@@ -1580,7 +1500,7 @@ const WikiBranchWorkspace = () => {
 									当前已有一个进行中的 PR。
 								</p>
 								<Link
-									to={withThemeSearch(`/wiki/${slug}/prs/${openPr.id}`, theme)}
+									to={`/wiki/${slug}/prs/${openPr.id}`}
 									className="text-sm font-bold text-[#c8951e] hover:underline"
 								>
 									查看 PR：{openPr.title}
@@ -1664,7 +1584,6 @@ const WikiBranchWorkspace = () => {
 
 const WikiPullRequestList = () => {
 	const { slug } = useParams();
-	const { theme } = useTheme();
 	const { user, isAdmin } = useAuth();
 	const [status, setStatus] = useState<WikiPullRequestStatus>("open");
 	const [loading, setLoading] = useState(true);
@@ -1703,7 +1622,7 @@ const WikiPullRequestList = () => {
 		<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32 space-y-6">
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<Link
-					to={withThemeSearch(slug ? `/wiki/${slug}/branches` : "/wiki", theme)}
+					to={slug ? `/wiki/${slug}/branches` : "/wiki"}
 					className="inline-flex items-center gap-2 text-sm text-[#9e968e] hover:text-[#c8951e] transition-colors"
 				>
 					<ArrowLeft size={18} /> 返回
@@ -1737,10 +1656,7 @@ const WikiPullRequestList = () => {
 						{items.map((item) => (
 							<Link
 								key={item.id}
-								to={withThemeSearch(
-									`/wiki/${item.pageSlug}/prs/${item.id}`,
-									theme,
-								)}
+								to={`/wiki/${item.pageSlug}/prs/${item.id}`}
 								className="block p-4 rounded border border-gray-100 hover:border-brand-olive/30 hover:bg-[#f7f5f0]/20 transition-all"
 							>
 								<div className="flex flex-wrap items-center justify-between gap-3 mb-1">
@@ -1778,7 +1694,6 @@ const WikiPullRequestList = () => {
 
 const WikiPullRequestDetail = () => {
 	const { slug, prId } = useParams();
-	const { theme } = useTheme();
 	const { user, isAdmin } = useAuth();
 
 	const [loading, setLoading] = useState(true);
@@ -1889,13 +1804,13 @@ const WikiPullRequestDetail = () => {
 		<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32 space-y-6">
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<Link
-					to={withThemeSearch(`/wiki/${pullRequest.pageSlug}/prs`, theme)}
+					to={`/wiki/${pullRequest.pageSlug}/prs`}
 					className="inline-flex items-center gap-2 text-sm text-[#9e968e] hover:text-[#c8951e] transition-colors"
 				>
 					<ArrowLeft size={18} /> 返回 PR 列表
 				</Link>
 				<Link
-					to={withThemeSearch(`/wiki/${pullRequest.pageSlug}`, theme)}
+					to={`/wiki/${pullRequest.pageSlug}`}
 					className="text-xs text-[#c8951e] hover:underline"
 				>
 					查看页面：{pullRequest.page?.title || pullRequest.pageSlug}
@@ -2049,7 +1964,6 @@ const WikiEditor = WikiEditorComponent;
 const WikiHistory = () => {
 	const { isBanned } = useAuth();
 	const { slug } = useParams();
-	const { theme } = useTheme();
 	const [revisions, setRevisions] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [selectedRevision, setSelectedRevision] = useState<any>(null);
@@ -2085,7 +1999,7 @@ const WikiHistory = () => {
 
 		try {
 			await apiPost(`/api/wiki/${slug}/rollback/${revision.id}`);
-			navigate(withThemeSearch(`/wiki/${slug}`, theme));
+			navigate(`/wiki/${slug}`);
 		} catch (e) {
 			console.error("Rollback error:", e);
 			show("回滚失败", { variant: "error" });
@@ -2095,7 +2009,7 @@ const WikiHistory = () => {
 	return (
 		<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
 			<Link
-				to={withThemeSearch(`/wiki/${slug}`, theme)}
+				to={`/wiki/${slug}`}
 				className="inline-flex items-center gap-2 text-sm text-[#9e968e] hover:text-[#c8951e] transition-colors mb-5"
 			>
 				<ArrowLeft size={18} /> 返回页面
@@ -2219,7 +2133,6 @@ const WikiHistory = () => {
 
 // --- Wiki Timeline Component ---
 const WikiTimeline = () => {
-	const { theme } = useTheme();
 	const [events, setEvents] = useState<WikiItem[]>([]);
 	const [loading, setLoading] = useState(true);
 
@@ -2239,7 +2152,7 @@ const WikiTimeline = () => {
 	return (
 		<div className="max-w-5xl mx-auto px-4 py-12">
 			<Link
-				to={withThemeSearch("/wiki", theme)}
+				to={"/wiki"}
 				className="inline-flex items-center gap-2 text-sm text-[#9e968e] hover:text-[#c8951e] transition-colors mb-5"
 			>
 				<ArrowLeft size={18} /> 返回百科列表
@@ -2285,7 +2198,7 @@ const WikiTimeline = () => {
 
 							{/* Content Card */}
 							<Link
-								to={withThemeSearch(`/wiki/${event.slug}`, theme)}
+								to={`/wiki/${event.slug}`}
 								className="block group"
 							>
 								<div className="bg-white p-8 rounded border border-gray-100 hover:border-[#c8951e] hover:border-brand-olive/20 transition-all">

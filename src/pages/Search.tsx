@@ -22,9 +22,6 @@ import { motion, AnimatePresence } from "motion/react";
 import { SmartImage } from "../components/SmartImage";
 import { apiGet, apiUpload } from "../lib/apiClient";
 import { toDateValue } from "../lib/dateUtils";
-import { useTheme } from "../context/ThemeContext";
-import { withThemeSearch, mergeSearchParamsWithTheme } from "../lib/theme";
-import type { ThemeName } from "../lib/theme";
 import type { WikiItem, PostItem, GalleryItem, SongItem, AlbumItem } from "../types/entities";
 import { MixedSearchResultCard } from "../components/MixedSearchResultCard";
 import type { MixedSearchResult, SearchSuggestion } from "../hooks/useSearch";
@@ -34,12 +31,11 @@ type SearchSuggestionType = SearchSuggestion;
 interface SearchWikiCardProps {
 	page: WikiItem;
 	viewMode: string;
-	theme: ThemeName;
 }
 
-const SearchWikiCard = React.memo(({ page, viewMode, theme }: SearchWikiCardProps) => (
+const SearchWikiCard = React.memo(({ page, viewMode }: SearchWikiCardProps) => (
 	<Link
-		to={withThemeSearch(`/wiki/${page.slug}`, theme)}
+		to={`/wiki/${page.slug}`}
 		className={clsx(
 			viewMode === "list"
 				? "flex gap-4 p-3 bg-white border border-[#e0dcd3] rounded overflow-hidden hover:border-[#c8951e] transition-all w-full"
@@ -102,12 +98,11 @@ const SearchWikiCard = React.memo(({ page, viewMode, theme }: SearchWikiCardProp
 interface SearchGalleryCardProps {
 	gallery: GalleryItem;
 	viewMode: string;
-	theme: ThemeName;
 }
 
-const SearchGalleryCard = React.memo(({ gallery, viewMode, theme }: SearchGalleryCardProps) => (
+const SearchGalleryCard = React.memo(({ gallery, viewMode }: SearchGalleryCardProps) => (
 	<Link
-		to={withThemeSearch(`/gallery/${gallery.id}`, theme)}
+		to={`/gallery/${gallery.id}`}
 		className={clsx(
 			viewMode === "list"
 				? "flex gap-4 p-3 bg-white border border-[#e0dcd3] rounded overflow-hidden hover:border-[#c8951e] transition-all w-full"
@@ -162,12 +157,11 @@ const SearchGalleryCard = React.memo(({ gallery, viewMode, theme }: SearchGaller
 interface SearchMusicCardProps {
 	track: SongItem;
 	viewMode: string;
-	theme: ThemeName;
 }
 
-const SearchMusicCard = React.memo(({ track, viewMode, theme }: SearchMusicCardProps) => (
+const SearchMusicCard = React.memo(({ track, viewMode }: SearchMusicCardProps) => (
 	<Link
-		to={withThemeSearch(`/music/${track.id}`, theme)}
+		to={`/music/${track.id}`}
 		className={clsx(
 			viewMode === "list"
 				? "flex gap-4 p-3 bg-white border border-[#e0dcd3] rounded overflow-hidden hover:border-[#c8951e] transition-all w-full"
@@ -210,12 +204,11 @@ const SearchMusicCard = React.memo(({ track, viewMode, theme }: SearchMusicCardP
 interface SearchAlbumCardProps {
 	album: AlbumItem;
 	viewMode: string;
-	theme: ThemeName;
 }
 
-const SearchAlbumCard = React.memo(({ album, viewMode, theme }: SearchAlbumCardProps) => (
+const SearchAlbumCard = React.memo(({ album, viewMode }: SearchAlbumCardProps) => (
 	<Link
-		to={withThemeSearch(`/album/${album.id}`, theme)}
+		to={`/album/${album.id}`}
 		className={clsx(
 			viewMode === "list"
 				? "flex gap-4 p-3 bg-white border border-[#e0dcd3] rounded overflow-hidden hover:border-[#c8951e] transition-all w-full"
@@ -279,7 +272,6 @@ const Search = () => {
 		"all" | "wiki" | "posts" | "galleries" | "music" | "albums" | "semantic"
 	>("all");
 	const { preferences, setViewMode } = useUserPreferences();
-	const { theme } = useTheme();
 	const viewMode = preferences.viewMode;
 
 	const [showFilters, setShowFilters] = useState(false);
@@ -372,7 +364,7 @@ const Search = () => {
 		setShowSuggest(false);
 		const currentQuery = q || searchQuery;
 		setSearchParams(
-			mergeSearchParamsWithTheme(searchParams, { q: currentQuery }, theme),
+			(() => { const sp = new URLSearchParams(searchParams); sp.set('q', currentQuery); return sp; })(),
 		);
 		setSearchQuery(currentQuery);
 
@@ -584,13 +576,13 @@ const Search = () => {
 												} else {
 													setShowSuggest(false);
 													if (s.type === "wiki" && s.id) {
-														navigate(withThemeSearch(`/wiki/${s.id}`, theme));
+														navigate(`/wiki/${s.id}`);
 													} else if (s.type === "post" && s.id) {
-														navigate(withThemeSearch(`/forum/${s.id}`, theme));
+														navigate(`/forum/${s.id}`);
 													} else if (s.type === "music" && s.id) {
-														navigate(withThemeSearch(`/music/${s.id}`, theme));
+														navigate(`/music/${s.id}`);
 													} else if (s.type === "album" && s.id) {
-														navigate(withThemeSearch(`/album/${s.id}`, theme));
+														navigate(`/album/${s.id}`);
 													}
 												}
 											}}
@@ -870,7 +862,6 @@ const Search = () => {
 														key={`${result.sourceType}-${result.sourceId}-${index}`}
 														result={result}
 														viewMode={viewMode}
-														theme={theme}
 														showSimilarity={true}
 													/>
 												))}
@@ -903,7 +894,6 @@ const Search = () => {
 																key={page.id}
 																page={page}
 																viewMode={viewMode}
-																theme={theme}
 															/>
 														))}
 													</div>
@@ -925,7 +915,7 @@ const Search = () => {
 														{results.posts.map((post) => (
 															<Link
 																key={post.id}
-																to={withThemeSearch(`/forum/${post.id}`, theme)}
+																to={`/forum/${post.id}`}
 																className="block bg-white border border-[#e0dcd3] rounded p-4 hover:border-[#c8951e] transition-all group"
 															>
 																<div className="flex items-center gap-2 mb-1.5">
@@ -971,7 +961,6 @@ const Search = () => {
 																key={gallery.id}
 																gallery={gallery}
 																viewMode={viewMode}
-																theme={theme}
 															/>
 														))}
 													</div>
@@ -1001,7 +990,6 @@ const Search = () => {
 																key={track.docId}
 																track={track}
 																viewMode={viewMode}
-																theme={theme}
 															/>
 														))}
 													</div>
@@ -1031,7 +1019,6 @@ const Search = () => {
 																key={album.docId}
 																album={album}
 																viewMode={viewMode}
-																theme={theme}
 															/>
 														))}
 													</div>

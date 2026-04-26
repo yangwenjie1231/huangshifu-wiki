@@ -8,7 +8,7 @@ import {
 } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { MusicProvider, useMusic } from "./context/MusicContext";
-import { ThemeProvider, useTheme } from "./context/ThemeContext";
+
 import { Navbar } from "./components/Navbar";
 import { BottomNav } from "./components/BottomNav";
 import { AnnouncementBar } from "./components/AnnouncementBar";
@@ -24,7 +24,6 @@ import {
 import Home from "./pages/Home";
 import Wiki from "./pages/Wiki";
 import Profile from "./pages/Profile";
-import Recruit from "./pages/Recruit";
 import Forum from "./pages/Forum";
 import Music from "./pages/Music";
 import Gallery from "./pages/Gallery";
@@ -37,50 +36,11 @@ import AdminRoutes from "./pages/Admin/AdminRoutes";
 
 const MainLayout = () => {
 	const { currentSong } = useMusic();
-	const { isAcademy } = useTheme();
 	const location = useLocation();
 	const path = location.pathname;
 
 	if (path.startsWith("/admin")) {
 		return <AdminRoutes />;
-	}
-
-	if (isAcademy) {
-		const forumWritePath =
-			path === "/forum/new" || /\/forum\/[^/]+\/edit$/.test(path);
-		const wikiWritePath =
-			path === "/wiki/new" ||
-			/\/wiki\/[^/]+\/edit$/.test(path) ||
-			/\/wiki\/[^/]+\/branches/.test(path) ||
-			/\/wiki\/[^/]+\/prs/.test(path);
-		const profilePath = path === "/profile" || path.startsWith("/profile/");
-		const adminPath = path === "/admin" || path.startsWith("/admin/");
-
-		if (forumWritePath) {
-			return (
-				<Navigate
-					to={{
-						pathname: "/forum",
-						search: location.search,
-						hash: location.hash,
-					}}
-					replace
-				/>
-			);
-		}
-
-		if (wikiWritePath || profilePath || adminPath) {
-			return (
-				<Navigate
-					to={{
-						pathname: "/wiki",
-						search: location.search,
-						hash: location.hash,
-					}}
-					replace
-				/>
-			);
-		}
 	}
 
 	return (
@@ -95,7 +55,6 @@ const MainLayout = () => {
 			>
 				<Routes>
 					<Route path="/" element={<Home />} />
-					<Route path="/recruit" element={<Recruit />} />
 					<Route path="/wiki/*" element={<Wiki />} />
 					<Route path="/forum/*" element={<Forum />} />
 					<Route path="/gallery" element={<Gallery />} />
@@ -129,13 +88,6 @@ const MainLayout = () => {
 
 export default function App() {
 	React.useEffect(() => {
-		if (
-			typeof document !== "undefined" &&
-			document.documentElement.dataset.theme === "academy"
-		) {
-			return;
-		}
-
 		if (!isMiniProgramWebView()) {
 			return;
 		}
@@ -156,13 +108,11 @@ export default function App() {
 
 	return (
 		<Router>
-			<ThemeProvider>
-				<AuthProvider>
-					<MusicProvider>
-						<MainLayout />
-					</MusicProvider>
-				</AuthProvider>
-			</ThemeProvider>
+			<AuthProvider>
+				<MusicProvider>
+					<MainLayout />
+				</MusicProvider>
+			</AuthProvider>
 		</Router>
 	);
 }

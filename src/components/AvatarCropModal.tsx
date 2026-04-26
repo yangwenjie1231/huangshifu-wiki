@@ -26,8 +26,6 @@ function centerAspectCrop(mediaWidth: number, mediaHeight: number, aspect: numbe
   );
 }
 
-
-
 export const AvatarCropModal = ({ open, onClose, onSuccess }: AvatarCropModalProps) => {
   const [imageSrc, setImageSrc] = useState<string>('');
   const [crop, setCrop] = useState<Crop>();

@@ -1,11 +1,9 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { useTheme } from "../../context/ThemeContext";
 import { useToast } from "../../components/Toast";
 import { apiGet, apiPost, apiPut } from "../../lib/apiClient";
 import { randomId } from "../../lib/randomId";
-import { withThemeSearch } from "../../lib/theme";
 import { splitTagsInput } from "../../lib/contentUtils";
 import { generateWikiIntro } from "../../services/aiService";
 import { uploadMarkdownImage } from "../../services/imageService";
@@ -37,7 +35,6 @@ const WikiEditor = () => {
 	const isNew = !slug || slug === "new";
 	const navigate = useNavigate();
 	const { user, profile, isAdmin, isBanned } = useAuth();
-	const { theme } = useTheme();
 
 	const [formData, setFormData] = useState({
 		title: "",
@@ -340,7 +337,6 @@ const WikiEditor = () => {
 				editorName: profile?.displayName || user.displayName || "匿名用户",
 			});
 
-			navigate(withThemeSearch(`/wiki/${pageSlug}`, theme));
 		} catch (e) {
 			console.error("Error saving wiki page:", e);
 			show("保存失败，请检查网络或权限", { variant: "error" });

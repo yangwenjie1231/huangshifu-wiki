@@ -13,13 +13,10 @@ import {
   MapPin,
 } from 'lucide-react';
 import { apiGet } from '../../lib/apiClient';
-import { useTheme } from '../../context/ThemeContext';
-import { withThemeSearch } from '../../lib/theme';
 // import { HomeSkeleton } from '../../components/HomeSkeleton';
 import type { HomeFeedResponse } from '../../types/home';
 
 export const DefaultHome = () => {
-  const { theme } = useTheme();
   const [, setFeed] = useState<HomeFeedResponse | null>(null);
 
   useEffect(() => {
@@ -78,13 +75,13 @@ export const DefaultHome = () => {
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3">
             <Link
-              to={withThemeSearch('/wiki', theme)}
+              to='/wiki'
               className="px-6 py-2.5 bg-[#c8951e] text-white text-[0.9375rem] rounded hover:bg-[#dca828] transition-all flex items-center gap-2"
             >
               <Library size={16} /> 进入百科
             </Link>
             <Link
-              to={withThemeSearch('/music', theme)}
+              to='/music'
               className="px-6 py-2.5 border border-[#e0dcd3] text-[#6b6560] text-[0.9375rem] rounded hover:text-[#c8951e] hover:border-[#c8951e] transition-all flex items-center gap-2"
             >
               <Music size={16} /> 曲库
@@ -99,7 +96,7 @@ export const DefaultHome = () => {
               内容
             </h2>
             <Link
-              to={withThemeSearch('/wiki', theme)}
+              to='/wiki'
               className="text-[0.8125rem] text-[#c8951e] font-medium hover:text-[#dca828] transition-colors flex items-center gap-1 pb-2"
             >
               查看全部 <ArrowRight size={14} />
@@ -109,7 +106,7 @@ export const DefaultHome = () => {
             {navCards.map((card) => (
               <Link
                 key={card.title}
-                to={withThemeSearch(card.link, theme)}
+                to={card.link}
                 className="px-3 py-2.5 bg-white border border-[#e0dcd3] rounded hover:border-[#c8951e] transition-all group"
               >
                 <div className="flex items-center gap-2 text-[#c8951e]">
@@ -152,7 +149,7 @@ export const DefaultHome = () => {
               {quickLinks.map((item) => (
                 <Link
                   key={item.title}
-                  to={withThemeSearch(item.link, theme)}
+                  to={item.link}
                   className="flex items-center gap-3 p-3 bg-white border border-[#e0dcd3] rounded hover:border-[#c8951e] transition-all group"
                 >
                   <span className="text-[#c8951e]">{item.icon}</span>

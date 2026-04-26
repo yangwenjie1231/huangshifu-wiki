@@ -9,8 +9,6 @@ import {
   Clock,
 } from "lucide-react";
 import { SmartImage } from "./SmartImage";
-import { withThemeSearch } from "../lib/theme";
-import type { ThemeName } from "../lib/theme";
 import type { MixedSearchResult, ImageSourceType } from "../hooks/useSearch";
 import type { GalleryItem, WikiItem, PostItem } from "../types/entities";
 import { format } from "date-fns";
@@ -19,7 +17,6 @@ import { toDateValue } from "../lib/dateUtils";
 interface MixedSearchResultCardProps {
   result: MixedSearchResult;
   viewMode: "grid" | "list" | "compact" | string;
-  theme: ThemeName;
   showSimilarity?: boolean;
 }
 
@@ -41,11 +38,11 @@ function getSourceTypeIcon(sourceType: ImageSourceType) {
   }
 }
 
-function getResultLink(result: MixedSearchResult, theme: ThemeName): string {
+function getResultLink(result: MixedSearchResult): string {
   switch (result.sourceType) {
-    case "gallery": return withThemeSearch(`/gallery/${result.sourceId}`, theme);
-    case "wiki": return withThemeSearch(`/wiki/${result.sourceId}`, theme);
-    case "post": return withThemeSearch(`/forum/${result.sourceId}`, theme);
+    case "gallery": return `/gallery/${result.sourceId}`;
+    case "wiki": return `/wiki/${result.sourceId}`;
+    case "post": return `/forum/${result.sourceId}`;
     default: return "#";
   }
 }
@@ -55,10 +52,10 @@ function formatSimilarity(similarity: number): string {
 }
 
 export const MixedSearchResultCard = React.memo(
-  ({ result, viewMode, theme, showSimilarity = true }: MixedSearchResultCardProps) => {
+  ({ result, viewMode, showSimilarity = true }: MixedSearchResultCardProps) => {
     const { sourceType, data, imageUrl, similarity } = result;
     const SourceIcon = getSourceTypeIcon(sourceType);
-    const link = getResultLink(result, theme);
+    const link = getResultLink(result);
 
     if (viewMode === "list") {
       return (

@@ -8,7 +8,6 @@ import {
 	useNavigate,
 } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { useTheme } from "../context/ThemeContext";
 import ReactMarkdown from "react-markdown";
 import {
 	MessageSquare,
@@ -35,8 +34,6 @@ import { uploadMarkdownImage } from "../services/imageService";
 import { apiDelete, apiGet, apiPost, apiPut } from "../lib/apiClient";
 import { useToast } from "../components/Toast";
 import { copyToClipboard, toAbsoluteInternalUrl } from "../lib/copyLink";
-import { withThemeSearch, mergeSearchParamsWithTheme } from "../lib/theme";
-import type { ThemeName } from "../lib/theme";
 import { ContentStatus, getStatusText } from "../lib/contentUtils";
 import { formatDate } from "../lib/dateUtils";
 import { LocationTagInput } from "../components/LocationTagInput";
@@ -97,12 +94,11 @@ interface PostCardProps {
 	sectionName: string;
 	isAdmin: boolean;
 	pinning: string | null;
-	theme: ThemeName;
 	onCopyLink: (event: React.MouseEvent<HTMLButtonElement>, postId: string) => void;
 	onTogglePin: (postId: string, currentlyPinned: boolean) => void;
 }
 
-const PostCard = React.memo(({ post, sectionName, isAdmin, pinning, theme, onCopyLink, onTogglePin }: PostCardProps) => (
+const PostCard = React.memo(({ post, sectionName, isAdmin, pinning, onCopyLink, onTogglePin }: PostCardProps) => (
 	<div
 		className={clsx(
 			"p-3 bg-white border border-[#e0dcd3] rounded hover:border-[#c8951e] transition-all group relative",
@@ -110,7 +106,7 @@ const PostCard = React.memo(({ post, sectionName, isAdmin, pinning, theme, onCop
 		)}
 	>
 		<Link
-			to={withThemeSearch(`/forum/${post.id}`, theme)}
+			to={`/forum/${post.id}`}
 			className="block"
 		>
 			<div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -200,38 +196,11 @@ const PostCard = React.memo(({ post, sectionName, isAdmin, pinning, theme, onCop
 	</div>
 ));
 
-const academyForumLecturers = [
-	{
-		name: "坛务讲师 · 鹿鸣",
-		focus: "问答引导",
-		desc: "整理高频问题并维护提问模板，减少重复讨论成本。",
-	},
-	{
-		name: "值夜讲师 · 玄箫",
-		focus: "版务巡检",
-		desc: "关注夜间热帖与讨论秩序，给出优先阅读建议。",
-	},
-];
-
-const academyForumCopyMappings = [
-	{
-		field: "排序",
-		defaultCopy: "最新 / 热门 / 推荐",
-		academyCopy: "新帖卷 / 议题卷 / 藏卷",
-	},
-	{
-		field: "发帖入口",
-		defaultCopy: "发布帖子",
-		academyCopy: "书院讲义投稿（书院模式默认隐藏）",
-	},
-];
-
 const PostList = () => {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const section = searchParams.get("section") || "all";
 	const sort = searchParams.get("sort") || "latest";
 	const pageParam = Number(searchParams.get("page")) || 1;
-	const { theme, isAcademy } = useTheme();
 	const [posts, setPosts] = useState<PostItem[]>([]);
 	const [sections, setSections] = useState<SectionItem[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -283,7 +252,6 @@ const PostList = () => {
 	const handlePageChange = (newPage: number) => {
 		setPage(newPage);
 		setSearchParams(
-			mergeSearchParamsWithTheme(searchParams, { page: String(newPage) }, theme),
 		);
 		window.scrollTo({ top: 0, behavior: "smooth" });
 	};
@@ -347,9 +315,9 @@ const PostList = () => {
 						</p>
 					</div>
 					<div className="flex items-center gap-3">
-						{user && !isBanned && !isAcademy && (
+						{user && !isBanned && (
 							<Link
-								to={withThemeSearch("/forum/new", theme)}
+								to="/forum/new"
 								className="px-5 py-2 bg-[#c8951e] text-white text-sm rounded hover:bg-[#dca828] transition-all flex items-center gap-2"
 							>
 								<Plus size={15} /> 发布帖子
@@ -360,21 +328,21 @@ const PostList = () => {
 
 				<div className="flex items-end justify-between border-b border-[#e0dcd3] mb-5">
 					<div className="flex gap-5 flex-wrap">
-						<Link
-							to={withThemeSearch("/forum?section=all", theme)}
-							className={clsx(
-								"text-[1.125rem] pb-2 relative tracking-[0.05em] transition-all cursor-pointer",
-								section === "all"
-									? "text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]"
-									: "text-[#9e968e] hover:text-[#c8951e]",
-							)}
-						>
-							全部板块
-						</Link>
+					<Link
+						to="/forum?section=all"
+						className={clsx(
+							"text-[1.125rem] pb-2 relative tracking-[0.05em] transition-all cursor-pointer",
+							section === "all"
+								? "text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]"
+								: "text-[#9e968e] hover:text-[#c8951e]",
+						)}
+					>
+						全部板块
+					</Link>
 						{sections.map((sec) => (
 							<Link
 								key={sec.id}
-								to={withThemeSearch(`/forum?section=${sec.id}`, theme)}
+								to={`/forum?section=${sec.id}`}
 								className={clsx(
 									"text-[1.125rem] pb-2 relative tracking-[0.05em] transition-all cursor-pointer",
 									section === sec.id
@@ -393,7 +361,6 @@ const PostList = () => {
 								key={s}
 								onClick={() => {
 									setSearchParams(
-										mergeSearchParamsWithTheme(searchParams, { sort: s }, theme),
 									);
 								}}
 								className={clsx(
@@ -409,52 +376,7 @@ const PostList = () => {
 					</div>
 				</div>
 
-				{isAcademy && (
-					<section className="theme-surface theme-card p-6 mb-10 space-y-6">
-						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-							{academyForumLecturers.map((lecturer) => (
-								<article
-									key={lecturer.name}
-									className="academy-lecturer-card rounded p-5"
-								>
-									<p className="text-xs uppercase tracking-[0.2em] text-[color:var(--color-theme-muted)] mb-2">
-										{lecturer.focus}
-									</p>
-									<h3 className="text-lg font-serif font-bold text-[color:var(--color-theme-accent-strong)] mb-2">
-										{lecturer.name}
-									</h3>
-									<p className="text-sm text-[color:var(--color-theme-text)]/90 leading-relaxed">
-										{lecturer.desc}
-									</p>
-								</article>
-							))}
-						</div>
-						<div className="overflow-x-auto">
-							<table className="academy-mapping-table w-full border-collapse rounded overflow-hidden text-sm">
-								<thead>
-									<tr>
-										<th className="border px-3 py-2 text-left">映射项</th>
-										<th className="border px-3 py-2 text-left">默认</th>
-										<th className="border px-3 py-2 text-left">书院</th>
-									</tr>
-								</thead>
-								<tbody>
-									{academyForumCopyMappings.map((row) => (
-										<tr key={row.field}>
-											<td className="border px-3 py-2 font-medium">
-												{row.field}
-											</td>
-											<td className="border px-3 py-2 text-[color:var(--color-theme-muted)]">
-												{row.defaultCopy}
-											</td>
-											<td className="border px-3 py-2">{row.academyCopy}</td>
-										</tr>
-									))}
-									</tbody>
-								</table>
-							</div>
-						</section>
-				)}
+				
 
 				{loading ? (
 					<div className="text-center text-[#9e968e] italic py-12">
@@ -470,7 +392,6 @@ const PostList = () => {
 									sectionName={sections.find((s) => s.id === post.section)?.name || post.section}
 									isAdmin={isAdmin}
 									pinning={pinning}
-									theme={theme}
 									onCopyLink={handleCopyPostLink}
 									onTogglePin={handleTogglePin}
 								/>
@@ -514,7 +435,6 @@ const PostDetail = () => {
 	const isAdmin = profile?.role === "admin" || profile?.role === "super_admin";
 	const { show } = useToast();
 	const navigate = useNavigate();
-	const { theme } = useTheme();
 
 	useEffect(() => {
 		const fetchSections = async () => {
@@ -783,12 +703,12 @@ const PostDetail = () => {
 			}}
 		>
 			<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
-				<Link
-					to={withThemeSearch("/forum", theme)}
-					className="inline-flex items-center gap-2 text-sm text-[#9e968e] hover:text-[#c8951e] transition-colors mb-5"
-				>
-					<ArrowLeft size={18} /> 返回论坛列表
-				</Link>
+			<Link
+				to="/forum"
+				className="inline-flex items-center gap-2 text-sm text-[#9e968e] hover:text-[#c8951e] transition-colors mb-5"
+			>
+				<ArrowLeft size={18} /> 返回论坛列表
+			</Link>
 
 				<div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8 items-start">
 					<div>
@@ -1067,7 +987,7 @@ const PostDetail = () => {
 							</div>
 							{canEditPost && (
 								<Link
-									to={withThemeSearch(`/forum/${post.id}/edit`, theme)}
+									to={`/forum/${post.id}/edit`}
 									className="w-full mt-2 px-3 py-2 rounded text-sm font-medium bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e] transition-all flex items-center justify-center gap-1.5"
 								>
 									<Edit3 size={15} /> 编辑
@@ -1127,7 +1047,6 @@ const PostEditor = () => {
 	);
 	const [loadingPost, setLoadingPost] = useState(false);
 	const { show } = useToast();
-	const { theme } = useTheme();
 
 	useEffect(() => {
 		const fetchSections = async () => {
@@ -1168,13 +1087,11 @@ const PostEditor = () => {
 				const data = await apiGet<{ post: PostItem }>(`/api/posts/${postId}`);
 				if (!data.post) {
 					show("帖子不存在或无权编辑", { variant: "error" });
-					navigate(withThemeSearch("/forum", theme));
 					return;
 				}
 
 				if (!user || data.post.authorUid !== user.uid) {
 					show("你无权编辑此帖子", { variant: "error" });
-					navigate(withThemeSearch(`/forum/${postId}`, theme));
 					return;
 				}
 
@@ -1189,14 +1106,13 @@ const PostEditor = () => {
 			} catch (error) {
 				console.error("Error loading editable post:", error);
 				show("加载帖子失败，请稍后重试", { variant: "error" });
-				navigate(withThemeSearch("/forum", theme));
 			} finally {
 				setLoadingPost(false);
 			}
 		};
 
 		fetchEditingPost();
-	}, [authLoading, isEditing, navigate, postId, show, theme, user]);
+	}, [authLoading, isEditing, navigate, postId, show, user]);
 
 	const handleSubmit = async (status: "draft" | "pending") => {
 		if (!user) return;
@@ -1228,7 +1144,6 @@ const PostEditor = () => {
 					? await apiPut<{ post: PostItem }>(`/api/posts/${postId}`, payload)
 					: await apiPost<{ post: PostItem }>("/api/posts", payload);
 
-			navigate(withThemeSearch(`/forum/${data.post.id}`, theme));
 		} catch (error) {
 			console.error("Error creating post:", error);
 			show(

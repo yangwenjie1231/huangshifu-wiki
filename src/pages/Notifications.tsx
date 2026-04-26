@@ -12,8 +12,6 @@ import {
 import { clsx } from "clsx";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { apiGet, apiPost } from "../lib/apiClient";
-import { useTheme } from "../context/ThemeContext";
-import { mergeSearchParamsWithTheme, withThemeSearch } from "../lib/theme";
 
 type NotificationType = "reply" | "like" | "review_result";
 
@@ -137,7 +135,6 @@ function NotificationTypeIcon({ type }: { type: NotificationType }) {
 const Notifications = () => {
 	const navigate = useNavigate();
 	const [searchParams, setSearchParams] = useSearchParams();
-	const { theme } = useTheme();
 	const rawFilter = searchParams.get("filter");
 	const filter: NotificationFilter = isNotificationFilter(rawFilter)
 		? rawFilter
@@ -195,14 +192,9 @@ const Notifications = () => {
 	const totalPages = Math.max(1, Math.ceil((data.total || 0) / PAGE_SIZE));
 
 	const updateQuery = (nextFilter: NotificationFilter, nextPage = 1) => {
-		const next = mergeSearchParamsWithTheme(
-			searchParams,
-			{
-				filter: nextFilter,
-				page: String(nextPage),
-			},
-			theme,
-		);
+		const next = new URLSearchParams(searchParams);
+		next.set('filter', nextFilter);
+		next.set('page', String(nextPage));
 		setSearchParams(next);
 	};
 
@@ -243,13 +235,13 @@ const Notifications = () => {
 	return (
 		<div className="max-w-5xl mx-auto px-4 py-10">
 			<div className="mb-6">
-				<Link
-					to={withThemeSearch("/", theme)}
-					className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-brand-olive transition-colors"
-				>
-					<ChevronLeft size={16} />
-					返回首页
-				</Link>
+			<Link
+				to="/"
+				className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-brand-olive transition-colors"
+			>
+				<ChevronLeft size={16} />
+				返回首页
+			</Link>
 			</div>
 
 			<section className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
@@ -330,7 +322,6 @@ const Notifications = () => {
 														markNotificationRead(notif.id);
 													}
 													if (link) {
-														navigate(withThemeSearch(link, theme));
 													}
 												}}
 												className="text-left flex-1"
