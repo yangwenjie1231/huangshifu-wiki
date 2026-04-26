@@ -389,10 +389,9 @@ const WikiList = () => {
 			<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
 				<div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
 					<div>
-						<h1 className="text-[1.75rem] font-bold text-[#2c2c2c] tracking-[0.12em] mb-1.5">
-							百科全书
-						</h1>
-						<p className="text-[#9e968e] italic tracking-[0.08em]">诗扶百科 · 记录每一个动人瞬间</p>
+					<h1 className="text-[1.75rem] font-bold text-[#2c2c2c] tracking-[0.12em]">
+						百科全书
+					</h1>
 					</div>
 					<div className="flex items-center gap-3">
 						{user && !isBanned && !isAcademy && (
