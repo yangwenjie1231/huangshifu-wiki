@@ -50,7 +50,7 @@ const MusicFilters: React.FC<MusicFiltersProps> = ({
 				<button
 					onClick={() => onTabChange('music')}
 					className={clsx(
-						'text-[1.125rem] pb-2 relative tracking-[0.05em] transition-all',
+						'text-[1.125rem] pb-2 relative tracking-[0.05em] transition-all cursor-pointer',
 						activeTab === 'music'
 							? "text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]"
 							: 'text-[#9e968e] hover:text-[#c8951e]'
@@ -61,7 +61,7 @@ const MusicFilters: React.FC<MusicFiltersProps> = ({
 				<button
 					onClick={() => onTabChange('albums')}
 					className={clsx(
-						'text-[1.125rem] pb-2 relative tracking-[0.05em] transition-all',
+						'text-[1.125rem] pb-2 relative tracking-[0.05em] transition-all cursor-pointer',
 						activeTab === 'albums'
 							? "text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]"
 							: 'text-[#9e968e] hover:text-[#c8951e]'
@@ -72,14 +72,14 @@ const MusicFilters: React.FC<MusicFiltersProps> = ({
 				{activeTab === 'albums' && isAdmin && (
 					<button
 						onClick={onCreateAlbum}
-						className="text-[0.8125rem] text-[#c8951e] font-medium hover:text-[#dca828] transition-colors flex items-center gap-1 self-center mb-1"
+						className="text-[0.8125rem] text-[#c8951e] font-medium hover:text-[#dca828] transition-colors flex items-center gap-1 self-center mb-1 cursor-pointer"
 					>
 						<Plus size={14} /> {t('music.createAlbum')}
 					</button>
 				)}
 			</div>
 
-			<div className="flex items-center gap-1 pb-2 text-[0.8125rem] text-[#9e968e]">
+			<div className="flex items-center gap-3 pb-2 text-[0.8125rem] text-[#9e968e]">
 				{activeTab === 'music' && (
 					<>
 						<div className="flex items-center">
@@ -87,19 +87,19 @@ const MusicFilters: React.FC<MusicFiltersProps> = ({
 								<button
 									key={key}
 									onClick={() => onSortByChange(key)}
-									className={clsx(
-										'px-2 py-1 transition-colors',
-										sortBy === key
-											? 'text-[#2c2c2c] font-medium'
-											: 'hover:text-[#6b6560]'
-									)}
+								className={clsx(
+									'px-2 py-1 transition-colors cursor-pointer',
+									sortBy === key
+										? 'text-[#2c2c2c] font-medium'
+										: 'hover:text-[#6b6560]'
+								)}
 								>
 									{sortLabel[key]}
 								</button>
 							))}
 							<button
 								onClick={() => onSortOrderChange(sortOrder === 'asc' ? 'desc' : 'asc')}
-								className="p-1 hover:text-[#c8951e] transition-colors"
+								className="p-1 hover:text-[#c8951e] transition-colors cursor-pointer"
 								title={sortOrder === 'asc' ? t('music.sortOrder.asc') : t('music.sortOrder.desc')}
 							>
 								<ArrowUpDown size={13} />

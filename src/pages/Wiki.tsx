@@ -414,7 +414,7 @@ const WikiList = () => {
 									key={cat}
 									to={withThemeSearch(`/wiki?category=${cat}`, theme)}
 									className={clsx(
-										"text-[1.125rem] pb-2 relative tracking-[0.05em] transition-all",
+										"text-[1.125rem] pb-2 relative tracking-[0.05em] transition-all cursor-pointer",
 										category === cat
 											? "text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]"
 											: "text-[#9e968e] hover:text-[#c8951e]"
@@ -438,7 +438,7 @@ const WikiList = () => {
 						)}
 						<Link
 							to={withThemeSearch("/wiki/timeline", theme)}
-							className="text-[0.8125rem] text-[#c8951e] font-medium hover:text-[#dca828] transition-colors flex items-center gap-1 self-center mb-1"
+							className="text-[0.8125rem] text-[#c8951e] font-medium hover:text-[#dca828] transition-colors flex items-center gap-1 self-center mb-1 cursor-pointer"
 						>
 							<Calendar size={14} /> 时间轴
 						</Link>
