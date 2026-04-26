@@ -406,7 +406,7 @@ const WikiList = () => {
 					</div>
 				</div>
 
-				<div className="flex items-center justify-between border-b border-[#e0dcd3] mb-5">
+				<div className="flex items-end justify-between border-b border-[#e0dcd3] mb-5">
 					<div className="flex gap-5">
 						{["all", "biography", "music", "album", "timeline", "event"].map(
 							(cat) => (
@@ -416,7 +416,7 @@ const WikiList = () => {
 									className={clsx(
 										"text-[1.125rem] pb-2 relative tracking-[0.05em] transition-all",
 										category === cat
-											? "text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-[-1px] after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]"
+											? "text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]"
 											: "text-[#9e968e] hover:text-[#c8951e]"
 									)}
 								>

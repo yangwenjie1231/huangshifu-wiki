@@ -45,7 +45,7 @@ const MusicFilters: React.FC<MusicFiltersProps> = ({
 	} as const;
 
 	return (
-		<div className="flex items-center justify-between border-b border-[#e0dcd3] mb-5">
+		<div className="flex items-end justify-between border-b border-[#e0dcd3] mb-5">
 			<div className="flex gap-5">
 				<button
 					onClick={() => onTabChange('music')}
