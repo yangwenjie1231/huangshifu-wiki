@@ -791,18 +791,80 @@ const WikiPageView = () => {
 	};
 
 	return (
-		<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
-			<Link
-				to={withThemeSearch("/wiki", theme)}
-				className="inline-flex items-center gap-2 text-sm text-[#9e968e] hover:text-[#c8951e] transition-colors mb-5"
-			>
-				<ArrowLeft size={18} /> 返回百科列表
-			</Link>
+		<div
+			className="min-h-[calc(100vh-60px)]"
+			style={{
+				backgroundColor: '#f7f5f0',
+				fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif",
+				lineHeight: 1.8,
+			}}
+		>
+			<style>{`
+				.wiki-detail-page ::selection {
+					background-color: #fdf5d8;
+					color: #c8951e;
+				}
+				.wiki-detail-page ::-webkit-scrollbar { width: 6px; }
+				.wiki-detail-page ::-webkit-scrollbar-track { background: transparent; }
+				.wiki-detail-page ::-webkit-scrollbar-thumb { background: #e0dcd3; border-radius: 3px; }
+				.wiki-detail-page ::-webkit-scrollbar-thumb:hover { background: #9e968e; }
+			`}</style>
 
-			<article className="bg-white rounded border border-[#e0dcd3] p-8 sm:p-10">
-				<header className="mb-12 border-b border-[#e0dcd3] pb-6">
-					<div className="flex items-center gap-3 mb-6">
-						<span className="px-3 py-1 bg-[#f0ece3] text-[#6b6560] text-xs font-bold uppercase tracking-widest rounded">
+			<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32 wiki-detail-page">
+				{/* Breadcrumb */}
+				<Link
+					to={withThemeSearch("/wiki", theme)}
+					className="inline-flex items-center gap-2 text-sm text-[#9e968e] hover:text-[#c8951e] transition-colors mb-5"
+				>
+					<ArrowLeft size={18} /> 返回百科列表
+				</Link>
+
+				{/* Header */}
+				<header className="mb-7">
+					<div className="flex items-end justify-between flex-wrap gap-3">
+						<h1 className="text-[1.75rem] font-semibold tracking-[0.12em] text-[#2c2c2c]">
+							{page.title}
+						</h1>
+						<div className="flex flex-wrap gap-2">
+							{isOwner && !isAcademy && (page.category !== "music" || isAdmin) && (
+								<Link
+									to={withThemeSearch(`/wiki/${slug}/edit`, theme)}
+									className="px-4 py-2 text-[0.9375rem] rounded bg-[#c8951e] text-white hover:bg-[#dca828] transition-all flex items-center gap-2"
+								>
+									<Edit3 size={16} /> 编辑
+								</Link>
+							)}
+							{isOwner && !isAcademy && (page.category !== "music" || isAdmin) && (
+								<Link
+									to={withThemeSearch(`/wiki/${slug}/history`, theme)}
+									className="px-4 py-2 text-[0.9375rem] rounded border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all flex items-center gap-2"
+								>
+									<History size={16} /> 历史
+								</Link>
+							)}
+							{user && !isBanned && !isAcademy && (
+								<Link
+									to={withThemeSearch(`/wiki/${slug}/branches`, theme)}
+									className="px-4 py-2 text-[0.9375rem] rounded border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all flex items-center gap-2"
+								>
+									<GitBranch size={16} /> 分支
+								</Link>
+							)}
+							<button
+								onClick={handleCopyPageLink}
+								className="px-4 py-2 text-[0.9375rem] rounded border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all flex items-center gap-2"
+								title="复制内链"
+							>
+								<Link2 size={16} /> 复制
+							</button>
+						</div>
+					</div>
+				</header>
+
+				{/* Filter bar style info bar */}
+				<div className="flex items-end justify-between border-b border-[#e0dcd3] mb-5">
+					<div className="flex gap-5 items-center">
+						<span className="text-[1.125rem] pb-2 relative tracking-[0.05em] text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]">
 							{page.category === "biography"
 								? "人物介绍"
 								: page.category === "music"
@@ -815,96 +877,205 @@ const WikiPageView = () => {
 												? "活动记录"
 												: page.category}
 						</span>
-						<span className="text-gray-300">/</span>
-						<span className="text-[#9e968e] text-sm flex items-center gap-1">
-							<Clock size={14} /> 最后更新:{" "}
+						{canSubmitReview && (
+							<button
+								onClick={handleSubmitReview}
+								disabled={submittingReview}
+								className="px-3 py-1 text-[0.8125rem] rounded bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 disabled:opacity-50 transition-all self-center mb-1"
+							>
+								{submittingReview ? "提交中..." : "提交审核"}
+							</button>
+						)}
+						{page.status === "rejected" && page.reviewNote ? (
+							<span className="text-[0.8125rem] text-red-500 self-center mb-1">
+								驳回：{page.reviewNote}
+							</span>
+						) : null}
+					</div>
+					<div className="flex items-center gap-3 pb-2 text-[0.8125rem] text-[#9e968e]">
+						<span className="flex items-center gap-1">
+							<Clock size={14} />
 							{formatDate(page.updatedAt, "yyyy-MM-dd HH:mm")}
 						</span>
 					</div>
-					<div className="flex flex-col gap-4">
-					<h1 className="text-5xl sm:text-6xl font-serif font-bold text-[#c8951e] leading-tight">
-						{page.title}
-					</h1>
-					<div className="flex flex-wrap items-center gap-2">
-							<button
-								onClick={handleToggleFavorite}
-								disabled={!user || favoriting}
-								className={clsx(
-									"p-3 rounded transition-all flex items-center gap-2",
-									page.favoritedByMe
-										? "bg-[#c8951e] text-white"
-										: "bg-[#f7f5f0] text-[#c8951e] hover:bg-[#c8951e] hover:text-white",
-									(!user || favoriting) && "opacity-50 cursor-not-allowed",
+				</div>
+
+				{/* Two Column Layout */}
+				<div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8 items-start">
+					{/* Main Content */}
+					<div>
+									{/* AI Summary */}
+									{summary && (
+										<motion.div
+											initial={{ opacity: 0, height: 0 }}
+											animate={{ opacity: 1, height: "auto" }}
+											className="mb-7 p-5 bg-[#faf8f4] border border-[#e0dcd3] rounded relative overflow-hidden"
+										>
+											<div className="absolute top-0 left-0 w-1 h-full bg-[#c8951e]"></div>
+											<div className="flex items-center justify-between mb-3">
+												<h4 className="text-sm font-semibold text-[#c8951e] uppercase tracking-widest flex items-center gap-2">
+													<Sparkles size={14} /> AI 摘要
+												</h4>
+												<button
+													onClick={() => setSummary(null)}
+													className="p-1.5 hover:bg-[#f0ece3] rounded transition-colors"
+												>
+													<X size={16} className="text-[#9e968e]" />
+												</button>
+											</div>
+											<p className="text-[#6b6560] italic leading-relaxed">{summary}</p>
+										</motion.div>
+									)}
+
+						{/* Markdown Content */}
+								{/* Markdown Content */}
+								<div className="prose prose-lg prose-stone max-w-none font-body leading-relaxed text-[#2c2c2c]">
+									<WikiMarkdown content={page.content} />
+								</div>
+
+								{/* Relation Graph */}
+								{showGraph && relationGraph && (
+									<div className="mt-12 pt-8 border-t border-[#e0dcd3]">
+										<div className="flex items-center justify-between mb-5">
+											<h4 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase flex items-center gap-2">
+												<Network size={14} className="text-[#c8951e]" /> 知识图谱
+											</h4>
+											<span className="text-xs text-[#9e968e]">点击节点可跳转</span>
+										</div>
+										<RelationGraph
+											graph={relationGraph}
+											currentSlug={slug || ""}
+											onNodeClick={(nodeSlug) =>
+												navigate(withThemeSearch(`/wiki/${nodeSlug}`, theme))
+											}
+										/>
+									</div>
 								)}
-								title={page.favoritedByMe ? "取消收藏" : "收藏页面"}
-							>
-								<Heart size={20} />
-							</button>
-							<button
-								onClick={handleToggleLike}
-								disabled={!user || liking}
-								className={clsx(
-									"p-3 rounded transition-all flex items-center gap-2",
-									page.likedByMe
-										? "bg-red-500 text-white"
-										: "bg-[#f7f5f0] text-[#c8951e] hover:bg-red-500 hover:text-white",
-									(!user || liking) && "opacity-50 cursor-not-allowed",
+
+								{/* Relations List */}
+								{page.relations && page.relations.length > 0 && !showGraph && (
+									<div className="mt-12 pt-8 border-t border-[#e0dcd3]">
+										<h4 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-5 flex items-center gap-2">
+											<Book size={14} className="text-[#c8951e]" /> 相关页面
+										</h4>
+										<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+											{page.relations.map(
+												(relation: WikiRelationRecord, index: number) => (
+													<Link
+														key={`${relation.targetSlug}-${index}`}
+														to={withThemeSearch(`/wiki/${relation.targetSlug}`, theme)}
+														className="p-3 bg-white border border-[#e0dcd3] rounded hover:border-[#c8951e] transition-all group"
+													>
+														<p className="text-xs text-[#c8951e] font-medium uppercase tracking-wider mb-1">
+															{RELATION_TYPE_LABELS[relation.type] || relation.type}
+														</p>
+														<p className="font-medium text-[#2c2c2c] group-hover:text-[#c8951e] group-hover:underline underline-offset-4 transition-colors">
+															{relation.label || relation.targetSlug}
+														</p>
+														{relation.bidirectional && (
+															<span className="inline-block mt-1 text-[10px] text-[#9e968e]">
+																↔ 双向关联
+															</span>
+														)}
+													</Link>
+												),
+											)}
+										</div>
+									</div>
 								)}
-								title={page.likedByMe ? "取消点赞" : "点赞"}
-							>
-								<ThumbsUp size={20} />
-							</button>
-							<button
-								onClick={handleToggleDislike}
-								disabled={!user || disliking}
-								className={clsx(
-									"p-3 rounded transition-all flex items-center gap-2",
-									page.dislikedByMe
-										? "bg-orange-500 text-white"
-										: "bg-[#f7f5f0] text-[#c8951e] hover:bg-orange-500 hover:text-white",
-									(!user || disliking) && "opacity-50 cursor-not-allowed",
+
+								{/* Backlinks */}
+								{backlinks.length > 0 && (
+									<div className="mt-12 pt-8 border-t border-[#e0dcd3]">
+										<h4 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-5 flex items-center gap-2">
+											<ChevronRight size={14} className="text-[#c8951e]" /> 引用本页的内容
+										</h4>
+										<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+											{backlinks.map((link) => (
+												<Link
+													key={link.id}
+													to={withThemeSearch(`/wiki/${link.slug}`, theme)}
+													className="p-3 bg-white border border-[#e0dcd3] rounded hover:border-[#c8951e] transition-all group"
+												>
+													<p className="font-medium text-[#2c2c2c] group-hover:text-[#c8951e] group-hover:underline underline-offset-4 transition-colors">
+														{link.title}
+													</p>
+													<p className="text-xs text-[#9e968e] mt-1 truncate">
+														{link.slug}
+													</p>
+												</Link>
+											))}
+										</div>
+									</div>
 								)}
-								title={page.dislikedByMe ? "取消踩" : "踩"}
-							>
-								<ThumbsDown size={20} />
-							</button>
-							<button
-								onClick={handleTogglePin}
-								disabled={!isAdmin || pinning}
-								className={clsx(
-									"p-3 rounded transition-all flex items-center gap-2",
-									page.isPinned
-										? "bg-brand-primary text-[#2c2c2c]"
-										: "bg-[#f7f5f0] text-[#c8951e] hover:bg-brand-primary hover:text-[#2c2c2c]",
-									(!isAdmin || pinning) && "opacity-50 cursor-not-allowed",
-								)}
-								title={page.isPinned ? "取消置顶" : "置顶"}
-							>
-								<Pin size={20} />
-							</button>
-							<button
-								onClick={handleCopyPageLink}
-								className="p-2 bg-white border border-[#e0dcd3] text-[#6b6560] rounded hover:text-[#c8951e] hover:border-[#c8951e] transition-all"
-								title="复制内链"
-								aria-label="复制百科内链"
-							>
-								<Link2 size={20} />
-							</button>
-							<button
-								onClick={() => setShowGraph(!showGraph)}
-								className={clsx(
-									"p-3 rounded transition-all flex items-center gap-2",
-									showGraph
-										? "bg-[#c8951e] text-white"
-										: "bg-[#f7f5f0] text-[#c8951e] hover:bg-[#c8951e] hover:text-white",
-								)}
-								title={showGraph ? "收起图谱" : "展开图谱"}
-							>
-								<Network size={20} />
-							<span className="text-xs font-bold hidden sm:inline">
-								{showGraph ? "收起图谱" : "展开图谱"}
-							</span>
-							</button>
+					</div>
+
+					{/* Sidebar */}
+					<aside className="lg:sticky lg:top-20">
+						{/* Actions */}
+						<div className="py-5 border-b border-[#e0dcd3]">
+							<h3 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-3.5">
+								互动
+							</h3>
+							<div className="flex flex-wrap gap-2">
+								<button
+									onClick={handleToggleFavorite}
+									disabled={!user || favoriting}
+									className={clsx(
+										"flex-1 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
+										page.favoritedByMe
+											? "bg-[#c8951e] text-white"
+											: "bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e]",
+										(!user || favoriting) && "opacity-50 cursor-not-allowed",
+									)}
+									title={page.favoritedByMe ? "取消收藏" : "收藏页面"}
+								>
+									<Heart size={15} /> {page.favoritesCount || 0}
+								</button>
+								<button
+									onClick={handleToggleLike}
+									disabled={!user || liking}
+									className={clsx(
+										"flex-1 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
+										page.likedByMe
+											? "bg-red-500 text-white"
+											: "bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-red-400 hover:text-red-500",
+										(!user || liking) && "opacity-50 cursor-not-allowed",
+									)}
+									title={page.likedByMe ? "取消点赞" : "点赞"}
+								>
+									<ThumbsUp size={15} /> {page.likesCount || 0}
+								</button>
+								<button
+									onClick={handleToggleDislike}
+									disabled={!user || disliking}
+									className={clsx(
+										"flex-1 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
+										page.dislikedByMe
+											? "bg-orange-500 text-white"
+											: "bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-orange-400 hover:text-orange-500",
+										(!user || disliking) && "opacity-50 cursor-not-allowed",
+									)}
+									title={page.dislikedByMe ? "取消踩" : "踩"}
+								>
+									<ThumbsDown size={15} /> {page.dislikesCount || 0}
+								</button>
+							</div>
+							{isAdmin && (
+								<button
+									onClick={handleTogglePin}
+									disabled={pinning}
+									className={clsx(
+										"w-full mt-2 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
+										page.isPinned
+											? "bg-[#c8951e] text-white"
+											: "bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e]",
+										pinning && "opacity-50 cursor-not-allowed",
+									)}
+								>
+									<Pin size={15} /> {page.isPinned ? "已置顶" : "置顶"}
+								</button>
+							)}
 							<button
 								onClick={async () => {
 									setSummarizing(true);
@@ -913,226 +1084,103 @@ const WikiPageView = () => {
 									setSummarizing(false);
 								}}
 								disabled={summarizing}
-								className="p-3 bg-[#f7f5f0] text-[#c8951e] rounded hover:bg-[#c8951e] hover:text-white transition-all flex items-center gap-2"
-								title="AI 摘要"
+								className="w-full mt-2 px-3 py-2 rounded text-sm font-medium bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e] transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
 							>
-								<Sparkles size={20} />
-								{summarizing && <span className="text-xs">生成中...</span>}
+								<Sparkles size={15} /> {summarizing ? "生成中..." : "AI 摘要"}
 							</button>
-							{user && !isBanned && !isAcademy && (
-								<Link
-									to={withThemeSearch(`/wiki/${slug}/branches`, theme)}
-									className="p-2 bg-white border border-[#e0dcd3] text-[#6b6560] rounded hover:text-[#c8951e] hover:border-[#c8951e] transition-all"
-									title="协作分支"
-								>
-									<GitBranch size={20} />
-								</Link>
-							)}
-							{isOwner && !isAcademy && (
-								<div className="flex gap-2">
-									{(page.category !== "music" || isAdmin) && (
-										<>
-											<Link
-												to={withThemeSearch(`/wiki/${slug}/history`, theme)}
-												className="p-2 bg-white border border-[#e0dcd3] text-[#6b6560] rounded hover:text-[#c8951e] hover:border-[#c8951e] transition-all"
-												title="历史版本"
-											>
-												<History size={20} />
-											</Link>
-											<Link
-												to={withThemeSearch(`/wiki/${slug}/edit`, theme)}
-												className="p-2 bg-white border border-[#e0dcd3] text-[#6b6560] rounded hover:text-[#c8951e] hover:border-[#c8951e] transition-all"
-											>
-												<Edit3 size={20} />
-											</Link>
-										</>
-									)}
-								</div>
-							)}
-						</div>
-					</div>
-					<div className="mt-4 flex flex-wrap items-center gap-3">
-						<span
-							className={clsx(
-								"px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider",
-								page.status === "published"
-									? "bg-green-50 text-green-700 border border-green-200"
-									: page.status === "pending"
-										? "bg-amber-50 text-amber-700 border border-amber-200"
-										: page.status === "rejected"
-											? "bg-red-50 text-red-700 border border-red-200"
-											: "bg-[#f0ece3] text-[#6b6560]",
-							)}
-						>
-							{getStatusText(page.status)}
-						</span>
-						<span className="text-xs text-[#9e968e]">
-							收藏 {page.favoritesCount || 0}
-						</span>
-						<span className="text-xs text-[#9e968e]">
-							点赞 {page.likesCount || 0}
-						</span>
-						<span className="text-xs text-[#9e968e]">
-							踩 {page.dislikesCount || 0}
-						</span>
-						{page.isPinned && (
-							<span className="text-xs text-[#c8951e] font-bold">已置顶</span>
-						)}
-						{canSubmitReview && (
 							<button
-								onClick={handleSubmitReview}
-								disabled={submittingReview}
-								className="px-4 py-1.5 rounded bg-amber-100 text-amber-800 text-xs font-bold hover:bg-amber-200 disabled:opacity-50"
+								onClick={() => setShowGraph(!showGraph)}
+								className={clsx(
+									"w-full mt-2 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
+									showGraph
+										? "bg-[#c8951e] text-white"
+										: "bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e]",
+								)}
 							>
-								{submittingReview ? "提交中..." : "提交审核"}
+								<Network size={15} /> {showGraph ? "收起图谱" : "展开图谱"}
 							</button>
-						)}
-						{page.status === "rejected" && page.reviewNote ? (
-							<span className="text-xs text-red-500">
-								驳回原因：{page.reviewNote}
-							</span>
-						) : null}
-					</div>
-				</header>
-
-				{summary && (
-					<motion.div
-						initial={{ opacity: 0, height: 0 }}
-						animate={{ opacity: 1, height: "auto" }}
-						className="mb-12 p-8 bg-[#c8951e]/5 border border-brand-olive/10 rounded relative overflow-hidden"
-					>
-						<div className="absolute top-0 left-0 w-1 h-full bg-[#c8951e]"></div>
-						<h4 className="text-sm font-bold text-[#c8951e] uppercase tracking-widest mb-3 flex items-center gap-2">
-							<Sparkles size={14} /> AI 摘要
-						</h4>
-						<p className="text-[#6b6560] italic leading-relaxed">{summary}</p>
-						<button
-							onClick={() => setSummary(null)}
-							className="absolute top-4 right-4 text-[#9e968e] hover:text-[#c8951e]"
-						>
-							<X size={16} />
-						</button>
-					</motion.div>
-				)}
-
-				<div className="prose prose-lg prose-stone max-w-none font-body leading-relaxed text-[#2c2c2c]">
-					<WikiMarkdown content={page.content} />
-				</div>
-
-				{backlinks.length > 0 && (
-					<div className="mt-20 pt-12 border-t border-[#e0dcd3]">
-						<h4 className="text-base font-semibold text-[#2c2c2c] tracking-[0.12em] mb-4 flex items-center gap-2">
-							<ChevronRight size={14} /> 引用本页的内容
-						</h4>
-						<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-							{backlinks.map((link) => (
-								<Link
-									key={link.id}
-									to={withThemeSearch(`/wiki/${link.slug}`, theme)}
-									className="p-4 bg-[#f7f5f0]/30 border border-brand-cream rounded hover:bg-[#f7f5f0] transition-all group"
-								>
-									<p className="font-bold text-[#c8951e] group-hover:underline underline-offset-4">
-										{link.title}
-									</p>
-									<p className="text-xs text-[#9e968e] mt-1 truncate">
-										{link.slug}
-									</p>
-								</Link>
-							))}
 						</div>
-					</div>
-				)}
 
-				{showGraph && relationGraph && (
-					<div className="mt-16">
-						<div className="flex items-center justify-between mb-6">
-							<h4 className="text-base font-semibold text-[#2c2c2c] tracking-[0.12em] flex items-center gap-2">
-								<Network size={14} /> 知识图谱
-							</h4>
-							<span className="text-xs text-[#9e968e]">点击节点可跳转页面</span>
-						</div>
-						<RelationGraph
-							graph={relationGraph}
-							currentSlug={slug || ""}
-							onNodeClick={(nodeSlug) =>
-								navigate(withThemeSearch(`/wiki/${nodeSlug}`, theme))
-							}
-						/>
-					</div>
-				)}
-
-				{page.relations && page.relations.length > 0 && !showGraph && (
-					<div className="mt-20 pt-12 border-t border-[#e0dcd3]">
-						<h4 className="text-base font-semibold text-[#2c2c2c] tracking-[0.12em] mb-4 flex items-center gap-2">
-							<Book size={14} /> 相关页面
-						</h4>
-						<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-							{page.relations.map(
-								(relation: WikiRelationRecord, index: number) => (
-									<Link
-										key={`${relation.targetSlug}-${index}`}
-										to={withThemeSearch(`/wiki/${relation.targetSlug}`, theme)}
-										className="p-4 bg-brand-primary/5 border border-brand-primary/10 rounded hover:bg-brand-primary/10 transition-all group"
-									>
-										<p className="text-xs text-brand-primary font-bold uppercase tracking-wider mb-1">
-											{RELATION_TYPE_LABELS[relation.type] || relation.type}
-										</p>
-										<p className="font-bold text-[#c8951e] group-hover:underline underline-offset-4">
-											{relation.label || relation.targetSlug}
-										</p>
-										{relation.bidirectional && (
-											<span className="inline-block mt-1 text-[10px] text-[#9e968e]">
-												↔ 双向关联
-											</span>
+						{/* Status */}
+						<div className="py-5 border-b border-[#e0dcd3]">
+							<h3 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-3.5">
+								状态
+							</h3>
+							<div className="flex flex-col gap-2.5">
+								<div className="flex items-center justify-between text-sm">
+									<span className="text-[#9e968e]">审核</span>
+									<span
+										className={clsx(
+											"px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider",
+											page.status === "published"
+												? "bg-green-50 text-green-700 border border-green-200"
+												: page.status === "pending"
+													? "bg-amber-50 text-amber-700 border border-amber-200"
+													: page.status === "rejected"
+														? "bg-red-50 text-red-700 border border-red-200"
+														: "bg-[#f0ece3] text-[#6b6560]",
 										)}
-									</Link>
-								),
-							)}
+									>
+										{getStatusText(page.status)}
+									</span>
+								</div>
+								<div className="flex items-center justify-between text-sm">
+									<span className="text-[#9e968e]">编辑者</span>
+									<span className="text-[#2c2c2c] font-medium">{page.lastEditorName || "匿名"}</span>
+								</div>
+								<div className="flex items-center justify-between text-sm">
+									<span className="text-[#9e968e]">创建</span>
+									<span className="text-[#2c2c2c] font-medium">{formatDate(page.createdAt, "yyyy-MM-dd")}</span>
+								</div>
+								<div className="flex items-center justify-between text-sm">
+									<span className="text-[#9e968e]">更新</span>
+									<span className="text-[#2c2c2c] font-medium">{formatDate(page.updatedAt, "yyyy-MM-dd HH:mm")}</span>
+								</div>
+							</div>
 						</div>
-					</div>
-				)}
 
-				<footer className="mt-20 pt-12 border-t border-gray-100 flex flex-wrap gap-4 items-center justify-between">
-					<div className="flex flex-wrap items-center gap-3">
-						<div className="flex items-center gap-2 text-[#9e968e] text-sm italic">
-							<Tag size={14} />
-							{page.tags?.map((tag: string) => (
-								<span
-									key={tag}
-									onClick={() =>
-										navigate(
-											withThemeSearch(
-												`/wiki?tag=${encodeURIComponent(tag)}`,
-												theme,
-											),
-										)
-									}
-									className="hover:text-[#c8951e] cursor-pointer px-2 py-0.5 bg-[#f7f5f0]/30 rounded text-[10px] font-bold uppercase tracking-wider"
-								>
-									#{tag}
-								</span>
-							))}
-						</div>
-						{page.locationName && (
-							<div className="flex items-center gap-2 text-[#9e968e] text-sm">
-								<MapPin size={14} className="text-amber-500" />
-								<span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold uppercase tracking-wider">
-									{page.locationName}
-								</span>
+						{/* Tags */}
+						{page.tags && page.tags.length > 0 && (
+							<div className="py-5 border-b border-[#e0dcd3]">
+								<h3 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-3.5">
+									标签
+								</h3>
+								<div className="flex flex-wrap gap-2">
+									{page.tags.map((tag: string) => (
+										<span
+											key={tag}
+											onClick={() =>
+												navigate(
+													withThemeSearch(
+														`/wiki?tag=${encodeURIComponent(tag)}`,
+														theme,
+													),
+												)
+											}
+											className="cursor-pointer px-2 py-1 bg-white border border-[#e0dcd3] text-[#6b6560] text-xs rounded hover:text-[#c8951e] hover:border-[#c8951e] transition-all"
+										>
+											{tag}
+										</span>
+									))}
+								</div>
 							</div>
 						)}
-					</div>
-					<div className="flex items-center gap-2 text-[#9e968e] text-sm">
-						<UserIcon size={14} /> 编辑者:{" "}
-						<span className="font-bold text-[#c8951e]">
-							{page.lastEditorName || "匿名用户"}
-						</span>{" "}
-						<span className="text-[10px] opacity-50">
-							({page.lastEditorUid?.substring(0, 8)})
-						</span>
-					</div>
-				</footer>
-			</article>
+
+						{/* Location */}
+						{page.locationName && (
+							<div className="py-5">
+								<h3 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-3.5">
+									地点
+								</h3>
+								<div className="flex items-center gap-2 text-sm text-[#6b6560]">
+									<MapPin size={14} className="text-[#c8951e]" />
+									<span>{page.locationName}</span>
+								</div>
+							</div>
+						)}
+					</aside>
+				</div>
+			</div>
 		</div>
 	);
 };
