@@ -13,7 +13,6 @@ import {
   MapPin,
 } from 'lucide-react';
 import { apiGet } from '../../lib/apiClient';
-// import { HomeSkeleton } from '../../components/HomeSkeleton';
 import type { HomeFeedResponse } from '../../types/home';
 
 export const DefaultHome = () => {

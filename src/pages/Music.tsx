@@ -15,7 +15,7 @@ import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import Pagination from '../components/Pagination';
 import { PlatformIds } from '../types/PlatformIds';
 import { useI18n } from '../lib/i18n';
-import { MusicSkeleton } from '../components/MusicSkeleton';
+import { Loader2 } from 'lucide-react';
 import { SongCard } from '../components/Music/SongCard';
 import { AlbumCard } from '../components/Music/AlbumCard';
 import { MusicFilters } from '../components/Music/MusicFilters';
@@ -389,7 +389,11 @@ const Music = () => {
   };
 
   if (loading) {
-    return <MusicSkeleton />;
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#f7f5f0' }}>
+        <Loader2 size={32} className="animate-spin text-[#c8951e]" />
+      </div>
+    );
   }
 
   return (
