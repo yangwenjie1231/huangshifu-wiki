@@ -221,7 +221,7 @@ const AdminEmbeddings = () => {
               <button onClick={handleSyncBatch} disabled={actionLoading !== null} className="px-4 py-2 rounded border border-[#e0dcd3] text-[#6b6560] text-sm font-medium hover:text-[#c8951e] hover:border-[#c8951e] disabled:opacity-50 inline-flex items-center gap-2 transition-all">
                 {actionLoading === 'sync' ? <Loader2 size={14} className="animate-spin" /> : null} 批量同步
               </button>
-              <button onClick={() => setShowErrors(!showErrors)} disabled={actionLoading !== null} className={clsx('px-4 py-2 rounded border text-sm font-medium inline-flex items-center gap-2 transition-all', showErrors ? 'border-red-200 bg-red-50 text-red-600' : 'border-[#e0dcd3] text-[#6b6560] hover:bg-[#faf8f4]', actionLoading !== null && 'opacity-50')}>
+              <button onClick={() => setShowErrors(!showErrors)} disabled={actionLoading !== null} className={clsx('px-4 py-2 rounded border text-sm font-medium inline-flex items-center gap-2 transition-all', showErrors ? 'border-red-200 bg-red-50 text-red-600' : 'border-[#e0dcd3] text-[#6b6560] hover:bg-[#f7f5f0]', actionLoading !== null && 'opacity-50')}>
                 <AlertTriangle size={14} /> 查看错误 ({summary.gallery.failed + summary.wiki.failed + summary.post.failed})
               </button>
               <button onClick={handleRetryFailed} disabled={actionLoading !== null || (summary.gallery.failed + summary.wiki.failed + summary.post.failed) === 0} className="px-4 py-2 rounded border border-[#e0dcd3] text-[#6b6560] text-sm font-medium hover:text-[#c8951e] hover:border-[#c8951e] disabled:opacity-50 inline-flex items-center gap-2 transition-all">
@@ -250,7 +250,7 @@ const AdminEmbeddings = () => {
           ) : errors.length > 0 ? (
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {errors.map((error) => (
-                <div key={error.id} className="flex items-start gap-3 p-3 rounded border border-[#f0ece3] hover:bg-[#faf8f4] transition-colors">
+                <div key={error.id} className="flex items-start gap-3 p-3 rounded border border-[#f0ece3] hover:bg-[#f7f5f0] transition-colors">
                   <AlertTriangle size={16} className="text-red-400 mt-0.5 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">

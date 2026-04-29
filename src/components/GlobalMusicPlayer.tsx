@@ -256,7 +256,7 @@ export const GlobalMusicPlayer = () => {
   return (
     <div
       className="fixed left-0 right-0 z-[200] bg-white/96 border-t border-[#e0dcd3]"
-      style={{ bottom: 0, boxShadow: '0 -4px 20px rgba(0,0,0,0.05)', backdropFilter: 'blur(16px)' }}
+      style={{ bottom: 0, backdropFilter: 'blur(16px)' }}
     >
       {/* Progress bar */}
       <div className="absolute top-[-1px] left-0 right-0 h-[2px] bg-[#ebe8e0] cursor-pointer">
@@ -341,8 +341,7 @@ export const GlobalMusicPlayer = () => {
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 6 }}
-                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-white rounded-lg border border-[#e0dcd3] flex items-center gap-2"
-                style={{ boxShadow: '0 2px 12px rgba(44,30,20,0.06)' }}
+                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-white rounded border border-[#e0dcd3] flex items-center gap-2"
               >
                 <input
                   type="range"

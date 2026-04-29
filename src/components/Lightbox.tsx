@@ -274,7 +274,7 @@ export const Lightbox = ({ images, initialIndex, onClose }: LightboxProps) => {
       <button
         ref={closeButtonRef}
         onClick={close}
-        className="absolute top-4 right-4 z-30 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+        className="absolute top-4 right-4 z-30 p-2 rounded bg-white/10 text-white hover:bg-white/20 transition-colors"
         aria-label="关闭"
       >
         <X size={24} />
@@ -290,14 +290,14 @@ export const Lightbox = ({ images, initialIndex, onClose }: LightboxProps) => {
         <>
           <button
             onClick={prev}
-            className="absolute left-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+            className="absolute left-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded bg-white/10 text-white hover:bg-white/20 transition-colors"
             aria-label="上一张"
           >
             <ChevronLeft size={28} />
           </button>
           <button
             onClick={next}
-            className="absolute right-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+            className="absolute right-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded bg-white/10 text-white hover:bg-white/20 transition-colors"
             aria-label="下一张"
           >
             <ChevronRight size={28} />
@@ -339,7 +339,7 @@ export const Lightbox = ({ images, initialIndex, onClose }: LightboxProps) => {
       </div>
 
       {/* Bottom toolbar */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 rounded-lg px-4 py-2 backdrop-blur-sm z-30">
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/40 rounded px-4 py-2 z-30">
         <button
           onClick={zoomOut}
           className="text-white/70 hover:text-white w-8 h-8 flex items-center justify-center transition-colors"

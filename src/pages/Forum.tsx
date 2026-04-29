@@ -808,7 +808,7 @@ const PostDetail = () => {
 											}
 											rows={3}
 											disabled={!canComment || isBanned}
-											className="w-full px-4 py-3 bg-[#faf8f4] border border-[#e0dcd3] rounded focus:outline-none focus:border-[#c8951e] resize-none"
+											className="w-full px-4 py-3 bg-[#f7f5f0] border border-[#e0dcd3] rounded focus:outline-none focus:border-[#c8951e] resize-none"
 										/>
 										<button
 											type="submit"
@@ -829,7 +829,7 @@ const PostDetail = () => {
 									) : null}
 								</form>
 							) : (
-								<div className="p-6 bg-[#faf8f4] border border-[#e0dcd3] rounded text-center mb-8">
+								<div className="p-6 bg-[#f7f5f0] border border-[#e0dcd3] rounded text-center mb-8">
 									<p className="text-[#9e968e] text-sm">请先登录后发表评论</p>
 								</div>
 							)}

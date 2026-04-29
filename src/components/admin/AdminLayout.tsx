@@ -86,7 +86,7 @@ const NavGroup = ({
               'flex items-center gap-3 px-3 py-2 rounded transition-all',
               isActive
                 ? 'bg-[#f7f5f0] text-[#c8951e] font-medium'
-                : 'text-[#6b6560] hover:bg-[#faf8f4] hover:text-[#c8951e]',
+                : 'text-[#6b6560] hover:bg-[#f7f5f0] hover:text-[#c8951e]',
             )}
             title={sidebarCollapsed && !mobileOpen ? item.label : undefined}
           >
@@ -197,7 +197,7 @@ export const AdminLayout = () => {
                   'flex items-center gap-3 px-3 py-2.5 rounded transition-all',
                   currentPath === '/admin'
                     ? 'bg-[#f7f5f0] text-[#c8951e] font-medium'
-                    : 'text-[#6b6560] hover:bg-[#faf8f4] hover:text-[#c8951e]',
+                    : 'text-[#6b6560] hover:bg-[#f7f5f0] hover:text-[#c8951e]',
                 )}
                 title={sidebarCollapsed ? '仪表盘' : undefined}
               >

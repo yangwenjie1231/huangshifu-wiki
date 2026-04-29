@@ -219,7 +219,7 @@ const AdminImages: React.FC = () => {
             {images.map((image) => {
               const imageUrl = image.s3Url || image.externalUrl || image.localUrl;
               return (
-                <div key={image.id} className="border border-[#e0dcd3] rounded p-4 hover:bg-[#faf8f4] transition-colors">
+                <div key={image.id} className="border border-[#e0dcd3] rounded p-4 hover:bg-[#f7f5f0] transition-colors">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex gap-4">
                       <div className="w-20 h-20 flex-shrink-0">
@@ -262,7 +262,7 @@ const AdminImages: React.FC = () => {
       </div>
 
       {editingImage && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-[#e0dcd3] rounded p-6 max-w-2xl w-full">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-[#2c2c2c]">编辑图片映射</h3>
@@ -289,7 +289,7 @@ const AdminImages: React.FC = () => {
       {showImportModal && <ImportModal onClose={() => setShowImportModal(false)} onSuccess={() => { fetchImages(); fetchStats(); setShowImportModal(false); }} />}
 
       {showPreferenceModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-[#e0dcd3] rounded p-6 max-w-md w-full">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-[#2c2c2c]">图片加载策略</h3>
@@ -352,7 +352,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ onClose, onSuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white border border-[#e0dcd3] rounded p-6 max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-[#2c2c2c]">批量导入图片映射</h3>
@@ -366,7 +366,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ onClose, onSuccess }) => {
               { value: 'update', label: '仅更新', desc: '按ID更新已有记录' },
               { value: 'create', label: '仅创建', desc: '只创建新记录' },
             ].map((option) => (
-              <button key={option.value} onClick={() => setMode(option.value as any)} className={clsx('flex-1 px-4 py-2 border rounded text-sm font-medium transition-all', mode === option.value ? 'border-[#c8951e] bg-[#fdf5d8] text-[#c8951e]' : 'border-[#e0dcd3] text-[#6b6560] hover:bg-[#faf8f4]')}>
+              <button key={option.value} onClick={() => setMode(option.value as any)} className={clsx('flex-1 px-4 py-2 border rounded text-sm font-medium transition-all', mode === option.value ? 'border-[#c8951e] bg-[#fdf5d8] text-[#c8951e]' : 'border-[#e0dcd3] text-[#6b6560] hover:bg-[#f7f5f0]')}>
                 <div>{option.label}</div>
                 <div className="text-xs opacity-70 mt-1">{option.desc}</div>
               </button>

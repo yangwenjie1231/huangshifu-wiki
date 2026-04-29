@@ -133,7 +133,7 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-[#faf8f4] border-b border-[#e0dcd3]">
+              <tr className="bg-[#f7f5f0] border-b border-[#e0dcd3]">
                 {cfg.columns.map((col) => (
                   <th key={col} className="px-5 py-3 text-[11px] font-semibold text-[#9e968e] uppercase tracking-wider">{col}</th>
                 ))}
@@ -150,7 +150,7 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
                 data.map((item) => {
                   const rowId = String(item.docId || item.id || item.uid || '');
                   return (
-                    <tr key={rowId} className="hover:bg-[#faf8f4] transition-colors group">
+                    <tr key={rowId} className="hover:bg-[#f7f5f0] transition-colors group">
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
                           {type === 'galleries' ? (

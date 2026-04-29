@@ -84,7 +84,7 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
   const isCurrent = currentSong?.id === song.id;
 
   return (
-    <div className="bg-[#faf8f4] rounded-lg border border-[#ebe8e0] p-4">
+    <div className="bg-[#f7f5f0] rounded border border-[#e0dcd3] p-4">
       <div className="flex items-center gap-3 mb-3">
         <img 
           src={song.cover} 

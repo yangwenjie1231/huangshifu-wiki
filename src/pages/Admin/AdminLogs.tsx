@@ -47,7 +47,7 @@ export const AdminLogs = ({ type: propType }: { type?: 'moderation_logs' | 'ban_
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-[#faf8f4] border-b border-[#e0dcd3]">
+              <tr className="bg-[#f7f5f0] border-b border-[#e0dcd3]">
                 {['时间', '操作者', '目标', '操作类型', '备注'].map((col) => (
                   <th key={col} className="px-5 py-3 text-[11px] font-semibold text-[#9e968e] uppercase tracking-wider">{col}</th>
                 ))}
@@ -62,7 +62,7 @@ export const AdminLogs = ({ type: propType }: { type?: 'moderation_logs' | 'ban_
                 ))
               ) : data.length > 0 ? (
                 data.map((item) => (
-                  <tr key={item.id} className="hover:bg-[#faf8f4] transition-colors">
+                  <tr key={item.id} className="hover:bg-[#f7f5f0] transition-colors">
                     <td className="px-5 py-4 text-sm text-[#9e968e] whitespace-nowrap">{formatDateTime(item.createdAt, 'N/A')}</td>
                     <td className="px-5 py-4 text-sm font-medium text-[#2c2c2c]">{item.operatorName || item.operatorUid}</td>
                     <td className="px-5 py-4 text-sm text-[#6b6560]">

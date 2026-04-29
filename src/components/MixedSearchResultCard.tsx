@@ -73,7 +73,7 @@ export const MixedSearchResultCard = React.memo(
                 {getSourceTypeLabel(sourceType)}
               </span>
               {showSimilarity && (
-                <span className="px-2 py-0.5 bg-[#faf8f4] text-[#c8951e] text-[10px] font-medium rounded">
+                <span className="px-2 py-0.5 bg-[#f7f5f0] text-[#c8951e] text-[10px] font-medium rounded">
                   {formatSimilarity(similarity)}
                 </span>
               )}

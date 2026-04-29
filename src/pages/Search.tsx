@@ -586,7 +586,7 @@ const Search = () => {
 													}
 												}
 											}}
-											className="w-full text-left px-4 py-2.5 hover:bg-[#faf8f4] transition-colors border-b border-[#f0ece3] last:border-0"
+											className="w-full text-left px-4 py-2.5 hover:bg-[#f7f5f0] transition-colors border-b border-[#f0ece3] last:border-0"
 										>
 											<div className="flex items-center gap-3">
 												<span className={clsx(
@@ -627,7 +627,7 @@ const Search = () => {
 								type="button"
 								onClick={() => fileInputRef.current?.click()}
 								disabled={aiSearching}
-								className="p-2.5 bg-[#f7f5f0] text-[#9e968e] rounded hover:text-[#c8951e] hover:bg-[#faf8f4] transition-all"
+								className="p-2.5 bg-[#f7f5f0] text-[#9e968e] rounded hover:text-[#c8951e] hover:bg-[#f7f5f0] transition-all"
 								title="AI 图片搜索"
 							>
 								{aiSearching ? (
@@ -659,7 +659,7 @@ const Search = () => {
 								<button
 									key={tag}
 									onClick={() => handleSearch(tag)}
-									className="px-3 py-1 bg-[#f7f5f0] text-[#6b6560] text-xs rounded hover:text-[#c8951e] hover:bg-[#faf8f4] transition-all"
+									className="px-3 py-1 bg-[#f7f5f0] text-[#6b6560] text-xs rounded hover:text-[#c8951e] hover:bg-[#f7f5f0] transition-all"
 								>
 									{tag}
 								</button>

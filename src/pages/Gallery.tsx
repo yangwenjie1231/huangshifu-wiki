@@ -79,7 +79,7 @@ const GalleryCard = React.memo(({ gallery, viewMode, isAdmin, deletingGalleryId,
               alt={gallery.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
-            <div className="absolute top-2 right-2 px-2 py-0.5 bg-black/50 text-white text-[10px] font-medium rounded">
+            <div className="absolute top-2 right-2 px-2 py-0.5 bg-black/40 text-white text-[10px] font-medium rounded">
               {Array.isArray(gallery.images) ? gallery.images.length : 0} 张
             </div>
           </div>
@@ -291,8 +291,7 @@ const GalleryList = () => {
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
-                className="bg-white rounded-lg p-8 max-w-md w-full"
-                style={{ boxShadow: '0 8px 24px rgba(44,30,20,0.1)' }}
+                className="bg-white rounded p-8 max-w-md w-full border border-[#e0dcd3]"
               >
                 <h3 className="text-xl font-semibold text-[#2c2c2c] mb-4 tracking-wide">确认删除</h3>
                 <p className="text-[#6b6560] mb-8 text-[0.9375rem]">
@@ -553,8 +552,7 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
         initial={{ scale: 0.9, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.9, y: 20 }}
-        className="bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
-        style={{ boxShadow: '0 8px 24px rgba(44,30,20,0.1)' }}
+        className="bg-white rounded w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col border border-[#e0dcd3]"
       >
         <div className="p-6 border-b border-[#e0dcd3] flex justify-between items-center">
           <h2 className="text-[1.5rem] font-bold text-[#2c2c2c] tracking-[0.12em]">上传新图集</h2>
@@ -618,7 +616,7 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
             <div className="flex flex-wrap gap-4">
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="flex-1 min-w-[160px] p-6 border-2 border-dashed border-[#e0dcd3] rounded hover:border-[#c8951e] hover:bg-[#faf8f4] transition-all flex flex-col items-center justify-center gap-2 group"
+                className="flex-1 min-w-[160px] p-6 border-2 border-dashed border-[#e0dcd3] rounded hover:border-[#c8951e] hover:bg-[#f7f5f0] transition-all flex flex-col items-center justify-center gap-2 group"
               >
                 <Upload size={28} className="text-[#9e968e] group-hover:text-[#c8951e]" />
                 <span className="text-sm text-[#6b6560] group-hover:text-[#c8951e]">选择多张图片</span>
@@ -634,7 +632,7 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
 
               <button
                 onClick={() => folderInputRef.current?.click()}
-                className="flex-1 min-w-[160px] p-6 border-2 border-dashed border-[#e0dcd3] rounded hover:border-[#c8951e] hover:bg-[#faf8f4] transition-all flex flex-col items-center justify-center gap-2 group"
+                className="flex-1 min-w-[160px] p-6 border-2 border-dashed border-[#e0dcd3] rounded hover:border-[#c8951e] hover:bg-[#f7f5f0] transition-all flex flex-col items-center justify-center gap-2 group"
               >
                 <Folder size={28} className="text-[#9e968e] group-hover:text-[#c8951e]" />
                 <span className="text-sm text-[#6b6560] group-hover:text-[#c8951e]">上传整个文件夹</span>
@@ -652,7 +650,7 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
             </div>
 
             {files.length > 0 && (
-              <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 p-3 bg-[#faf8f4] border border-[#e0dcd3] rounded">
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 p-3 bg-[#f7f5f0] border border-[#e0dcd3] rounded">
                 {files.map((item, i) => (
                   <div key={i} className="relative aspect-square rounded overflow-hidden group">
                     <img
@@ -676,7 +674,7 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
         <div className="p-6 border-t border-[#e0dcd3] flex items-center justify-between">
           <div className="flex-grow mr-6">
             {uploading && (
-              <div className="w-full h-2 bg-[#f0ece3] rounded-full overflow-hidden">
+              <div className="w-full h-2 bg-[#f0ece3] rounded overflow-hidden">
                 <div
                   className="h-full bg-[#c8951e] transition-all duration-300"
                   style={{ width: `${progress}%` }}

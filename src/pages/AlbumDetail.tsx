@@ -175,7 +175,7 @@ const AlbumDetail = () => {
           <SmartImage
             src={album.cover}
             alt={album.title}
-            className="w-40 h-40 md:w-44 md:h-44 object-cover flex-shrink-0 rounded-lg bg-[#f0ece3]"
+            className="w-40 h-40 md:w-44 md:h-44 object-cover flex-shrink-0 rounded bg-[#f0ece3]"
           />
           <div className="flex-1 flex flex-col justify-center min-w-0">
             <h1 className="text-[1.75rem] font-bold text-[#2c2c2c] tracking-[0.12em] mb-1.5">{album.title}</h1>

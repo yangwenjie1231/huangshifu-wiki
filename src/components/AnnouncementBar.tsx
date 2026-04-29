@@ -41,7 +41,7 @@ export const AnnouncementBar = () => {
 				initial={{ height: 0, opacity: 0 }}
 				animate={{ height: "auto", opacity: 1 }}
 				exit={{ height: 0, opacity: 0 }}
-				className="py-2 px-4 relative overflow-hidden bg-brand-primary text-gray-900"
+				className="py-2 px-4 relative overflow-hidden bg-[#c8951e] text-white"
 			>
 				<div className="max-w-7xl mx-auto flex items-center justify-center gap-3">
 					<Megaphone size={16} className="animate-bounce" />
@@ -62,7 +62,7 @@ export const AnnouncementBar = () => {
 				<button
 					type="button"
 					onClick={() => setIsVisible(false)}
-					className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-black/10 rounded-full transition-colors"
+					className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-black/10 rounded transition-colors"
 				>
 					<X size={16} />
 				</button>

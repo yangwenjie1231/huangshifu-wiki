@@ -141,13 +141,13 @@ export const NotificationPanel = ({ onNavigate }: NotificationPanelProps) => {
 			<button
 				type="button"
 				onClick={() => setNotifPanelOpen(!notifPanelOpen)}
-				className="relative text-gray-500 hover:text-brand-olive transition-colors"
+				className="relative text-[#9e968e] hover:text-[#c8951e] transition-colors"
 				aria-label={`通知${unreadCount > 0 ? `，有${unreadCount}条未读` : ""}`}
 				aria-expanded={notifPanelOpen}
 			>
 				<Bell size={20} />
 				{unreadCount > 0 && (
-					<span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full px-1">
+					<span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded px-1">
 						{unreadCount > 99 ? "99+" : unreadCount}
 					</span>
 				)}
@@ -166,17 +166,17 @@ export const NotificationPanel = ({ onNavigate }: NotificationPanelProps) => {
 							animate={{ opacity: 1, y: 0, scale: 1 }}
 							exit={{ opacity: 0, y: -8, scale: 0.95 }}
 							transition={{ duration: 0.15 }}
-							className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl border border-gray-100 shadow-xl z-50 overflow-hidden"
+							className="absolute right-0 top-full mt-2 w-80 bg-white rounded border border-[#e0dcd3] z-50 overflow-hidden"
 						>
-							<div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-								<span className="font-bold text-gray-900">
+							<div className="flex items-center justify-between px-4 py-3 border-b border-[#e0dcd3]">
+								<span className="font-bold text-[#2c2c2c]">
 									通知
 								</span>
 								{unreadCount > 0 && (
 									<button
 										type="button"
 										onClick={markAllNotificationsRead}
-										className="text-xs text-brand-olive hover:underline"
+										className="text-xs text-[#c8951e] hover:underline"
 									>
 										全部已读
 									</button>
@@ -184,11 +184,11 @@ export const NotificationPanel = ({ onNavigate }: NotificationPanelProps) => {
 							</div>
 							<div className="max-h-80 overflow-y-auto">
 								{notifLoading ? (
-									<div className="py-8 text-center text-sm text-gray-400">
+									<div className="py-8 text-center text-sm text-[#9e968e]">
 										加载中...
 									</div>
 								) : notifications.length === 0 ? (
-									<div className="py-8 text-center text-sm text-gray-400">
+									<div className="py-8 text-center text-sm text-[#9e968e]">
 										暂无通知
 									</div>
 								) : (
@@ -213,13 +213,13 @@ export const NotificationPanel = ({ onNavigate }: NotificationPanelProps) => {
 												className={clsx(
 													"text-sm",
 													!notif.isRead
-														? "font-medium text-gray-900"
-														: "text-gray-600",
+														? "font-medium text-[#2c2c2c]"
+														: "text-[#6b6560]",
 												)}
 											>
 												{getNotificationText(notif)}
 											</p>
-											<p className="text-xs text-gray-400 mt-0.5">
+											<p className="text-xs text-[#9e968e] mt-0.5">
 												{new Date(
 													notif.createdAt,
 												).toLocaleString("zh-CN")}

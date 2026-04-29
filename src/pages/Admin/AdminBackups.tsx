@@ -146,7 +146,7 @@ const AdminBackups = () => {
       <div className="bg-white border border-[#e0dcd3] rounded overflow-hidden">
         <table className="w-full">
           <thead>
-            <tr className="bg-[#faf8f4] border-b border-[#e0dcd3]">
+            <tr className="bg-[#f7f5f0] border-b border-[#e0dcd3]">
               <th className="px-5 py-3 text-left text-[11px] font-semibold text-[#9e968e] uppercase tracking-wider">文件名</th>
               <th className="px-5 py-3 text-left text-[11px] font-semibold text-[#9e968e] uppercase tracking-wider">创建时间</th>
               <th className="px-5 py-3 text-left text-[11px] font-semibold text-[#9e968e] uppercase tracking-wider">大小</th>
@@ -156,7 +156,7 @@ const AdminBackups = () => {
           <tbody className="divide-y divide-[#f0ece3]">
             {backups.length > 0 ? (
               backups.map((backup) => (
-                <tr key={backup.filename} className="hover:bg-[#faf8f4] transition-colors">
+                <tr key={backup.filename} className="hover:bg-[#f7f5f0] transition-colors">
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-2">
                       <Database size={16} className="text-[#9e968e] shrink-0" />

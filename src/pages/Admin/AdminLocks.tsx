@@ -51,7 +51,7 @@ export const AdminLocks = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-[#faf8f4] border-b border-[#e0dcd3]">
+              <tr className="bg-[#f7f5f0] border-b border-[#e0dcd3]">
                 {['资源', '锁定者', '到期时间', '操作'].map((col) => (
                   <th key={col} className="px-5 py-3 text-[11px] font-semibold text-[#9e968e] uppercase tracking-wider">{col}</th>
                 ))}
@@ -66,7 +66,7 @@ export const AdminLocks = () => {
                 ))
               ) : data.length > 0 ? (
                 data.map((item) => (
-                  <tr key={item.id} className="hover:bg-[#faf8f4] transition-colors group">
+                  <tr key={item.id} className="hover:bg-[#f7f5f0] transition-colors group">
                     <td className="px-5 py-4">
                       <p className="text-sm font-medium text-[#2c2c2c]">{item.collection} / {item.recordId}</p>
                     </td>

@@ -225,21 +225,21 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 			<div className="absolute top-3 right-3 z-10 flex gap-2">
 				<button
 					onClick={handleZoomOut}
-					className="p-2 bg-white rounded shadow-sm hover:shadow-md transition-all text-[#6b6560] hover:text-[#c8951e]"
+					className="p-2 bg-white rounded transition-all text-[#6b6560] hover:text-[#c8951e]"
 					title="缩小"
 				>
 					<ZoomOut size={16} />
 				</button>
 				<button
 					onClick={handleZoomIn}
-					className="p-2 bg-white rounded shadow-sm hover:shadow-md transition-all text-[#6b6560] hover:text-[#c8951e]"
+					className="p-2 bg-white rounded transition-all text-[#6b6560] hover:text-[#c8951e]"
 					title="放大"
 				>
 					<ZoomIn size={16} />
 				</button>
 				<button
 					onClick={handleReset}
-					className="p-2 bg-white rounded shadow-sm hover:shadow-md transition-all text-[#6b6560] hover:text-[#c8951e]"
+					className="p-2 bg-white rounded transition-all text-[#6b6560] hover:text-[#c8951e]"
 					title="重置"
 				>
 					<Maximize size={16} />

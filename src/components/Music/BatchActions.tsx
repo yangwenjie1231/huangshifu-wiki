@@ -18,8 +18,7 @@ const BatchActions: React.FC<BatchActionsProps> = ({
 
 	return (
 		<div
-			className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 bg-[#2c2c2c] text-white px-6 py-3 rounded-lg flex items-center gap-6"
-			style={{ boxShadow: '0 8px 24px rgba(44,30,20,0.15)' }}
+			className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 bg-[#2c2c2c] text-white px-6 py-3 rounded flex items-center gap-6"
 		>
 			<span className="text-sm font-semibold tracking-wide">{t('music.selectedCount', { count: selectedCount })}</span>
 			<div className="flex gap-3">

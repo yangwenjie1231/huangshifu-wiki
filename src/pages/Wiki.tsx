@@ -236,7 +236,7 @@ const WikiMarkdown = ({ content }: { content: string }) => {
 							<WikiLinkPreview slug={slug}>
 								<Link
 									to={themedHref}
-									className="text-[#c8951e] font-bold hover:underline decoration-brand-olive/30 underline-offset-4"
+									className="text-[#c8951e] font-bold hover:underline decoration-[#c8951e]/30 underline-offset-4"
 									{...props}
 								>
 									{children}
@@ -832,7 +832,7 @@ const WikiPageView = () => {
 										<motion.div
 											initial={{ opacity: 0, height: 0 }}
 											animate={{ opacity: 1, height: "auto" }}
-											className="mb-7 p-5 bg-[#faf8f4] border border-[#e0dcd3] rounded relative overflow-hidden"
+											className="mb-7 p-5 bg-[#f7f5f0] border border-[#e0dcd3] rounded relative overflow-hidden"
 										>
 											<div className="absolute top-0 left-0 w-1 h-full bg-[#c8951e]"></div>
 											<div className="flex items-center justify-between mb-3">
@@ -1465,7 +1465,7 @@ const WikiBranchWorkspace = () => {
 								value={content}
 								onChange={(event) => setContent(event.target.value)}
 								rows={18}
-								className="w-full mt-1 px-4 py-3 rounded bg-[#f7f5f0] border-none focus:ring-2 focus:ring-brand-olive/20 font-mono text-sm"
+								className="w-full mt-1 px-4 py-3 rounded bg-[#f7f5f0] border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none font-mono text-sm"
 							/>
 						</div>
 
@@ -1473,7 +1473,7 @@ const WikiBranchWorkspace = () => {
 							<button
 								onClick={handleSaveRevision}
 								disabled={savingRevision || isBanned}
-								className="px-6 py-2 rounded bg-brand-primary text-[#2c2c2c] text-sm font-bold disabled:opacity-50"
+								className="px-6 py-2 rounded bg-[#c8951e] text-white text-sm font-medium disabled:opacity-50 hover:bg-[#dca828] transition-all"
 							>
 								{savingRevision ? "保存中..." : "保存分支版本"}
 							</button>
@@ -1495,7 +1495,7 @@ const WikiBranchWorkspace = () => {
 						</h2>
 
 						{openPr ? (
-							<div className="p-4 rounded border border-brand-primary/20 bg-brand-primary/5">
+							<div className="p-4 rounded border border-[#c8951e]/20 bg-[#fdf5d8]/20">
 								<p className="text-sm text-[#2c2c2c] mb-2">
 									当前已有一个进行中的 PR。
 								</p>
@@ -1552,7 +1552,7 @@ const WikiBranchWorkspace = () => {
 								{revisions.map((revision, index) => (
 									<div
 										key={revision.id}
-										className="p-4 rounded bg-[#f7f5f0]/30 border border-brand-cream"
+										className="p-4 rounded bg-[#f7f5f0]/30 border border-[#e0dcd3]"
 									>
 										<div className="flex items-center justify-between gap-3">
 											<p className="text-sm font-bold text-[#2c2c2c] line-clamp-1">
@@ -1635,7 +1635,7 @@ const WikiPullRequestList = () => {
 							className={clsx(
 								"px-4 py-2 rounded text-xs font-bold",
 								status === item
-									? "bg-brand-primary text-[#2c2c2c]"
+									? "bg-[#c8951e] text-white"
 									: "bg-[#f0ece3] text-[#9e968e] hover:bg-gray-200",
 							)}
 						>
@@ -1657,7 +1657,7 @@ const WikiPullRequestList = () => {
 							<Link
 								key={item.id}
 								to={`/wiki/${item.pageSlug}/prs/${item.id}`}
-								className="block p-4 rounded border border-gray-100 hover:border-brand-olive/30 hover:bg-[#f7f5f0]/20 transition-all"
+								className="block p-4 rounded border border-[#e0dcd3] hover:border-[#c8951e] hover:bg-[#f7f5f0]/20 transition-all"
 							>
 								<div className="flex flex-wrap items-center justify-between gap-3 mb-1">
 									<p className="font-bold text-[#2c2c2c]">{item.title}</p>
@@ -1946,7 +1946,7 @@ const WikiPullRequestDetail = () => {
 							<button
 								onClick={handleComment}
 								disabled={saving || !comment.trim()}
-								className="px-5 py-2 rounded bg-brand-primary text-[#2c2c2c] text-xs font-bold disabled:opacity-50"
+								className="px-5 py-2 rounded bg-[#c8951e] text-white text-xs font-medium disabled:opacity-50 hover:bg-[#dca828] transition-all"
 							>
 								发表评论
 							</button>
@@ -2034,7 +2034,7 @@ const WikiHistory = () => {
 						{revisions.map((rev, i) => (
 							<div
 								key={rev.id}
-								className="p-6 bg-[#f7f5f0]/30 border border-brand-cream rounded flex items-center justify-between group hover:bg-[#f7f5f0] transition-all"
+								className="p-6 bg-[#f7f5f0]/30 border border-[#e0dcd3] rounded flex items-center justify-between group hover:bg-[#f7f5f0] transition-all"
 							>
 								<div className="flex items-center gap-4">
 									<div className="w-10 h-10 rounded bg-[#c8951e]/10 flex items-center justify-center text-[#c8951e] font-bold">
@@ -2052,13 +2052,13 @@ const WikiHistory = () => {
 								<div className="flex items-center gap-2">
 									<button
 										onClick={() => setSelectedRevision(rev)}
-										className="px-4 py-2 bg-white text-[#c8951e] text-xs font-bold rounded border border-brand-olive/20 hover:bg-[#c8951e] hover:text-white transition-all opacity-0 group-hover:opacity-100"
+										className="px-4 py-2 bg-white text-[#c8951e] text-xs font-bold rounded border border-[#c8951e]/20 hover:bg-[#c8951e] hover:text-white transition-all opacity-0 group-hover:opacity-100"
 									>
 										预览内容
 									</button>
 									<button
 										onClick={() => handleRollback(rev)}
-										className="px-4 py-2 bg-white text-[#c8951e] text-xs font-bold rounded border border-brand-olive/20 hover:bg-[#c8951e] hover:text-white transition-all opacity-0 group-hover:opacity-100"
+										className="px-4 py-2 bg-white text-[#c8951e] text-xs font-bold rounded border border-[#c8951e]/20 hover:bg-[#c8951e] hover:text-white transition-all opacity-0 group-hover:opacity-100"
 									>
 										回滚到此版本
 									</button>
@@ -2073,7 +2073,7 @@ const WikiHistory = () => {
 
 			<AnimatePresence>
 				{selectedRevision && (
-					<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+					<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
 						<motion.div
 							initial={{ opacity: 0, scale: 0.95 }}
 							animate={{ opacity: 1, scale: 1 }}
@@ -2201,7 +2201,7 @@ const WikiTimeline = () => {
 								to={`/wiki/${event.slug}`}
 								className="block group"
 							>
-								<div className="bg-white p-8 rounded border border-gray-100 hover:border-[#c8951e] hover:border-brand-olive/20 transition-all">
+								<div className="bg-white p-8 rounded border border-[#e0dcd3] hover:border-[#c8951e] transition-all">
 									<div className="md:hidden mb-4">
 										<span className="text-xs font-bold text-[#c8951e] bg-[#f7f5f0] px-2 py-1 rounded">
 											{event.eventDate}

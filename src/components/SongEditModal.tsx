@@ -306,7 +306,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
                         value={currentId}
                         onChange={(e) => handlePlatformIdChange(platform.key, e.target.value)}
                         placeholder={isLinked ? '已关联' : '输入平台歌曲ID'}
-                        className="flex-1 px-2 py-1.5 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none"
+                        className="flex-1 px-3 py-2 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-[#2c2c2c]"
                       />
                       {isLinked && (
                         <a
@@ -321,7 +321,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
                       <button
                         type="button"
                         onClick={() => setMatchingPlatform(platform.key.replace('Id', '') as Platform)}
-                        className="px-2 py-1.5 rounded border border-[#e0dcd3] text-xs text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all flex items-center gap-1"
+                        className="px-3 py-2 rounded border border-[#e0dcd3] text-xs text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all flex items-center gap-1"
                       >
                         <Search size={13} />
                         匹配
@@ -358,11 +358,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
                       const buildUrl = (id: string) => platform.urlPattern.replace('{id}', id);
                       return (
                         <div key={platform.key} className="flex items-center gap-2">
-                          <span className={clsx(
-                            'w-20 text-xs px-2 py-1 rounded text-center shrink-0',
-                            platform.bgColor,
-                            platform.color
-                          )}>
+                          <span className="w-20 text-xs px-2 py-1 rounded text-center shrink-0 bg-[#fdf5d8] text-[#c8951e] font-medium">
                             {platform.label}
                           </span>
                           <input
@@ -373,7 +369,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
                               [platform.key]: e.target.value,
                             }))}
                             placeholder={isLinked ? '已添加' : '输入平台ID'}
-                            className="flex-1 px-2 py-1.5 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none"
+                            className="flex-1 px-3 py-2 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-[#2c2c2c]"
                           />
                           {isLinked && (
                             <>
@@ -427,21 +423,21 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
                   {customPlatformLinks.map((link, index) => {
                     const previewUrl = normalizeCustomPlatformLinkUrl(link.url);
                     return (
-                      <div key={`custom-link-${index}`} className="rounded border border-[#e0dcd3] bg-white p-2 space-y-2">
+                      <div key={`custom-link-${index}`} className="rounded border border-[#e0dcd3] bg-white p-3 space-y-2">
                         <div className="flex items-center gap-2">
                           <input
                             type="text"
                             value={link.label}
                             onChange={(e) => handleCustomPlatformLinkChange(index, 'label', e.target.value)}
                             placeholder="平台名称，例如 Bilibili"
-                            className="w-36 px-2 py-1.5 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none"
+                            className="w-36 px-3 py-2 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-[#2c2c2c]"
                           />
                           <input
                             type="text"
                             value={link.url}
                             onChange={(e) => handleCustomPlatformLinkChange(index, 'url', e.target.value)}
                             placeholder="链接地址"
-                            className="flex-1 px-2 py-1.5 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none"
+                            className="flex-1 px-3 py-2 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-[#2c2c2c]"
                           />
                           {previewUrl && (
                             <a

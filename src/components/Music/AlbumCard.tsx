@@ -23,7 +23,7 @@ const AlbumCard = React.memo(function AlbumCard({
 
 	if (viewMode === 'list') {
 		return (
-			<div className="flex gap-4 py-4 px-1 border-b border-[#e0dcd3] items-center group transition-all hover:bg-[#faf8f4]">
+			<div className="flex gap-4 py-4 px-1 border-b border-[#e0dcd3] items-center group transition-all hover:bg-[#f7f5f0]">
 				<div className="relative w-14 h-14 flex-shrink-0">
 					<SmartImage src={album.cover} alt={album.title} className="w-full h-full object-cover rounded" />
 				</div>
@@ -52,14 +52,14 @@ const AlbumCard = React.memo(function AlbumCard({
 	return (
 		<div className="group transition-all">
 			<Link to={`/album/${albumId}`} className="block">
-				<div className="relative aspect-square overflow-hidden bg-[#f0ece3] rounded-lg mb-2.5">
+				<div className="relative aspect-square overflow-hidden bg-[#f0ece3] rounded mb-2.5">
 					<SmartImage
 						src={album.cover}
 						alt={album.title}
 						className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
 					/>
 					{trackCount > 0 && (
-						<div className="absolute top-2 right-2 bg-black/45 backdrop-blur-sm text-white text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
+						<div className="absolute top-2 right-2 bg-black/45 text-white text-xs px-2 py-0.5 rounded flex items-center gap-1">
 							<List size={12} /> {trackCount}
 						</div>
 					)}

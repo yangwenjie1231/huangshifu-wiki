@@ -180,7 +180,7 @@ export const AdminToolPage = ({ type: propType }: { type?: ToolType }) => {
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-[#faf8f4] border-b border-[#e0dcd3]">
+                    <tr className="bg-[#f7f5f0] border-b border-[#e0dcd3]">
                       {['类型', '标题', '排序', '状态', '操作'].map((col) => (
                         <th key={col} className="px-5 py-3 text-[11px] font-semibold text-[#9e968e] uppercase tracking-wider">{col}</th>
                       ))}
@@ -193,7 +193,7 @@ export const AdminToolPage = ({ type: propType }: { type?: ToolType }) => {
                       ))
                     ) : (
                       (birthdayFilter === 'all' ? birthdayData : birthdayData.filter((d) => d.type === birthdayFilter)).map((item) => (
-                        <tr key={item.id} className="hover:bg-[#faf8f4] transition-colors group">
+                        <tr key={item.id} className="hover:bg-[#f7f5f0] transition-colors group">
                           <td className="px-5 py-4"><span className="px-2 py-0.5 bg-[#f7f5f0] text-[#c8951e] text-[10px] font-medium rounded">{item.type}</span></td>
                           <td className="px-5 py-4 text-sm font-medium text-[#2c2c2c]">{item.title}</td>
                           <td className="px-5 py-4 text-sm text-[#9e968e]">{item.sortOrder}</td>
@@ -254,7 +254,7 @@ export const AdminToolPage = ({ type: propType }: { type?: ToolType }) => {
       {renderContent()}
 
       {editingConfig && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-[#e0dcd3] rounded p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-bold text-[#2c2c2c] mb-4">编辑配置</h3>
             <div className="space-y-4">

@@ -473,7 +473,7 @@ const Music = () => {
                     if (isBanned) { show('账号已被封禁，无法执行此操作', { variant: 'error' }); return; }
                     setIsAdding(!isAdding);
                   }}
-                  className="px-4 py-2 text-[0.9375rem] rounded bg-[#2c2c2c] text-white hover:bg-[#3d3d3d] transition-all"
+                  className="px-4 py-2 text-[0.9375rem] rounded bg-[#c8951e] text-white hover:bg-[#dca828] transition-all"
                 >
                   {isAdding ? <X size={16} className="inline mr-1.5 -mt-0.5" /> : <Plus size={16} className="inline mr-1.5 -mt-0.5" />}
                   {isAdding ? t('music.cancelAdd') : t('music.addMusic')}
@@ -497,19 +497,18 @@ const Music = () => {
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="mb-7 p-6 md:p-8 bg-white rounded-lg border border-[#ebe8e0]"
-              style={{ boxShadow: '0 2px 12px rgba(44,30,20,0.06)' }}
+              className="mb-7 p-6 md:p-8 bg-white rounded border border-[#e0dcd3]"
             >
               <h3 className="text-lg font-semibold text-[#2c2c2c] mb-5 flex items-center gap-2">
                 <Sparkles size={18} className="text-[#c8951e]" /> {t('music.inputMusicId')}
               </h3>
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-4">
-                  <label className="text-sm font-bold text-[#6b6560]">{t('music.selectPlatform')}：</label>
+                  <label className="text-sm font-medium text-[#6b6560]">{t('music.selectPlatform')}：</label>
                   <select
                     value={selectedPlatform}
                     onChange={e => setSelectedPlatform(e.target.value as typeof selectedPlatform)}
-                    className="px-4 py-2 bg-[#faf8f4] rounded border border-[#e0dcd3] text-[0.9375rem] focus:outline-none focus:border-[#c8951e]"
+                    className="px-4 py-2 bg-[#f7f5f0] rounded border border-[#e0dcd3] text-sm focus:outline-none focus:border-[#c8951e] text-[#2c2c2c]"
                     style={{ fontFamily: "inherit" }}
                   >
                     <option value="netease">{t('music.platforms.netease')}</option>
@@ -523,14 +522,14 @@ const Music = () => {
                   value={searchId}
                   onChange={e => setSearchId(e.target.value)}
                   placeholder={`${t('music.inputPlaceholder')} ${selectedPlatform === 'netease' ? t('music.platforms.netease') : selectedPlatform === 'qq' ? t('music.platforms.tencent') : selectedPlatform === 'kugou' ? t('music.platforms.kugou') : selectedPlatform === 'baidu' ? t('music.platforms.baidu') : t('music.platforms.kuwo')} ${t('music.idOrLinkList')}`}
-                  className="w-full px-5 py-4 bg-[#faf8f4] rounded-lg border border-[#e0dcd3] focus:outline-none focus:border-[#c8951e] min-h-[120px] text-[0.9375rem]"
+                  className="w-full px-4 py-3 bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:outline-none focus:border-[#c8951e] min-h-[100px] text-sm text-[#2c2c2c] resize-y"
                   style={{ fontFamily: "inherit" }}
                 />
                 <div className="flex justify-end">
                   <button
                     onClick={handleAddSong}
                     disabled={loading}
-                    className="px-8 py-3 bg-[#c8951e] text-white rounded text-[0.9375rem] font-semibold hover:bg-[#dca828] transition-all disabled:opacity-50"
+                    className="px-6 py-2.5 bg-[#c8951e] text-white rounded text-sm font-medium hover:bg-[#dca828] transition-all disabled:opacity-50"
                   >
                     {loading ? t('music.processing') : t('music.getAndAdd')}
                   </button>
@@ -568,8 +567,7 @@ const Music = () => {
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
-                className="bg-white rounded-lg p-8 max-w-md w-full"
-                style={{ boxShadow: '0 8px 24px rgba(44,30,20,0.1)' }}
+                className="bg-white rounded p-8 max-w-md w-full border border-[#e0dcd3]"
               >
                 <h3 className="text-xl font-semibold text-[#2c2c2c] mb-4 tracking-wide">{t('music.confirmDelete')}</h3>
                 <p className="text-[#6b6560] mb-8 text-[0.9375rem]">
@@ -648,10 +646,9 @@ const Music = () => {
                           initial={{ opacity: 0, y: 12 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: 12 }}
-                          className="border border-[#e0dcd3] rounded-lg overflow-hidden mt-6 bg-white"
-                          style={{ boxShadow: '0 2px 12px rgba(44,30,20,0.06)' }}
+                          className="border border-[#e0dcd3] rounded overflow-hidden mt-6 bg-white"
                         >
-                          <div className="p-5 bg-[#faf8f4]">
+                          <div className="p-5 bg-[#f7f5f0]">
                             <div className="flex items-center justify-between mb-3">
                               <h3 className="font-semibold text-[#2c2c2c] flex items-center gap-2 text-[0.9375rem]">
                                 <MessageSquare size={16} />
@@ -670,7 +667,7 @@ const Music = () => {
                               <div className="p-8 text-center text-[#9e968e] italic">{t('music.loading')}</div>
                             ) : songPosts.length > 0 ? (
                               songPosts.map((post) => (
-                                <div key={post.id} className="p-5 hover:bg-[#faf8f4] transition-colors">
+                                <div key={post.id} className="p-5 hover:bg-[#f7f5f0] transition-colors">
                                   <div className="flex items-center gap-3 mb-1.5">
                                     <span className="font-semibold text-sm text-[#2c2c2c]">{post.title}</span>
                                     <span className="text-xs text-[#9e968e]">by {post.authorUid?.substring(0, 6)}</span>

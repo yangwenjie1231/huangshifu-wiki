@@ -538,7 +538,7 @@ const GalleryDetail = () => {
       `}</style>
 
       {editing && canManage && pageDragDepth > 0 ? (
-        <div className="pointer-events-none fixed inset-0 z-20 flex items-center justify-center bg-[#f7f5f0]/80 px-4 backdrop-blur-[2px]">
+        <div className="pointer-events-none fixed inset-0 z-20 flex items-center justify-center bg-[#f7f5f0]/80 px-4">
           <div className="w-full max-w-3xl rounded border-2 border-dashed border-[#c8951e] bg-white/95 px-8 py-12 text-center">
             <p className="text-lg font-bold text-[#2c2c2c]">松开鼠标即可加入待上传列表</p>
             <p className="mt-2 text-sm text-[#9e968e]">整个图集页面都可以拖入图片，保存时统一上传并生效</p>
@@ -757,7 +757,7 @@ const GalleryDetail = () => {
 
                 {!editing && (
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 pointer-events-none">
-                    <div className="absolute bottom-3 right-3 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                    <div className="absolute bottom-3 right-3 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 bg-black/40 text-white text-xs px-2 py-1 rounded">
                       查看大图
                     </div>
                   </div>
@@ -792,7 +792,7 @@ const GalleryDetail = () => {
                 type="button"
                 onClick={() => addImagesInputRef.current?.click()}
                 disabled={uploading || saving}
-                className="flex aspect-square items-center justify-center rounded border border-dashed border-[#c8951e]/40 bg-[#faf8f4] text-[#c8951e] transition-colors hover:border-[#c8951e] hover:bg-[#f7f5f0] disabled:opacity-50"
+                className="flex aspect-square items-center justify-center rounded border border-dashed border-[#c8951e]/40 bg-[#f7f5f0] text-[#c8951e] transition-colors hover:border-[#c8951e] hover:bg-[#f7f5f0] disabled:opacity-50"
                 title={uploading ? '上传中' : '加入图片'}
               >
                 <Plus size={24} />
