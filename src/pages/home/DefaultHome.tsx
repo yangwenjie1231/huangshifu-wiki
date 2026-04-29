@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import {
   Book,
@@ -12,23 +12,8 @@ import {
   Clock,
   MapPin,
 } from 'lucide-react';
-import { apiGet } from '../../lib/apiClient';
-import type { HomeFeedResponse } from '../../types/home';
 
 export const DefaultHome = () => {
-  const [, setFeed] = useState<HomeFeedResponse | null>(null);
-
-  useEffect(() => {
-    const fetchFeed = async () => {
-      try {
-        const data = await apiGet<HomeFeedResponse>('/api/home/feed');
-        setFeed(data);
-      } catch (e) {
-        console.error('Error fetching home feed:', e);
-      }
-    };
-    fetchFeed();
-  }, []);
 
   const navCards = [
     { title: '百科', icon: <Book size={18} />, link: '/wiki' },
