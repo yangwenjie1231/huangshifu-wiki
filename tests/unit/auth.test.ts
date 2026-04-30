@@ -74,7 +74,7 @@ describe('auth module', () => {
     }
     expect(received).toContain('u_2');
 
-    expect(received[0]).toBeNull();
+    expect(received[0]).toBe('u_2');
 
     unsubscribe();
   });

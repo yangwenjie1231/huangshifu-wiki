@@ -74,12 +74,18 @@ export function onAuthStateChanged(
   callback: AuthStateListener,
 ) {
   listeners.add(callback);
-  callback(currentUser);
 
-  if (!initialized) {
-    refreshAuthState().catch((error) => {
-      console.error('Failed to initialize auth state:', error);
-    });
+  if (initialized) {
+    callback(currentUser);
+  } else {
+    refreshAuthState()
+      .then(() => {
+        callback(currentUser);
+      })
+      .catch((error) => {
+        console.error('Failed to initialize auth state:', error);
+        callback(null);
+      });
   }
 
   return () => {

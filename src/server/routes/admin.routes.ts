@@ -103,7 +103,7 @@ router.get('/review-queue', requireAdmin, async (req, res) => {
 // PUT /api/admin/review-queue/:id/approve - Approve a review item
 router.put('/review-queue/:id/approve', requireAdmin, async (req: any, res) => {
   try {
-    const targetType = normalizeModerationTargetType(req.params.type) || 'wiki';
+    const targetType = normalizeModerationTargetType(req.body.type) || 'wiki';
     const targetId = req.params.id;
     const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
     const reqAuthUser = req.authUser;
@@ -190,7 +190,7 @@ router.put('/review-queue/:id/approve', requireAdmin, async (req: any, res) => {
 // PUT /api/admin/review-queue/:id/reject - Reject a review item
 router.put('/review-queue/:id/reject', requireAdmin, async (req: any, res) => {
   try {
-    const targetType = normalizeModerationTargetType(req.params.type) || 'wiki';
+    const targetType = normalizeModerationTargetType(req.body.type) || 'wiki';
     const targetId = req.params.id;
     const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
     const reqAuthUser = req.authUser;
@@ -1419,7 +1419,7 @@ router.get('/:tab/:id', requireAdmin, async (req, res) => {
     const id = req.params.id;
 
     if (tab === 'wiki') {
-      const item = await prisma.wikiPage.findUnique({ where: { slug: id } });
+      const item = await prisma.wikiPage.findUnique({ where: { id } });
       if (!item) {
         res.status(404).json({ error: '记录不存在' });
         return;
@@ -1508,7 +1508,7 @@ router.delete('/:tab/:id', requireAdmin, async (req: any, res) => {
     const id = req.params.id;
 
     if (tab === 'wiki') {
-      await prisma.wikiPage.delete({ where: { slug: id } });
+      await prisma.wikiPage.delete({ where: { id } });
       res.json({ success: true });
       return;
     }

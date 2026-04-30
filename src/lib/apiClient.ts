@@ -3,6 +3,7 @@ import {
   logApiError,
   NetworkError,
   type ApiErrorContext,
+  getAuthErrorCallback,
 } from './errorHandler';
 import {
   dedupedRequest,
@@ -53,7 +54,6 @@ async function parseResponse<T>(response: Response, context?: Omit<ApiErrorConte
   if (!response.ok) {
     const error = classifyError(response.status, data);
 
-    // 记录详细错误日志
     if (context) {
       logApiError(error, {
         ...context,
@@ -66,6 +66,11 @@ async function parseResponse<T>(response: Response, context?: Omit<ApiErrorConte
         status: response.status,
         error: error.message,
       });
+    }
+
+    const authErrorCallback = getAuthErrorCallback();
+    if (authErrorCallback && (response.status === 401 || response.status === 403)) {
+      authErrorCallback(error);
     }
 
     throw error;

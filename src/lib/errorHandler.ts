@@ -209,6 +209,21 @@ export function logApiError(error: Error, context: ApiErrorContext): void {
 }
 
 /**
+ * 全局认证错误回调
+ * 当 API 返回 401/403 时调用，可用于触发全局登出或跳转
+ */
+type AuthErrorCallback = (error: AppError) => void;
+let globalAuthErrorCallback: AuthErrorCallback | null = null;
+
+export function setAuthErrorCallback(callback: AuthErrorCallback | null): void {
+  globalAuthErrorCallback = callback;
+}
+
+export function getAuthErrorCallback(): AuthErrorCallback | null {
+  return globalAuthErrorCallback;
+}
+
+/**
  * 获取用户友好的错误消息
  */
 export function getUserFriendlyMessage(error: unknown): string {

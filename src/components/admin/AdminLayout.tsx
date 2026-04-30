@@ -28,6 +28,7 @@ import {
 import { clsx } from 'clsx';
 import { useAuth } from '../../context/AuthContext';
 import { logoutRequest } from '../../lib/auth';
+import { setAuthErrorCallback } from '../../lib/errorHandler';
 
 const contentNav = [
   { id: 'wiki', label: '百科管理', path: '/admin/wiki', icon: Book },
@@ -117,6 +118,16 @@ export const AdminLayout = () => {
       }
     }
   }, [isAdmin, authLoading, navigate]);
+
+  useEffect(() => {
+    setAuthErrorCallback(() => {
+      logoutRequest();
+      navigate('/');
+    });
+    return () => {
+      setAuthErrorCallback(null);
+    };
+  }, [navigate]);
 
   const currentPath = location.pathname;
 
