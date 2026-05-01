@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
-  GripVertical,
   Link2,
   Plus,
   Save,
@@ -716,7 +715,7 @@ const GalleryDetail = () => {
         <section className="mb-10">
           {editing ? (
             <p className="mb-3 text-xs text-[#9e968e]">
-              拖拽缩略图可调整顺序，点击删除只会先加入本地修改，保存后统一提交。也可以把图片拖到整个页面中加入待上传列表。
+              直接拖拽图片可调整顺序，点击图片左上角的删除按钮可移除。也可以把图片拖到整个页面中加入待上传列表。
             </p>
           ) : null}
 
@@ -738,15 +737,15 @@ const GalleryDetail = () => {
                   onThumbDrop(index);
                 }}
                 className={clsx(
-                  'relative overflow-hidden rounded cursor-zoom-in group',
-                  editing ? 'aspect-square' : 'aspect-[3/4]',
+                  'relative overflow-hidden rounded group',
+                  editing ? 'aspect-square cursor-grab active:cursor-grabbing' : 'cursor-zoom-in aspect-[3/4]',
                   draggingIndex === index && 'opacity-60',
                 )}
               >
                 <button
                   onClick={() => !editing && handleOpenLightbox(index)}
                   className="w-full h-full"
-                  disabled={editing}
+                  type="button"
                 >
                   <SmartImage
                     src={image.url}
@@ -764,25 +763,20 @@ const GalleryDetail = () => {
                 )}
 
                 {editing && canManage && (
-                  <div className="absolute inset-x-0 top-0 flex items-center justify-between p-1.5 bg-black/40 text-white opacity-0 hover:opacity-100 transition-opacity">
+                  <>
                     <button
                       onClick={() => handleDeleteImage(index)}
-                      className="p-1 rounded bg-black/40 hover:bg-red-500/80"
+                      className="absolute top-1.5 left-1.5 z-10 p-1 rounded bg-black/50 text-white hover:bg-red-500/80 transition-colors"
                       title="删除图片"
                     >
                       <Trash2 size={11} />
                     </button>
-                    <div className="flex items-center gap-1">
-                      {image.isPending ? (
-                        <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-[#c8951e] text-white">
-                          待上传
-                        </span>
-                      ) : null}
-                      <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-black/40">
-                        <GripVertical size={10} /> 拖拽
+                    {image.isPending ? (
+                      <span className="absolute top-1.5 right-1.5 z-10 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-[#c8951e] text-white">
+                        待上传
                       </span>
-                    </div>
-                  </div>
+                    ) : null}
+                  </>
                 )}
               </div>
             ))}
