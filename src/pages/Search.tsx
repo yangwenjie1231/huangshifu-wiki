@@ -699,7 +699,7 @@ const Search = () => {
 													className={clsx(
 														"px-3 py-1 rounded text-xs transition-all",
 														selectedTags.includes(tag)
-															? "bg-[#c8951e] text-white"
+															? "bg-[#c8951e] text-white border border-transparent"
 															: "bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e]",
 													)}
 												>
@@ -745,7 +745,7 @@ const Search = () => {
 													className={clsx(
 														"px-3 py-1 rounded text-xs transition-all capitalize",
 														contentType === type
-															? "bg-[#c8951e] text-white"
+															? "bg-[#c8951e] text-white border border-transparent"
 															: "bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e]",
 													)}
 												>
@@ -765,7 +765,7 @@ const Search = () => {
 												className={clsx(
 													"px-3 py-1 rounded text-xs transition-all flex items-center gap-1.5",
 													semanticImageSearch
-														? "bg-[#c8951e] text-white"
+														? "bg-[#c8951e] text-white border border-transparent"
 														: "bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e]",
 												)}
 											>

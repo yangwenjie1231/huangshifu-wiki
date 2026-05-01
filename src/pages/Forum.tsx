@@ -947,7 +947,7 @@ const PostDetail = () => {
 									className={clsx(
 										"flex-1 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
 										post.likedByMe
-											? "bg-red-500 text-white"
+											? "bg-red-500 text-white border border-transparent"
 											: "bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-red-400 hover:text-red-500",
 										(!user || liking) && "opacity-50 cursor-not-allowed",
 									)}
@@ -961,7 +961,7 @@ const PostDetail = () => {
 									className={clsx(
 										"flex-1 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
 										post.dislikedByMe
-											? "bg-orange-500 text-white"
+											? "bg-orange-500 text-white border border-transparent"
 											: "bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-orange-400 hover:text-orange-500",
 										(!user || disliking) && "opacity-50 cursor-not-allowed",
 									)}
@@ -977,7 +977,7 @@ const PostDetail = () => {
 									className={clsx(
 										"flex-1 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
 										post.favoritedByMe
-											? "bg-[#c8951e] text-white"
+											? "bg-[#c8951e] text-white border border-transparent"
 											: "bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e]",
 										(!user || favoriting) && "opacity-50 cursor-not-allowed",
 									)}
@@ -1008,7 +1008,7 @@ const PostDetail = () => {
 									className={clsx(
 										"w-full mt-2 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
 										post.isPinned
-											? "bg-[#c8951e] text-white"
+											? "bg-[#c8951e] text-white border border-transparent"
 											: "bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e]",
 										pinning && "opacity-50 cursor-not-allowed",
 									)}
