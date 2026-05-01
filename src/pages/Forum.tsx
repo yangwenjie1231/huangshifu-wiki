@@ -98,7 +98,7 @@ interface PostCardProps {
 const PostCard = React.memo(({ post, sectionName, onCopyLink }: PostCardProps) => (
 	<div
 		className={clsx(
-			"p-3 bg-white border border-[#e0dcd3] rounded hover:border-[#c8951e] transition-all group relative",
+			"p-4 bg-white border border-[#e0dcd3] rounded hover:border-[#c8951e] transition-all group relative",
 			post.isPinned && "border-l-[3px] border-l-[#c8951e]",
 		)}
 	>
@@ -116,8 +116,8 @@ const PostCard = React.memo(({ post, sectionName, onCopyLink }: PostCardProps) =
 					{sectionName}
 				</span>
 				<span className="text-[#e0dcd3]">|</span>
-				<span className="text-[#9e968e] text-[11px] flex items-center gap-1">
-					<Clock size={11} />{" "}
+				<span className="text-[#9e968e] text-xs flex items-center gap-1">
+					<Clock size={10} />{" "}
 					{formatDate(post.updatedAt, "yyyy-MM-dd")}
 				</span>
 				{post.status && post.status !== "published" && (
@@ -135,26 +135,26 @@ const PostCard = React.memo(({ post, sectionName, onCopyLink }: PostCardProps) =
 					</span>
 				)}
 			</div>
-			<h3 className="text-sm font-medium text-[#2c2c2c] group-hover:text-[#c8951e] transition-colors mb-2">
+			<h3 className="text-base font-bold text-[#2c2c2c] group-hover:text-[#c8951e] transition-colors mb-2">
 				{post.title}
 			</h3>
 			<div className="flex items-center justify-between">
-				<div className="flex items-center gap-4 text-[#9e968e] text-[11px]">
+				<div className="flex items-center gap-4 text-[#9e968e] text-xs">
 					<span className="flex items-center gap-1">
-						<Heart size={12} /> {post.likesCount || 0}
+						<Heart size={10} /> {post.likesCount || 0}
 					</span>
 					<span className="flex items-center gap-1">
-						<ThumbsDown size={12} /> {post.dislikesCount || 0}
+						<ThumbsDown size={10} /> {post.dislikesCount || 0}
 					</span>
 					<span className="flex items-center gap-1">
-						<MessageSquare size={12} /> {post.commentsCount || 0}
+						<MessageSquare size={10} /> {post.commentsCount || 0}
 					</span>
 				</div>
 				<div className="flex items-center gap-2">
 					<div className="w-5 h-5 rounded bg-[#f0ece3] overflow-hidden flex items-center justify-center">
 						<UserIcon size={10} className="text-[#9e968e]" />
 					</div>
-					<span className="text-[11px] text-[#9e968e]">
+					<span className="text-xs text-[#9e968e]">
 						作者 ID: {post.authorUid?.substring(0, 6)}
 					</span>
 				</div>
@@ -162,7 +162,7 @@ const PostCard = React.memo(({ post, sectionName, onCopyLink }: PostCardProps) =
 		</Link>
 		<button
 			onClick={(event) => onCopyLink(event, post.id)}
-			className="absolute top-3 right-3 p-1.5 rounded border border-[#e0dcd3] bg-white text-[#9e968e] hover:text-[#c8951e] hover:border-[#c8951e] transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+			className="absolute top-4 right-4 p-2 rounded border bg-white/90 text-[#9e968e] hover:text-[#c8951e] hover:border-[#c8951e] transition-all"
 			title="复制内链"
 			aria-label="复制帖子内链"
 		>
