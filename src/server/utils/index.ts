@@ -906,7 +906,7 @@ function toWikiResponse(page: WikiResponseInput) {
     likesCount: page.likesCount,
     dislikesCount: page.dislikesCount,
     lastEditorUid: page.lastEditorUid,
-    lastEditorName: page.lastEditorName,
+    lastEditorName: page.lastEditor?.displayName || "匿名",
     createdAt: page.createdAt.toISOString(),
     updatedAt: page.updatedAt.toISOString(),
   };

@@ -283,6 +283,7 @@ router.get('/:slug', async (req: AuthenticatedRequest, res) => {
   try {
     const page = await prisma.wikiPage.findUnique({
       where: { slug: req.params.slug },
+      include: { lastEditor: { select: { displayName: true } } },
     });
 
     if (!page || !canViewWikiPage(page, req.authUser)) {
@@ -293,6 +294,7 @@ router.get('/:slug', async (req: AuthenticatedRequest, res) => {
     await prisma.$executeRaw`UPDATE "WikiPage" SET "viewCount" = "viewCount" + 1 WHERE "slug" = ${req.params.slug}`;
     const freshPage = await prisma.wikiPage.findUnique({
       where: { slug: req.params.slug },
+      include: { lastEditor: { select: { displayName: true } } },
     });
 
     if (!freshPage) {
@@ -784,7 +786,6 @@ router.post('/', requireAuth, requireActiveUser, async (req: AuthenticatedReques
         reviewedBy: null,
         reviewedAt: null,
         lastEditorUid: req.authUser!.uid,
-        lastEditorName: req.authUser!.displayName,
         locationCode: locationCode || null,
       },
       update: {
@@ -799,7 +800,6 @@ router.post('/', requireAuth, requireActiveUser, async (req: AuthenticatedReques
         reviewedBy: null,
         reviewedAt: null,
         lastEditorUid: req.authUser!.uid,
-        lastEditorName: req.authUser!.displayName,
         locationCode: locationCode || null,
       },
     });
@@ -921,7 +921,6 @@ router.post('/legacy', requireAuth, requireActiveUser, async (req: Authenticated
         reviewedBy: null,
         reviewedAt: null,
         lastEditorUid: req.authUser!.uid,
-        lastEditorName: req.authUser!.displayName,
       },
       update: {
         title,
@@ -935,7 +934,6 @@ router.post('/legacy', requireAuth, requireActiveUser, async (req: Authenticated
         reviewedBy: null,
         reviewedAt: null,
         lastEditorUid: req.authUser!.uid,
-        lastEditorName: req.authUser!.displayName,
       },
     });
 
@@ -1020,7 +1018,6 @@ router.put('/:slug', requireAuth, requireActiveUser, async (req: AuthenticatedRe
         reviewedBy: null,
         reviewedAt: null,
         lastEditorUid: req.authUser!.uid,
-        lastEditorName: req.authUser!.displayName,
         locationCode: locationCode || null,
       },
     });
@@ -1662,7 +1659,6 @@ router.post('/pull-requests/:prId/merge', requireAuth, requireAdmin, async (req:
           reviewedBy: req.authUser!.uid,
           reviewedAt: mergedAt,
           lastEditorUid: req.authUser!.uid,
-          lastEditorName: req.authUser!.displayName,
           mergedAt,
         },
       }),
@@ -1894,7 +1890,6 @@ router.post('/:slug/rollback/:revisionId', requireAuth, requireActiveUser, async
         reviewedBy: null,
         reviewedAt: null,
         lastEditorUid: req.authUser!.uid,
-        lastEditorName: req.authUser!.displayName,
       },
     });
 

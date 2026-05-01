@@ -178,7 +178,7 @@ type WikiResponseInput = {
   likesCount: number;
   dislikesCount: number;
   lastEditorUid: string;
-  lastEditorName: string;
+  lastEditor?: { displayName: string } | null;
   createdAt: Date;
   updatedAt: Date;
   location?: { code: string; name: string; fullName: string } | null;

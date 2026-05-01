@@ -277,7 +277,6 @@ model WikiPage {
   dislikesCount Int            @default(0)
   isPinned      Boolean        @default(false)
   lastEditorUid String
-  lastEditorName String
   mainBranchId  String?
   mergedAt      DateTime?
   createdAt     DateTime       @default(now())
