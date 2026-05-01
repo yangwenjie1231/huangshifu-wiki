@@ -996,7 +996,7 @@ const WikiPageView = () => {
 									className={clsx(
 										"w-full mt-2 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
 										page.isPinned
-											? "bg-[#c8951e] text-white"
+											? "bg-[#c8951e] text-white border border-transparent"
 											: "bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e]",
 										pinning && "opacity-50 cursor-not-allowed",
 									)}
