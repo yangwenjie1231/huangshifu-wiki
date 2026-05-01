@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth, requireActiveUser, isAdminRole } from '../middleware/auth';
+import { requireAuth, requireAdmin, requireActiveUser, isAdminRole } from '../middleware/auth';
 import {
   prisma,
   toPostResponse,
@@ -832,6 +832,59 @@ router.delete('/:id/dislike', requireAuth, requireActiveUser, async (req: Authen
   } catch (error) {
     console.error('Undislike post error:', error);
     res.status(500).json({ error: '取消踩失败' });
+  }
+});
+
+// Pin routes
+router.post('/:id/pin', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const postId = req.params.id;
+
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      select: { id: true, isPinned: true },
+    });
+
+    if (!post) {
+      res.status(404).json({ error: '帖子未找到' });
+      return;
+    }
+
+    const updated = await prisma.post.update({
+      where: { id: postId },
+      data: { isPinned: true },
+    });
+
+    res.json({ isPinned: updated.isPinned });
+  } catch (error) {
+    console.error('Pin post error:', error);
+    res.status(500).json({ error: '置顶失败' });
+  }
+});
+
+router.delete('/:id/pin', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const postId = req.params.id;
+
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      select: { id: true, isPinned: true },
+    });
+
+    if (!post) {
+      res.status(404).json({ error: '帖子未找到' });
+      return;
+    }
+
+    const updated = await prisma.post.update({
+      where: { id: postId },
+      data: { isPinned: false },
+    });
+
+    res.json({ isPinned: updated.isPinned });
+  } catch (error) {
+    console.error('Unpin post error:', error);
+    res.status(500).json({ error: '取消置顶失败' });
   }
 });
 
