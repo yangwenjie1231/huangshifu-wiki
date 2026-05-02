@@ -251,6 +251,11 @@ router.get('/:id', async (req: AuthenticatedRequest, res) => {
     const comments = await prisma.postComment.findMany({
       where: { postId: req.params.id },
       orderBy: { createdAt: 'asc' },
+      include: {
+        author: {
+          select: { displayName: true, photoURL: true },
+        },
+      },
     });
 
     const [likedByMe, favoritedByMe, dislikedByMe] = req.authUser
@@ -463,6 +468,11 @@ router.get('/:postId/comments', async (req: AuthenticatedRequest, res) => {
         orderBy: { createdAt: 'asc' },
         take: limit,
         skip,
+        include: {
+          author: {
+            select: { displayName: true, photoURL: true },
+          },
+        },
       }),
       prisma.postComment.count({ where: { postId } }),
     ]);
@@ -531,10 +541,13 @@ router.post('/:postId/comments', requireAuth, requireActiveUser, async (req: Aut
       data: {
         postId: req.params.postId,
         authorUid: req.authUser!.uid,
-        authorName: req.authUser!.displayName,
-        authorPhoto: req.authUser!.photoURL,
         content,
         parentId: parentId || null,
+      },
+      include: {
+        author: {
+          select: { displayName: true, photoURL: true },
+        },
       },
     });
 

@@ -1019,14 +1019,25 @@ function toCommentResponse(comment: {
   postId?: string | null;
   galleryId?: string | null;
   authorUid: string;
-  authorName: string;
-  authorPhoto: string | null;
   content: string;
   parentId: string | null;
   createdAt: Date;
+  // author 关系是可选的——评论查询时如果忘记 include 就回退到 null/匿名，
+  // 而不是直接抛 TS 错误。生产路径都应该 include 关系。
+  author?: {
+    displayName: string;
+    photoURL: string | null;
+  } | null;
 }) {
   return {
-    ...comment,
+    id: comment.id,
+    postId: comment.postId ?? null,
+    galleryId: comment.galleryId ?? null,
+    authorUid: comment.authorUid,
+    authorName: comment.author?.displayName ?? '匿名用户',
+    authorPhoto: comment.author?.photoURL ?? null,
+    content: comment.content,
+    parentId: comment.parentId,
     createdAt: comment.createdAt.toISOString(),
   };
 }

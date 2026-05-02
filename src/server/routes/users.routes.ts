@@ -318,34 +318,14 @@ router.patch('/me', requireAuth, requireActiveUser, async (req: AuthenticatedReq
     // 关键：authMiddleware 缓存了 ApiUser，不清就要等 5 分钟 TTL 才生效，导致刷新后看到旧头像/旧昵称
     clearUserCache(req.authUser!.uid);
 
-    // 同步历史评论中的作者头像快照，保证作者修改头像后旧评论也能看到新头像
+    // 替换头像后，旧的本地上传文件不再被引用，安全删除
     if (photoURL !== undefined && oldPhotoURL !== normalizedPhotoUrl) {
-      try {
-        await prisma.postComment.updateMany({
-          where: { authorUid: req.authUser!.uid },
-          data: { authorPhoto: normalizedPhotoUrl ?? null },
-        });
-      } catch (syncError) {
-        console.warn('Sync historic authorPhoto failed:', syncError);
-      }
-
-      // 替换头像后，旧的本地上传文件不再被引用，安全删除
       if (oldPhotoURL && oldPhotoURL.startsWith('/uploads/') && oldPhotoURL !== normalizedPhotoUrl) {
         await safeDeleteUploadFileByUrl(oldPhotoURL).catch(() => {});
       }
     }
-
-    // 如果昵称改了，也同步历史评论的 authorName 快照（保持一致性）
-    if (displayName !== undefined && typeof displayName === 'string' && displayName.trim()) {
-      try {
-        await prisma.postComment.updateMany({
-          where: { authorUid: req.authUser!.uid },
-          data: { authorName: displayName.trim() },
-        });
-      } catch (syncError) {
-        console.warn('Sync historic authorName failed:', syncError);
-      }
-    }
+    // 注：评论的作者昵称/头像现在通过 author 关系实时 JOIN 获取，
+    // 不再需要 updateMany 同步快照字段。
 
     res.json({ user: userToApiUser(user) });
   } catch (error) {
@@ -375,15 +355,9 @@ router.delete('/account', requireAuth, requireActiveUser, async (req: Authentica
     });
     clearUserCache(req.authUser!.uid);
 
-    // 清理历史评论中的作者头像快照，避免裂图
-    try {
-      await prisma.postComment.updateMany({
-        where: { authorUid: req.authUser!.uid },
-        data: { authorPhoto: null, authorName: '已注销用户' },
-      });
-    } catch (syncError) {
-      console.warn('Sync historic comment after account deletion failed:', syncError);
-    }
+    // 注：评论的作者昵称/头像通过 author 关系实时 JOIN 获取，
+    // 注销时 User.displayName 已置为 "已注销用户"、photoURL 已置 null，
+    // 历史评论会自动反映这些更新，不需要再额外 updateMany。
 
     // 物理删除旧头像文件，防止留下孤儿文件
     if (existing?.photoURL && existing.photoURL.startsWith('/uploads/')) {
@@ -658,9 +632,16 @@ router.get('/:userId/comments', async (req: AuthenticatedRequest, res) => {
       orderBy: { createdAt: 'desc' },
       take: limit,
       skip,
+      include: {
+        author: {
+          select: { displayName: true, photoURL: true },
+        },
+      },
     });
 
-    const postIds = [...new Set(comments.map((c) => c.postId))];
+    // PostComment.postId 可能为 null（图集评论），筛掉非空的再传给 Post 查询，
+    // 让 Prisma 的 in 子句类型对齐 string[]
+    const postIds = [...new Set(comments.map((c) => c.postId).filter((id): id is string => Boolean(id)))];
     const postsMap = new Map<string, { id: string; title: string; status: string }>();
 
     if (postIds.length) {
@@ -678,14 +659,7 @@ router.get('/:userId/comments', async (req: AuthenticatedRequest, res) => {
 
     res.json({
       comments: comments.map((comment) => ({
-        id: comment.id,
-        postId: comment.postId,
-        authorUid: comment.authorUid,
-        authorName: comment.authorName,
-        authorPhoto: comment.authorPhoto,
-        content: comment.content,
-        parentId: comment.parentId,
-        createdAt: comment.createdAt.toISOString(),
+        ...toCommentResponse(comment),
         post: comment.postId && postsMap.has(comment.postId) ? postsMap.get(comment.postId)! : null,
       })),
       total,

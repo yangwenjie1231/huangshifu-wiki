@@ -243,8 +243,6 @@ model PostComment {
   postId     String?
   galleryId  String?
   authorUid  String
-  authorName String
-  authorPhoto String?
   content    String
   parentId   String?
   createdAt  DateTime @default(now())
@@ -255,6 +253,7 @@ model PostComment {
   @@index([postId, createdAt])
   @@index([galleryId, createdAt])
   @@index([parentId])
+  @@index([authorUid, createdAt])
 }
 
 model WikiPage {
