@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { UserRole as PrismaUserRole } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { requireAuth, requireActiveUser, requireAdmin, requireSuperAdmin, userToApiUser } from '../middleware/auth';
+import { requireAuth, requireActiveUser, requireAdmin, requireSuperAdmin, userToApiUser, clearUserCache } from '../middleware/auth';
 import { prisma, toUserResponse, buildPostVisibilityWhere, toPostResponse, toCommentResponse } from '../utils';
 import type { AuthenticatedRequest, UserStatus } from '../types';
 
@@ -88,6 +88,7 @@ router.put('/:userId/status', requireSuperAdmin, async (req: AuthenticatedReques
         updatedAt: true,
       },
     });
+    clearUserCache(targetUid);
 
     await prisma.userBanLog.create({
       data: {
@@ -132,6 +133,7 @@ router.put('/name', requireAuth, requireActiveUser, async (req: AuthenticatedReq
         updatedAt: true,
       },
     });
+    clearUserCache(req.authUser!.uid);
 
     res.json({ user: toUserResponse(user) });
   } catch (error) {
@@ -261,7 +263,8 @@ router.patch('/me', requireAuth, requireActiveUser, async (req: AuthenticatedReq
       where: { uid: req.authUser!.uid },
       data: updateData,
     });
-    
+    clearUserCache(req.authUser!.uid);
+
     res.json({ user: userToApiUser(user) });
   } catch (error) {
     console.error('Update user profile error:', error);
@@ -282,6 +285,7 @@ router.delete('/account', requireAuth, requireActiveUser, async (req: Authentica
         banReason: '用户主动注销',
       },
     });
+    clearUserCache(req.authUser!.uid);
 
     res.json({ success: true });
   } catch (error) {
@@ -344,6 +348,7 @@ router.put('/:userId/role', requireSuperAdmin, async (req, res) => {
         updatedAt: true,
       },
     });
+    clearUserCache(req.params.userId);
 
     res.json({ user: toUserResponse(user) });
   } catch (error) {
@@ -391,6 +396,7 @@ router.put('/:userId/ban', requireAdmin, async (req: AuthenticatedRequest, res) 
         updatedAt: true,
       },
     });
+    clearUserCache(targetUid);
 
     await prisma.userBanLog.create({
       data: {
@@ -440,6 +446,7 @@ router.put('/:userId/unban', requireAdmin, async (req: AuthenticatedRequest, res
         updatedAt: true,
       },
     });
+    clearUserCache(targetUid);
 
     await prisma.userBanLog.create({
       data: {

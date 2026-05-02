@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { UserRole as PrismaUserRole } from '@prisma/client';
-import { requireAuth, requireActiveUser, userToApiUser, createToken, setAuthCookie, clearAuthCookie } from '../middleware/auth';
+import { requireAuth, requireActiveUser, userToApiUser, createToken, setAuthCookie, clearAuthCookie, clearUserCache } from '../middleware/auth';
 import { authRateLimiter } from '../middleware/rateLimiter';
 import { exchangeWechatLoginCode, buildUniqueWechatEmail } from '../utils';
 import { prisma } from '../prisma';
@@ -250,6 +250,7 @@ router.post('/wechat/login', async (req, res) => {
             wechatUnionId: unionId || user.wechatUnionId,
           },
         });
+        clearUserCache(user.uid);
       }
     }
 
