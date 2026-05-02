@@ -11,6 +11,25 @@ const router = Router();
 
 const SUPER_ADMIN_EMAIL = process.env.SEED_SUPER_ADMIN_EMAIL || '';
 
+/**
+ * 校验微信回调里带过来的 photoURL：
+ * - 必须是 http:// 或 https://（防止 javascript:/data: 等危险协议被原样写入数据库）
+ * - 长度不超过 2048 字符
+ */
+function sanitizeWechatPhotoUrl(value: string): string | null {
+  if (!value) return null;
+  if (value.length > 2048) return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null;
+    }
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 router.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -189,8 +208,12 @@ router.post('/login', authRateLimiter, async (req, res) => {
 router.post('/wechat/login', async (req, res) => {
   try {
     const code = typeof req.body?.code === 'string' ? req.body.code : '';
-    const displayNameRaw = typeof req.body?.displayName === 'string' ? req.body.displayName.trim() : '';
-    const photoURLRaw = typeof req.body?.photoURL === 'string' ? req.body.photoURL.trim() : '';
+    const displayNameRaw = typeof req.body?.displayName === 'string' ? req.body.displayName.trim().slice(0, 100) : '';
+    const photoURLRawInput = typeof req.body?.photoURL === 'string' ? req.body.photoURL.trim() : '';
+    const photoURLRaw = sanitizeWechatPhotoUrl(photoURLRawInput);
+    if (photoURLRawInput && !photoURLRaw) {
+      console.warn('[Auth] WeChat login: photoURL rejected by validation:', photoURLRawInput.slice(0, 80));
+    }
 
     if (!code.trim()) {
       console.log('[Auth] WeChat login failed - missing code');
