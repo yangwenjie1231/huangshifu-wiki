@@ -38,7 +38,7 @@ type CommentItem = {
 type ActiveTab = 'profile' | 'favorites' | 'posts' | 'comments' | 'history';
 
 const Profile = () => {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshAuth } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>('profile');
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
@@ -169,8 +169,17 @@ const Profile = () => {
     );
   }
 
-  const handleAvatarSuccess = (photoURL: string) => {
+  const handleAvatarSuccess = async (photoURL: string) => {
     setFormData((prev) => ({ ...prev, photoURL }));
+    // 立即将新头像持久化到数据库，避免刷新后丢失
+    try {
+      await apiPatch('/api/users/me', { photoURL });
+      await refreshAuth();
+      show('头像更新成功');
+    } catch (e) {
+      console.error('Error saving avatar:', e);
+      show('头像保存失败，请稍后重试', { variant: 'error' });
+    }
   };
 
   const handleSave = async () => {
@@ -179,7 +188,9 @@ const Profile = () => {
       await apiPatch('/api/users/me', {
         displayName: formData.displayName,
         bio: formData.bio,
+        photoURL: formData.photoURL,
       });
+      await refreshAuth();
       setIsEditing(false);
       show('保存成功');
     } catch (e) {
@@ -249,7 +260,15 @@ const Profile = () => {
                   {isEditing ? (
                     <>
                       <button
-                        onClick={() => setIsEditing(false)}
+                        onClick={() => {
+                          // 取消编辑时回滚 formData，避免 UI 上保留未保存的头像/昵称/简介
+                          setFormData({
+                            displayName: profile?.displayName || user.displayName || '',
+                            bio: profile?.bio || '',
+                            photoURL: profile?.photoURL || user.photoURL || '',
+                          });
+                          setIsEditing(false);
+                        }}
                         className="px-3 py-1.5 border border-[#e0dcd3] text-[#6b6560] rounded text-sm hover:border-[#c8951e] hover:text-[#c8951e] transition-all flex items-center gap-1"
                       >
                         <X size={14} /> 取消

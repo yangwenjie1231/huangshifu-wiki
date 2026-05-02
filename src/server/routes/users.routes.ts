@@ -2,10 +2,50 @@ import { Router } from 'express';
 import { UserRole as PrismaUserRole } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { requireAuth, requireActiveUser, requireAdmin, requireSuperAdmin, userToApiUser, clearUserCache } from '../middleware/auth';
-import { prisma, toUserResponse, buildPostVisibilityWhere, toPostResponse, toCommentResponse } from '../utils';
+import {
+  prisma,
+  toUserResponse,
+  buildPostVisibilityWhere,
+  toPostResponse,
+  toCommentResponse,
+  safeDeleteUploadFileByUrl,
+} from '../utils';
 import type { AuthenticatedRequest, UserStatus } from '../types';
 
 const router = Router();
+
+/**
+ * 校验前端传入的 photoURL：
+ * - 允许空字符串/null（清除头像）
+ * - 允许相对路径 /uploads/...（本站上传）
+ * - 允许 https?:// 形式的远端 URL（如外部图床、S3、微信头像）
+ * - 禁止 javascript:/data:/vbscript: 等危险协议
+ * - 限制最大长度 2048 字符
+ */
+function normalizePhotoUrl(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > 2048) return null;
+  if (trimmed.startsWith('/uploads/')) {
+    return trimmed;
+  }
+  // 远端 URL 必须是 http/https
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol === 'http:' || url.protocol === 'https:') {
+      return trimmed;
+    }
+  } catch {
+    // 解析失败
+  }
+  return null;
+}
 
 // User self-management routes
 router.get('/status', requireAuth, async (req: AuthenticatedRequest, res) => {
@@ -88,6 +128,7 @@ router.put('/:userId/status', requireSuperAdmin, async (req: AuthenticatedReques
         updatedAt: true,
       },
     });
+    // 清除目标用户在 authMiddleware 里的缓存，确保下次请求拿到最新状态
     clearUserCache(targetUid);
 
     await prisma.userBanLog.create({
@@ -200,16 +241,9 @@ router.put('/password', requireAuth, requireActiveUser, async (req: Authenticate
   }
 });
 
-router.post('/avatar', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
-  try {
-    // This route requires file upload middleware
-    // The actual implementation would be in server.ts with multer
-    res.status(501).json({ error: '头像上传请使用完整接口' });
-  } catch (error) {
-    console.error('Avatar upload error:', error);
-    res.status(500).json({ error: '上传头像失败' });
-  }
-});
+// 注：头像上传走 POST /api/uploads/sessions/:id/files 通用上传接口，
+// 客户端拿到文件 URL 后通过 PATCH /api/users/me { photoURL } 写入。
+// 此处不再保留独立的 POST /avatar 占位路由。
 
 // GET /api/users/me - Get current user info
 router.get('/me', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
@@ -247,23 +281,71 @@ router.get('/me', requireAuth, requireActiveUser, async (req: AuthenticatedReque
 
 router.patch('/me', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
-    const { displayName, bio, preferences } = req.body;
+    const { displayName, bio, preferences, photoURL } = req.body;
     const updateData: Record<string, unknown> = {};
-    
+
     if (displayName !== undefined) updateData.displayName = displayName;
     if (bio !== undefined) updateData.bio = bio;
     if (preferences !== undefined) updateData.preferences = preferences;
-    
+
+    // 头像处理：校验 URL，并在变更时同步历史评论 / 帖子作者头像快照
+    let normalizedPhotoUrl: string | null | undefined;
+    let oldPhotoURL: string | null = null;
+    if (photoURL !== undefined) {
+      normalizedPhotoUrl = normalizePhotoUrl(photoURL);
+      if (photoURL && photoURL !== '' && normalizedPhotoUrl === null) {
+        res.status(400).json({ error: '头像地址不合法' });
+        return;
+      }
+      // 读取旧头像，便于在替换后清理已经无人引用的旧文件
+      const existing = await prisma.user.findUnique({
+        where: { uid: req.authUser!.uid },
+        select: { photoURL: true },
+      });
+      oldPhotoURL = existing?.photoURL || null;
+      updateData.photoURL = normalizedPhotoUrl;
+    }
+
     if (Object.keys(updateData).length === 0) {
       res.status(400).json({ error: '没有要更新的字段' });
       return;
     }
-    
+
     const user = await prisma.user.update({
       where: { uid: req.authUser!.uid },
       data: updateData,
     });
+    // 关键：authMiddleware 缓存了 ApiUser，不清就要等 5 分钟 TTL 才生效，导致刷新后看到旧头像/旧昵称
     clearUserCache(req.authUser!.uid);
+
+    // 同步历史评论中的作者头像快照，保证作者修改头像后旧评论也能看到新头像
+    if (photoURL !== undefined && oldPhotoURL !== normalizedPhotoUrl) {
+      try {
+        await prisma.postComment.updateMany({
+          where: { authorUid: req.authUser!.uid },
+          data: { authorPhoto: normalizedPhotoUrl ?? null },
+        });
+      } catch (syncError) {
+        console.warn('Sync historic authorPhoto failed:', syncError);
+      }
+
+      // 替换头像后，旧的本地上传文件不再被引用，安全删除
+      if (oldPhotoURL && oldPhotoURL.startsWith('/uploads/') && oldPhotoURL !== normalizedPhotoUrl) {
+        await safeDeleteUploadFileByUrl(oldPhotoURL).catch(() => {});
+      }
+    }
+
+    // 如果昵称改了，也同步历史评论的 authorName 快照（保持一致性）
+    if (displayName !== undefined && typeof displayName === 'string' && displayName.trim()) {
+      try {
+        await prisma.postComment.updateMany({
+          where: { authorUid: req.authUser!.uid },
+          data: { authorName: displayName.trim() },
+        });
+      } catch (syncError) {
+        console.warn('Sync historic authorName failed:', syncError);
+      }
+    }
 
     res.json({ user: userToApiUser(user) });
   } catch (error) {
@@ -274,6 +356,12 @@ router.patch('/me', requireAuth, requireActiveUser, async (req: AuthenticatedReq
 
 router.delete('/account', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
+    // 获取旧头像 URL，用于注销后清理本地文件
+    const existing = await prisma.user.findUnique({
+      where: { uid: req.authUser!.uid },
+      select: { photoURL: true },
+    });
+
     // Soft delete or account deletion logic
     await prisma.user.update({
       where: { uid: req.authUser!.uid },
@@ -286,6 +374,21 @@ router.delete('/account', requireAuth, requireActiveUser, async (req: Authentica
       },
     });
     clearUserCache(req.authUser!.uid);
+
+    // 清理历史评论中的作者头像快照，避免裂图
+    try {
+      await prisma.postComment.updateMany({
+        where: { authorUid: req.authUser!.uid },
+        data: { authorPhoto: null, authorName: '已注销用户' },
+      });
+    } catch (syncError) {
+      console.warn('Sync historic comment after account deletion failed:', syncError);
+    }
+
+    // 物理删除旧头像文件，防止留下孤儿文件
+    if (existing?.photoURL && existing.photoURL.startsWith('/uploads/')) {
+      await safeDeleteUploadFileByUrl(existing.photoURL).catch(() => {});
+    }
 
     res.json({ success: true });
   } catch (error) {
