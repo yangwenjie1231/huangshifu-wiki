@@ -27,6 +27,17 @@ const uploadsDir = process.env.UPLOADS_PATH || path.join(__dirname, '..', '..', 
 const router = Router();
 
 // 配置 multer 用于处理文件上传
+// 使用与 validateUploadedImage 一致的扩展名 + MIME 白名单（JPG/PNG/WEBP/GIF/BMP），
+// 拒绝 SVG/AVIF/HEIC 等可能携带脚本或服务端不支持的格式。
+const ALLOWED_UPLOAD_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp']);
+const ALLOWED_UPLOAD_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/bmp',
+]);
+
 const upload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => {
@@ -43,11 +54,13 @@ const upload = multer({
     fileSize: 20 * 1024 * 1024, // 20MB
   },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('仅支持图片文件'));
+    const ext = path.extname(file.originalname).toLowerCase();
+    const mime = (file.mimetype || '').toLowerCase();
+    if (!ALLOWED_UPLOAD_EXTENSIONS.has(ext) || !ALLOWED_UPLOAD_MIME_TYPES.has(mime)) {
+      cb(new Error('仅支持 JPG、PNG、WEBP、GIF、BMP 图片上传'));
+      return;
     }
+    cb(null, true);
   },
 });
 

@@ -19,7 +19,6 @@ import { createServer as createViteServer } from 'vite';
 import multer from 'multer';
 import { initSensitiveWords } from './src/lib/sensitiveWordFilter';
 import { prisma } from './src/server/prisma';
-import { createUploadStorageInfo } from './src/server/uploadPath';
 import { authMiddleware } from './src/server/middleware/auth';
 import { registerRegionRoutes } from './src/server/location/routes';
 import { registerExifRoutes } from './src/server/location/exifRoutes';
@@ -57,92 +56,6 @@ fs.mkdirSync(backupsDir, { recursive: true });
 
 const PORT = Number(process.env.PORT) || 3000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '';
-const UPLOAD_SESSION_TTL_MINUTES = Math.max(5, Number(process.env.UPLOAD_SESSION_TTL_MINUTES || 45));
-const IMAGE_EMBEDDING_BATCH_SIZE = Math.max(1, Number(process.env.IMAGE_EMBEDDING_BATCH_SIZE || 100));
-const IMAGE_SEARCH_RESULT_LIMIT = Math.max(1, Number(process.env.IMAGE_SEARCH_RESULT_LIMIT || 24));
-const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp']);
-const ALLOWED_IMAGE_MIME_TYPES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-  'image/bmp',
-]);
-
-const uploadStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const routePath = (req.originalUrl || req.url || '').toLowerCase();
-    const namespace = routePath.includes('/api/users/me/avatar')
-      ? 'avatars'
-      : routePath.includes('/api/galleries/upload')
-        ? 'galleries'
-        : routePath.includes('/api/uploads/sessions')
-          ? 'sessions'
-          : routePath.includes('/api/uploads')
-            ? 'markdown'
-            : 'general';
-    const info = createUploadStorageInfo(uploadsDir, namespace, file.originalname);
-    (file as Express.Multer.File & { uploadInfo?: ReturnType<typeof createUploadStorageInfo> }).uploadInfo = info;
-    cb(null, info.absoluteDir);
-  },
-  filename: (_req, file, cb) => {
-    const info = (file as Express.Multer.File & { uploadInfo?: ReturnType<typeof createUploadStorageInfo> }).uploadInfo;
-    cb(null, info?.fileName || file.originalname);
-  },
-});
-
-const upload = multer({
-  storage: uploadStorage,
-  limits: {
-    fileSize: 25 * 1024 * 1024,
-  },
-  fileFilter: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    const mime = (file.mimetype || '').toLowerCase();
-    if (!ALLOWED_IMAGE_EXTENSIONS.has(ext) || !ALLOWED_IMAGE_MIME_TYPES.has(mime)) {
-      cb(new Error('仅支持 JPG、PNG、WEBP、GIF、BMP 图片上传'));
-      return;
-    }
-    cb(null, true);
-  },
-});
-
-const uploadBackup = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => {
-      cb(null, backupsDir);
-    },
-    filename: (_req, _file, cb) => {
-      cb(null, `upload_${Date.now()}_${Math.random().toString(36).slice(2, 10)}.zip`);
-    },
-  }),
-  limits: {
-    fileSize: 1024 * 1024 * 1024,
-  },
-  fileFilter: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (ext !== '.zip') {
-      cb(new Error('仅支持 .zip 备份文件'));
-      return;
-    }
-    cb(null, true);
-  },
-});
-
-const searchImageUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 5 * 1024 * 1024,
-  },
-  fileFilter: (_req, file, cb) => {
-    const mime = (file.mimetype || '').toLowerCase();
-    if (!ALLOWED_IMAGE_MIME_TYPES.has(mime)) {
-      cb(new Error('仅支持 JPG、PNG、WEBP 图片'));
-      return;
-    }
-    cb(null, true);
-  },
-});
 
 // ============================================================================
 // CORS 配置 - 优化预检请求性能
@@ -280,4 +193,4 @@ startServer().catch((error) => {
   process.exit(1);
 });
 
-export { app, prisma, upload, uploadBackup, searchImageUpload, uploadsDir, backupsDir };
+export { app, prisma, uploadsDir, backupsDir };
