@@ -37,6 +37,7 @@ import { useToast } from "../components/Toast";
 import { copyToClipboard, toAbsoluteInternalUrl } from "../lib/copyLink";
 import { ContentStatus, getStatusText } from "../lib/contentUtils";
 import { formatDate } from "../lib/dateUtils";
+import { DEFAULT_AVATAR, handleAvatarError } from "../lib/defaultAvatar";
 import { LocationTagInput } from "../components/LocationTagInput";
 import Pagination from "../components/Pagination";
 
@@ -809,11 +810,12 @@ const PostDetail = () => {
 													<img
 														src={
 															comment.authorPhoto ||
-															"https://picsum.photos/seed/user/100/100"
+															DEFAULT_AVATAR
 														}
 														alt=""
 														className="w-full h-full object-cover"
 														referrerPolicy="no-referrer"
+														onError={handleAvatarError}
 													/>
 												</div>
 												<div className="flex-grow min-w-0">
@@ -855,11 +857,12 @@ const PostDetail = () => {
 																<img
 																	src={
 																		reply.authorPhoto ||
-																		"https://picsum.photos/seed/user/100/100"
+																		DEFAULT_AVATAR
 																	}
 																	alt=""
 																	className="w-full h-full object-cover"
 																	referrerPolicy="no-referrer"
+																	onError={handleAvatarError}
 																/>
 															</div>
 															<div className="flex-grow min-w-0">

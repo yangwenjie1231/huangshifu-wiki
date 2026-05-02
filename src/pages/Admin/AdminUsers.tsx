@@ -5,6 +5,7 @@ import { apiDelete, apiGet, apiPatch, apiPost } from '../../lib/apiClient';
 import { useToast } from '../../components/Toast';
 import { SmartImage } from '../../components/SmartImage';
 import { useAuth } from '../../context/AuthContext';
+import { DEFAULT_AVATAR } from '../../lib/defaultAvatar';
 import type { AdminDataItem } from '../../types/entities';
 
 export const AdminUsers = () => {
@@ -97,7 +98,7 @@ export const AdminUsers = () => {
                   <tr key={item.uid} className="hover:bg-[#f7f5f0] transition-colors group">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <SmartImage src={item.photoURL || ''} alt="" className="w-10 h-10 rounded-full object-cover bg-[#f7f5f0]" />
+                        <SmartImage src={item.photoURL || DEFAULT_AVATAR} alt="" className="w-10 h-10 rounded-full object-cover bg-[#f7f5f0]" />
                         <div>
                           <p className="text-sm font-medium text-[#2c2c2c]">{item.displayName || item.uid}</p>
                           <p className="text-xs text-[#9e968e]">{item.email}</p>

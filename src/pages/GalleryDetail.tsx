@@ -20,6 +20,7 @@ import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { apiDelete, apiGet, apiPatch, apiPost, apiUpload } from '../lib/apiClient';
 import { splitTagsInput } from '../lib/contentUtils';
 import { formatDateTime, toDateValue } from '../lib/dateUtils';
+import { DEFAULT_AVATAR, handleAvatarError } from '../lib/defaultAvatar';
 import { getImagePreference } from '../services/imageService';
 
 type GalleryImage = {
@@ -820,10 +821,11 @@ const GalleryDetail = () => {
                 <div className="flex gap-3">
                   <div className="w-10 h-10 rounded bg-[#f0ece3] flex-shrink-0 overflow-hidden">
                     <img
-                      src={user.photoURL || `https://picsum.photos/seed/${user.uid}/100/100`}
+                      src={user.photoURL || DEFAULT_AVATAR}
                       alt=""
                       className="w-full h-full object-cover"
                       referrerPolicy="no-referrer"
+                      onError={handleAvatarError}
                     />
                   </div>
                   <div className="flex-grow">
@@ -862,10 +864,11 @@ const GalleryDetail = () => {
                   <div className="flex gap-3">
                     <div className="w-10 h-10 rounded bg-[#f0ece3] flex-shrink-0 overflow-hidden">
                       <img
-                        src={comment.authorPhoto || `https://picsum.photos/seed/${comment.authorUid}/100/100`}
+                        src={comment.authorPhoto || DEFAULT_AVATAR}
                         alt=""
                         className="w-full h-full object-cover"
                         referrerPolicy="no-referrer"
+                        onError={handleAvatarError}
                       />
                     </div>
                     <div className="flex-grow">
@@ -894,10 +897,11 @@ const GalleryDetail = () => {
                         <div key={reply.id} className="flex gap-3">
                           <div className="w-8 h-8 rounded bg-[#f0ece3] flex-shrink-0 overflow-hidden">
                             <img
-                              src={reply.authorPhoto || `https://picsum.photos/seed/${reply.authorUid}/100/100`}
+                              src={reply.authorPhoto || DEFAULT_AVATAR}
                               alt=""
                               className="w-full h-full object-cover"
                               referrerPolicy="no-referrer"
+                              onError={handleAvatarError}
                             />
                           </div>
                           <div className="flex-grow">

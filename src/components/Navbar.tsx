@@ -17,6 +17,7 @@ import { clsx } from "clsx";
 import { logoutRequest } from "../lib/auth";
 import { useToast } from "./Toast";
 import { useI18n } from "../lib/i18n";
+import { DEFAULT_AVATAR, handleAvatarError } from "../lib/defaultAvatar";
 import { AuthModal } from "./Navbar/AuthModal";
 import type { AuthMode } from "./Navbar/AuthModal";
 import { NotificationPanel } from "./Navbar/NotificationPanel";
@@ -124,11 +125,12 @@ export const Navbar = () => {
 									{user && (
 										<Link to="/profile" className="flex items-center gap-2 group">
 											<img
-												src={profile?.photoURL || user.photoURL || ""}
+												src={profile?.photoURL || user.photoURL || DEFAULT_AVATAR}
 												alt=""
 												className="w-8 h-8 object-cover"
 												style={{ borderRadius: '50%', border: '1px solid #e0dcd3' }}
 												referrerPolicy="no-referrer"
+												onError={handleAvatarError}
 											/>
 											<span className="hidden sm:inline text-sm text-[#2c2c2c] group-hover:text-[#c8951e] transition-colors">
 												{profile?.displayName || user.displayName}

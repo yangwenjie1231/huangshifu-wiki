@@ -7,6 +7,7 @@ import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import { AvatarCropModal } from '../components/AvatarCropModal';
 import { useToast } from '../components/Toast';
+import { DEFAULT_AVATAR, handleAvatarError } from '../lib/defaultAvatar';
 import type { FavoriteItem, HistoryItem } from '../types/entities';
 
 type FavoriteTargetType = 'wiki' | 'post' | 'music';
@@ -211,10 +212,11 @@ const Profile = () => {
           <div className="flex flex-col sm:flex-row items-start gap-6">
             <div className="relative shrink-0 group">
               <img
-                src={formData.photoURL || 'https://picsum.photos/seed/user/200/200'}
+                src={formData.photoURL || DEFAULT_AVATAR}
                 alt=""
                 className="w-24 h-24 rounded-full border-2 border-[#e0dcd3] object-cover"
                 referrerPolicy="no-referrer"
+                onError={handleAvatarError}
               />
               {isEditing && (
                 <button

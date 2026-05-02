@@ -12,6 +12,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../lib/i18n";
+import { DEFAULT_AVATAR, handleAvatarError } from "../../lib/defaultAvatar";
 import type { AuthMode } from "./AuthModal";
 
 interface MobileMenuProps {
@@ -90,10 +91,11 @@ export const MobileMenu = ({
 										className="flex items-center gap-3 p-2"
 									>
 										<img
-											src={profile?.photoURL || user.photoURL || ""}
+											src={profile?.photoURL || user.photoURL || DEFAULT_AVATAR}
 											alt=""
 											className="w-10 h-10 rounded-full border border-[#e0dcd3]"
 											referrerPolicy="no-referrer"
+											onError={handleAvatarError}
 										/>
 										<div>
 											<p className="font-bold text-[#2c2c2c]">

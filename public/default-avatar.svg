@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="默认头像">
+  <defs>
+    <linearGradient id="default-avatar-bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fbf7ee"/>
+      <stop offset="100%" stop-color="#efe7d5"/>
+    </linearGradient>
+    <clipPath id="default-avatar-clip">
+      <circle cx="100" cy="100" r="100"/>
+    </clipPath>
+  </defs>
+
+  <!-- 米黄底（与项目主背景同色系） -->
+  <circle cx="100" cy="100" r="100" fill="url(#default-avatar-bg)"/>
+
+  <!-- 人形剪影，金色填充，裁切到圆形容器内 -->
+  <g clip-path="url(#default-avatar-clip)" fill="#c8951e">
+    <!-- 头 -->
+    <circle cx="100" cy="78" r="30"/>
+    <!-- 肩颈：外扩到圆边以贴合裁切圆 -->
+    <path d="M 28 200 C 28 148, 58 124, 100 124 C 142 124, 172 148, 172 200 Z"/>
+  </g>
+</svg>
