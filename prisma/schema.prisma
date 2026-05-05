@@ -260,6 +260,7 @@ model WikiPage {
   id            String         @id @default(cuid())
   slug          String         @unique
   title         String
+  titleKey      String         @unique
   category      String
   content       String
   tags          Json?

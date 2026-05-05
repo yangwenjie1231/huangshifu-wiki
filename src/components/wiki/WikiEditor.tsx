@@ -297,33 +297,6 @@ const WikiEditor = () => {
 
 		try {
 			if (isNew) {
-				try {
-					await apiGet<{ page: WikiItemWithRelations }>(`/api/wiki/${pageSlug}`);
-					show("该页面标识已存在，请修改标题后重试", { variant: "error" });
-					setSavingMode(null);
-					return;
-				} catch {
-					// continue when page does not exist
-				}
-
-				const existingByTitle = await apiGet<{ pages: WikiItemWithRelations[] }>(
-					"/api/wiki",
-					{
-						category: "all",
-					},
-				);
-				const duplicatedTitle = (existingByTitle.pages || []).some(
-					(item) => item.title.trim() === formData.title.trim(),
-				);
-
-				if (duplicatedTitle) {
-					show("该标题的百科已存在，请修改标题或编辑已有页面", {
-						variant: "error",
-					});
-					setSavingMode(null);
-					return;
-				}
-
 				await apiPost("/api/wiki", pageData);
 			} else {
 				await apiPut(`/api/wiki/${pageSlug}`, pageData);
@@ -348,7 +321,7 @@ const WikiEditor = () => {
 
 		} catch (e) {
 			console.error("Error saving wiki page:", e);
-			show("保存失败，请检查网络或权限", { variant: "error" });
+			show(e instanceof Error ? e.message : "保存失败，请检查网络或权限", { variant: "error" });
 		}
 		setSavingMode(null);
 	};

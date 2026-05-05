@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { Router } from 'express';
+import { Router, type Response } from 'express';
 import { requireAuth, requireActiveUser, requireAdmin, isAdminRole } from '../middleware/auth';
 import {
   prisma,
@@ -25,8 +25,19 @@ import type {
   WikiPullRequestWithRelations,
 } from '../types';
 import { buildWikiBacklinkSearchTerms } from '../../lib/wikiLinkParser';
+import { getWikiUniqueConflictMessage, normalizeWikiTitleKey } from '../wiki/wikiTitleKey';
 
 const router = Router();
+
+function sendWikiUniqueConflict(error: unknown, res: Response) {
+  const message = getWikiUniqueConflictMessage(error);
+  if (!message) {
+    return false;
+  }
+
+  res.status(409).json({ error: message });
+  return true;
+}
 
 router.get('/', async (req: AuthenticatedRequest, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
@@ -778,7 +789,10 @@ router.post('/', requireAuth, requireActiveUser, async (req: AuthenticatedReques
       locationCode?: string;
     };
 
-    if (!title || !slug || !category || !content) {
+    const pageSlug = typeof slug === 'string' ? slug.trim().toLowerCase() : '';
+    const titleKey = typeof title === 'string' ? normalizeWikiTitleKey(title) : '';
+
+    if (!titleKey || !pageSlug || !category || !content) {
       res.status(400).json({ error: '缺少必要字段' });
       return;
     }
@@ -788,40 +802,19 @@ router.post('/', requireAuth, requireActiveUser, async (req: AuthenticatedReques
       return;
     }
 
-    const pageSlug = slug.trim().toLowerCase();
-    const existing = await prisma.wikiPage.findUnique({ where: { slug: pageSlug } });
     const nextStatus = normalizeWikiWriteStatus(status, req.authUser!);
     const normalizedRelations = hasRelationsInPayload
       ? await normalizeWikiRelationListForWrite(relations, pageSlug)
-      : serializeRelations(existing?.relations, pageSlug);
+      : [];
     const normalizedTags = hasTagsInPayload
       ? (Array.isArray(tags) ? tags : [])
-      : serializeTags(existing?.tags);
+      : [];
 
-    if (existing && !isAdminRole(req.authUser!.role) && existing.lastEditorUid !== req.authUser!.uid) {
-      res.status(409).json({ error: '该 slug 已存在' });
-      return;
-    }
-
-    const page = await prisma.wikiPage.upsert({
-      where: { slug: pageSlug },
-      create: {
+    const page = await prisma.wikiPage.create({
+      data: {
         slug: pageSlug,
         title,
-        category,
-        content,
-        tags: normalizedTags,
-        relations: normalizedRelations,
-        eventDate: eventDate || null,
-        status: nextStatus,
-        reviewNote: null,
-        reviewedBy: null,
-        reviewedAt: null,
-        lastEditorUid: req.authUser!.uid,
-        locationCode: locationCode || null,
-      },
-      update: {
-        title,
+        titleKey,
         category,
         content,
         tags: normalizedTags,
@@ -884,6 +877,7 @@ router.post('/', requireAuth, requireActiveUser, async (req: AuthenticatedReques
 
     res.status(201).json({ page: toWikiResponse(page) });
   } catch (error) {
+    if (sendWikiUniqueConflict(error, res)) return;
     console.error('Create wiki page error:', error);
     res.status(500).json({ error: '保存页面失败' });
   }
@@ -913,7 +907,10 @@ router.post('/legacy', requireAuth, requireActiveUser, async (req: Authenticated
       status?: ContentStatus;
     };
 
-    if (!title || !slug || !category || !content) {
+    const pageSlug = typeof slug === 'string' ? slug.trim().toLowerCase() : '';
+    const titleKey = typeof title === 'string' ? normalizeWikiTitleKey(title) : '';
+
+    if (!titleKey || !pageSlug || !category || !content) {
       res.status(400).json({ error: '缺少必要字段' });
       return;
     }
@@ -923,7 +920,6 @@ router.post('/legacy', requireAuth, requireActiveUser, async (req: Authenticated
       return;
     }
 
-    const pageSlug = slug.trim().toLowerCase();
     const existing = await prisma.wikiPage.findUnique({ where: { slug: pageSlug } });
 
     if (existing && !isAdminRole(req.authUser!.role) && existing.lastEditorUid !== req.authUser!.uid) {
@@ -943,6 +939,7 @@ router.post('/legacy', requireAuth, requireActiveUser, async (req: Authenticated
       create: {
         slug: pageSlug,
         title,
+        titleKey,
         category,
         content,
         tags: normalizedTags,
@@ -956,6 +953,7 @@ router.post('/legacy', requireAuth, requireActiveUser, async (req: Authenticated
       },
       update: {
         title,
+        titleKey,
         category,
         content,
         tags: normalizedTags,
@@ -986,6 +984,7 @@ router.post('/legacy', requireAuth, requireActiveUser, async (req: Authenticated
 
     res.status(201).json({ page: toWikiResponse(page) });
   } catch (error) {
+    if (sendWikiUniqueConflict(error, res)) return;
     console.error('Create legacy wiki page error:', error);
     res.status(500).json({ error: '保存页面失败' });
   }
@@ -1015,7 +1014,9 @@ router.put('/:slug', requireAuth, requireActiveUser, async (req: AuthenticatedRe
       locationCode?: string;
     };
 
-    if (!title || !category || !content) {
+    const titleKey = typeof title === 'string' ? normalizeWikiTitleKey(title) : '';
+
+    if (!titleKey || !category || !content) {
       res.status(400).json({ error: '缺少必要字段' });
       return;
     }
@@ -1040,6 +1041,7 @@ router.put('/:slug', requireAuth, requireActiveUser, async (req: AuthenticatedRe
       where: { slug: req.params.slug },
       data: {
         title,
+        titleKey,
         category,
         content,
         tags: normalizedTags,
@@ -1071,6 +1073,7 @@ router.put('/:slug', requireAuth, requireActiveUser, async (req: AuthenticatedRe
 
     res.json({ page: toWikiResponse(updated) });
   } catch (error) {
+    if (sendWikiUniqueConflict(error, res)) return;
     console.error('Update wiki page error:', error);
     res.status(500).json({ error: '更新页面失败' });
   }
@@ -1681,6 +1684,7 @@ router.post('/pull-requests/:prId/merge', requireAuth, requireAdmin, async (req:
         where: { slug: pr.pageSlug },
         data: {
           title: mergedSnapshot.title,
+          titleKey: normalizeWikiTitleKey(mergedSnapshot.title),
           content: mergedSnapshot.content,
           category: mergedSnapshot.category || pr.page.category,
           tags: mergedSnapshot.tags || [],
@@ -1724,6 +1728,7 @@ router.post('/pull-requests/:prId/merge', requireAuth, requireAdmin, async (req:
     const updatedPage = await prisma.wikiPage.findUnique({ where: { slug: pr.pageSlug } });
     res.json({ page: updatedPage ? toWikiResponse(updatedPage) : null });
   } catch (error) {
+    if (sendWikiUniqueConflict(error, res)) return;
     console.error('Merge wiki PR error:', error);
     res.status(500).json({ error: '合并 PR 失败' });
   }
@@ -1912,6 +1917,7 @@ router.post('/:slug/rollback/:revisionId', requireAuth, requireActiveUser, async
       where: { slug: req.params.slug },
       data: {
         title: revision.title,
+        titleKey: normalizeWikiTitleKey(revision.title),
         content: revision.content,
         category: revision.category || undefined,
         tags: revision.tags || undefined,
@@ -1937,6 +1943,7 @@ router.post('/:slug/rollback/:revisionId', requireAuth, requireActiveUser, async
 
     res.json({ page: toWikiResponse(page) });
   } catch (error) {
+    if (sendWikiUniqueConflict(error, res)) return;
     console.error('Rollback wiki page error:', error);
     res.status(500).json({ error: '回滚失败' });
   }
