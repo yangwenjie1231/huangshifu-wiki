@@ -34,18 +34,41 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
   try {
     const category = typeof req.query.category === 'string' ? req.query.category : 'all';
     const tag = typeof req.query.tag === 'string' ? req.query.tag.trim() : '';
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const pageSize = Math.min(Math.max(Number(req.query.pageSize) || 24, 1), 100);
     const visibilityWhere = buildWikiVisibilityWhere(req.authUser);
     const where: Prisma.WikiPageWhereInput = {
       ...(category && category !== 'all' ? { category } : {}),
       ...visibilityWhere,
     };
 
-    const pages = await prisma.wikiPage.findMany({
-      where,
-      orderBy: [{ isPinned: 'desc' }, { updatedAt: 'desc' }],
-    });
-    const filteredPages = tag ? pages.filter((page) => hasTag(page.tags, tag)) : pages;
-    const visiblePages = filteredPages.slice(0, 200);
+    let visiblePages: Awaited<ReturnType<typeof prisma.wikiPage.findMany>>;
+    let total: number;
+
+    if (tag) {
+      // tag 存储在 JSON 中，需要 JS 侧过滤后再分页
+      const allPages = await prisma.wikiPage.findMany({
+        where,
+        orderBy: [{ isPinned: 'desc' }, { updatedAt: 'desc' }],
+        take: 500,
+      });
+      const filtered = allPages.filter((p) => hasTag(p.tags, tag));
+      total = filtered.length;
+      const skip = (page - 1) * pageSize;
+      visiblePages = filtered.slice(skip, skip + pageSize);
+    } else {
+      const [dbPages, count] = await Promise.all([
+        prisma.wikiPage.findMany({
+          where,
+          orderBy: [{ isPinned: 'desc' }, { updatedAt: 'desc' }],
+          take: pageSize,
+          skip: (page - 1) * pageSize,
+        }),
+        prisma.wikiPage.count({ where }),
+      ]);
+      visiblePages = dbPages;
+      total = count;
+    }
 
     const favoritedWikiSet = new Set<string>();
     const likedWikiSet = new Set<string>();
@@ -88,6 +111,9 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
         likedByMe: likedWikiSet.has(page.slug),
         dislikedByMe: dislikedWikiSet.has(page.slug),
       })),
+      total,
+      page,
+      pageSize,
     });
   } catch (error) {
     console.error('Fetch wiki pages error:', error);

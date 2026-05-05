@@ -70,7 +70,7 @@ import type {
 } from "../components/wiki/types";
 import { RELATION_TYPE_LABELS } from "../components/wiki/types";
 
-const DEFAULT_PAGE_SIZE = 24;
+const DEFAULT_PAGE_SIZE = 10;
 
 type WikiRelationResolved = WikiRelationRecord & {
 	typeLabel: string;
@@ -295,6 +295,7 @@ const WikiList = () => {
 	const category = searchParams.get("category") || "all";
 	const tag = searchParams.get("tag");
 	const [pages, setPages] = useState<WikiItem[]>([]);
+	const [total, setTotal] = useState(0);
 	const [loading, setLoading] = useState(true);
 	const [page, setPage] = useState(1);
 	const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -303,11 +304,7 @@ const WikiList = () => {
 	const { preferences, setViewMode } = useUserPreferences();
 	const viewMode = preferences.viewMode;
 
-	const totalWikiPages = Math.ceil(pages.length / pageSize);
-	const paginatedPages = useMemo(() => {
-		const start = (page - 1) * pageSize;
-		return pages.slice(start, start + pageSize);
-	}, [pages, page, pageSize]);
+	const totalWikiPages = Math.max(1, Math.ceil(total / pageSize));
 
 	const handlePageChange = (newPage: number) => {
 		setPage(newPage);
@@ -324,21 +321,28 @@ const WikiList = () => {
 	}, [category, tag]);
 
 	useEffect(() => {
+		let cancelled = false;
 		const fetchPages = async () => {
 			setLoading(true);
 			try {
-				const data = await apiGet<{ pages: WikiItem[] }>("/api/wiki", {
+				const data = await apiGet<{ pages: WikiItem[]; total: number }>("/api/wiki", {
 					category: category !== "all" ? category : undefined,
 					tag: tag || undefined,
+					page,
+					pageSize,
 				});
+				if (cancelled) return;
 				setPages(data.pages || []);
+				setTotal(data.total || 0);
 			} catch (e) {
+				if (cancelled) return;
 				console.error("Error fetching wiki pages:", e);
 			}
-			setLoading(false);
+			if (!cancelled) setLoading(false);
 		};
 		fetchPages();
-	}, [category, tag]);
+		return () => { cancelled = true; };
+	}, [category, tag, page, pageSize]);
 
 	const handleCopyWikiLink = async (
 		event: React.MouseEvent<HTMLButtonElement>,
@@ -452,7 +456,7 @@ const WikiList = () => {
 							VIEW_MODE_CONFIG[viewMode].gap,
 						)}
 					>
-						{paginatedPages.map((page) => (
+						{pages.map((page) => (
 							<WikiCard
 								key={page.id}
 								page={page}
@@ -461,7 +465,7 @@ const WikiList = () => {
 							/>
 						))}
 					</div>
-					{totalWikiPages > 1 && (
+					{(import.meta.env.DEV || totalWikiPages > 1) && (
 						<Pagination
 							page={page}
 							totalPages={totalWikiPages}
