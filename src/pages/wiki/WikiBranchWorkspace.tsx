@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { clsx } from "clsx";
@@ -17,7 +17,6 @@ import { getBranchStatusText } from "./types";
 
 const WikiBranchWorkspace = () => {
 	const { slug } = useParams();
-	const navigate = useNavigate();
 	const { user, isAdmin, isBanned } = useAuth();
 
 	const [page, setPage] = useState<WikiItem | null>(null);

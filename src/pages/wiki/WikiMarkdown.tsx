@@ -46,11 +46,10 @@ const WikiMarkdown = ({ content }: { content: string }) => {
 					if (href?.startsWith("/wiki/")) {
 						const rawSlug = href.replace("/wiki/", "");
 						const slug = rawSlug.split("?")[0];
-						const themedHref = href;
 						return (
 							<WikiLinkPreview slug={slug}>
 								<Link
-									to={themedHref}
+									to={href}
 									className="text-[#c8951e] font-bold hover:underline decoration-[#c8951e]/30 underline-offset-4"
 									{...props}
 								>
