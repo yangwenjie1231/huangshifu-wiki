@@ -130,11 +130,17 @@ export function useSearchPage() {
     const currentQuery = q || state.query;
     if (!currentQuery.trim()) return;
 
+    if (suggestTimeoutRef.current) {
+      clearTimeout(suggestTimeoutRef.current);
+      suggestTimeoutRef.current = null;
+    }
+
     setState((prev) => ({
       ...prev,
       loading: true,
       hasSearched: true,
       query: currentQuery,
+      suggestions: [],
     }));
 
     // 更新 URL
@@ -284,6 +290,12 @@ export function useSearchPage() {
     setState((prev) => ({ ...prev, showFilters: show }));
   };
 
+  const dismissSuggestions = () => {
+    setState((prev) =>
+      prev.suggestions.length === 0 ? prev : { ...prev, suggestions: [] }
+    );
+  };
+
   const totalResults =
     state.results.wiki.length +
     state.results.posts.length +
@@ -324,5 +336,6 @@ export function useSearchPage() {
     resetFilters,
     setActiveTab,
     setShowFilters,
+    dismissSuggestions,
   };
 }

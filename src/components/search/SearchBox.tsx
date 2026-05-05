@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search as SearchIcon, Camera, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -12,6 +12,7 @@ interface SearchBoxProps {
   onQueryChange: (val: string) => void;
   onSearch: (q: string) => void;
   onImageSearch: (file: File) => void;
+  onDismissSuggestions: () => void;
 }
 
 export const SearchBox: React.FC<SearchBoxProps> = ({
@@ -21,9 +22,22 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
   onQueryChange,
   onSearch,
   onImageSearch,
+  onDismissSuggestions,
 }) => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!suggestions.length) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        onDismissSuggestions();
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [suggestions.length, onDismissSuggestions]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,7 +88,7 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
   };
 
   return (
-    <div className="bg-white border border-[#e0dcd3] rounded p-6 mb-6">
+    <div ref={wrapperRef} className="bg-white border border-[#e0dcd3] rounded p-6 mb-6">
       <form onSubmit={handleSubmit} className="relative group mb-5">
         <input
           type="text"

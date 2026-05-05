@@ -21,6 +21,7 @@ const Search: React.FC = () => {
     resetFilters,
     setActiveTab,
     setShowFilters,
+    dismissSuggestions,
   } = useSearchPage();
 
   return (
@@ -58,6 +59,7 @@ const Search: React.FC = () => {
           onQueryChange={handleQueryChange}
           onSearch={performSearch}
           onImageSearch={handleImageSearch}
+          onDismissSuggestions={dismissSuggestions}
         />
 
         {/* Search Filters */}
