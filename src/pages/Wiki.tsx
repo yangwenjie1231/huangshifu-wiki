@@ -56,6 +56,7 @@ import {
 	splitTagsInput,
 } from "../lib/contentUtils";
 import { formatDate } from "../lib/dateUtils";
+import { getWikiRelationDisplayTitle } from "../lib/wikiRelationDisplay";
 import WikiLinkPreview from "../components/WikiLinkPreview";
 import RelationGraph, {
 	RelationGraphData,
@@ -80,6 +81,9 @@ type WikiRelationResolved = WikiRelationRecord & {
 	sourceSlug: string;
 	sourceTitle: string;
 };
+
+type WikiRelationDisplayItem = WikiRelationRecord &
+	Partial<Pick<WikiRelationResolved, "typeLabel" | "targetTitle" | "targetCategory">>;
 
 type WikiItem = WikiItemWithRelations;
 
@@ -506,6 +510,7 @@ const WikiPageView = () => {
 	const [relationGraph, setRelationGraph] = useState<RelationGraphData | null>(
 		null,
 	);
+	const [resolvedRelations, setResolvedRelations] = useState<WikiRelationResolved[]>([]);
 	const [showGraph, setShowGraph] = useState(false);
 
 	useEffect(() => {
@@ -520,6 +525,7 @@ const WikiPageView = () => {
 				}>(`/api/wiki/${slug}`);
 				setPage(data.page);
 				setBacklinks(data.backlinks || []);
+				setResolvedRelations((data.relations || []).filter((relation) => !relation.inferred));
 				setRelationGraph(data.relationGraph || null);
 			} catch (e) {
 				console.error("Error fetching page:", e);
@@ -543,6 +549,8 @@ const WikiPageView = () => {
 		);
 
 	const isOwner = Boolean(user && page?.lastEditorUid === user.uid);
+	const displayedRelations: WikiRelationDisplayItem[] =
+		resolvedRelations.length > 0 ? resolvedRelations : page.relations || [];
 	const canSubmitReview = Boolean(
 		!isBanned &&
 			isOwner &&
@@ -887,24 +895,24 @@ const WikiPageView = () => {
 								)}
 
 								{/* Relations List */}
-								{page.relations && page.relations.length > 0 && !showGraph && (
+								{displayedRelations.length > 0 && !showGraph && (
 									<div className="mt-12 pt-8 border-t border-[#e0dcd3]">
 										<h4 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-5 flex items-center gap-2">
 											<Book size={14} className="text-[#c8951e]" /> 相关页面
 										</h4>
 										<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-											{page.relations.map(
-												(relation: WikiRelationRecord, index: number) => (
+											{displayedRelations.map(
+												(relation, index: number) => (
 													<Link
 														key={`${relation.targetSlug}-${index}`}
 														to={`/wiki/${relation.targetSlug}`}
 														className="p-3 bg-white border border-[#e0dcd3] rounded hover:border-[#c8951e] transition-all group"
 													>
 														<p className="text-xs text-[#c8951e] font-medium uppercase tracking-wider mb-1">
-															{RELATION_TYPE_LABELS[relation.type] || relation.type}
+															{relation.typeLabel || RELATION_TYPE_LABELS[relation.type] || relation.type}
 														</p>
 														<p className="font-medium text-[#2c2c2c] group-hover:text-[#c8951e] group-hover:underline underline-offset-4 transition-colors">
-															{relation.label || relation.targetSlug}
+															{getWikiRelationDisplayTitle(relation)}
 														</p>
 														{relation.bidirectional && (
 															<span className="inline-block mt-1 text-[10px] text-[#9e968e]">

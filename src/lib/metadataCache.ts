@@ -1,6 +1,10 @@
 import type { WikiPageMetadata } from "./wikiLinkParser";
 import { apiGet } from "./apiClient";
 
+type WikiPageMetadataResponse = {
+	page?: Partial<WikiPageMetadata> | null;
+};
+
 /**
  * 元数据缓存类
  * 用于缓存 Wiki 页面的元数据，避免重复请求
@@ -112,22 +116,23 @@ class MetadataCache {
 		slug: string,
 	): Promise<WikiPageMetadata | null> {
 		try {
-			const response = await apiGet<any>(`/api/wiki/${slug}`);
-			if (!response) {
+			const response = await apiGet<WikiPageMetadataResponse>(`/api/wiki/${slug}`);
+			const page = response?.page;
+			if (!page) {
 				return null;
 			}
 
 			return {
-				title: response.title || slug,
-				slug: response.slug || slug,
-				category: response.category,
-				description: response.description,
-				coverImage: response.coverImage,
-				tags: response.tags,
-				authorName: response.authorName,
-				publishDate: response.publishDate,
-				updatedAt: response.updatedAt,
-				contentSummary: response.contentSummary,
+				title: page.title || slug,
+				slug: page.slug || slug,
+				category: page.category,
+				description: page.description,
+				coverImage: page.coverImage,
+				tags: page.tags,
+				authorName: page.authorName,
+				publishDate: page.publishDate,
+				updatedAt: page.updatedAt,
+				contentSummary: page.contentSummary,
 			};
 		} catch (error) {
 			console.error(`Failed to fetch metadata for ${slug}:`, error);

@@ -36,7 +36,7 @@ describe('metadataCache', () => {
         description: 'Test description',
       };
       fetchMock.mockResolvedValueOnce(
-        new Response(JSON.stringify(mockMetadata), { status: 200 })
+        new Response(JSON.stringify({ page: mockMetadata }), { status: 200 })
       );
 
       const result = await metadataCache.get('test-page');
@@ -65,11 +65,19 @@ describe('metadataCache', () => {
       expect(result).toBeNull();
     });
 
+    it('returns null when response page is empty', async () => {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ page: null }), { status: 200 }));
+
+      const result = await metadataCache.get('empty-page-wrapper');
+
+      expect(result).toBeNull();
+    });
+
     it('deduplicates concurrent requests for same slug', async () => {
       const mockMetadata = { title: 'Page', slug: 'dedup-page' };
       fetchMock.mockImplementation(
         () => new Promise((resolve) => {
-          setTimeout(() => resolve(new Response(JSON.stringify(mockMetadata), { status: 200 })), 50);
+          setTimeout(() => resolve(new Response(JSON.stringify({ page: mockMetadata }), { status: 200 })), 50);
         })
       );
 
@@ -98,7 +106,7 @@ describe('metadataCache', () => {
         contentSummary: 'Summary',
       };
       fetchMock.mockResolvedValueOnce(
-        new Response(JSON.stringify(apiResponse), { status: 200 })
+        new Response(JSON.stringify({ page: apiResponse }), { status: 200 })
       );
 
       const result = await metadataCache.get('full-page');
@@ -137,7 +145,7 @@ describe('metadataCache', () => {
       metadataCache.set('cached', cachedMetadata);
 
       fetchMock.mockResolvedValueOnce(
-        new Response(JSON.stringify({ title: 'New', slug: 'new' }), { status: 200 })
+        new Response(JSON.stringify({ page: { title: 'New', slug: 'new' } }), { status: 200 })
       );
 
       const result = await metadataCache.getBatch(['cached', 'new']);
@@ -223,7 +231,7 @@ describe('metadataCache', () => {
     it('is an alias for getBatch', async () => {
       const metadata: WikiPageMetadata = { title: 'Preload', slug: 'preload' };
       fetchMock.mockResolvedValueOnce(
-        new Response(JSON.stringify(metadata), { status: 200 })
+        new Response(JSON.stringify({ page: metadata }), { status: 200 })
       );
 
       const result = await preloadMetadata(['preload']);
