@@ -6,6 +6,7 @@ import { apiGet, apiPost, apiPut } from "../../lib/apiClient";
 import { randomId } from "../../lib/randomId";
 import { splitTagsInput } from "../../lib/contentUtils";
 import { handleMarkdownTextPasteCapture } from "../../lib/markdownEditorPaste";
+import { normalizeWikiPageSlug } from "../../lib/wikiSlug";
 import { generateWikiIntro } from "../../services/aiService";
 import { uploadMarkdownImage } from "../../services/imageService";
 import {
@@ -265,13 +266,9 @@ const WikiEditor = () => {
 			return;
 		}
 
-		const pageSlug = (
+		const pageSlug = normalizeWikiPageSlug(
 			isNew ? formData.slug || formData.title : slug || formData.slug
-		)
-			?.trim()
-			.toLowerCase()
-			.replace(/[\\/]/g, "-")
-			.replace(/\s+/g, "-");
+		);
 
 		if (!pageSlug) {
 			show("请先填写标题以生成页面标识", { variant: "error" });

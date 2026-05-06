@@ -26,6 +26,7 @@ import type {
   WikiPullRequestWithRelations,
 } from '../types';
 import { buildWikiBacklinkSearchTerms } from '../../lib/wikiLinkParser';
+import { normalizeWikiPageSlug } from '../../lib/wikiSlug';
 import { getWikiUniqueConflictMessage, normalizeWikiTitleKey } from '../wiki/wikiTitleKey';
 import { canViewWikiBranchContent } from '../wiki/wikiBranchAccess';
 
@@ -829,7 +830,7 @@ router.post('/', requireAuth, requireActiveUser, async (req: AuthenticatedReques
       locationCode?: string;
     };
 
-    const pageSlug = typeof slug === 'string' ? slug.trim().toLowerCase() : '';
+    const pageSlug = normalizeWikiPageSlug(slug);
     const titleKey = typeof title === 'string' ? normalizeWikiTitleKey(title) : '';
 
     if (!titleKey || !pageSlug || !category || !content) {
@@ -920,114 +921,6 @@ router.post('/', requireAuth, requireActiveUser, async (req: AuthenticatedReques
   } catch (error) {
     if (sendWikiUniqueConflict(error, res)) return;
     console.error('Create wiki page error:', error);
-    res.status(500).json({ error: '保存页面失败' });
-  }
-});
-
-router.post('/legacy', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
-  try {
-    const hasTagsInPayload = Object.prototype.hasOwnProperty.call(req.body, 'tags');
-    const hasRelationsInPayload = Object.prototype.hasOwnProperty.call(req.body, 'relations');
-    const {
-      title,
-      slug,
-      category,
-      content,
-      tags,
-      relations,
-      eventDate,
-      status,
-    } = req.body as {
-      title?: string;
-      slug?: string;
-      category?: string;
-      content?: string;
-      tags?: string[];
-      relations?: unknown;
-      eventDate?: string;
-      status?: ContentStatus;
-    };
-
-    const pageSlug = typeof slug === 'string' ? slug.trim().toLowerCase() : '';
-    const titleKey = typeof title === 'string' ? normalizeWikiTitleKey(title) : '';
-
-    if (!titleKey || !pageSlug || !category || !content) {
-      res.status(400).json({ error: '缺少必要字段' });
-      return;
-    }
-
-    if (category === 'music' && req.authUser?.role === 'user') {
-      res.status(403).json({ error: '只有管理员可以编辑音乐分类内容' });
-      return;
-    }
-
-    const existing = await prisma.wikiPage.findUnique({ where: { slug: pageSlug } });
-
-    if (existing && !isAdminRole(req.authUser!.role) && existing.lastEditorUid !== req.authUser!.uid) {
-      res.status(409).json({ error: '该 slug 已存在' });
-      return;
-    }
-
-    const nextStatus = normalizeWikiWriteStatus(status, req.authUser!);
-    const normalizedRelations = hasRelationsInPayload
-      ? await normalizeWikiRelationListForWrite(relations, pageSlug)
-      : serializeRelations(existing?.relations, pageSlug);
-    const normalizedTags = hasTagsInPayload
-      ? (Array.isArray(tags) ? tags : [])
-      : serializeTags(existing?.tags);
-    const page = await prisma.wikiPage.upsert({
-      where: { slug: pageSlug },
-      create: {
-        slug: pageSlug,
-        title,
-        titleKey,
-        category,
-        content,
-        tags: normalizedTags,
-        relations: normalizedRelations,
-        eventDate: eventDate || null,
-        status: nextStatus,
-        reviewNote: null,
-        reviewedBy: null,
-        reviewedAt: null,
-        lastEditorUid: req.authUser!.uid,
-      },
-      update: {
-        title,
-        titleKey,
-        category,
-        content,
-        tags: normalizedTags,
-        relations: normalizedRelations,
-        eventDate: eventDate || null,
-        status: nextStatus,
-        reviewNote: null,
-        reviewedBy: null,
-        reviewedAt: null,
-        lastEditorUid: req.authUser!.uid,
-      },
-    });
-
-    await prisma.wikiRevision.create({
-      data: {
-        pageSlug,
-        title,
-        content,
-        slug: pageSlug,
-        category,
-        tags: normalizedTags,
-        relations: normalizedRelations,
-        eventDate: eventDate || null,
-        editorUid: req.authUser!.uid,
-        editorName: req.authUser!.displayName,
-      },
-    });
-
-    clearWikiPageCache(pageSlug);
-    res.status(201).json({ page: toWikiResponse(page) });
-  } catch (error) {
-    if (sendWikiUniqueConflict(error, res)) return;
-    console.error('Create legacy wiki page error:', error);
     res.status(500).json({ error: '保存页面失败' });
   }
 });
@@ -1370,7 +1263,7 @@ router.post('/branches/:branchId/revisions', requireAuth, requireActiveUser, asy
         branchId: branch.id,
         title,
         content,
-        slug: (slug || branch.pageSlug).trim().toLowerCase(),
+        slug: normalizeWikiPageSlug(slug || branch.pageSlug),
         category,
         tags: normalizedTags,
         relations: normalizedRelations,

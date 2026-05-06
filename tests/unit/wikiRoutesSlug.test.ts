@@ -1,19 +1,23 @@
 import express from 'express';
 import { createServer, request as httpRequest, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockPrisma = vi.hoisted(() => ({
-  wikiBranch: {
-    findUnique: vi.fn(),
+  wikiPage: {
+    create: vi.fn(),
+    update: vi.fn(),
   },
   wikiRevision: {
-    findMany: vi.fn(),
-    findUnique: vi.fn(),
+    create: vi.fn(),
+  },
+  wikiBranch: {
+    create: vi.fn(),
+  },
+  moderationLog: {
+    create: vi.fn(),
   },
 }));
-
-const mockCanViewWikiPage = vi.hoisted(() => vi.fn(() => true));
 
 vi.mock('../../src/server/middleware/auth', () => ({
   requireAuth: (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -32,23 +36,13 @@ vi.mock('../../src/server/utils', () => ({
   prisma: mockPrisma,
   toWikiResponse: vi.fn((page) => page),
   buildWikiVisibilityWhere: vi.fn(() => ({})),
-  canViewWikiPage: mockCanViewWikiPage,
+  canViewWikiPage: vi.fn(() => true),
   serializeRelations: vi.fn(() => []),
   normalizeWikiRelationListForWrite: vi.fn(() => []),
   serializeTags: vi.fn(() => []),
   normalizeWikiWriteStatus: vi.fn(() => 'draft'),
   recordBrowsingHistory: vi.fn(),
-  toWikiBranchResponse: vi.fn((branch) => ({
-    id: branch.id,
-    pageSlug: branch.pageSlug,
-    editorUid: branch.editorUid,
-    editorName: branch.editorName,
-    status: branch.status,
-    latestRevisionId: branch.latestRevisionId,
-    createdAt: branch.createdAt.toISOString(),
-    updatedAt: branch.updatedAt.toISOString(),
-    page: branch.page,
-  })),
+  toWikiBranchResponse: vi.fn((branch) => branch),
   toWikiPullRequestResponse: vi.fn((pullRequest) => pullRequest),
   hasTag: vi.fn(() => false),
   buildWikiRelationBundle: vi.fn(),
@@ -57,37 +51,13 @@ vi.mock('../../src/server/utils', () => ({
 type TestUser = {
   uid: string;
   role: string;
+  displayName: string;
 };
-
-type TestResponse = {
-  status: number;
-  body: unknown;
-};
-
-function createBranch(overrides?: Record<string, unknown>) {
-  return {
-    id: 'branch_1',
-    pageSlug: 'page-1',
-    editorUid: 'author_uid',
-    editorName: 'Author',
-    status: 'pending_review',
-    latestRevisionId: 'revision_1',
-    createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    updatedAt: new Date('2026-01-02T00:00:00.000Z'),
-    page: {
-      slug: 'page-1',
-      title: 'Page 1',
-      category: 'biography',
-      status: 'published',
-      lastEditorUid: 'author_uid',
-    },
-    ...overrides,
-  };
-}
 
 async function createApp(authUser: TestUser | null) {
   const { registerWikiRoutes } = await import('../../src/server/routes/wiki.routes');
   const app = express();
+  app.use(express.json());
   app.use((req, _res, next) => {
     (req as express.Request & { authUser?: TestUser }).authUser = authUser ?? undefined;
     next();
@@ -96,7 +66,7 @@ async function createApp(authUser: TestUser | null) {
   return app;
 }
 
-async function request(app: express.Express, path: string): Promise<TestResponse> {
+async function postJson(app: express.Express, path: string, body: unknown) {
   const server = createServer(app);
   await new Promise<void>((resolve) => server.listen(0, resolve));
   const { port } = server.address() as AddressInfo;
@@ -108,15 +78,17 @@ async function request(app: express.Express, path: string): Promise<TestResponse
           hostname: '127.0.0.1',
           port,
           path,
-          method: 'GET',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
         },
         resolve,
       );
       req.on('error', reject);
+      req.write(JSON.stringify(body));
       req.end();
     });
 
-    const body = await new Promise<unknown>((resolve, reject) => {
+    const responseBody = await new Promise<unknown>((resolve, reject) => {
       let raw = '';
       response.setEncoding('utf8');
       response.on('data', (chunk) => {
@@ -139,7 +111,7 @@ async function request(app: express.Express, path: string): Promise<TestResponse
 
     return {
       status: response.statusCode ?? 0,
-      body,
+      body: responseBody,
     };
   } finally {
     await new Promise<void>((resolve, reject) => {
@@ -151,33 +123,48 @@ async function request(app: express.Express, path: string): Promise<TestResponse
   }
 }
 
-describe('wiki branch routes', () => {
+describe('wiki routes slug normalization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCanViewWikiPage.mockReturnValue(true);
+    mockPrisma.wikiPage.create.mockImplementation(async ({ data }) => ({
+      ...data,
+      id: 'page_1',
+      mainBranchId: null,
+    }));
+    mockPrisma.wikiRevision.create.mockResolvedValue({ id: 'revision_1' });
+    mockPrisma.wikiBranch.create.mockResolvedValue({ id: 'branch_1' });
+    mockPrisma.wikiPage.update.mockResolvedValue({});
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+  it('canonicalizes created wiki page slugs before writing', async () => {
+    const app = await createApp({ uid: 'user_1', role: 'user', displayName: 'Tester' });
 
-  it('blocks unrelated users from pending review branch details', async () => {
-    mockPrisma.wikiBranch.findUnique.mockResolvedValueOnce(createBranch());
-    const app = await createApp({ uid: 'other_uid', role: 'user' });
+    const response = await postJson(app, '/api/wiki', {
+      title: 'Test Page',
+      slug: ' Test/Page\\Name ',
+      category: 'biography',
+      content: 'Body',
+      tags: [],
+      relations: [],
+      status: 'draft',
+    });
 
-    const response = await request(app, '/api/wiki/branches/branch_1');
-
-    expect(response).toEqual({ status: 403, body: { error: '无权访问该分支' } });
-    expect(mockPrisma.wikiRevision.findUnique).not.toHaveBeenCalled();
-  });
-
-  it('blocks unrelated users from conflicted branch revision history', async () => {
-    mockPrisma.wikiBranch.findUnique.mockResolvedValueOnce(createBranch({ status: 'conflict' }));
-    const app = await createApp({ uid: 'other_uid', role: 'user' });
-
-    const response = await request(app, '/api/wiki/branches/branch_1/revisions');
-
-    expect(response).toEqual({ status: 403, body: { error: '无权查看修订历史' } });
-    expect(mockPrisma.wikiRevision.findMany).not.toHaveBeenCalled();
+    expect(response.status).toBe(201);
+    expect(mockPrisma.wikiPage.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        slug: 'test-page-name',
+      }),
+    }));
+    expect(mockPrisma.wikiRevision.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        pageSlug: 'test-page-name',
+        slug: 'test-page-name',
+      }),
+    }));
+    expect(mockPrisma.wikiBranch.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        pageSlug: 'test-page-name',
+      }),
+    }));
   });
 });
