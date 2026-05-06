@@ -20,6 +20,7 @@ import multer from 'multer';
 import { initSensitiveWords } from './src/lib/sensitiveWordFilter';
 import { prisma } from './src/server/prisma';
 import { authMiddleware } from './src/server/middleware/auth';
+import { requestLoggerMiddleware } from './src/server/middleware/requestLogger';
 import { registerRegionRoutes } from './src/server/location/routes';
 import { registerExifRoutes } from './src/server/location/exifRoutes';
 import { registerBirthdayRoutes } from './src/server/birthday/routes';
@@ -112,32 +113,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 app.use(authMiddleware);
-
-// ============================================================================
-// 请求耗时监控中间件
-// ============================================================================
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const start = Date.now();
-
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    const method = req.method;
-    const path = req.path;
-    const statusCode = res.statusCode;
-    const isSlow = duration > 1000;
-
-    const logPrefix = isSlow ? '[API] [SLOW]' : '[API]';
-    const logMessage = `${logPrefix} ${method} ${path} ${statusCode} ${duration}ms`;
-
-    if (isSlow) {
-      console.warn(logMessage);
-    } else {
-      console.log(logMessage);
-    }
-  });
-
-  next();
-});
+app.use(requestLoggerMiddleware);
 
 // 静态文件服务 - 必须在路由注册之前
 app.use('/uploads', express.static(uploadsDir));
