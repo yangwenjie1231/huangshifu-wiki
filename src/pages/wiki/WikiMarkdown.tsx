@@ -49,9 +49,9 @@ const WikiMarkdown = ({ content }: { content: string }) => {
 						return (
 							<WikiLinkPreview slug={slug}>
 								<Link
+									{...props}
 									to={href}
 									className="text-[#c8951e] font-bold hover:underline decoration-[#c8951e]/30 underline-offset-4"
-									{...props}
 								>
 									{children}
 								</Link>
@@ -60,11 +60,11 @@ const WikiMarkdown = ({ content }: { content: string }) => {
 					}
 					return (
 						<a
+							{...props}
 							href={href}
 							target="_blank"
 							rel="noopener noreferrer"
 							className="text-[#c8951e] hover:underline"
-							{...props}
 						>
 							{children}
 						</a>

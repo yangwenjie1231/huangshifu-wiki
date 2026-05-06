@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 import { isTrustedIframeDomain } from '../../src/lib/htmlSanitizer';
+import WikiMarkdown from '../../src/pages/wiki/WikiMarkdown';
 
 describe('htmlSanitizer', () => {
   describe('isTrustedIframeDomain', () => {
@@ -74,6 +77,42 @@ describe('htmlSanitizer', () => {
 
     it('returns false for invalid URLs', () => {
       expect(isTrustedIframeDomain('not-a-valid-url')).toBe(false);
+    });
+  });
+
+  describe('WikiMarkdown', () => {
+    const renderWikiMarkdown = (content: string) =>
+      renderToStaticMarkup(createElement(WikiMarkdown, { content }));
+
+    it('sanitizes dangerous raw html while keeping trusted embeds', () => {
+      const output = renderWikiMarkdown(`
+# Safe rendering
+
+<script>alert(1)</script>
+<img src="x" onerror="alert(1)">
+<a href="javascript:alert(1)" target="_self" rel="opener">bad</a>
+<iframe src="https://player.bilibili.com/video/BV1" width="640" height="360" style="border-radius: 12px;" allowfullscreen></iframe>
+<iframe src="https://evil.com/embed"></iframe>
+`);
+
+      expect(output).not.toContain('<script');
+      expect(output).not.toContain('onerror=');
+      expect(output).not.toContain('javascript:');
+      expect(output).toContain('https://player.bilibili.com/video/BV1');
+      expect(output).toContain('border-radius');
+      expect(output).not.toContain('https://evil.com/embed');
+    });
+
+    it('forces safe attributes on external links', () => {
+      const output = renderWikiMarkdown(
+        '<a href="https://example.com" target="_self" rel="opener">example</a>',
+      );
+
+      expect(output).toContain('href="https://example.com"');
+      expect(output).toContain('target="_blank"');
+      expect(output).toContain('rel="noopener noreferrer"');
+      expect(output).not.toContain('target="_self"');
+      expect(output).not.toContain('rel="opener"');
     });
   });
 });

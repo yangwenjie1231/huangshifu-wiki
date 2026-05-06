@@ -1,4 +1,4 @@
-import rehypeSanitize, { type Options as Schema } from 'rehype-sanitize';
+import { defaultSchema, type Options as Schema } from 'rehype-sanitize';
 
 const IFRAME_WHITELIST = [
   'player.bilibili.com',
@@ -16,44 +16,27 @@ const IFRAME_WHITELIST = [
 ];
 
 export const customSchema: Schema = {
-  tagNames: [
-    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'p', 'br', 'hr',
-    'ul', 'ol', 'li',
-    'blockquote', 'pre', 'code',
-    'a', 'img',
-    'strong', 'b', 'em', 'i', 'u', 'del', 's',
-    'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
-    'span', 'div',
-    'iframe',
-  ],
+  ...defaultSchema,
+  tagNames: [...defaultSchema.tagNames, 'iframe'],
   attributes: {
-    a: ['href', 'title', 'target', 'rel'],
-    img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
+    ...(defaultSchema.attributes ?? {}),
+    div: ['className'],
+    span: ['className'],
     iframe: [
       'src',
-      'width',
-      'height',
-      'frameborder',
-      'allowfullscreen',
-      'scrolling',
-      'title',
-      'style',
       'allow',
+      'allowFullScreen',
+      'className',
+      'frameBorder',
+      'height',
+      'loading',
+      'referrerPolicy',
+      'scrolling',
+      'style',
+      'title',
+      'width',
     ],
-    td: ['colspan', 'rowspan', 'align'],
-    th: ['colspan', 'rowspan', 'align', 'scope'],
-    span: ['class', 'style'],
-    div: ['class', 'style'],
-    blockquote: ['class'],
-    pre: ['class'],
-    code: ['class'],
   },
-  protocols: {
-    href: ['http', 'https', 'mailto'],
-    src: ['http', 'https'],
-  },
-  clobberPrefix: 'user-content-',
 };
 
 export function isTrustedIframeDomain(src: string | undefined): boolean {
