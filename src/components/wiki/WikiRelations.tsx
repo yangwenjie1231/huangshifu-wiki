@@ -23,6 +23,10 @@ import {
 	getSortStrategyLabel,
 	type RelationWithMetadata,
 } from "../../lib/relationSorter";
+import {
+	type RelationWithOriginalIndex,
+	withOriginalRelationIndexes,
+} from "../../lib/wikiRelationIndex";
 import { metadataCache } from "../../lib/metadataCache";
 import type { WikiPageMetadata } from "../../lib/wikiLinkParser";
 import type { WikiItem } from "../../types/entities";
@@ -201,16 +205,19 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 	}, [relations]);
 
 	// 带元数据的关联
-	const relationsWithMetadata: RelationWithMetadata[] = useMemo(() => {
-		return relations.map((relation) => {
-			const metadata = metadataMap.get(relation.targetSlug) || null;
-			return {
-				...relation,
-				metadata,
-				qualityScore: 0,
-			};
-		});
-	}, [relations, metadataMap]);
+	const relationsWithMetadata: RelationWithOriginalIndex<RelationWithMetadata>[] =
+		useMemo(() => {
+			return withOriginalRelationIndexes(
+				relations.map((relation) => {
+					const metadata = metadataMap.get(relation.targetSlug) || null;
+					return {
+						...relation,
+						metadata,
+						qualityScore: 0,
+					};
+				}),
+			);
+		}, [relations, metadataMap]);
 
 	// 筛选和排序后的关联
 	const filteredAndSortedRelations = useMemo(() => {
@@ -525,20 +532,11 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 			{/* 关联列表 */}
 			{filteredAndSortedRelations.length > 0 && (
 				<div className="space-y-3">
-					{filteredAndSortedRelations.map((relation, index) => {
-						// 找到原始数组中的索引
-						const originalIndex = relations.findIndex(
-							(r) =>
-								r.targetSlug === relation.targetSlug &&
-								r.type === relation.type,
-						);
-
-						// 如果找不到原始索引，跳过渲染
-						if (originalIndex === -1) return null;
-
+					{filteredAndSortedRelations.map((relation) => {
+						const originalIndex = relation.originalIndex;
 						return (
 							<RelationPreview
-								key={`${relation.targetSlug}-${relation.type}`}
+								key={`relation-${originalIndex}`}
 								relation={{
 									...relation,
 									metadata: relation.metadata || undefined,

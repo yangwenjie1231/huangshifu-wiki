@@ -48,10 +48,10 @@ export const DEFAULT_SORT_STRATEGY: SortStrategy = "quality";
 /**
  * 筛选关联记录
  */
-export function filterRelations(
-	relations: RelationWithMetadata[],
+export function filterRelations<T extends RelationWithMetadata>(
+	relations: T[],
 	options: FilterOptions,
-): RelationWithMetadata[] {
+): T[] {
 	return relations.filter((relation) => {
 		// 类型筛选
 		if (options.type !== "all" && relation.type !== options.type) {
@@ -94,10 +94,10 @@ export function filterRelations(
 /**
  * 排序关联记录
  */
-export function sortRelations(
-	relations: RelationWithMetadata[],
+export function sortRelations<T extends RelationWithMetadata>(
+	relations: T[],
 	strategy: SortStrategy,
-): RelationWithMetadata[] {
+): T[] {
 	const sorted = [...relations];
 
 	switch (strategy) {
@@ -159,11 +159,11 @@ export function sortRelations(
 /**
  * 筛选并排序关联记录
  */
-export function filterAndSortRelations(
-	relations: RelationWithMetadata[],
+export function filterAndSortRelations<T extends RelationWithMetadata>(
+	relations: T[],
 	filterOptions: FilterOptions,
 	sortStrategy: SortStrategy,
-): RelationWithMetadata[] {
+): T[] {
 	const filtered = filterRelations(relations, filterOptions);
 	return sortRelations(filtered, sortStrategy);
 }
