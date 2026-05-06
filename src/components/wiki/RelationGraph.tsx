@@ -1,30 +1,18 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import { Network, DataSet } from 'vis-network/standalone';
-import { clsx } from 'clsx';
 import type { WikiRelationType } from './types';
 import { RELATION_TYPE_LABELS } from './types';
+import {
+  RELATION_GRAPH_TYPE_COLORS,
+  getRelationGraphEdgeColor,
+  getRelationGraphEdgeLabel,
+  getRelationGraphNodeStyle,
+  isRelationGraphNodeClickable,
+  truncateGraphLabel,
+  type RelationGraphData,
+} from '../../lib/wikiRelationGraph';
 
-export type RelationGraphNode = {
-  slug: string;
-  title: string;
-  category: string;
-  depth: 0 | 1 | 2;
-  isCenter: boolean;
-};
-
-export type RelationGraphEdge = {
-  sourceSlug: string;
-  targetSlug: string;
-  type: WikiRelationType;
-  typeLabel: string;
-  label: string | null;
-  inferred: boolean;
-};
-
-export type RelationGraphData = {
-  nodes: RelationGraphNode[];
-  edges: RelationGraphEdge[];
-};
+export type { RelationGraphData, RelationGraphEdge, RelationGraphNode } from '../../lib/wikiRelationGraph';
 
 type RelationGraphProps = {
   graph: RelationGraphData;
@@ -32,26 +20,12 @@ type RelationGraphProps = {
   onNodeClick?: (slug: string) => void;
 };
 
-const NODE_COLORS: Record<WikiRelationType, string> = {
-  related_person: '#6B8E23',
-  work_relation: '#CD853F',
-  timeline_relation: '#4682B4',
-  custom: '#9370DB',
-};
-
-const EDGE_COLORS: Record<WikiRelationType, string> = {
-  related_person: '#6B8E23',
-  work_relation: '#CD853F',
-  timeline_relation: '#4682B4',
-  custom: '#9370DB',
-};
-
 const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const networkRef = useRef<Network | null>(null);
 
   const handleClick = useCallback((slug: string) => {
-    if (slug !== currentSlug && onNodeClick) {
+    if (isRelationGraphNodeClickable(slug, currentSlug) && onNodeClick) {
       onNodeClick(slug);
     }
   }, [currentSlug, onNodeClick]);
@@ -62,25 +36,25 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
     const nodes = new DataSet(
       graph.nodes.map((node) => {
         const isCenter = node.slug === currentSlug || node.isCenter;
-        const baseColor = isCenter ? '#6B8E23' : node.depth === 1 ? '#F4A460' : '#DEB887';
+        const nodeStyle = getRelationGraphNodeStyle({ ...node, isCenter });
         
         return {
           id: node.slug,
-          label: node.title.length > 12 ? node.title.slice(0, 12) + '...' : node.title,
+          label: truncateGraphLabel(node.title, nodeStyle.labelLength),
           title: node.title,
           color: {
-            background: baseColor,
-            border: isCenter ? '#556B2F' : '#D2B48C',
+            background: nodeStyle.background,
+            border: nodeStyle.border,
             highlight: {
-              background: isCenter ? '#8FBC8F' : node.depth === 1 ? '#FFA07A' : '#E6C89C',
-              border: isCenter ? '#6B8E23' : '#DAA520',
+              background: nodeStyle.highlightBackground,
+              border: nodeStyle.highlightBorder,
             },
           },
           shape: 'dot',
-          size: isCenter ? 40 : node.depth === 1 ? 30 : 25,
+          size: nodeStyle.size,
           font: {
-            color: isCenter ? '#ffffff' : '#2F2F2F',
-            size: isCenter ? 16 : 14,
+            color: nodeStyle.fontColor,
+            size: nodeStyle.fontSize,
             face: 'serif',
             strokeWidth: 0,
           },
@@ -91,7 +65,7 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
             x: 0,
             y: 0,
           },
-          borderWidth: isCenter ? 3 : 2,
+          borderWidth: nodeStyle.borderWidth,
           fixed: isCenter,
         };
       })
@@ -99,13 +73,13 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
 
     const edges = new DataSet(
       graph.edges.map((edge) => {
-        const edgeColor = EDGE_COLORS[edge.type] || '#7b8a70';
+        const edgeColor = getRelationGraphEdgeColor(edge.type);
         
         return {
           id: `${edge.sourceSlug}-${edge.targetSlug}-${edge.type}-${edge.label || 'none'}`,
           from: edge.sourceSlug,
           to: edge.targetSlug,
-          label: edge.label || edge.typeLabel,
+          label: truncateGraphLabel(getRelationGraphEdgeLabel(edge), 12),
           color: {
             color: edgeColor,
             highlight: edgeColor,
@@ -169,7 +143,7 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
         },
       },
       interaction: {
-        hover: false,
+        hover: true,
         dragNodes: true,
         dragView: true,
         zoomView: true,
@@ -191,10 +165,20 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
       }
     });
 
-    // Set a consistent grab cursor for drag interactions
     if (containerRef.current) {
       containerRef.current.style.cursor = 'grab';
     }
+    network.on('hoverNode', (params) => {
+      if (containerRef.current) {
+        const nodeId = String(params.node);
+        containerRef.current.style.cursor = isRelationGraphNodeClickable(nodeId, currentSlug) ? 'pointer' : 'grab';
+      }
+    });
+    network.on('blurNode', () => {
+      if (containerRef.current) {
+        containerRef.current.style.cursor = 'grab';
+      }
+    });
     network.on('dragStart', () => {
       if (containerRef.current) {
         containerRef.current.style.cursor = 'grabbing';
@@ -228,7 +212,7 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
       <div className="mt-6 flex flex-wrap gap-4 text-sm">
         {(Object.entries(RELATION_TYPE_LABELS) as [WikiRelationType, string][]).map(([type, label]) => (
           <div key={type} className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#f7f5f0] rounded">
-            <span className="inline-block h-3 w-3 rounded" style={{ backgroundColor: NODE_COLORS[type] }} />
+            <span className="inline-block h-3 w-3 rounded" style={{ backgroundColor: RELATION_GRAPH_TYPE_COLORS[type] }} />
             <span className="text-[#6b6560] font-medium">{label}</span>
           </div>
         ))}

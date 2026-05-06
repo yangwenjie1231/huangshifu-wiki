@@ -1,19 +1,18 @@
 import React, { useMemo, useState, useCallback, useRef } from "react";
-import { motion } from "motion/react";
 import { ZoomIn, ZoomOut, Maximize } from "lucide-react";
 import type { WikiRelationRecord } from "./types";
 import type { WikiPageMetadata } from "../../lib/wikiLinkParser";
 import { RELATION_TYPE_LABELS } from "./types";
-
-const RELATION_TYPE_COLORS = {
-	related_person: "#3b82f6",
-	work_relation: "#8b5cf6",
-	timeline_relation: "#f59e0b",
-	custom: "#6b7280",
-};
-
-const CENTER_POSITION = { x: 0, y: 0 };
-const DEPTH_RADII = { 1: 120, 2: 220 };
+import {
+	RELATION_GRAPH_TYPE_COLORS,
+	buildMiniRelationGraphData,
+	getRelationGraphEdgeColor,
+	getRelationGraphEdgeLabel,
+	getRelationGraphNodeStyle,
+	isRelationGraphNodeClickable,
+	layoutRelationGraphRadial,
+	truncateGraphLabel,
+} from "../../lib/wikiRelationGraph";
 
 interface MiniRelationGraphProps {
 	relations: WikiRelationRecord[];
@@ -22,22 +21,6 @@ interface MiniRelationGraphProps {
 	currentTitle: string;
 	onNodeClick?: (slug: string) => void;
 	height?: number;
-}
-
-interface NodeData {
-	slug: string;
-	title: string;
-	x: number;
-	y: number;
-	isCenter: boolean;
-	depth: number;
-}
-
-interface EdgeData {
-	sourceSlug: string;
-	targetSlug: string;
-	type: WikiRelationRecord["type"];
-	label?: string;
 }
 
 const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
@@ -63,55 +46,27 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 
 	const width = 600;
 
-	// 计算节点和边
-	const { nodes, edges } = useMemo(() => {
-		const nodesMap = new Map<string, NodeData>();
-		const edgesData: EdgeData[] = [];
+	const graph = useMemo(
+		() =>
+			buildMiniRelationGraphData({
+				relations,
+				metadata,
+				currentSlug,
+				currentTitle,
+			}),
+		[relations, metadata, currentSlug, currentTitle],
+	);
 
-		// 添加中心节点
-		nodesMap.set(currentSlug, {
-			slug: currentSlug,
-			title: currentTitle,
-			x: width / 2,
-			y: height / 2,
-			isCenter: true,
-			depth: 0,
-		});
+	const nodes = useMemo(
+		() => layoutRelationGraphRadial(graph, { width, height, scale, pan }),
+		[graph, width, height, scale, pan],
+	);
 
-		// 添加关联节点
-		relations.forEach((relation, index) => {
-			const targetSlug = relation.targetSlug;
-			const targetMeta = metadata.get(targetSlug);
-			const targetTitle = targetMeta?.title || relation.label || targetSlug;
+	const nodeBySlug = useMemo(
+		() => new Map(nodes.map((node) => [node.slug, node])),
+		[nodes],
+	);
 
-			// 计算位置（圆形布局）
-			const angle = (2 * Math.PI * index) / relations.length;
-			const radius = 120 * scale;
-
-			const x = width / 2 + radius * Math.cos(angle) + pan.x;
-			const y = height / 2 + radius * Math.sin(angle) + pan.y;
-
-			nodesMap.set(targetSlug, {
-				slug: targetSlug,
-				title: targetTitle,
-				x,
-				y,
-				isCenter: false,
-				depth: 1,
-			});
-
-			edgesData.push({
-				sourceSlug: currentSlug,
-				targetSlug,
-				type: relation.type,
-				label: relation.label,
-			});
-		});
-
-		return { nodes: Array.from(nodesMap.values()), edges: edgesData };
-	}, [relations, metadata, currentSlug, currentTitle, width, height, scale, pan]);
-
-	// 处理拖拽
 	const handleMouseDown = useCallback(
 		(e: React.MouseEvent) => {
 			setIsDragging(true);
@@ -135,69 +90,59 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 		setIsDragging(false);
 	}, []);
 
-	// Touch event handlers for mobile
-	const handleTouchStart = useCallback(
-		(e: React.TouchEvent) => {
-			if (e.touches.length === 1) {
-				// Single finger - start drag
-				const touch = e.touches[0];
-				touchState.current.lastTouchX = touch.clientX;
-				touchState.current.lastTouchY = touch.clientY;
-				touchState.current.isPinching = false;
-			} else if (e.touches.length === 2) {
-				// Two fingers - start pinch zoom
-				const t1 = e.touches[0];
-				const t2 = e.touches[1];
-				const distance = Math.sqrt(
-					Math.pow(t2.clientX - t1.clientX, 2) +
-						Math.pow(t2.clientY - t1.clientY, 2)
-				);
-				touchState.current.lastTouchDistance = distance;
-				touchState.current.isPinching = true;
-				touchState.current.lastTouchX = (t1.clientX + t2.clientX) / 2;
-				touchState.current.lastTouchY = (t1.clientY + t2.clientY) / 2;
-			}
-		},
-		[pan],
-	);
+	const handleTouchStart = useCallback((e: React.TouchEvent) => {
+		if (e.touches.length === 1) {
+			const touch = e.touches[0];
+			setIsDragging(true);
+			touchState.current.lastTouchX = touch.clientX;
+			touchState.current.lastTouchY = touch.clientY;
+			touchState.current.isPinching = false;
+		} else if (e.touches.length === 2) {
+			const t1 = e.touches[0];
+			const t2 = e.touches[1];
+			const distance = Math.sqrt(
+				Math.pow(t2.clientX - t1.clientX, 2) +
+					Math.pow(t2.clientY - t1.clientY, 2),
+			);
+			touchState.current.lastTouchDistance = distance;
+			touchState.current.isPinching = true;
+			touchState.current.lastTouchX = (t1.clientX + t2.clientX) / 2;
+			touchState.current.lastTouchY = (t1.clientY + t2.clientY) / 2;
+		}
+	}, []);
 
-	const handleTouchMove = useCallback(
-		(e: React.TouchEvent) => {
-			if (e.touches.length === 1 && !touchState.current.isPinching) {
-				// Single finger drag
-				const touch = e.touches[0];
-				setPan({
-					x: touch.clientX - dragStart.x,
-					y: touch.clientY - dragStart.y,
-				});
-			} else if (e.touches.length === 2 && touchState.current.isPinching) {
-				// Pinch to zoom
-				e.preventDefault();
-				const t1 = e.touches[0];
-				const t2 = e.touches[1];
-				const distance = Math.sqrt(
-					Math.pow(t2.clientX - t1.clientX, 2) +
-						Math.pow(t2.clientY - t1.clientY, 2)
-				);
+	const handleTouchMove = useCallback((e: React.TouchEvent) => {
+		if (e.touches.length === 1 && !touchState.current.isPinching) {
+			const touch = e.touches[0];
+			const panX = touch.clientX - touchState.current.lastTouchX;
+			const panY = touch.clientY - touchState.current.lastTouchY;
+			setPan((p) => ({ x: p.x + panX, y: p.y + panY }));
+			touchState.current.lastTouchX = touch.clientX;
+			touchState.current.lastTouchY = touch.clientY;
+		} else if (e.touches.length === 2 && touchState.current.isPinching) {
+			e.preventDefault();
+			const t1 = e.touches[0];
+			const t2 = e.touches[1];
+			const distance = Math.sqrt(
+				Math.pow(t2.clientX - t1.clientX, 2) +
+					Math.pow(t2.clientY - t1.clientY, 2),
+			);
 
-				const scaleDelta =
-					(distance - touchState.current.lastTouchDistance) * 0.005;
-				setScale((s) => Math.max(0.5, Math.min(2, s + scaleDelta)));
+			const scaleDelta =
+				(distance - touchState.current.lastTouchDistance) * 0.005;
+			setScale((s) => Math.max(0.5, Math.min(2, s + scaleDelta)));
 
-				// Pan while pinching (center of two fingers)
-				const centerX = (t1.clientX + t2.clientX) / 2;
-				const centerY = (t1.clientY + t2.clientY) / 2;
-				const panX = centerX - touchState.current.lastTouchX;
-				const panY = centerY - touchState.current.lastTouchY;
-				setPan((p) => ({ x: p.x + panX, y: p.y + panY }));
+			const centerX = (t1.clientX + t2.clientX) / 2;
+			const centerY = (t1.clientY + t2.clientY) / 2;
+			const panX = centerX - touchState.current.lastTouchX;
+			const panY = centerY - touchState.current.lastTouchY;
+			setPan((p) => ({ x: p.x + panX, y: p.y + panY }));
 
-				touchState.current.lastTouchDistance = distance;
-				touchState.current.lastTouchX = centerX;
-				touchState.current.lastTouchY = centerY;
-			}
-		},
-		[dragStart],
-	);
+			touchState.current.lastTouchDistance = distance;
+			touchState.current.lastTouchX = centerX;
+			touchState.current.lastTouchY = centerY;
+		}
+	}, []);
 
 	const handleTouchEnd = useCallback(() => {
 		touchState.current.isPinching = false;
@@ -205,7 +150,6 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 		setIsDragging(false);
 	}, []);
 
-	// Wheel zoom support for desktop
 	const handleWheel = useCallback((e: React.WheelEvent) => {
 		e.preventDefault();
 		const delta = e.deltaY > 0 ? -0.1 : 0.1;
@@ -221,9 +165,9 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 
 	return (
 		<div className="relative rounded border border-[#e0dcd3] bg-[#faf9f6] overflow-hidden">
-			{/* 控制按钮 */}
 			<div className="absolute top-3 right-3 z-10 flex gap-2">
 				<button
+					type="button"
 					onClick={handleZoomOut}
 					className="p-2 bg-white rounded transition-all text-[#6b6560] hover:text-[#c8951e]"
 					title="缩小"
@@ -231,6 +175,7 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 					<ZoomOut size={16} />
 				</button>
 				<button
+					type="button"
 					onClick={handleZoomIn}
 					className="p-2 bg-white rounded transition-all text-[#6b6560] hover:text-[#c8951e]"
 					title="放大"
@@ -238,6 +183,7 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 					<ZoomIn size={16} />
 				</button>
 				<button
+					type="button"
 					onClick={handleReset}
 					className="p-2 bg-white rounded transition-all text-[#6b6560] hover:text-[#c8951e]"
 					title="重置"
@@ -246,12 +192,15 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 				</button>
 			</div>
 
-			{/* SVG 图谱 */}
 			<svg
 				ref={svgRef}
-				width={width}
+				width="100%"
 				height={height}
-				className="cursor-grab active:cursor-grabbing touch-none"
+				viewBox={`0 0 ${width} ${height}`}
+				preserveAspectRatio="xMidYMid meet"
+				className="w-full cursor-grab active:cursor-grabbing touch-none"
+				role="img"
+				aria-label="Wiki 关联预览图谱"
 				onMouseDown={handleMouseDown}
 				onMouseMove={handleMouseMove}
 				onMouseUp={handleMouseUp}
@@ -262,34 +211,45 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 				onWheel={handleWheel}
 			>
 				<defs>
-					<marker
-						id="mini-relation-arrow"
-						viewBox="0 0 10 10"
-						refX="9"
-						refY="5"
-						markerWidth="6"
-						markerHeight="6"
-						orient="auto-start-reverse"
-					>
-						<path d="M 0 0 L 10 5 L 0 10 z" fill="#5f6f52" />
-					</marker>
+					{Object.entries(RELATION_TYPE_LABELS).map(([type]) => (
+						<marker
+							key={type}
+							id={`mini-relation-arrow-${type}`}
+							viewBox="0 0 10 10"
+							refX="9"
+							refY="5"
+							markerWidth="6"
+							markerHeight="6"
+							orient="auto-start-reverse"
+						>
+							<path
+								d="M 0 0 L 10 5 L 0 10 z"
+								fill={
+									RELATION_GRAPH_TYPE_COLORS[
+										type as WikiRelationRecord["type"]
+									]
+								}
+							/>
+						</marker>
+					))}
 				</defs>
 
-				{/* 边 */}
-				{edges.map((edge, idx) => {
-					const source = nodes.find((n) => n.slug === edge.sourceSlug);
-					const target = nodes.find((n) => n.slug === edge.targetSlug);
+				{graph.edges.map((edge, idx) => {
+					const source = nodeBySlug.get(edge.sourceSlug);
+					const target = nodeBySlug.get(edge.targetSlug);
 					if (!source || !target) return null;
 
-					const edgeColor =
-						RELATION_TYPE_COLORS[edge.type as keyof typeof RELATION_TYPE_COLORS] ||
-						"#6f5f7a";
-
+					const edgeColor = getRelationGraphEdgeColor(edge.type);
+					const edgeLabel = truncateGraphLabel(
+						getRelationGraphEdgeLabel(edge),
+						10,
+					);
 					const midX = (source.x + target.x) / 2;
 					const midY = (source.y + target.y) / 2;
 
 					return (
-						<g key={idx}>
+						<g key={`${edge.sourceSlug}-${edge.targetSlug}-${edge.type}-${idx}`}>
+							<title>{getRelationGraphEdgeLabel(edge)}</title>
 							<line
 								x1={source.x}
 								y1={source.y}
@@ -297,50 +257,48 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 								y2={target.y}
 								stroke={edgeColor}
 								strokeWidth={2}
-								strokeOpacity={0.6}
-								markerEnd="url(#mini-relation-arrow)"
+								strokeOpacity={0.68}
+								strokeDasharray={edge.inferred ? "4 4" : undefined}
+								markerEnd={`url(#mini-relation-arrow-${edge.type})`}
 							/>
-							{edge.label && (
-								<text
-									x={midX}
-									y={midY - 4}
-									textAnchor="middle"
-									fill={edgeColor}
-									fontSize="10"
-									fontWeight={600}
-									style={{ textShadow: "0 1px 2px rgba(255,255,255,0.8)" }}
-								>
-									{edge.label.length > 10
-										? edge.label.substring(0, 10) + "..."
-										: edge.label}
-								</text>
-							)}
+							<text
+								x={midX}
+								y={midY - 4}
+								textAnchor="middle"
+								fill={edgeColor}
+								fontSize="10"
+								fontWeight={600}
+								style={{ textShadow: "0 1px 2px rgba(255,255,255,0.8)" }}
+							>
+								{edgeLabel}
+							</text>
 						</g>
 					);
 				})}
 
-				{/* 节点 */}
 				{nodes.map((node) => {
-					const isCenter = node.isCenter;
-					const radius = isCenter ? 30 : 22;
-					const nodeColor = isCenter ? "#6B8E23" : "#DEB88B";
+					const nodeStyle = getRelationGraphNodeStyle(node);
+					const canClick =
+						Boolean(onNodeClick) &&
+						isRelationGraphNodeClickable(node.slug, currentSlug);
 
 					return (
 						<g
 							key={node.slug}
 							transform={`translate(${node.x}, ${node.y})`}
-							className={`transition-all ${!isCenter && onNodeClick ? "cursor-pointer hover:opacity-80" : ""}`}
+							className={`transition-all ${canClick ? "cursor-pointer hover:opacity-80" : ""}`}
 							onClick={() => {
-								if (!isCenter && onNodeClick) {
-									onNodeClick(node.slug);
+								if (canClick) {
+									onNodeClick?.(node.slug);
 								}
 							}}
 						>
+							<title>{node.title}</title>
 							<circle
-								r={radius}
-								fill={nodeColor}
-								stroke={isCenter ? "#556B2F" : "#D2B48C"}
-								strokeWidth={2}
+								r={nodeStyle.size}
+								fill={nodeStyle.background}
+								stroke={nodeStyle.border}
+								strokeWidth={nodeStyle.borderWidth}
 								filter="drop-shadow(0 1px 2px rgba(0,0,0,0.1))"
 							/>
 							<text
@@ -348,28 +306,26 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 								y={0}
 								textAnchor="middle"
 								dominantBaseline="middle"
-								fill={isCenter ? "#ffffff" : "#2F2F2F"}
-								fontSize={isCenter ? "12" : "10"}
+								fill={nodeStyle.fontColor}
+								fontSize={nodeStyle.fontSize}
 								fontWeight={700}
 								style={{
-									textShadow: isCenter ? "0 1px 2px rgba(0,0,0,0.2)" : "none",
+									textShadow: node.isCenter
+										? "0 1px 2px rgba(0,0,0,0.2)"
+										: "none",
 								}}
 							>
-								{node.title.length > 8
-									? node.title.substring(0, 8) + "..."
-									: node.title}
+								{truncateGraphLabel(node.title, nodeStyle.labelLength)}
 							</text>
 						</g>
 					);
 				})}
 			</svg>
 
-			{/* 图例 */}
 			<div className="absolute bottom-3 left-3 z-10 flex flex-wrap gap-2">
 				{Object.entries(RELATION_TYPE_LABELS).map(([type, label]) => {
 					const color =
-						RELATION_TYPE_COLORS[type as keyof typeof RELATION_TYPE_COLORS] ||
-						"#6f5f7a";
+						RELATION_GRAPH_TYPE_COLORS[type as WikiRelationRecord["type"]];
 					return (
 						<div
 							key={type}
@@ -385,10 +341,9 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 				})}
 			</div>
 
-			{/* 统计信息 */}
 			<div className="absolute bottom-3 right-3 z-10 px-3 py-2 bg-white/90 rounded text-[10px] text-[#6b6560]">
-								<span className="font-bold">{nodes.length}</span> 个节点 ·{" "}
-								<span className="font-bold">{edges.length}</span> 条关联
+				<span className="font-bold">{nodes.length}</span> 个节点 ·{" "}
+				<span className="font-bold">{graph.edges.length}</span> 条关联
 			</div>
 		</div>
 	);
