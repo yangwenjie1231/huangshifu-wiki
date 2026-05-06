@@ -37,6 +37,10 @@ const router = Router();
 router.get('/', async (req: AuthenticatedRequest, res) => {
   try {
     const albumDocId = typeof req.query.albumDocId === 'string' ? req.query.albumDocId.trim() : '';
+    const limit = parseInteger(req.query.limit, 20, { min: 1, max: 100 });
+    const page = parseInteger(req.query.page, 1, { min: 1 });
+    const skip = (page - 1) * limit;
+
     const where = albumDocId
       ? {
           albumRelations: {
@@ -47,7 +51,10 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
         }
       : undefined;
 
-    const songs = await fetchSongsWithRelations(where);
+    const [songs, total] = await Promise.all([
+      fetchSongsWithRelations(where, { take: limit, skip }),
+      prisma.musicTrack.count({ where }),
+    ]);
 
     const favoritedMusicSet = new Set<string>();
     if (req.authUser && songs.length) {
@@ -64,6 +71,10 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
 
     res.json({
       songs: songs.map((song) => toSongResponse(song, { favoritedByMe: favoritedMusicSet.has(song.docId) })),
+      total,
+      page,
+      limit,
+      hasMore: page * limit < total,
     });
   } catch (error) {
     console.error('Fetch music error:', error);

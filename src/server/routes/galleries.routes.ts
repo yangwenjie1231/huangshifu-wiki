@@ -40,6 +40,10 @@ const router = Router();
 // GET /api/galleries - List all galleries
 router.get('/', async (req: AuthenticatedRequest, res) => {
   try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const skip = (page - 1) * limit;
+
     const visibilityWhere = req.authUser
       ? (isAdminRole(req.authUser.role)
           ? {}
@@ -51,21 +55,31 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
             })
       : { published: true };
 
-    const galleries = await prisma.gallery.findMany({
-      where: visibilityWhere,
-      include: {
-        images: {
-          include: {
-            asset: true,
+    const [galleries, total] = await Promise.all([
+      prisma.gallery.findMany({
+        where: visibilityWhere,
+        include: {
+          images: {
+            include: {
+              asset: true,
+            },
+            orderBy: { sortOrder: 'asc' },
           },
-          orderBy: { sortOrder: 'asc' },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip,
+      }),
+      prisma.gallery.count({ where: visibilityWhere }),
+    ]);
 
-    res.json({ galleries: await Promise.all(galleries.map(toGalleryResponse)) });
+    res.json({
+      galleries: await Promise.all(galleries.map(toGalleryResponse)),
+      total,
+      page,
+      limit,
+      hasMore: skip + galleries.length < total,
+    });
   } catch (error) {
     console.error('Fetch galleries error:', error);
     res.status(500).json({ error: '获取图集失败' });

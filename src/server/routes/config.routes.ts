@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAuth, requireAdmin, requireActiveUser } from '../middleware/auth';
 import { prisma } from '../utils';
+import { enhancedCache, CACHE_KEYS } from '../utils/cache';
 import {
   getPresignedUploadUrl,
   getPresignedDownloadUrl,
@@ -20,6 +21,13 @@ const router = Router();
 // GET /api/config/image-preference - Get image preference
 router.get('/image-preference', async (_req, res) => {
   try {
+    const cacheKey = `${CACHE_KEYS.SITE_CONFIG}:image_preference`;
+    const cached = enhancedCache.get<{ strategy: string; fallback: boolean }>(cacheKey);
+    if (cached) {
+      res.json(cached);
+      return;
+    }
+
     const config = await prisma.siteConfig.findUnique({
       where: { key: 'image_preference' },
     });
@@ -29,6 +37,7 @@ router.get('/image-preference', async (_req, res) => {
       fallback?: boolean;
     } || { strategy: 'local', fallback: true };
 
+    enhancedCache.set(cacheKey, preference, 300);
     res.json(preference);
   } catch (error) {
     console.error('Get image preference error:', error);
@@ -64,6 +73,9 @@ router.patch('/image-preference', requireAuth, requireAdmin, async (req, res) =>
       update: { value },
       create: { key: 'image_preference', value },
     });
+
+    // 清除缓存
+    enhancedCache.delete(`${CACHE_KEYS.SITE_CONFIG}:image_preference`);
 
     // 如果切换到 S3 或 external 策略，自动启动同步任务
     let syncTask = null;

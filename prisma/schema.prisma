@@ -230,10 +230,13 @@ model Post {
   dislikes      PostDislike[]
 
   @@index([section])
+  @@index([section, status])
+  @@index([status, authorUid])
   @@index([musicDocId, updatedAt])
   @@index([albumDocId, updatedAt])
   @@index([status, updatedAt])
   @@index([updatedAt])
+  @@index([createdAt])
   @@index([hotScore, updatedAt])
   @@index([locationCode])
 }
@@ -291,6 +294,7 @@ model WikiPage {
 
   @@index([category, updatedAt])
   @@index([status, updatedAt])
+  @@index([isPinned, updatedAt])
   @@index([eventDate])
   @@index([mainBranchId])
   @@index([locationCode])
@@ -305,6 +309,7 @@ model PostLike {
   user      User     @relation(fields: [userUid], references: [uid], onDelete: Cascade)
 
   @@unique([postId, userUid])
+  @@index([userUid, postId])
   @@index([userUid, createdAt])
 }
 
@@ -317,6 +322,7 @@ model PostDislike {
   user      User     @relation("UserDislikes", fields: [userUid], references: [uid], onDelete: Cascade)
 
   @@unique([postId, userUid])
+  @@index([userUid, postId])
   @@index([userUid, createdAt])
 }
 
@@ -354,6 +360,7 @@ model Favorite {
 
   @@unique([userUid, targetType, targetId])
   @@index([targetType, targetId])
+  @@index([userUid, targetType])
   @@index([userUid, createdAt])
 }
 
@@ -500,6 +507,7 @@ model Gallery {
 
   @@index([createdAt])
   @@index([published, updatedAt])
+  @@index([authorUid])
   @@index([locationCode])
 }
 

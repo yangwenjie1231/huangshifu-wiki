@@ -3,6 +3,8 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+axios.defaults.timeout = 5000;
 import {
   Prisma,
   UserRole as PrismaUserRole,
@@ -66,6 +68,7 @@ import {
 import { RELATION_TYPE_LABELS } from '../../lib/relationConstants';
 import { userToApiUser, isAdminRole } from '../middleware/auth';
 import { prisma } from '../prisma';
+import { enhancedCache, CACHE_KEYS } from './cache';
 
 const prismaAny = prisma as any;
 
@@ -980,9 +983,9 @@ function toPostResponse(post: {
   authorUid: string;
   author?: { displayName: string } | null;
   status: ContentStatus;
-  reviewNote: string | null;
-  reviewedBy: string | null;
-  reviewedAt: Date | null;
+  reviewNote?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: Date | null;
   hotScore?: number;
   viewCount?: number;
   likesCount: number;
@@ -1072,23 +1075,32 @@ async function toGalleryResponse(gallery: {
   try {
     const storageConfig = await prisma.siteConfig.findUnique({
       where: { key: 'image_preference' },
+      select: { value: true },
     });
-    const preference = storageConfig?.value as { strategy?: 'local' | 's3' | 'external' };
+    const preference = storageConfig?.value as { strategy?: 'local' | 's3' | 'external' } | undefined;
     storageStrategy = preference?.strategy || 'local';
   } catch (error) {
     console.warn('Failed to get storage strategy:', error);
   }
 
-  const storageKeys = gallery.images
-    .map(img => img.asset?.storageKey)
-    .filter((key): key is string => Boolean(key));
+  const storageKeys: string[] = [];
+  const localUrls: string[] = [];
+  for (const img of gallery.images) {
+    if (img.asset?.storageKey) {
+      storageKeys.push(img.asset.storageKey);
+      localUrls.push(`/uploads/${img.asset.storageKey}`);
+    }
+  }
 
   const imageMaps = storageKeys.length > 0
     ? await prisma.imageMap.findMany({
         where: {
-          localUrl: {
-            in: storageKeys.map(key => `/uploads/${key}`),
-          },
+          localUrl: { in: localUrls },
+        },
+        select: {
+          localUrl: true,
+          externalUrl: true,
+          s3Url: true,
         },
       })
     : [];
@@ -1592,6 +1604,17 @@ function clearExpiredPlayUrlCache() {
 }
 
 function getCachedPlayUrl(cacheKey: string) {
+  // 优先使用增强缓存（限制大小）
+  const enhancedKey = `${CACHE_KEYS.MUSIC_PLAY_URL}:${cacheKey}`;
+  const enhancedCached = enhancedCache.get<PlayUrlCacheValue>(enhancedKey);
+  if (enhancedCached) {
+    if (enhancedCached.expiresAt > Date.now()) {
+      return enhancedCached;
+    }
+    enhancedCache.delete(enhancedKey);
+  }
+
+  // 回退到旧版内存缓存
   const cached = playUrlCache.get(cacheKey);
   if (!cached) {
     return null;
@@ -1610,6 +1633,10 @@ function setCachedPlayUrl(cacheKey: string, value: Omit<PlayUrlCacheValue, 'fetc
     fetchedAt: now,
     expiresAt: now + PLAY_URL_CACHE_TTL_MS,
   };
+
+  // 同时写入增强缓存（限制大小）和旧版缓存
+  const enhancedKey = `${CACHE_KEYS.MUSIC_PLAY_URL}:${cacheKey}`;
+  enhancedCache.set(enhancedKey, record, Math.ceil(PLAY_URL_CACHE_TTL_MS / 1000));
   playUrlCache.set(cacheKey, record);
   return record;
 }
@@ -2114,7 +2141,10 @@ async function autoLinkInstrumental(
   });
 }
 
-async function fetchSongsWithRelations(where?: Record<string, unknown>) {
+async function fetchSongsWithRelations(
+  where?: Record<string, unknown>,
+  pagination?: { take?: number; skip?: number },
+) {
   const songs = await prisma.musicTrack.findMany({
     where,
     include: {
@@ -2124,7 +2154,12 @@ async function fetchSongsWithRelations(where?: Record<string, unknown>) {
       albumRelations: {
         include: {
           album: {
-            include: {
+            select: {
+              docId: true,
+              title: true,
+              artist: true,
+              cover: true,
+              defaultCoverSource: true,
               covers: {
                 orderBy: { sortOrder: 'asc' },
               },
@@ -2140,6 +2175,8 @@ async function fetchSongsWithRelations(where?: Record<string, unknown>) {
       },
     },
     orderBy: { createdAt: 'desc' },
+    ...(pagination?.take !== undefined ? { take: pagination.take } : {}),
+    ...(pagination?.skip !== undefined ? { skip: pagination.skip } : {}),
   });
   return songs as MusicTrackWithRelations[];
 }
@@ -2403,7 +2440,8 @@ async function uploadFileToS3(
         Key: s3Key,
         Body: fileBuffer,
         ContentType: contentType,
-      })
+      }),
+      { requestTimeout: 10000 }
     );
 
     // URL 中的 key 需要编码
@@ -2453,6 +2491,7 @@ async function uploadFileToExternal(
       method: 'POST',
       headers,
       body: formData as unknown as BodyInit,
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!response.ok) {
@@ -2524,6 +2563,7 @@ async function uploadToSuperbed(
         ...formData.getHeaders(),
       },
       body: formData as unknown as BodyInit,
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!response.ok) {
@@ -2589,6 +2629,7 @@ async function deleteFromSuperbed(
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: params.toString(),
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!response.ok) {

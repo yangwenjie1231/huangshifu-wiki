@@ -562,6 +562,26 @@ router.get('/:userId/posts', async (req: AuthenticatedRequest, res) => {
         orderBy: { createdAt: 'desc' },
         take: limit,
         skip,
+        select: {
+          id: true,
+          title: true,
+          section: true,
+          content: true,
+          tags: true,
+          locationCode: true,
+          authorUid: true,
+          status: true,
+          hotScore: true,
+          viewCount: true,
+          likesCount: true,
+          dislikesCount: true,
+          commentsCount: true,
+          isPinned: true,
+          musicDocId: true,
+          albumDocId: true,
+          createdAt: true,
+          updatedAt: true,
+        },
       }),
       prisma.post.count({ where }),
     ]);
@@ -570,11 +590,12 @@ router.get('/:userId/posts', async (req: AuthenticatedRequest, res) => {
     const favoritedPostSet = new Set<string>();
     const dislikedPostSet = new Set<string>();
     if (req.authUser && posts.length) {
+      const postIds = posts.map((item) => item.id);
       const [likedPosts, favoritedPosts, dislikedPosts] = await Promise.all([
         prisma.postLike.findMany({
           where: {
             userUid: req.authUser.uid,
-            postId: { in: posts.map((item) => item.id) },
+            postId: { in: postIds },
           },
           select: { postId: true },
         }),
@@ -582,14 +603,14 @@ router.get('/:userId/posts', async (req: AuthenticatedRequest, res) => {
           where: {
             userUid: req.authUser.uid,
             targetType: 'post',
-            targetId: { in: posts.map((item) => item.id) },
+            targetId: { in: postIds },
           },
           select: { targetId: true },
         }),
         prisma.postDislike.findMany({
           where: {
             userUid: req.authUser.uid,
-            postId: { in: posts.map((item) => item.id) },
+            postId: { in: postIds },
           },
           select: { postId: true },
         }),
@@ -609,6 +630,7 @@ router.get('/:userId/posts', async (req: AuthenticatedRequest, res) => {
       total,
       page,
       limit,
+      hasMore: skip + posts.length < total,
     });
   } catch (error) {
     console.error('Fetch user posts error:', error);
@@ -625,19 +647,22 @@ router.get('/:userId/comments', async (req: AuthenticatedRequest, res) => {
 
     const visibilityWhere = buildPostVisibilityWhere(req.authUser);
 
-    const comments = await prisma.postComment.findMany({
-      where: {
-        authorUid: uid,
-      },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-      skip,
-      include: {
-        author: {
-          select: { displayName: true, photoURL: true },
+    const [comments, total] = await Promise.all([
+      prisma.postComment.findMany({
+        where: {
+          authorUid: uid,
         },
-      },
-    });
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip,
+        include: {
+          author: {
+            select: { displayName: true, photoURL: true },
+          },
+        },
+      }),
+      prisma.postComment.count({ where: { authorUid: uid } }),
+    ]);
 
     // PostComment.postId 可能为 null（图集评论），筛掉非空的再传给 Post 查询，
     // 让 Prisma 的 in 子句类型对齐 string[]
@@ -655,8 +680,6 @@ router.get('/:userId/comments', async (req: AuthenticatedRequest, res) => {
       posts.forEach((p) => postsMap.set(p.id, p));
     }
 
-    const total = await prisma.postComment.count({ where: { authorUid: uid } });
-
     res.json({
       comments: comments.map((comment) => ({
         ...toCommentResponse(comment),
@@ -665,6 +688,7 @@ router.get('/:userId/comments', async (req: AuthenticatedRequest, res) => {
       total,
       page,
       limit,
+      hasMore: skip + comments.length < total,
     });
   } catch (error) {
     console.error('Fetch user comments error:', error);

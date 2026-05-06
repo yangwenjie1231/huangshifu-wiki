@@ -16,6 +16,7 @@ import {
   hasTag,
   buildWikiRelationBundle,
 } from '../utils';
+import { enhancedCache, CACHE_KEYS } from '../utils/cache';
 import type {
   AuthenticatedRequest,
   ContentStatus,
@@ -40,6 +41,10 @@ function sendWikiUniqueConflict(error: unknown, res: Response) {
   return true;
 }
 
+function clearWikiPageCache(slug: string) {
+  enhancedCache.delete(`${CACHE_KEYS.WIKI_PAGE}:${slug}`);
+}
+
 router.get('/', async (req: AuthenticatedRequest, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
   res.setHeader('Pragma', 'no-cache');
@@ -47,19 +52,21 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
   try {
     const category = typeof req.query.category === 'string' ? req.query.category : 'all';
     const tag = typeof req.query.tag === 'string' ? req.query.tag.trim() : '';
+    const limit = Math.min(Math.max(Number(req.query.limit ?? req.query.pageSize) || 20, 1), 100);
     const page = Math.max(Number(req.query.page) || 1, 1);
-    const pageSize = Math.min(Math.max(Number(req.query.pageSize) || 24, 1), 100);
+    const skip = (page - 1) * limit;
+
     const visibilityWhere = buildWikiVisibilityWhere(req.authUser);
     const where: Prisma.WikiPageWhereInput = {
       ...(category && category !== 'all' ? { category } : {}),
+      ...(tag ? { tags: { array_contains: [tag] } } : {}),
       ...visibilityWhere,
     };
 
-    let visiblePages: Awaited<ReturnType<typeof prisma.wikiPage.findMany>>;
+    let pages: Awaited<ReturnType<typeof prisma.wikiPage.findMany>>;
     let total: number;
 
     if (tag) {
-      // tag 存储在 JSON 中，需要 JS 侧过滤后再分页
       const allPages = await prisma.wikiPage.findMany({
         where,
         orderBy: [{ isPinned: 'desc' }, { updatedAt: 'desc' }],
@@ -67,19 +74,18 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
       });
       const filtered = allPages.filter((p) => hasTag(p.tags, tag));
       total = filtered.length;
-      const skip = (page - 1) * pageSize;
-      visiblePages = filtered.slice(skip, skip + pageSize);
+      pages = filtered.slice(skip, skip + limit);
     } else {
       const [dbPages, count] = await Promise.all([
         prisma.wikiPage.findMany({
           where,
           orderBy: [{ isPinned: 'desc' }, { updatedAt: 'desc' }],
-          take: pageSize,
-          skip: (page - 1) * pageSize,
+          take: limit,
+          skip,
         }),
         prisma.wikiPage.count({ where }),
       ]);
-      visiblePages = dbPages;
+      pages = dbPages;
       total = count;
     }
 
@@ -87,27 +93,27 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     const likedWikiSet = new Set<string>();
     const dislikedWikiSet = new Set<string>();
 
-    if (req.authUser && visiblePages.length) {
+    if (req.authUser && pages.length) {
       const [favorites, likes, dislikes] = await Promise.all([
         prisma.favorite.findMany({
           where: {
             userUid: req.authUser.uid,
             targetType: 'wiki',
-            targetId: { in: visiblePages.map((item) => item.slug) },
+            targetId: { in: pages.map((item) => item.slug) },
           },
           select: { targetId: true },
         }),
         prisma.wikiLike.findMany({
           where: {
             userUid: req.authUser.uid,
-            pageSlug: { in: visiblePages.map((item) => item.slug) },
+            pageSlug: { in: pages.map((item) => item.slug) },
           },
           select: { pageSlug: true },
         }),
         prisma.wikiDislike.findMany({
           where: {
             userUid: req.authUser.uid,
-            pageSlug: { in: visiblePages.map((item) => item.slug) },
+            pageSlug: { in: pages.map((item) => item.slug) },
           },
           select: { pageSlug: true },
         }),
@@ -118,15 +124,16 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     }
 
     res.json({
-      pages: visiblePages.map((page) => ({
-        ...toWikiResponse(page),
-        favoritedByMe: favoritedWikiSet.has(page.slug),
-        likedByMe: likedWikiSet.has(page.slug),
-        dislikedByMe: dislikedWikiSet.has(page.slug),
+      pages: pages.map((p) => ({
+        ...toWikiResponse(p),
+        favoritedByMe: favoritedWikiSet.has(p.slug),
+        likedByMe: likedWikiSet.has(p.slug),
+        dislikedByMe: dislikedWikiSet.has(p.slug),
       })),
       total,
       page,
-      pageSize,
+      limit,
+      hasMore: page * limit < total,
     });
   } catch (error) {
     console.error('Fetch wiki pages error:', error);
@@ -320,8 +327,25 @@ router.get('/:slug', async (req: AuthenticatedRequest, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   try {
+    const { slug } = req.params;
+    const cacheKey = `${CACHE_KEYS.WIKI_PAGE}:${slug}`;
+
+    // 尝试读取缓存（仅对未登录用户启用缓存）
+    if (!req.authUser) {
+      const cached = enhancedCache.get<{
+        page: ReturnType<typeof toWikiResponse> & { favoritedByMe: boolean; likedByMe: boolean; dislikedByMe: boolean };
+        backlinks: ReturnType<typeof toWikiResponse>[];
+        relations: unknown;
+        relationGraph: unknown;
+      }>(cacheKey);
+      if (cached) {
+        res.json(cached);
+        return;
+      }
+    }
+
     const page = await prisma.wikiPage.findUnique({
-      where: { slug: req.params.slug },
+      where: { slug },
       include: { lastEditor: { select: { displayName: true } } },
     });
 
@@ -330,9 +354,9 @@ router.get('/:slug', async (req: AuthenticatedRequest, res) => {
       return;
     }
 
-    await prisma.$executeRaw`UPDATE "WikiPage" SET "viewCount" = "viewCount" + 1 WHERE "slug" = ${req.params.slug}`;
+    await prisma.$executeRaw`UPDATE "WikiPage" SET "viewCount" = "viewCount" + 1 WHERE "slug" = ${slug}`;
     const freshPage = await prisma.wikiPage.findUnique({
-      where: { slug: req.params.slug },
+      where: { slug },
       include: { lastEditor: { select: { displayName: true } } },
     });
 
@@ -342,7 +366,7 @@ router.get('/:slug', async (req: AuthenticatedRequest, res) => {
     }
 
     if (req.authUser) {
-      await recordBrowsingHistory(req.authUser.uid, 'wiki', req.params.slug);
+      await recordBrowsingHistory(req.authUser.uid, 'wiki', slug);
     }
 
     const backlinkSearchTerms = buildWikiBacklinkSearchTerms(req.params.slug);
@@ -379,7 +403,7 @@ router.get('/:slug', async (req: AuthenticatedRequest, res) => {
           where: {
             userUid: req.authUser.uid,
             targetType: 'wiki',
-            targetId: req.params.slug,
+            targetId: slug,
           },
         })) > 0
       : false;
@@ -388,7 +412,7 @@ router.get('/:slug', async (req: AuthenticatedRequest, res) => {
       ? (await prisma.wikiLike.count({
           where: {
             userUid: req.authUser.uid,
-            pageSlug: req.params.slug,
+            pageSlug: slug,
           },
         })) > 0
       : false;
@@ -397,12 +421,12 @@ router.get('/:slug', async (req: AuthenticatedRequest, res) => {
       ? (await prisma.wikiDislike.count({
           where: {
             userUid: req.authUser.uid,
-            pageSlug: req.params.slug,
+            pageSlug: slug,
           },
         })) > 0
       : false;
 
-    res.json({
+    const response = {
       page: {
         ...toWikiResponse(freshPage),
         favoritedByMe,
@@ -412,7 +436,14 @@ router.get('/:slug', async (req: AuthenticatedRequest, res) => {
       backlinks: backlinks.map(toWikiResponse),
       relations: relationBundle.relations,
       relationGraph: relationBundle.graph,
-    });
+    };
+
+    // 仅对未登录用户缓存页面详情
+    if (!req.authUser) {
+      enhancedCache.set(cacheKey, response, 180);
+    }
+
+    res.json(response);
   } catch (error) {
     console.error('Fetch wiki page error:', error);
     res.status(500).json({ error: '获取页面失败' });
@@ -468,6 +499,7 @@ router.post('/:slug/like', requireAuth, requireActiveUser, async (req: Authentic
       prisma.wikiDislike.count({ where: { pageSlug: slug } }),
     ]);
 
+    clearWikiPageCache(slug);
     res.json({ liked: true, likesCount, dislikesCount });
   } catch (error) {
     console.error('Like wiki page error:', error);
@@ -501,6 +533,7 @@ router.delete('/:slug/like', requireAuth, requireActiveUser, async (req: Authent
 
     const likesCount = await prisma.wikiLike.count({ where: { pageSlug: slug } });
 
+    clearWikiPageCache(slug);
     res.json({ liked: false, likesCount });
   } catch (error) {
     console.error('Unlike wiki page error:', error);
@@ -557,6 +590,7 @@ router.post('/:slug/dislike', requireAuth, requireActiveUser, async (req: Authen
       prisma.wikiDislike.count({ where: { pageSlug: slug } }),
     ]);
 
+    clearWikiPageCache(slug);
     res.json({ disliked: true, dislikesCount, likesCount });
   } catch (error) {
     console.error('Dislike wiki page error:', error);
@@ -590,6 +624,7 @@ router.delete('/:slug/dislike', requireAuth, requireActiveUser, async (req: Auth
 
     const dislikesCount = await prisma.wikiDislike.count({ where: { pageSlug: slug } });
 
+    clearWikiPageCache(slug);
     res.json({ disliked: false, dislikesCount });
   } catch (error) {
     console.error('Undislike wiki page error:', error);
@@ -616,6 +651,7 @@ router.post('/:slug/pin', requireAdmin, async (req: AuthenticatedRequest, res) =
       data: { isPinned: true },
     });
 
+    clearWikiPageCache(slug);
     res.json({ isPinned: updatedPage.isPinned });
   } catch (error) {
     console.error('Pin wiki page error:', error);
@@ -642,6 +678,7 @@ router.delete('/:slug/pin', requireAdmin, async (req: AuthenticatedRequest, res)
       data: { isPinned: false },
     });
 
+    clearWikiPageCache(slug);
     res.json({ isPinned: updatedPage.isPinned });
   } catch (error) {
     console.error('Unpin wiki page error:', error);
@@ -733,6 +770,7 @@ router.post('/:slug/submit', requireAuth, requireActiveUser, async (req: Authent
         },
       });
 
+      clearWikiPageCache(slug);
       res.json({ page: toWikiResponse(published) });
       return;
     }
@@ -757,6 +795,7 @@ router.post('/:slug/submit', requireAuth, requireActiveUser, async (req: Authent
       },
     });
 
+    clearWikiPageCache(slug);
     res.json({ page: toWikiResponse(updated) });
   } catch (error) {
     console.error('Submit wiki review error:', error);
@@ -876,6 +915,7 @@ router.post('/', requireAuth, requireActiveUser, async (req: AuthenticatedReques
       });
     }
 
+    clearWikiPageCache(pageSlug);
     res.status(201).json({ page: toWikiResponse(page) });
   } catch (error) {
     if (sendWikiUniqueConflict(error, res)) return;
@@ -983,6 +1023,7 @@ router.post('/legacy', requireAuth, requireActiveUser, async (req: Authenticated
       },
     });
 
+    clearWikiPageCache(pageSlug);
     res.status(201).json({ page: toWikiResponse(page) });
   } catch (error) {
     if (sendWikiUniqueConflict(error, res)) return;
@@ -1072,6 +1113,7 @@ router.put('/:slug', requireAuth, requireActiveUser, async (req: AuthenticatedRe
       },
     });
 
+    clearWikiPageCache(req.params.slug);
     res.json({ page: toWikiResponse(updated) });
   } catch (error) {
     if (sendWikiUniqueConflict(error, res)) return;
@@ -1727,6 +1769,7 @@ router.post('/pull-requests/:prId/merge', requireAuth, requireAdmin, async (req:
     ]);
 
     const updatedPage = await prisma.wikiPage.findUnique({ where: { slug: pr.pageSlug } });
+    clearWikiPageCache(pr.pageSlug);
     res.json({ page: updatedPage ? toWikiResponse(updatedPage) : null });
   } catch (error) {
     if (sendWikiUniqueConflict(error, res)) return;
@@ -1773,6 +1816,7 @@ router.post('/pull-requests/:prId/reject', requireAuth, requireAdmin, async (req
       }),
     ]);
 
+    clearWikiPageCache(pr.pageSlug);
     res.json({ success: true });
   } catch (error) {
     console.error('Reject wiki PR error:', error);
@@ -1942,6 +1986,7 @@ router.post('/:slug/rollback/:revisionId', requireAuth, requireActiveUser, async
       },
     });
 
+    clearWikiPageCache(req.params.slug);
     res.json({ page: toWikiResponse(page) });
   } catch (error) {
     if (sendWikiUniqueConflict(error, res)) return;

@@ -21,8 +21,8 @@ const MUSIC_SECTION_ID = 'music';
 router.get('/', async (req: AuthenticatedRequest, res) => {
   try {
     const section = typeof req.query.section === 'string' ? req.query.section : 'all';
-    const limit = Number(req.query.limit) || 20;
-    const page = Number(req.query.page) || 1;
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
+    const page = Math.max(Number(req.query.page) || 1, 1);
     const sort = req.query.sort as string | undefined;
     const skip = (page - 1) * limit;
     const visibilityWhere = buildPostVisibilityWhere(req.authUser);
@@ -44,9 +44,29 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
       prisma.post.findMany({
         where,
         orderBy,
-        take: Math.min(limit, 200),
+        take: limit,
         skip,
-        include: { author: { select: { displayName: true } } },
+        select: {
+          id: true,
+          title: true,
+          section: true,
+          content: true,
+          tags: true,
+          locationCode: true,
+          authorUid: true,
+          status: true,
+          hotScore: true,
+          viewCount: true,
+          likesCount: true,
+          dislikesCount: true,
+          commentsCount: true,
+          isPinned: true,
+          musicDocId: true,
+          albumDocId: true,
+          createdAt: true,
+          updatedAt: true,
+          author: { select: { displayName: true } },
+        },
       }),
       prisma.post.count({ where }),
     ]);
@@ -100,9 +120,9 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
         favoritedByMe: favoritedPostSet.has(post.id),
       })),
       total,
-      totalPages: Math.ceil(total / limit),
       page,
       limit,
+      hasMore: skip + posts.length < total,
     });
   } catch (error) {
     console.error('Fetch posts error:', error);

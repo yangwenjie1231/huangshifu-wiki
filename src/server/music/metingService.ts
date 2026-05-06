@@ -54,6 +54,30 @@ function createClient(platform: MusicPlatform, formatted = true) {
   return client;
 }
 
+const METING_API_TIMEOUT_MS = 5000;
+
+async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Meting API timeout')), ms);
+    promise
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
+
+function ensureString(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  return '';
+}
+
 function parseJsonSafe<T>(raw: string, fallback: T): T {
   try {
     return JSON.parse(raw) as T;
@@ -126,14 +150,14 @@ async function runFormattedList(
   runner: (client: Meting) => Promise<string>,
 ) {
   const client = createClient(platform, true);
-  const raw = await runner(client);
+  const raw = ensureString(await withTimeout(runner(client), METING_API_TIMEOUT_MS));
   const parsed = parseJsonSafe<unknown>(raw, []);
   return toArray(parsed) as MetingTrackRaw[];
 }
 
 async function runRawValue(platform: MusicPlatform, runner: (client: Meting) => Promise<string>) {
   const client = createClient(platform, false);
-  const raw = await runner(client);
+  const raw = ensureString(await withTimeout(runner(client), METING_API_TIMEOUT_MS));
   return parseJsonSafe<unknown>(raw, {});
 }
 
@@ -144,7 +168,7 @@ async function resolvePicById(platform: MusicPlatform, picId: string, fallback =
 
   try {
     const client = createClient(platform, true);
-    const raw = await client.pic(picId, 500);
+    const raw = ensureString(await withTimeout(client.pic(picId, 500), METING_API_TIMEOUT_MS));
     const parsed = parseJsonSafe<unknown>(raw, {});
     if (Array.isArray(parsed)) {
       const first = parsed[0] as { url?: string } | undefined;
@@ -266,11 +290,14 @@ export async function searchMusicResources(options: {
   limit?: number;
 }) {
   const client = createClient(options.platform, true);
-  const raw = await client.search(options.keyword, {
-    type: mapSearchTypeToMeting(options.type),
-    page: options.page || 1,
-    limit: options.limit || 20,
-  });
+  const raw = ensureString(await withTimeout(
+    client.search(options.keyword, {
+      type: mapSearchTypeToMeting(options.type),
+      page: options.page || 1,
+      limit: options.limit || 20,
+    }),
+    METING_API_TIMEOUT_MS,
+  ));
   const parsed = parseJsonSafe<unknown>(raw, []);
   const list = toArray(parsed) as MetingTrackRaw[];
 
@@ -420,7 +447,7 @@ export async function resolveAudioUrl(platform: MusicPlatform, urlId: string) {
 
   try {
     const client = createClient(platform, true);
-    const raw = await client.url(urlId, 320);
+    const raw = ensureString(await withTimeout(client.url(urlId, 320), METING_API_TIMEOUT_MS));
     const parsed = parseJsonSafe<unknown>(raw, {});
     return extractSingleFieldAsString(parsed, 'url');
   } catch {
@@ -434,7 +461,7 @@ export async function resolveLyric(platform: MusicPlatform, lyricId: string) {
   }
   try {
     const client = createClient(platform, true);
-    const raw = await client.lyric(lyricId);
+    const raw = ensureString(await withTimeout(client.lyric(lyricId), METING_API_TIMEOUT_MS));
     const parsed = parseJsonSafe<unknown>(raw, {});
     return extractSingleFieldAsString(parsed, 'lyric');
   } catch {

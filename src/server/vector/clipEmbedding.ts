@@ -12,6 +12,9 @@ const DEFAULT_VECTOR_SIZE = 512;
 const MODEL_CACHE_DIR = process.env.TRANSFORMERS_CACHE || path.join(process.cwd(), 'models', 'transformers');
 env.cacheDir = MODEL_CACHE_DIR;
 
+// 设置远程模型下载超时（毫秒）
+(env as unknown as Record<string, unknown>).remoteHostTimeout = 5000;
+
 // 如果使用本地模型，设置本地模型路径
 if (process.env.TRANSFORMERS_OFFLINE === 'true') {
   env.allowRemoteModels = false;
