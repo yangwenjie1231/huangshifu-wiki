@@ -1,0 +1,569 @@
+/**
+ * 认证 API 集成测试
+ *
+ * 测试范围：
+ * 1. /api/auth/health - 健康检查端点
+ * 2. /api/auth/me - 获取当前用户信息（认证和未认证状态）
+ * 3. /api/auth/login - 用户登录功能
+ * 4. /api/auth/register - 用户注册功能
+ * 5. /api/auth/logout - 用户登出功能
+ *
+ * 测试策略：
+ * - 使用 supertest 进行 HTTP 请求测试
+ * - 使用实际数据库连接进行集成测试
+ * - 包含正常流程和错误情况的测试用例
+ */
+
+import { describe, beforeEach, afterEach, it, expect } from 'vitest';
+import request from 'supertest';
+import { app } from '../../server';
+import { prisma, createTestUser, createTestToken } from './setup';
+
+describe('Auth API - 认证接口测试', () => {
+  /**
+   * 每个测试前清理用户表，确保测试隔离性
+   */
+  beforeEach(async () => {
+    // 清理测试数据，避免冲突
+    await prisma.user.deleteMany({
+      where: {
+        email: {
+          startsWith: 'test_',
+        },
+      },
+    });
+  });
+
+  /**
+   * 每个测试后不需要特别清理，因为 beforeEach 会处理
+   */
+  afterEach(async () => {
+    // 可选：额外的清理逻辑
+  });
+
+  // ============================================================================
+  // 健康检查端点测试
+  // ============================================================================
+  describe('GET /api/auth/health', () => {
+    /**
+     * 测试目的：验证健康检查端点是否正常工作
+     * 预期结果：返回 200 状态码和包含 status: 'ok' 的响应体
+     */
+    it('应该返回健康状态 OK', async () => {
+      const response = await request(app).get('/api/auth/health');
+
+      // 验证状态码
+      expect(response.status).toBe(200);
+
+      // 验证响应体结构
+      expect(response.body).toHaveProperty('status', 'ok');
+      expect(response.body).toHaveProperty('timestamp');
+      expect(typeof response.body.timestamp).toBe('string');
+
+      // 验证时间戳格式（ISO 8601）
+      const timestamp = new Date(response.body.timestamp);
+      expect(timestamp.getTime()).not.toBeNaN();
+    });
+
+    /**
+     * 测试目的：验证健康检查端点的响应时间
+     * 预期结果：响应时间应该在合理范围内（< 100ms）
+     */
+    it('应该快速响应健康检查请求', async () => {
+      const startTime = Date.now();
+
+      const response = await request(app).get('/api/auth/health');
+
+      const endTime = Date.now();
+      const responseTime = endTime - startTime;
+
+      expect(response.status).toBe(200);
+      // 健康检查应该很快，通常 < 100ms
+      expect(responseTime).toBeLessThan(100);
+    });
+  });
+
+  // ============================================================================
+  // 获取当前用户信息端点测试
+  // ============================================================================
+  describe('GET /api/auth/me', () => {
+    /**
+     * 测试目的：验证未认证用户访问 /me 端点的行为
+     * 预期结果：返回 200 状态码，但 user 字段为 null
+     */
+    it('未登录时应该返回 user: null', async () => {
+      const response = await request(app).get('/api/auth/me');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('user', null);
+    });
+
+    /**
+     * 测试目的：验证已认证用户访问 /me 端点能否正确返回用户信息
+     * 预期结果：返回包含完整用户信息的响应体
+     */
+    it('已登录时应该返回当前用户信息', async () => {
+      // 创建测试用户
+      const { user } = await createTestUser({
+        displayName: 'TestUser_Me',
+      });
+
+      // 创建认证 token
+      const token = await createTestToken(user.uid, user.role);
+
+      // 发送带认证 token 的请求
+      const response = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${token}`);
+
+      // 验证状态码
+      expect(response.status).toBe(200);
+
+      // 验证用户信息存在
+      expect(response.body).toHaveProperty('user');
+      expect(response.body.user).not.toBeNull();
+
+      // 验证用户信息字段
+      expect(response.body.user).toMatchObject({
+        uid: user.uid,
+        email: user.email,
+        displayName: 'TestUser_Me',
+        role: 'user',
+        status: 'active',
+      });
+
+      // 验证额外字段
+      expect(response.body.user).toHaveProperty('emailVerified', true);
+      expect(response.body.user).toHaveProperty('isAnonymous', false);
+      expect(response.body.user).toHaveProperty('providerData');
+      expect(Array.isArray(response.body.user.providerData)).toBe(true);
+    });
+
+    /**
+     * 测试目的：验证使用 Cookie 认证方式能否正确获取用户信息
+     * 预期结果：通过 Cookie 认证能正确返回用户信息
+     */
+    it('应该支持通过 Cookie 认证获取用户信息', async () => {
+      // 创建测试用户
+      const { user } = await createTestUser();
+
+      // 创建认证 token
+      const token = await createTestToken(user.uid, user.role);
+
+      // 发送带 Cookie 的请求
+      const response = await request(app)
+        .get('/api/auth/me')
+        .set('Cookie', [`hsf_token=${token}`]);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('user');
+      expect(response.body.user).toMatchObject({
+        uid: user.uid,
+        email: user.email,
+      });
+    });
+
+    /**
+     * 测试目的：验证无效 token 的处理
+     * 预期结果：无效 token 应该被视为未认证，返回 user: null
+     */
+    it('使用无效 token 时应该返回 user: null', async () => {
+      const response = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', 'Bearer invalid_token_12345');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('user', null);
+    });
+
+    /**
+     * 测试目的：验证过期 token 的处理
+     * 预期结果：过期 token 应该被视为未认证
+     */
+    it('使用过期 token 时应该返回 user: null', async () => {
+      const jwt = (await import('jsonwebtoken')).default;
+      const JWT_SECRET = process.env.JWT_SECRET || 'test_jwt_secret_replace_with_random_string';
+
+      // 创建一个立即过期的 token
+      const expiredToken = jwt.sign(
+        { uid: 'non-existent-user', role: 'user' },
+        JWT_SECRET,
+        { expiresIn: '-1s' }, // 已过期
+      );
+
+      const response = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${expiredToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('user', null);
+    });
+  });
+
+  // ============================================================================
+  // 用户登录功能测试
+  // ============================================================================
+  describe('POST /api/auth/login', () => {
+    /**
+     * 测试目的：验证使用正确的凭据能否成功登录
+     * 预期结果：返回 200 状态码、用户信息和认证 Cookie
+     */
+    it('使用正确的邮箱和密码应该成功登录', async () => {
+      // 创建测试用户
+      const { user, plainPassword } = await createTestUser({
+        email: 'login_test@example.com',
+        password: 'CorrectPassword123!',
+        displayName: 'LoginTestUser',
+      });
+
+      // 发送登录请求
+      const response = await request(app)
+        .post('/api/auth/login')
+        .send({
+          email: 'login_test@example.com',
+          password: 'CorrectPassword123!',
+        });
+
+      // 验证状态码
+      expect(response.status).toBe(200);
+
+      // 验证返回的用户信息
+      expect(response.body).toHaveProperty('user');
+      expect(response.body.user).toMatchObject({
+        uid: user.uid,
+        email: 'login_test@example.com',
+        displayName: 'LoginTestUser',
+      });
+
+      // 验证设置了认证 Cookie
+      expect(response.headers['set-cookie']).toBeDefined();
+      const cookies = Array.isArray(response.headers['set-cookie'])
+        ? response.headers['set-cookie']
+        : [response.headers['set-cookie']];
+      const authCookie = cookies.find((cookie: string) =>
+        cookie.startsWith('hsf_token='),
+      );
+      expect(authCookie).toBeDefined();
+      expect(authCookie).toContain('HttpOnly');
+    });
+
+    /**
+     * 测试目的：验证错误密码的处理
+     * 预期结果：返回 401 状态码和错误信息
+     */
+    it('使用错误的密码应该返回 401 错误', async () => {
+      // 创建测试用户
+      await createTestUser({
+        email: 'wrong_password@example.com',
+        password: 'CorrectPassword123!',
+      });
+
+      // 使用错误密码尝试登录
+      const response = await request(app)
+        .post('/api/auth/login')
+        .send({
+          email: 'wrong_password@example.com',
+          password: 'WrongPassword456!',
+        });
+
+      expect(response.status).toBe(401);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.error).toContain('邮箱或密码错误');
+    });
+
+    /**
+     * 测试目的：验证不存在的邮箱的处理
+     * 预期结果：返回 401 状态码（不泄露用户是否存在的信息）
+     */
+    it('使用不存在的邮箱应该返回 401 错误', async () => {
+      const response = await request(app)
+        .post('/api/auth/login')
+        .send({
+          email: 'nonexistent@example.com',
+          password: 'SomePassword123!',
+        });
+
+      expect(response.status).toBe(401);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.error).toContain('邮箱或密码错误');
+    });
+
+    /**
+     * 测试目的：验证缺少必要字段时的处理
+     * 预期结果：返回 400 状态码和明确的错误信息
+     */
+    it('缺少邮箱或密码时应该返回 400 错误', async () => {
+      // 缺少密码
+      const response1 = await request(app)
+        .post('/api/auth/login')
+        .send({
+          email: 'test@example.com',
+        });
+
+      expect(response1.status).toBe(400);
+      expect(response1.body).toHaveProperty('error');
+      expect(response1.body.error).toContain('不能为空');
+
+      // 缺少邮箱
+      const response2 = await request(app)
+        .post('/api/auth/login')
+        .send({
+          password: 'password123',
+        });
+
+      expect(response2.status).toBe(400);
+      expect(response2.body).toHaveProperty('error');
+
+      // 完全为空
+      const response3 = await request(app).post('/api/auth/login').send({});
+
+      expect(response3.status).toBe(400);
+      expect(response3.body).toHaveProperty('error');
+    });
+
+    /**
+     * 测试目的：验证空请求体的处理
+     * 预期结果：返回 400 状态码
+     */
+    it('发送空请求体时应该返回 400 错误', async () => {
+      const response = await request(app)
+        .post('/api/auth/login')
+        .set('Content-Type', 'application/json')
+        .send('');
+
+      expect(response.status).toBe(400);
+    });
+  });
+
+  // ============================================================================
+  // 用户注册功能测试
+  // ============================================================================
+  describe('POST /api/auth/register', () => {
+    /**
+     * 测试目的：验证使用有效信息能否成功注册新用户
+     * 预期结果：返回 201 状态码、创建的用户信息和认证 Cookie
+     */
+    it('使用有效信息应该成功注册新用户', async () => {
+      const response = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: 'new_user@example.com',
+          password: 'ValidPassword123!',
+          displayName: 'NewUser',
+        });
+
+      // 验证状态码
+      expect(response.status).toBe(201);
+
+      // 验证返回的用户信息
+      expect(response.body).toHaveProperty('user');
+      expect(response.body.user).toMatchObject({
+        email: 'new_user@example.com',
+        displayName: 'NewUser',
+        role: 'user',
+      });
+
+      // 验证 UID 已生成
+      expect(response.body.user.uid).toBeDefined();
+      expect(typeof response.body.user.uid).toBe('string');
+
+      // 验证用户确实被创建到数据库
+      const dbUser = await prisma.user.findUnique({
+        where: { email: 'new_user@example.com' },
+      });
+      expect(dbUser).not.toBeNull();
+      expect(dbUser?.displayName).toBe('NewUser');
+    });
+
+    /**
+     * 测试目的：验证重复注册的处理
+     * 预期结果：返回 409 冲突状态码
+     */
+    it('使用已存在的邮箱注册应该返回 409 冲突错误', async () => {
+      // 先创建一个用户
+      await createTestUser({
+        email: 'duplicate@example.com',
+      });
+
+      // 尝试使用相同邮箱注册
+      const response = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: 'duplicate@example.com',
+          password: 'Password123!',
+          displayName: 'AnotherUser',
+        });
+
+      expect(response.status).toBe(409);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.error).toContain('已注册');
+    });
+
+    /**
+     * 测试目的：验证密码长度限制
+     * 预期结果：短于 8 个字符的密码应该被拒绝
+     */
+    it('使用过短的密码应该返回 400 错误', async () => {
+      const response = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: 'short_pwd@example.com',
+          password: 'short', // 少于 8 个字符
+          displayName: 'ShortPwdUser',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.error).toContain('至少8个字符');
+    });
+
+    /**
+     * 测试目的：验证缺少必填字段的注册请求
+     * 预期结果：返回 400 状态码
+     */
+    it('缺少必填字段时应该返回 400 错误', async () => {
+      // 缺少密码
+      const response1 = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: 'no_pwd@example.com',
+          displayName: 'NoPwdUser',
+        });
+
+      expect(response1.status).toBe(400);
+
+      // 缺少邮箱
+      const response2 = await request(app)
+        .post('/api/auth/register')
+        .send({
+          password: 'ValidPassword123!',
+          displayName: 'NoEmailUser',
+        });
+
+      expect(response2.status).toBe(400);
+    });
+
+    /**
+     * 测试目的：验证邮箱自动小写化和昵称默认值
+     * 预期结果：邮箱应转为小写，未提供昵称时应使用邮箱前缀
+     */
+    it('应该自动将邮箱转为小写并设置默认昵称', async () => {
+      const response = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: 'MixedCase@Example.COM',
+          password: 'ValidPassword123!',
+          // 不提供 displayName
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.user.email).toBe('mixedcase@example.com');
+      expect(response.body.user.displayName).toBe('mixedcase'); // 默认使用邮箱前缀
+    });
+  });
+
+  // ============================================================================
+  // 用户登出功能测试
+  // ============================================================================
+  describe('POST /api/auth/logout', () => {
+    /**
+     * 测试目的：验证登出功能是否能清除认证信息
+     * 预期结果：返回成功响应并清除认证 Cookie
+     */
+    it('已登录用户应该能够成功登出', async () => {
+      // 创建并登录测试用户
+      const { user } = await createTestUser();
+      const token = await createTestToken(user.uid, user.role);
+
+      // 执行登出操作
+      const response = await request(app)
+        .post('/api/auth/logout')
+        .set('Authorization', `Bearer ${token}`);
+
+      // 验证登出响应
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('success', true);
+
+      // 验证 Cookie 被清除
+      if (response.headers['set-cookie']) {
+        const cookies = Array.isArray(response.headers['set-cookie'])
+          ? response.headers['set-cookie']
+          : [response.headers['set-cookie']];
+        const clearedCookie = cookies.find((cookie: string) =>
+          cookie.includes('hsf_token=;'),
+        );
+        expect(clearedCookie).toBeDefined();
+      }
+    });
+
+    /**
+     * 测试目的：验证未登录用户执行登出的行为
+     * 预期结果：登出操作应该始终成功（幂等操作）
+     */
+    it('未登录时执行登出也应该返回成功', async () => {
+      const response = await request(app).post('/api/auth/logout');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('success', true);
+    });
+  });
+
+  // ============================================================================
+  // 安全性和边界情况测试
+  // ============================================================================
+  describe('安全性和边界情况', () => {
+    /**
+     * 测试目的：验证 SQL 注入防护
+     * 预期结果：恶意输入不应导致系统错误或数据泄露
+     */
+    it('应该防止 SQL 注入攻击', async () => {
+      // 尝试 SQL 注入
+      const response = await request(app)
+        .post('/api/auth/login')
+        .send({
+          email: "'; DROP TABLE users; --",
+          password: "anything",
+        });
+
+      // 不应该返回 500 服务器错误
+      expect(response.status).not.toBe(500);
+      expect([400, 401]).toContain(response.status);
+    });
+
+    /**
+     * 测试目的：验证超长输入的处理
+     * 预期结果：系统应优雅地处理超长输入
+     */
+    it('应该优雅地处理超长输入', async () => {
+      const longString = 'a'.repeat(10000);
+
+      const response = await request(app)
+        .post('/api/auth/login')
+        .send({
+          email: `${longString}@example.com`,
+          password: longString,
+        });
+
+      // 不应该崩溃
+      expect([400, 401, 413]).toContain(response.status);
+    });
+
+    /**
+     * 测试目的：验证特殊字符在用户名中的处理
+     * 预期结果：特殊字符应被正确处理或拒绝
+     */
+    it('应该正确处理特殊字符输入', async () => {
+      const response = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: 'special@example.com',
+          password: 'ValidPassword123!',
+          displayName: '<script>alert("xss")</script>',
+        });
+
+      // 注册可能成功或失败，但不应该导致服务器错误
+      expect([201, 400]).toContain(response.status);
+      expect(response.status).not.toBe(500);
+    });
+  });
+});

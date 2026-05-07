@@ -1,0 +1,497 @@
+# ============================================================================
+# Security Scanning Workflow
+# ============================================================================
+# 功能：
+#   1. 依赖漏洞扫描 (npm audit) - 检测 npm 依赖中的已知漏洞
+#   2. CodeQL 代码安全分析 - 静态分析检测代码层面的安全问题
+#
+# 触发条件：
+#   - push 到 main 分支
+#   - PR 到 main 分支
+#   - 每周一凌晨 2:00 UTC 定时扫描
+#   - 手动触发 (workflow_dispatch)
+#
+# 输出：
+#   - SARIF 格式上传到 GitHub Security tab
+#   - PR 中展示安全扫描结果摘要
+# ============================================================================
+
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.js'
+      - '**/*.jsx'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.js'
+      - '**/*.jsx'
+  schedule:
+    # 每周一 UTC 02:00 (北京时间 10:00) 运行深度安全扫描
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+    inputs:
+      full_scan:
+        description: '运行完整的深度扫描（包含 CodeQL 完整分析）'
+        required: false
+        default: false
+        type: boolean
+
+# 最小权限原则：只授予必要的权限
+permissions:
+  contents: read
+  security-events: write  # 用于上传 SARIF 结果到 Security tab
+  pull-requests: write    # 用于在 PR 中显示结果
+  actions: read           # 用于读取 workflow 状态
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # ==========================================================================
+  # Job 1: 依赖漏洞扫描
+  # ==========================================================================
+  dependency-audit:
+    name: Dependency Vulnerability Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # ------------------------------------------------------------------
+      # npm audit: 扫描已知依赖漏洞
+      # --audit-level=moderate: 报告 moderate 及以上级别的漏洞
+      # 我们会在后续步骤中自定义严重性过滤逻辑
+      # ------------------------------------------------------------------
+      - name: Run npm audit
+        id: npm-audit
+        continue-on-error: true
+        run: |
+          echo "=== Running npm vulnerability audit ==="
+          npm audit --json > audit-results.json 2>&1 || true
+          
+          if [ -f audit-results.json ]; then
+            # 统计各级别漏洞数量
+            node -e "
+            const fs = require('fs');
+            const data = JSON.parse(fs.readFileSync('audit-results.json', 'utf8'));
+            
+            let summary = {
+              critical: 0,
+              high: 0,
+              moderate: 0,
+              low: 0,
+              info: 0,
+              total: 0
+            };
+            
+            // 解析审计结果
+            if (data.vulnerabilities) {
+              for (const [pkg, vuln] of Object.entries(data.vulnerabilities)) {
+                summary[vuln.severity] = (summary[vuln.severity] || 0) + 1;
+                summary.total++;
+              }
+            } else if (data.advisories) {
+              for (const advisory of Object.values(data.advisories)) {
+                summary[advisory.severity] = (summary[advisory.severity] || 0) + 1;
+                summary.total++;
+              }
+            }
+            
+            console.log('=== Vulnerability Summary ===');
+            console.log(JSON.stringify(summary));
+            
+            // 设置 GitHub Output
+            const fs2 = require('fs');
+            fs2.appendFileSync(process.env.GITHUB_OUTPUT, \`summary=\${JSON.stringify(summary)}\n\`);
+            
+            // 判断是否有高危/严重漏洞
+            const hasCriticalOrHigh = (summary.critical > 0 || summary.high > 0);
+            fs2.appendFileSync(process.env.GITHUB_OUTPUT, \`has_critical_or_high=\${hasCriticalOrHigh}\n\`);
+            "
+          else
+            echo "No valid audit results found"
+            echo "summary={}" >> $GITHUB_OUTPUT
+            echo "has_critical_or_high=false" >> $GITHUB_OUTPUT
+          fi
+
+      # ------------------------------------------------------------------
+      # 将 npm audit 结果转换为 SARIF 格式并上传
+      # ------------------------------------------------------------------
+      - name: Convert audit results to SARIF
+        if: always() && steps.npm-audit.outcome != 'skipped'
+        run: |
+          cat > sarif-npm-audit.json << 'SARIF_EOF'
+          {
+            "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+            "version": "2.1.0",
+            "runs": [
+              {
+                "tool": {
+                  "driver": {
+                    "name": "npm-audit",
+                    "informationUri": "https://docs.npmjs.com/cli/v10/commands/npm-audit",
+                    "rules": []
+                  }
+                },
+                "results": []
+              }
+            ]
+          }
+          SARIF_EOF
+          
+          if [ -f audit-results.json ]; then
+            node -e "
+            const fs = require('fs');
+            const data = JSON.parse(fs.readFileSync('audit-results.json', 'utf8'));
+            const sarif = JSON.parse(fs.readFileSync('sarif-npm-audit.json', 'utf8'));
+            
+            let ruleIndex = {};
+            let results = [];
+            
+            function addVulnerability(pkg, vuln, severity) {
+              const ruleId = 'npm-' + pkg.replace(/[^a-zA-Z0-9_-]/g, '-');
+              
+              if (!ruleIndex[ruleId]) {
+                ruleIndex[ruleId] = sarif.runs[0].tool.driver.rules.length;
+                sarif.runs[0].tool.driver.rules.push({
+                  id: ruleId,
+                  shortDescription: { text: vuln.title || ('Vulnerability in ' + pkg) },
+                  fullDescription: { text: vuln.overview || '' },
+                  help: {
+                    text: 'Package: ' + pkg + '\\n' +
+                          'Severity: ' + severity.toUpperCase() + '\\n' +
+                          'Vulnerable: ' + (vuln.via ? vuln.via.join(', ') : 'N/A') + '\\n' +
+                          'Fix: ' + (vuln.fixAvailable === false ? 'No fix available' : 
+                                vuln.fixAvailable && vuln.fixAvailable.version ? 
+                                'Update to ' + vuln.fixAvailable.version : 'Run npm audit fix')
+                  },
+                  properties: {
+                    'security-severity': getSeverityScore(severity),
+                    tags: ['dependency', 'vulnerability', severity]
+                  }
+                });
+              }
+              
+              results.push({
+                ruleId: ruleId,
+                level: getLevel(severity),
+                message: { text: (vuln.title || 'Dependency vulnerability') + ' [' + severity.toUpperCase() + ']' },
+                locations: [{
+                  physicalLocation: {
+                    artifactLocation: { uri: 'package.json' },
+                    region: { startLine: 1, endLine: 1 }
+                  }
+                }],
+                properties: {
+                  'package': pkg,
+                  'severity': severity,
+                  'vulnerableVersions': vuln.range || 'N/A',
+                  'patchedVersions': vuln.fixAvailable && vuln.fixAvailable.version ?
+                    vuln.fixAvailable.version : 'N/A'
+                }
+              });
+            }
+            
+            function getSeverityScore(sev) {
+              switch(sev.toLowerCase()) {
+                case 'critical': return '9.8';
+                case 'high': return '7.5';
+                case 'moderate': return '5.0';
+                case 'low': return '2.0';
+                default: return '1.0';
+              }
+            }
+            
+            function getLevel(sev) {
+              switch(sev.toLowerCase()) {
+                case 'critical':
+                case 'high': return 'error';
+                case 'moderate': return 'warning';
+                default: return 'note';
+              }
+            }
+            
+            if (data.vulnerabilities) {
+              for (const [pkg, vuln] of Object.entries(data.vulnerabilities)) {
+                addVulnerability(pkg, vuln, vuln.severity);
+              }
+            }
+            
+            sarif.runs[0].results = results;
+            fs.writeFileSync('sarif-npm-audit.json', JSON.stringify(sarif, null, 2));
+            console.log('Generated SARIF with ' + results.length + ' findings');
+            "
+          fi
+
+      - name: Upload npm audit results to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: sarif-npm-audit.json
+          category: npm-audit
+        continue-on-error: true
+
+      # ------------------------------------------------------------------
+      # 在 PR 中添加安全扫描结果注释
+      # ------------------------------------------------------------------
+      - name: Comment on PR with audit results
+        if: github.event_name == 'pull_request' && steps.npm-audit.outcome != 'skipped'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const summary = '${{ steps.npm-audit.outputs.summary }}';
+            const hasCriticalHigh = '${{ steps.npm-audit.outputs.has_critical_or_high }}' === 'true';
+            const data = JSON.parse(summary);
+            
+            const body = `## \u26A0\uFE0F Dependency Security Audit Report
+            
+            | Severity | Count |
+            |----------|-------|
+            | \uD83D\uDFE5 Critical | ${data.critical || 0} |
+            | \uD83D\uDD34 High | ${data.high || 0} |
+            | \uD83D\uDFE1 Moderate | ${data.moderate || 0} |
+            | \uD83D\uDFE2 Low | ${data.low || 0} |
+            | \u2139\uFE0F Info | ${data.info || 0} |
+            | **Total** | **${data.total || 0}** |
+            
+            ---
+            ${hasCriticalHigh ? '\u274C **Action Required:** Critical or high severity vulnerabilities detected! Please review and update affected dependencies.' : '\u2705 No critical or high severity vulnerabilities found.'}
+            
+            > Run \`npm audit fix\` to automatically fix fixable vulnerabilities.
+            > For detailed report, check the **Security** tab or download the artifact.`;
+            
+            // 查找或创建评论
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Dependency Security Audit Report')
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+
+      # ------------------------------------------------------------------
+      # 失败条件：发现高危或严重漏洞时失败构建
+      # ------------------------------------------------------------------
+      - name: Check for critical/high vulnerabilities
+        if: always()
+        run: |
+          HAS_CRITICAL_HIGH="${{ steps.npm-audit.outputs.has_critical_or_high }}"
+          
+          if [ "$HAS_CRITICAL_HIGH" = "true" ]; then
+            echo "::error::Critical or high severity vulnerabilities detected! Please review and fix before merging."
+            exit 1
+          fi
+          
+          echo "✓ No critical or high severity vulnerabilities found."
+
+      - name: Upload audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audit-report
+          path: |
+            audit-results.json
+            sarif-npm-audit.json
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # ==========================================================================
+  # Job 2: CodeQL 静态代码安全分析
+  # ==========================================================================
+  codeql-analyze:
+    name: CodeQL Analysis (${{ github.event_name == 'schedule' || inputs.full_scan == 'true' && 'Deep' || 'Standard' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ github.event_name == 'schedule' || inputs.full_scan == 'true' && 60 || 30 }}
+    
+    # PR 时可以并行运行；schedule/push 时等待 audit 完成
+    needs: ${{ github.event_name == 'pull_request' && [] || ['dependency-audit'] }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['javascript', 'typescript']
+        include:
+          - language: javascript
+            build-mode: autobuild
+          - language: typescript
+            build-mode: autobuild
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ------------------------------------------------------------------
+      # 初始化 CodeQL
+      # ------------------------------------------------------------------
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          # 启用更深入的查询（仅在定时扫描或手动全量扫描时）
+          queries: ${{ (github.event_name == 'schedule' || inputs.full_scan == 'true') &&
+            'security-extended,security-and-quality' ||
+            'security-extended' }}
+          # 使用最新的 CodeQL CLI 以获得最佳分析效果
+          tools: latest
+
+      # ------------------------------------------------------------------
+      # 自动构建：CodeQL 会自动检测项目类型并进行构建
+      # 这确保了分析覆盖实际编译的代码
+      # ------------------------------------------------------------------
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+        env:
+          # 确保 Node.js 环境正确配置
+          NODE_ENV: production
+
+      # ------------------------------------------------------------------
+      # 执行 CodeQL 分析
+      # --category 用于区分不同语言的扫描结果
+      # --sarif-category 确保 SARIF 文件有唯一标识
+      # ------------------------------------------------------------------
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:${{ matrix.language }}'
+          output: sarif-results-${{ matrix.language }}
+          # 上传到 GitHub Security tab（默认行为）
+          upload-database: true
+          # 在 PR 中显示结果
+          wait-for-processing: true
+
+      # ------------------------------------------------------------------
+      # 可选：导出额外的分析报告
+      # ------------------------------------------------------------------
+      - name: Export analysis summary
+        if: always()
+        run: |
+          echo "=== CodeQL Analysis Complete ==="
+          echo "Language: ${{ matrix.language }}"
+          echo "Build Mode: ${{ matrix.build-mode }}"
+          echo "Scan Type: ${{ (github.event_name == 'schedule' || inputs.full_scan == 'true') && 'Full Deep Scan' || 'Standard Security Scan' }}"
+          echo ""
+          echo "Results have been uploaded to the GitHub Security tab."
+          echo "SARIF results are available in the workflow artifacts."
+
+  # ==========================================================================
+  # Job 3: 安全扫描汇总（可选通知）
+  # ==========================================================================
+  security-summary:
+    name: Security Summary & Notifications
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [dependency-audit, codeql-analyze]
+    if: always()
+
+    steps:
+      - name: Generate security summary
+        run: |
+          DEP_STATUS="${{ needs.dependency-audit.result }}"
+          CODEQL_STATUS="${{ needs.codeql-analyze.result }}"
+          
+          echo "## Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Audit | $DEP_STATUS |" >> $GITHUB_STEP_SUMMARY
+          echo "| CodeQL Analysis | $CODEQL_STATUS |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "$DEP_STATUS" == "failure" || "$CODEQL_STATUS" == "failure" ]]; then
+            echo "### \u26A0\uFE0F Action Required" >> $GITHUB_STEP_SUMMARY
+            echo "One or more security checks failed. Please review the detailed reports." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "### \u2705 All Security Checks Passed" >> $GITHUB_STEP_SUMMARY
+            echo "No critical security issues detected." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # ------------------------------------------------------------------
+      # 可选：发送严重问题通知
+      # 取消下面的注释以启用 Slack/Teams/Email 通知
+      # ------------------------------------------------------------------
+      # - name: Send notification on failure
+      #   if: needs.dependency-audit.result == 'failure' || needs.codeql-analyze.result == 'failure'
+      #   uses: slackapi/slack-github-action@v1.26.0
+      #   with:
+      #     channel-id: 'security-alerts'
+      #     payload: |
+      #       {
+      #         "text": "\u26A0\uFE0F Security Scan Failed",
+      #         "blocks": [
+      #           {
+      #             "type": "section",
+      #             "text": {
+      #               "type": "mrkdwn",
+      #               "text": "*Security Scan Failed*\n\nRepository: ${{ github.repository }}\nBranch: ${{ github.ref_name }}\nTriggered by: ${{ github.actor }}\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
+      #             }
+      #           }
+      #         ]
+      #       }
+      #   env:
+      #     SLACK_BOT_TOKEN: ${{ secrets.SLACK_SECURITY_BOT_TOKEN }}
+
+      # - name: Send Teams notification on failure
+      #   if: needs.dependency-audit.result == 'failure' || needs.codeql-analyze.result == 'failure'
+      #   uses: jdcargile/ms-teams-notification@v1.4
+      #   with:
+      #     webhook-url: ${{ secrets.TEAMS_SECURITY_WEBHOOK }}
+      #     title: "\u26A0\uFE0F Security Scan Failed"
+      #     color: FF0000
+      #     message: "Security scan failed in ${{ github.repository }}. Please review immediately."
+
+      # ------------------------------------------------------------------
+      # 最终状态检查
+      # ------------------------------------------------------------------
+      - name: Final status check
+        run: |
+          if [[ "${{ needs.dependency-audit.result }}" == "failure" || "${{ needs.codeql-analyze.result }}" == "failure" ]]; then
+            echo "::error::Security scan completed with failures. Please review the reports above."
+            exit 1
+          fi
+          
+          echo "::notice::All security scans passed successfully!"

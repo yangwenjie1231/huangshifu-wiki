@@ -16,8 +16,11 @@
 - `npm run lint` → `tsc --noEmit`
 - `npm run test` / `npm run test:unit` → `vitest run`
 - `npm run test:coverage` → `vitest run --coverage`
+- `npm run test:integration` → `vitest run --config vitest.integration.config.ts`
 - `npm run build` → `vite build`
-- CI runs `lint` → `test:coverage` → `build`.
+- `npm run check:build` → 验证构建产物大小和完整性
+- `npm run validate:migrations` → 验证 Prisma 迁移文件
+- CI runs parallel jobs: `lint` + `test-unit` + `test-integration` → `build`.
 - `npm run clean` uses `rd /s /q dist`.
 
 ### Setup (one‑time)
@@ -32,6 +35,7 @@
 - `src/hooks/useApi.ts` is the standard React‑side API state helper.
 - `src/main.tsx` is the React entrypoint; `src/App.tsx` is the top‑level app shell.
 - Unit tests live under `tests/unit/**/*.test.ts`.
+- Integration tests live under `tests/integration/**/*.test.ts`.
 - `public/sw.js` caches the app shell; bump the cache name when UI/assets change.
 
 ### Repo‑specific conventions

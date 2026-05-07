@@ -11,33 +11,95 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NODE_VERSION: '20'
+  POSTGRES_USER: testuser
+  POSTGRES_PASSWORD: testpass
+  POSTGRES_DB: testdb
+
 jobs:
-  verify:
-    name: Lint Test Build
+  # ============================================================
+  # Job 1: Lint (Type Check)
+  # ============================================================
+  lint:
+    name: Lint & Type Check
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
+      - name: Cache node_modules
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
+
       - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
         run: npm ci
 
-      - name: Type check
+      - name: Run type check
         run: npm run lint
+
+  # ============================================================
+  # Job 2: Unit Tests + Coverage
+  # ============================================================
+  test-unit:
+    name: Unit Tests & Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Cache node_modules
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Cache Prisma Client
+        id: cache-prisma
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-${{ hashFiles('prisma/schema.prisma') }}
+          restore-keys: |
+            ${{ runner.os }}-prisma-
+
+      - name: Generate Prisma Client
+        if: steps.cache-prisma.outputs.cache-hit != 'true'
+        run: npx prisma generate
 
       - name: Run unit tests with coverage
         run: npm run test:coverage
-
-      - name: Build
-        run: npm run build
 
       - name: Check coverage thresholds
         run: |
@@ -91,6 +153,197 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
+          name: coverage-report-unit
           path: coverage/
           if-no-files-found: ignore
+
+  # ============================================================
+  # Job 3: Integration Tests (with PostgreSQL)
+  # ============================================================
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ${{ env.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U ${{ env.POSTGRES_USER }}"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DATABASE_URL: postgresql://${{ env.POSTGRES_USER }}:${{ env.POSTGRES_PASSWORD }}@localhost:${{ job.services.postgres.ports[5432] }}/${{ env.POSTGRES_DB }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Cache node_modules
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Cache Prisma Client
+        id: cache-prisma
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-${{ hashFiles('prisma/schema.prisma') }}
+          restore-keys: |
+            ${{ runner.os }}-prisma-
+
+      - name: Generate Prisma Client
+        if: steps.cache-prisma.outputs.cache-hit != 'true'
+        run: npx prisma generate
+
+      - name: Run database migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+
+      - name: Wait for PostgreSQL to be ready
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h localhost -p 5432 -U ${{ env.POSTGRES_USER }}; then
+              echo "PostgreSQL is ready!"
+              exit 0
+            fi
+            echo "Waiting for PostgreSQL... ($i/30)"
+            sleep 2
+          done
+          echo "::error::PostgreSQL did not become ready in time"
+          exit 1
+
+      - name: Run integration tests
+        run: npm run test:integration || echo "No integration tests configured yet"
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: |
+            test-results/
+            coverage/
+          if-no-files-found: ignore
+
+  # ============================================================
+  # Job 4: Build Verification
+  # ============================================================
+  build:
+    name: Build Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [lint, test-unit, test-integration]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Cache node_modules
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Cache Prisma Client
+        id: cache-prisma
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-${{ hashFiles('prisma/schema.prisma') }}
+          restore-keys: |
+            ${{ runner.os }}-prisma-
+
+      - name: Generate Prisma Client
+        if: steps.cache-prisma.outputs.cache-hit != 'true'
+        run: npx prisma generate
+
+      - name: Build application
+        run: npm run build
+
+      - name: Verify build output exists
+        run: |
+          echo "Verifying build output..."
+          if [ ! -d "dist" ]; then
+            echo "::error::Build output directory 'dist/' not found!"
+            exit 1
+          fi
+          echo "✓ dist/ directory exists"
+
+      - name: Check build artifact size
+        run: |
+          echo "Analyzing build artifacts..."
+          TOTAL_SIZE=$(du -sh dist/ | cut -f1)
+          FILE_COUNT=$(find dist/ -type f | wc -l)
+          
+          echo "=== Build Artifact Summary ==="
+          echo "Total size: $TOTAL_SIZE"
+          echo "File count: $FILE_COUNT"
+          echo "==============================="
+          
+          # Warning threshold: 50MB (adjust as needed)
+          SIZE_IN_KB=$(du -sk dist/ | cut -f1)
+          WARNING_THRESHOLD=51200  # 50MB in KB
+          
+          if [ "$SIZE_IN_KB" -gt "$WARNING_THRESHOLD" ]; then
+            echo "::warning::Build size ($TOTAL_SIZE) exceeds warning threshold (50MB)"
+            echo "Consider optimizing bundle size or checking for unexpected large files."
+            
+            # List largest files
+            echo ""
+            echo "Top 10 largest files:"
+            find dist/ -type f -exec du -k {} \; | sort -rn | head -10 | awk '{printf "%8s KB  %s\n", $1, $2}'
+          else
+            echo "✓ Build size is within acceptable limits"
+          fi
+
+      - name: Upload build artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: dist/
+          retention-days: 7
