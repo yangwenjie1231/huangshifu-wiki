@@ -345,9 +345,10 @@ jobs:
     name: CodeQL Analysis (${{ github.event_name == 'schedule' || inputs.full_scan == 'true' && 'Deep' || 'Standard' }})
     runs-on: ubuntu-latest
     timeout-minutes: ${{ github.event_name == 'schedule' || inputs.full_scan == 'true' && 60 || 30 }}
-    
+
     # PR 时可以并行运行；schedule/push 时等待 audit 完成
-    needs: ${{ github.event_name == 'pull_request' && [] || ['dependency-audit'] }}
+    needs: dependency-audit
+    if: ${{ github.event_name != 'pull_request' }}
 
     strategy:
       fail-fast: false
