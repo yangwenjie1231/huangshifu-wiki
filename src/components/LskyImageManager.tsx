@@ -1,0 +1,434 @@
+import { useState } from 'react';
+import { useLskyUpload } from '../hooks/useLskyUpload';
+import { useLskyPhotos } from '../hooks/useLskyPhotos';
+import { useLskyAlbums } from '../hooks/useLskyAlbums';
+
+export function LskyImageManager() {
+  const [activeTab, setActiveTab] = useState<'upload' | 'photos' | 'albums'>('upload');
+  
+  return (
+    <div className="lsky-manager">
+      <style>{`
+        .lsky-manager {
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 20px;
+        }
+        .lsky-tabs {
+          display: flex;
+          gap: 10px;
+          margin-bottom: 20px;
+          border-bottom: 2px solid #e0e0e0;
+        }
+        .lsky-tab {
+          padding: 10px 20px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          font-size: 16px;
+          color: #666;
+          border-bottom: 2px solid transparent;
+          margin-bottom: -2px;
+        }
+        .lsky-tab.active {
+          color: #1890ff;
+          border-bottom-color: #1890ff;
+        }
+        .lsky-upload-area {
+          border: 2px dashed #d9d9d9;
+          border-radius: 8px;
+          padding: 40px;
+          text-align: center;
+          background: #fafafa;
+          cursor: pointer;
+          transition: all 0.3s;
+        }
+        .lsky-upload-area:hover {
+          border-color: #1890ff;
+          background: #f0f5ff;
+        }
+        .lsky-upload-area.uploading {
+          pointer-events: none;
+          opacity: 0.6;
+        }
+        .lsky-progress {
+          width: 100%;
+          height: 8px;
+          background: #f0f0f0;
+          border-radius: 4px;
+          margin-top: 10px;
+          overflow: hidden;
+        }
+        .lsky-progress-bar {
+          height: 100%;
+          background: #1890ff;
+          transition: width 0.3s;
+        }
+        .lsky-error {
+          color: #ff4d4f;
+          padding: 10px;
+          background: #fff2f0;
+          border-radius: 4px;
+          margin-top: 10px;
+        }
+        .lsky-success {
+          color: #52c41a;
+          padding: 10px;
+          background: #f6ffed;
+          border-radius: 4px;
+          margin-top: 10px;
+        }
+        .lsky-photos-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+          gap: 16px;
+        }
+        .lsky-photo-card {
+          border: 1px solid #f0f0f0;
+          border-radius: 8px;
+          overflow: hidden;
+          transition: all 0.3s;
+        }
+        .lsky-photo-card:hover {
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .lsky-photo-card img {
+          width: 100%;
+          height: 150px;
+          object-fit: cover;
+        }
+        .lsky-photo-info {
+          padding: 10px;
+        }
+        .lsky-photo-actions {
+          display: flex;
+          gap: 8px;
+          margin-top: 8px;
+        }
+        .lsky-btn {
+          padding: 6px 12px;
+          border: 1px solid #d9d9d9;
+          background: white;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 14px;
+        }
+        .lsky-btn:hover {
+          color: #1890ff;
+          border-color: #1890ff;
+        }
+        .lsky-btn.danger:hover {
+          color: #ff4d4f;
+          border-color: #ff4d4f;
+        }
+        .lsky-albums-list {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .lsky-album-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 16px;
+          border: 1px solid #f0f0f0;
+          border-radius: 8px;
+          background: white;
+        }
+        .lsky-album-info h3 {
+          margin: 0 0 4px 0;
+          font-size: 16px;
+        }
+        .lsky-album-info p {
+          margin: 0;
+          color: #999;
+          font-size: 14px;
+        }
+        .lsky-empty {
+          text-align: center;
+          padding: 40px;
+          color: #999;
+        }
+        .lsky-loading {
+          text-align: center;
+          padding: 40px;
+          color: #666;
+        }
+      `}</style>
+
+      <h2>Lsky Pro+ 图床管理</h2>
+
+      <div className="lsky-tabs">
+        <button 
+          className={`lsky-tab ${activeTab === 'upload' ? 'active' : ''}`}
+          onClick={() => setActiveTab('upload')}
+        >
+          上传图片
+        </button>
+        <button 
+          className={`lsky-tab ${activeTab === 'photos' ? 'active' : ''}`}
+          onClick={() => setActiveTab('photos')}
+        >
+          图片列表
+        </button>
+        <button 
+          className={`lsky-tab ${activeTab === 'albums' ? 'active' : ''}`}
+          onClick={() => setActiveTab('albums')}
+        >
+          相册管理
+        </button>
+      </div>
+
+      {activeTab === 'upload' && <UploadPanel />}
+      {activeTab === 'photos' && <PhotosPanel />}
+      {activeTab === 'albums' && <AlbumsPanel />}
+    </div>
+  );
+}
+
+function UploadPanel() {
+  const { uploading, progress, error, data, upload, reset } = useLskyUpload();
+  const [imageUrl, setImageUrl] = useState<string>('');
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const result = await upload(file);
+    if (result) {
+      setImageUrl(result.url);
+    }
+  };
+
+  const handleCopyUrl = () => {
+    if (imageUrl) {
+      navigator.clipboard.writeText(imageUrl);
+      alert('URL 已复制到剪贴板！');
+    }
+  };
+
+  return (
+    <div>
+      <div 
+        className={`lsky-upload-area ${uploading ? 'uploading' : ''}`}
+        onClick={() => document.getElementById('lsky-file-input')?.click()}
+      >
+        <input
+          id="lsky-file-input"
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+          disabled={uploading}
+        />
+        {uploading ? (
+          <div>
+            <p>上传中...</p>
+            <div className="lsky-progress">
+              <div className="lsky-progress-bar" style={{ width: `${progress}%` }} />
+            </div>
+          </div>
+        ) : (
+          <div>
+            <p style={{ fontSize: '18px', marginBottom: '8px' }}>点击或拖拽图片到此处上传</p>
+            <p style={{ color: '#999' }}>支持 JPG, PNG, GIF, WebP 等格式</p>
+          </div>
+        )}
+      </div>
+
+      {error && <div className="lsky-error">❌ {error}</div>}
+      
+      {data && (
+        <div className="lsky-success">
+          <p>✅ 上传成功！</p>
+          <p><strong>文件名：</strong>{data.origin_name}</p>
+          <p><strong>大小：</strong>{(data.size / 1024).toFixed(2)} KB</p>
+          <p><strong>尺寸：</strong>{data.info.width} x {data.info.height}</p>
+          <div style={{ marginTop: '10px' }}>
+            <input
+              type="text"
+              value={data.url}
+              readOnly
+              style={{ width: '100%', padding: '8px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+            />
+            <div style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
+              <button className="lsky-btn" onClick={handleCopyUrl}>复制 URL</button>
+              <button className="lsky-btn" onClick={reset}>继续上传</button>
+            </div>
+          </div>
+          <div style={{ marginTop: '10px' }}>
+            <img src={data.url} alt="Uploaded" style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '4px' }} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PhotosPanel() {
+  const { loading, error, photos, pagination, fetchPhotos, deletePhoto } = useLskyPhotos();
+
+  const handleDelete = async (id: number) => {
+    if (confirm('确定要删除这张图片吗？')) {
+      await deletePhoto(id);
+    }
+  };
+
+  if (loading) {
+    return <div className="lsky-loading">加载中...</div>;
+  }
+
+  if (error) {
+    return <div className="lsky-error">❌ {error}</div>;
+  }
+
+  if (photos.length === 0) {
+    return <div className="lsky-empty">暂无图片</div>;
+  }
+
+  return (
+    <div>
+      <div className="lsky-photos-grid">
+        {photos.map(photo => (
+          <div key={photo.id} className="lsky-photo-card">
+            <img src={photo.url} alt={photo.filename} />
+            <div className="lsky-photo-info">
+              <p style={{ fontSize: '14px', margin: '0 0 4px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {photo.origin_name}
+              </p>
+              <p style={{ fontSize: '12px', color: '#999', margin: 0 }}>
+                {(photo.size / 1024).toFixed(2)} KB
+              </p>
+              <div className="lsky-photo-actions">
+                <button className="lsky-btn" onClick={() => navigator.clipboard.writeText(photo.url)}>
+                  复制
+                </button>
+                <button className="lsky-btn danger" onClick={() => handleDelete(photo.id)}>
+                  删除
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {pagination && pagination.last_page > 1 && (
+        <div style={{ marginTop: '20px', textAlign: 'center' }}>
+          <button 
+            className="lsky-btn"
+            onClick={() => fetchPhotos({ page: pagination.current_page - 1 })}
+            disabled={pagination.current_page === 1}
+          >
+            上一页
+          </button>
+          <span style={{ margin: '0 10px' }}>
+            {pagination.current_page} / {pagination.last_page}
+          </span>
+          <button 
+            className="lsky-btn"
+            onClick={() => fetchPhotos({ page: pagination.current_page + 1 })}
+            disabled={pagination.current_page === pagination.last_page}
+          >
+            下一页
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AlbumsPanel() {
+  const { loading, error, albums, createAlbum, deleteAlbum } = useLskyAlbums();
+  const [showCreate, setShowCreate] = useState(false);
+  const [newAlbumName, setNewAlbumName] = useState('');
+  const [newAlbumDesc, setNewAlbumDesc] = useState('');
+
+  const handleCreate = async () => {
+    if (!newAlbumName.trim()) {
+      alert('请输入相册名称');
+      return;
+    }
+
+    const result = await createAlbum({
+      name: newAlbumName,
+      description: newAlbumDesc,
+    });
+
+    if (result) {
+      setShowCreate(false);
+      setNewAlbumName('');
+      setNewAlbumDesc('');
+      alert('相册创建成功！');
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (confirm('确定要删除这个相册吗？')) {
+      await deleteAlbum(id);
+    }
+  };
+
+  if (loading) {
+    return <div className="lsky-loading">加载中...</div>;
+  }
+
+  if (error) {
+    return <div className="lsky-error">❌ {error}</div>;
+  }
+
+  return (
+    <div>
+      <button className="lsky-btn" onClick={() => setShowCreate(!showCreate)} style={{ marginBottom: '16px' }}>
+        {showCreate ? '取消' : '+ 新建相册'}
+      </button>
+
+      {showCreate && (
+        <div style={{ padding: '16px', border: '1px solid #f0f0f0', borderRadius: '8px', marginBottom: '16px', background: '#fafafa' }}>
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{ display: 'block', marginBottom: '4px' }}>相册名称 *</label>
+            <input
+              type="text"
+              value={newAlbumName}
+              onChange={(e) => setNewAlbumName(e.target.value)}
+              style={{ width: '100%', padding: '8px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+              placeholder="输入相册名称"
+            />
+          </div>
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{ display: 'block', marginBottom: '4px' }}>相册描述</label>
+            <textarea
+              value={newAlbumDesc}
+              onChange={(e) => setNewAlbumDesc(e.target.value)}
+              style={{ width: '100%', padding: '8px', border: '1px solid #d9d9d9', borderRadius: '4px', minHeight: '60px' }}
+              placeholder="输入相册描述（可选）"
+            />
+          </div>
+          <button className="lsky-btn" onClick={handleCreate} style={{ background: '#1890ff', color: 'white', border: 'none' }}>
+            创建相册
+          </button>
+        </div>
+      )}
+
+      {albums.length === 0 ? (
+        <div className="lsky-empty">暂无相册</div>
+      ) : (
+        <div className="lsky-albums-list">
+          {albums.map(album => (
+            <div key={album.id} className="lsky-album-item">
+              <div className="lsky-album-info">
+                <h3>{album.name}</h3>
+                <p>{album.description || '暂无描述'}</p>
+                <p style={{ fontSize: '12px' }}>图片数量：{album.photo_count}</p>
+              </div>
+              <div>
+                <button className="lsky-btn danger" onClick={() => handleDelete(album.id)}>
+                  删除
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
