@@ -331,6 +331,7 @@ const WikiEditor = () => {
 						{isNew ? "创建新百科" : "编辑百科"}
 					</h1>
 					<button
+						type="button"
 						onClick={() => navigate(-1)}
 						className="p-2 text-[#9e968e] hover:text-red-500"
 					>

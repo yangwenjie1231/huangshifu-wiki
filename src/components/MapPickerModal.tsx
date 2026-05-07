@@ -34,23 +34,93 @@ const AMAP_SECURITY_JS_CODE = import.meta.env.VITE_AMAP_SECURITY_JS_CODE as stri
 
 let amapLoaded = false;
 let amapLoadPromise: Promise<void> | null = null;
+let amapCallbackSeq = 0;
+
+function isAmapReady(): boolean {
+  return Boolean(window.AMap?.Map);
+}
+
+function waitForAmapReady(timeoutMs = 5000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+    const check = () => {
+      if (isAmapReady()) {
+        amapLoaded = true;
+        resolve();
+        return;
+      }
+
+      if (Date.now() - startTime >= timeoutMs) {
+        reject(new Error('AMap JS API loaded but AMap is unavailable'));
+        return;
+      }
+
+      window.setTimeout(check, 50);
+    };
+
+    check();
+  });
+}
 
 async function loadAmap(): Promise<void> {
-  if (amapLoaded) return;
+  if (amapLoaded && isAmapReady()) return;
+  if (isAmapReady()) {
+    amapLoaded = true;
+    return;
+  }
   if (amapLoadPromise) return amapLoadPromise;
   amapLoadPromise = new Promise((resolve, reject) => {
     if (!AMAP_JS_API_KEY) {
       reject(new Error('AMAP_JS_API_KEY is not configured'));
       return;
     }
-    if (AMAP_SECURITY_JS_CODE) {
-      window._AMapSecurityConfig = { securityJsCode: AMAP_SECURITY_JS_CODE };
+    if (!AMAP_SECURITY_JS_CODE) {
+      reject(new Error('VITE_AMAP_SECURITY_JS_CODE is not configured'));
+      return;
     }
+
+    const callbackName = `__onAmapJsApiLoaded_${Date.now()}_${++amapCallbackSeq}`;
+    const callbackRegistry = window as unknown as Record<string, unknown>;
+    const cleanupCallback = () => {
+      delete callbackRegistry[callbackName];
+    };
+    const timeoutId = window.setTimeout(() => {
+      cleanupCallback();
+      amapLoadPromise = null;
+      reject(new Error(
+        '高德地图脚本加载超时。请检查 VITE_AMAP_JS_API_KEY、VITE_AMAP_SECURITY_JS_CODE、域名白名单，以及是否允许加载 https://webapi.amap.com'
+      ));
+    }, 10000);
+
+    window._AMapSecurityConfig = { securityJsCode: AMAP_SECURITY_JS_CODE };
+
+    callbackRegistry[callbackName] = () => {
+      window.clearTimeout(timeoutId);
+      waitForAmapReady()
+        .then(() => {
+          cleanupCallback();
+          resolve();
+        })
+        .catch((err) => {
+          cleanupCallback();
+          amapLoadPromise = null;
+          reject(err);
+        });
+    };
+
     const script = document.createElement('script');
-    script.src = `https://webapi.amap.com/maps?v=2.0&key=${AMAP_JS_API_KEY}`;
+    const url = new URL('https://webapi.amap.com/maps');
+    url.searchParams.set('v', '2.0');
+    url.searchParams.set('key', AMAP_JS_API_KEY);
+    url.searchParams.set('callback', callbackName);
+    script.src = url.toString();
     script.async = true;
-    script.onload = () => { amapLoaded = true; resolve(); };
-    script.onerror = () => reject(new Error('Failed to load AMap JS API'));
+    script.onerror = () => {
+      window.clearTimeout(timeoutId);
+      cleanupCallback();
+      amapLoadPromise = null;
+      reject(new Error('Failed to load AMap JS API'));
+    };
     document.head.appendChild(script);
   });
   return amapLoadPromise;
@@ -171,6 +241,7 @@ export const MapPickerModal = ({
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#e0dcd3]">
           <h2 className="text-base font-bold text-[#2c2c2c]">选择地点</h2>
           <button
+            type="button"
             onClick={onClose}
             className="p-1 rounded text-[#9e968e] hover:text-[#2c2c2c] hover:bg-[#f7f5f0] transition-colors"
           >
@@ -186,10 +257,16 @@ export const MapPickerModal = ({
               type="text"
               placeholder="搜索地址..."
               className="w-full pl-9 pr-4 py-2 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-[#2c2c2c]"
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing) return;
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                handleSearch();
+              }}
             />
           </div>
           <button
+            type="button"
             onClick={handleSearch}
             disabled={searching}
             className="px-4 py-2 rounded bg-[#c8951e] text-white text-sm font-medium hover:bg-[#dca828] transition-all disabled:opacity-50"
@@ -203,6 +280,7 @@ export const MapPickerModal = ({
             {searchResults.map((result, index) => (
               <button
                 key={index}
+                type="button"
                 onClick={() => handleResultSelect(result)}
                 className="w-full px-4 py-3 text-left border-b border-[#e0dcd3] last:border-b-0 hover:bg-[#f7f5f0] transition-colors"
               >
@@ -252,12 +330,14 @@ export const MapPickerModal = ({
 
         <div className="flex justify-end gap-2 px-4 py-3 border-t border-[#e0dcd3] pb-safe">
           <button
+            type="button"
             onClick={onClose}
             className="px-4 py-2 rounded border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e] transition-all text-sm"
           >
             取消
           </button>
           <button
+            type="button"
             onClick={handleConfirm}
             disabled={!selectedLocation}
             className="px-4 py-2 rounded bg-[#c8951e] text-white font-medium hover:bg-[#dca828] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"

@@ -378,6 +378,23 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 		setEditingRelation(null);
 	};
 
+	const handleEditModalKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+		if (e.nativeEvent.isComposing) return;
+
+		if (e.key === "Enter") {
+			e.preventDefault();
+			e.stopPropagation();
+			handleSaveEdit();
+			return;
+		}
+
+		if (e.key === "Escape") {
+			e.preventDefault();
+			e.stopPropagation();
+			handleCancelEdit();
+		}
+	};
+
 	// 筛选控件
 	const FilterControls = () => (
 		<div className="space-y-3">
@@ -589,15 +606,16 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 							className="bg-white rounded p-6 max-w-md w-full"
 							onClick={(e) => e.stopPropagation()}
 						>
-							<div className="flex items-center justify-between mb-4">
-								<h3 className="text-lg font-semibold text-[#2c2c2c]">
-									编辑关联
-								</h3>
-								<button
-									onClick={handleCancelEdit}
-									className="p-1.5 text-[#9e968e] hover:text-[#6b6560] rounded hover:bg-[#f7f5f0]"
-								>
-									<X size={20} />
+						<div className="flex items-center justify-between mb-4">
+							<h3 className="text-lg font-semibold text-[#2c2c2c]">
+								编辑关联
+							</h3>
+							<button
+								type="button"
+								onClick={handleCancelEdit}
+								className="p-1.5 text-[#9e968e] hover:text-[#6b6560] rounded hover:bg-[#f7f5f0]"
+							>
+								<X size={20} />
 								</button>
 							</div>
 
@@ -639,19 +657,20 @@ const WikiRelations: React.FC<WikiRelationsProps> = ({
 									<label className="block text-xs font-medium text-[#6b6560] mb-1">
 										显示名称
 									</label>
-									<input
-										type="text"
-										value={editingRelation.label || ""}
-										onChange={(e) =>
-											setEditingRelation({
-												...editingRelation,
-												label: e.target.value,
-											})
-										}
-										placeholder="可选"
-										className="w-full px-3 py-2 bg-white rounded border border-[#e0dcd3] text-sm"
-									/>
-								</div>
+								<input
+									type="text"
+									value={editingRelation.label || ""}
+									onChange={(e) =>
+										setEditingRelation({
+											...editingRelation,
+											label: e.target.value,
+										})
+									}
+									onKeyDown={handleEditModalKeyDown}
+									placeholder="可选"
+									className="w-full px-3 py-2 bg-white rounded border border-[#e0dcd3] text-sm"
+								/>
+							</div>
 
 								<div>
 									<label className="flex items-center gap-2 text-sm text-[#6b6560]">
@@ -671,18 +690,20 @@ className="rounded border border-[#e0dcd3]"
 								</div>
 							</div>
 
-							<div className="flex gap-3 mt-6">
-								<button
-									onClick={handleCancelEdit}
-									className="flex-1 px-4 py-2 bg-[#f7f5f0] text-[#6b6560] rounded text-sm font-medium hover:bg-[#e8e4db] transition-all"
-								>
-									取消
-								</button>
-								<button
-									onClick={handleSaveEdit}
-									className="flex-1 px-4 py-2 bg-[#c8951e] text-white rounded text-sm font-medium hover:bg-[#dca828] transition-all"
-								>
-									保存
+						<div className="flex gap-3 mt-6">
+							<button
+								type="button"
+								onClick={handleCancelEdit}
+								className="flex-1 px-4 py-2 bg-[#f7f5f0] text-[#6b6560] rounded text-sm font-medium hover:bg-[#e8e4db] transition-all"
+							>
+								取消
+							</button>
+							<button
+								type="button"
+								onClick={handleSaveEdit}
+								className="flex-1 px-4 py-2 bg-[#c8951e] text-white rounded text-sm font-medium hover:bg-[#dca828] transition-all"
+							>
+								保存
 								</button>
 							</div>
 						</motion.div>

@@ -87,6 +87,7 @@ const RelationPreview: React.FC<RelationPreviewProps> = ({
 				<div className="flex items-center gap-2">
 					{onEdit && (
 						<button
+							type="button"
 							onClick={() => onEdit(relation)}
 							className="p-1.5 text-[#9e968e] hover:text-[#c8951e] transition-colors rounded hover:bg-[#f7f5f0]"
 							title="编辑关联"
@@ -97,6 +98,7 @@ const RelationPreview: React.FC<RelationPreviewProps> = ({
 
 					{onRemove && (
 						<button
+							type="button"
 							onClick={onRemove}
 							className="p-1.5 text-[#9e968e] hover:text-red-500 transition-colors rounded hover:bg-red-50"
 							title="移除关联"
@@ -107,6 +109,7 @@ const RelationPreview: React.FC<RelationPreviewProps> = ({
 
 					{onConfirm && isNew && (
 						<button
+							type="button"
 							onClick={onConfirm}
 							className="p-1.5 text-green-600 hover:text-green-700 transition-colors rounded hover:bg-green-50"
 							title="确认添加"

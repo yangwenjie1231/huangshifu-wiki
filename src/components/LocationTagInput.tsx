@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MapPin, X, Loader2 } from 'lucide-react';
 import { MapPickerModal, type PickedLocation } from './MapPickerModal';
 import { apiGet, apiPost } from '../lib/apiClient';
+import { resolveLocationTagInputEnterSelectionIndex } from '../lib/locationTagInput';
 
 interface RegionSuggestion {
   code: string;
@@ -83,21 +84,42 @@ export const LocationTagInput = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!showDropdown || suggestions.length === 0) return;
+    if (e.nativeEvent.isComposing) return;
+
     switch (e.key) {
       case 'ArrowDown':
+        if (!showDropdown || suggestions.length === 0) return;
         e.preventDefault();
         setSelectedIndex((prev) => prev < suggestions.length - 1 ? prev + 1 : prev);
         break;
       case 'ArrowUp':
+        if (!showDropdown || suggestions.length === 0) return;
         e.preventDefault();
         setSelectedIndex((prev) => prev > 0 ? prev - 1 : -1);
         break;
       case 'Enter':
         e.preventDefault();
-        if (selectedIndex >= 0) { handleSelect(suggestions[selectedIndex]); }
+        e.stopPropagation();
+        {
+          const selectedSuggestionIndex = resolveLocationTagInputEnterSelectionIndex({
+            showDropdown,
+            suggestionsLength: suggestions.length,
+            selectedIndex,
+          });
+
+          if (selectedSuggestionIndex === null) {
+            setShowDropdown(false);
+            setSelectedIndex(-1);
+            break;
+          }
+
+          handleSelect(suggestions[selectedSuggestionIndex]);
+        }
         break;
       case 'Escape':
+        if (!showDropdown) return;
+        e.preventDefault();
+        e.stopPropagation();
         setShowDropdown(false);
         setSelectedIndex(-1);
         break;
@@ -193,6 +215,7 @@ export const LocationTagInput = ({
           {suggestions.map((region, index) => (
             <button
               key={region.code}
+              type="button"
               onClick={() => handleSelect(region)}
               className={`w-full px-3 py-2 text-left border-b border-[#e0dcd3] last:border-b-0 transition-colors ${
                 index === selectedIndex ? 'bg-[#f7f5f0]' : 'hover:bg-[#f7f5f0]'
