@@ -10,19 +10,19 @@ export interface ViewModeConfig {
 export const VIEW_MODE_CONFIG: Record<ViewMode, ViewModeConfig> = {
   large: {
     gridCols: 'grid-cols-2 md:grid-cols-3',
-    cardHeight: 'h-[280px]',
+    cardHeight: 'h-[360px]',
     gap: 'gap-6',
     iconSize: 20,
   },
   medium: {
     gridCols: 'grid-cols-3 md:grid-cols-4',
-    cardHeight: 'h-[180px]',
+    cardHeight: 'h-[280px]',
     gap: 'gap-4',
     iconSize: 18,
   },
   small: {
     gridCols: 'grid-cols-5 md:grid-cols-6',
-    cardHeight: 'h-[100px]',
+    cardHeight: 'h-[200px]',
     gap: 'gap-3',
     iconSize: 16,
   },
@@ -35,8 +35,8 @@ export const VIEW_MODE_CONFIG: Record<ViewMode, ViewModeConfig> = {
 };
 
 export const VIEW_MODE_LABELS: Record<ViewMode, string> = {
-  large: '大图标',
-  medium: '中图标',
-  small: '小图标',
+  large: '舒适',
+  medium: '标准',
+  small: '紧凑',
   list: '列表',
 };
