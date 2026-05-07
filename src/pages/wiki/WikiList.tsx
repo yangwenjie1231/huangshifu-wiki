@@ -185,6 +185,7 @@ const WikiList = () => {
 								key={page.id}
 								page={page}
 								viewMode={viewMode}
+								cardHeight={VIEW_MODE_CONFIG[viewMode].cardHeight}
 								onCopyLink={handleCopyWikiLink}
 							/>
 						))}
