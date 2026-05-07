@@ -155,7 +155,7 @@ export async function searchAddress(keyword: string, city?: string): Promise<Arr
 }>> {
   interface TextSearchResponse {
     status: string;
-    suggestions: Array<{
+    pois: Array<{
       name: string;
       location: string;
       address: string;
@@ -174,11 +174,11 @@ export async function searchAddress(keyword: string, city?: string): Promise<Arr
 
   const data = await amapGet<TextSearchResponse>('/place/text', params);
 
-  if (!data || !data.suggestions) {
+  if (!data || !data.pois) {
     return [];
   }
 
-  return data.suggestions.map((s) => {
+  return data.pois.map((s) => {
     const [lng, lat] = s.location.split(',').map(Number);
     return {
       name: s.name,
