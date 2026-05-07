@@ -172,6 +172,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                       key={`${result.sourceType}-${result.sourceId}-${index}`}
                       result={result}
                       viewMode={viewMode}
+                      cardHeight={VIEW_MODE_CONFIG[viewMode].cardHeight}
                       showSimilarity={true}
                     />
                   ))}
@@ -204,6 +205,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                         key={page.id}
                         config={wikiToConfig(page)}
                         viewMode={viewMode}
+                        cardHeight={VIEW_MODE_CONFIG[viewMode].cardHeight}
                       />
                     ))}
                   </div>
@@ -271,6 +273,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                         key={gallery.id}
                         config={galleryToConfig(gallery)}
                         viewMode={viewMode}
+                        cardHeight={VIEW_MODE_CONFIG[viewMode].cardHeight}
                       />
                     ))}
                   </div>
@@ -300,6 +303,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                         key={track.docId}
                         config={musicToConfig(track as SongItem)}
                         viewMode={viewMode}
+                        cardHeight={VIEW_MODE_CONFIG[viewMode].cardHeight}
                       />
                     ))}
                   </div>
@@ -329,6 +333,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                         key={(album as AlbumItem).docId || (album as AlbumItem).id}
                         config={albumToConfig(album as AlbumItem)}
                         viewMode={viewMode}
+                        cardHeight={VIEW_MODE_CONFIG[viewMode].cardHeight}
                       />
                     ))}
                   </div>

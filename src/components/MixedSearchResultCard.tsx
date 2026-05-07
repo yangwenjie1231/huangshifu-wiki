@@ -17,6 +17,7 @@ import { toDateValue } from "../lib/dateUtils";
 interface MixedSearchResultCardProps {
   result: MixedSearchResult;
   viewMode: "grid" | "list" | "compact" | string;
+  cardHeight?: string;
   showSimilarity?: boolean;
 }
 
@@ -52,7 +53,7 @@ function formatSimilarity(similarity: number): string {
 }
 
 export const MixedSearchResultCard = React.memo(
-  ({ result, viewMode, showSimilarity = true }: MixedSearchResultCardProps) => {
+  ({ result, viewMode, cardHeight, showSimilarity = true }: MixedSearchResultCardProps) => {
     const { sourceType, data, imageUrl, similarity } = result;
     const SourceIcon = getSourceTypeIcon(sourceType);
     const link = getResultLink(result);
@@ -129,9 +130,9 @@ export const MixedSearchResultCard = React.memo(
     return (
       <Link
         to={link}
-        className="bg-white border border-[#e0dcd3] rounded overflow-hidden hover:border-[#c8951e] transition-all group block"
+        className={clsx("bg-white border border-[#e0dcd3] rounded overflow-hidden hover:border-[#c8951e] transition-all group flex flex-col", cardHeight)}
       >
-        <div className="h-36 overflow-hidden relative">
+        <div className="h-36 overflow-hidden relative flex-shrink-0">
           <SmartImage
             src={imageUrl || ""}
             alt=""
@@ -151,16 +152,16 @@ export const MixedSearchResultCard = React.memo(
             </div>
           )}
         </div>
-        <div className="p-3">
-          <h3 className="text-sm font-semibold text-[#2c2c2c] truncate group-hover:text-[#c8951e] transition-colors">
+        <div className="p-3 flex-1 flex flex-col">
+          <h3 className="text-sm font-semibold text-[#2c2c2c] truncate group-hover:text-[#c8951e] transition-colors mb-1">
             {(data as GalleryItem | WikiItem | PostItem).title}
           </h3>
-          <p className="text-xs text-[#9e968e] line-clamp-1 mt-1">
+          <p className="text-xs text-[#9e968e] line-clamp-1 flex-1 mt-1">
             {sourceType === "gallery" && ((data as GalleryItem).description || "暂无描述")}
             {sourceType === "wiki" && (data as WikiItem).category}
             {sourceType === "post" && (data as PostItem).section}
           </p>
-          <div className="flex items-center mt-2 text-[10px] text-[#9e968e]">
+          <div className="flex items-center mt-auto pt-2 text-[10px] text-[#9e968e]">
             <Clock size={10} className="mr-1" />
             {toDateValue((data as GalleryItem | WikiItem | PostItem).updatedAt)
               ? format(toDateValue((data as GalleryItem | WikiItem | PostItem).updatedAt)!, "yyyy-MM-dd")

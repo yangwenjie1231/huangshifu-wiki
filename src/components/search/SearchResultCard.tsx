@@ -21,6 +21,7 @@ export interface SearchResultCardConfig {
 interface SearchResultCardProps {
   config: SearchResultCardConfig;
   viewMode: string;
+  cardHeight?: string;
 }
 
 const typeIconMap: Record<SearchResultType, React.ReactNode> = {
@@ -31,15 +32,15 @@ const typeIconMap: Record<SearchResultType, React.ReactNode> = {
   post: <MessageSquare size={24} className="text-[#c8951e]/40" />,
 };
 
-export const SearchResultCard: React.FC<SearchResultCardProps> = React.memo(({ config, viewMode }) => {
+export const SearchResultCard: React.FC<SearchResultCardProps> = React.memo(({ config, viewMode, cardHeight }) => {
   const isList = viewMode === "list";
 
   return (
     <Link
       to={config.link}
       className={clsx(
-        "block bg-white border border-[#e0dcd3] rounded overflow-hidden hover:border-[#c8951e] transition-all group",
-        isList && "flex gap-4 p-3 w-full"
+        "bg-white border border-[#e0dcd3] rounded overflow-hidden hover:border-[#c8951e] transition-all group",
+        isList ? "flex gap-4 p-3 w-full" : clsx("flex flex-col block", cardHeight)
       )}
     >
       {isList ? (
@@ -83,7 +84,7 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = React.memo(({ c
       ) : (
         <>
           {config.image && (
-            <div className="overflow-hidden h-48">
+            <div className="overflow-hidden h-48 flex-shrink-0">
               <SmartImage
                 src={config.image}
                 alt=""
@@ -91,7 +92,7 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = React.memo(({ c
               />
             </div>
           )}
-          <div className="p-4">
+          <div className={clsx("p-4", !config.image && "flex-1 flex flex-col")}>
             {config.tags && config.tags.length > 0 && (
               <div className="flex items-center gap-2 mb-2">
                 {config.tags.map((tag) => (
@@ -111,10 +112,10 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = React.memo(({ c
               <p className="text-xs text-[#9e968e] truncate">{config.subtitle}</p>
             )}
             {config.description && !config.image && (
-              <p className="text-[#9e968e] text-xs line-clamp-2 mb-3 italic">{config.description}</p>
+              <p className="text-[#9e968e] text-xs line-clamp-2 mb-3 italic flex-1">{config.description}</p>
             )}
             {config.meta && (
-              <div className="flex items-center gap-1 text-[10px] text-[#9e968e] mt-2">
+              <div className="flex items-center gap-1 text-[10px] text-[#9e968e] mt-auto">
                 <Clock size={10} />
                 {config.meta}
               </div>
