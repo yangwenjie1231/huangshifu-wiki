@@ -4,7 +4,7 @@ import { ChevronUp } from 'lucide-react';
 export default function BackToTop() {
 	const [isVisible, setIsVisible] = useState(false);
 
-	useEffect(() {
+	useEffect(() => {
 		const toggleVisibility = () => {
 			setIsVisible(window.scrollY > 300);
 		};
