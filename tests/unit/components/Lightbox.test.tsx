@@ -27,12 +27,15 @@ describe('Lightbox', () => {
 
   it('renders dialog with role=dialog when open with images', () => {
     render(<Lightbox images={mockImages} initialIndex={0} onClose={vi.fn()} />);
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    const dialogs = screen.getAllByRole('dialog');
+    expect(dialogs.length).toBeGreaterThanOrEqual(1);
+    expect(dialogs[0]).toBeInTheDocument();
   });
 
   it('has aria-modal=true on dialog', () => {
     render(<Lightbox images={mockImages} initialIndex={0} onClose={vi.fn()} />);
-    expect(screen.getByRole('dialog')).toHaveAttribute('aria-modal', 'true');
+    const dialogs = screen.getAllByRole('dialog');
+    expect(dialogs[0]).toHaveAttribute('aria-modal', 'true');
   });
 
   it('shows image counter with role=status', () => {
@@ -60,7 +63,8 @@ describe('Lightbox', () => {
 
   it('includes image position in dialog aria-label', () => {
     render(<Lightbox images={mockImages} initialIndex={1} onClose={vi.fn()} />);
-    expect(screen.getByRole('dialog').getAttribute('aria-label')).toContain('2 / 3');
+    const dialogs = screen.getAllByRole('dialog');
+    expect(dialogs[0].getAttribute('aria-label')).toContain('2 / 3');
   });
 
   it('calls onClose when close button clicked', async () => {

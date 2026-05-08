@@ -17,9 +17,25 @@ export default defineConfig({
     },
   },
   test: {
-    environment: 'node',
+    environment: 'jsdom',
     setupFiles: ['./tests/unit/setup.ts'],
     include: ['tests/unit/**/*.test.ts', 'tests/unit/**/*.test.tsx'],
+    environmentMatchGlobs: [
+      // 非 UI 测试使用 node 环境
+      ['tests/unit/!(*components*)/**/*.test.{ts,tsx}', 'node'],
+      ['tests/unit/*.test.ts', 'node'],
+    ],
+    deps: {
+      optimizer: {
+        web: {
+          include: [
+            'react-dom',
+            'react-dom/server',
+            'react-dom/test-utils',
+          ],
+        },
+      },
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'json-summary'],
