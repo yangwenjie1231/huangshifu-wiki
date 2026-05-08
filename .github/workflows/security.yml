@@ -107,7 +107,7 @@ jobs:
           npm audit --json > audit-results.json 2>&1 || true
           
           if [ -f audit-results.json ]; then
-            cat > /tmp/audit-summary.mjs << 'EOF'
+            cat > /tmp/audit-summary.cjs << 'EOF'
             const fs = require('fs');
             const data = JSON.parse(fs.readFileSync('audit-results.json', 'utf8'));
             
@@ -134,15 +134,15 @@ jobs:
             
             console.log('=== Vulnerability Summary ===');
             console.log(JSON.stringify(summary));
-            
+
             const fs2 = require('fs');
             fs2.appendFileSync(process.env.GITHUB_OUTPUT, `summary=${JSON.stringify(summary)}\n`);
             
             const hasCriticalOrHigh = (summary.critical > 0 || summary.high > 0);
             fs2.appendFileSync(process.env.GITHUB_OUTPUT, `has_critical_or_high=${hasCriticalOrHigh}\n`);
             EOF
-            
-            node /tmp/audit-summary.mjs
+
+            node /tmp/audit-summary.cjs
           else
             echo "No valid audit results found"
             echo "summary={}" >> $GITHUB_OUTPUT
@@ -178,7 +178,7 @@ jobs:
           
           if [ -f audit-results.json ] && [ -s audit-results.json ]; then
             echo "Processing audit results..."
-            cat > /tmp/sarif-convert.mjs << 'EOF'
+            cat > /tmp/sarif-convert.cjs << 'EOF'
             const fs = require('fs');
             
             let data;
@@ -267,8 +267,8 @@ jobs:
             fs.writeFileSync('sarif-npm-audit.json', JSON.stringify(sarif, null, 2));
             console.log('Generated SARIF with ' + results.length + ' findings');
             EOF
-            
-            node /tmp/sarif-convert.mjs
+
+            node /tmp/sarif-convert.cjs
           else
             echo "⚠️ No audit results file found or file is empty"
             echo "SARIF file created with empty results (template only)"
@@ -350,9 +350,9 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
           if [ -f "audit-results.json" ]; then
-            cat > /tmp/generate-report.mjs << 'ENDOFSCRIPT'
-          const fs = require('fs');
-          const data = JSON.parse(fs.readFileSync('audit-results.json', 'utf8'));
+            cat > /tmp/generate-report.cjs << 'ENDOFSCRIPT'
+            const fs = require('fs');
+            const data = JSON.parse(fs.readFileSync('audit-results.json', 'utf8'));
           const vulns = data.vulnerabilities || {};
           const meta = data.metadata || {};
 
@@ -475,7 +475,7 @@ jobs:
           console.log(lines.join('\n'));
           ENDOFSCRIPT
 
-            node /tmp/generate-report.mjs >> $GITHUB_STEP_SUMMARY
+            node /tmp/generate-report.cjs >> $GITHUB_STEP_SUMMARY
           else
             echo "⚠️ No audit results file found" >> $GITHUB_STEP_SUMMARY
           fi
