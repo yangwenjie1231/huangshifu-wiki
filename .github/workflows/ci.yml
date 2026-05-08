@@ -371,29 +371,17 @@ jobs:
         with:
           name: coverage-report-unit
           path: coverage/unit
-        continue-on-error: true
-
-      - name: Download integration test artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: integration-test-results
-          path: results/integration
-        continue-on-error: true
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           name: build-output
           path: build-output
-        continue-on-error: true
 
       - name: List downloaded files
         run: |
           echo "=== Coverage files ==="
           find coverage/ -type f 2>/dev/null || echo "No coverage files"
-          echo ""
-          echo "=== Integration results ==="
-          find results/ -type f 2>/dev/null || echo "No integration results"  
           echo ""
           echo "=== Build output ==="
           find build-output/ -type f 2>/dev/null || echo "No build output"
