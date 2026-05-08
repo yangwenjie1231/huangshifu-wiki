@@ -19,6 +19,10 @@ const MAX_PIXEL_SCALE = 5;
 const ZOOM_RATIO = 0.1;
 
 export const Lightbox = ({ images, initialIndex, onClose }: LightboxProps) => {
+  if (!images || images.length === 0) {
+    return null;
+  }
+
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [pixelScale, setPixelScale] = useState(1);
   const [translateX, setTranslateX] = useState(0);
@@ -50,6 +54,10 @@ export const Lightbox = ({ images, initialIndex, onClose }: LightboxProps) => {
 
   const activeImage = images[activeIndex];
   const currentImageUrl = activeImage?.url || '';
+
+  useEffect(() => {
+    setActiveIndex(initialIndex);
+  }, [initialIndex]);
 
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
