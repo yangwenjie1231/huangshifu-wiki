@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, fireEvent } from '@testing-library/react';
+import { render, screen, act, fireEvent, within } from '@testing-library/react';
 import { ToastProvider, useToast } from '../../../src/components/Toast';
 
 function TestComponent({ message = '测试消息' }: { message?: string }) {
@@ -12,49 +12,74 @@ function TestComponent({ message = '测试消息' }: { message?: string }) {
   );
 }
 
-function renderToast() {
-  return render(
-    <ToastProvider>
-      <TestComponent />
-    </ToastProvider>
-  );
-}
-
 describe('Toast', () => {
+  let container: HTMLElement;
+
   beforeEach(() => {
     vi.useFakeTimers();
+    container = document.createElement('div');
+    document.body.appendChild(container);
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    document.body.removeChild(container);
   });
 
+  const renderToast = (ui: React.ReactElement) => {
+    return render(ui, { container });
+  };
+
   it('does not show toast initially', () => {
-    renderToast();
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    const { unmount } = renderToast(
+      <ToastProvider>
+        <TestComponent />
+      </ToastProvider>
+    );
+
+    expect(within(container).queryByRole('status')).not.toBeInTheDocument();
+    unmount();
   });
 
   it('shows toast message after calling show()', () => {
-    renderToast();
-    fireEvent.click(screen.getByTestId('toast-trigger'));
-    expect(screen.getByRole('status')).toBeInTheDocument();
-    expect(screen.getByText('测试消息')).toBeInTheDocument();
+    const { unmount } = renderToast(
+      <ToastProvider>
+        <TestComponent />
+      </ToastProvider>
+    );
+
+    fireEvent.click(within(container).getByTestId('toast-trigger'));
+    expect(within(container).getByRole('status')).toBeInTheDocument();
+    expect(within(container).getByText('测试消息')).toBeInTheDocument();
+    unmount();
   });
 
   it('toast has role="status" and aria-live="polite"', () => {
-    renderToast();
-    fireEvent.click(screen.getByTestId('toast-trigger'));
-    const statusEl = screen.getByRole('status');
+    const { unmount } = renderToast(
+      <ToastProvider>
+        <TestComponent />
+      </ToastProvider>
+    );
+
+    fireEvent.click(within(container).getByTestId('toast-trigger'));
+    const statusEl = within(container).getByRole('status');
     expect(statusEl).toBeInTheDocument();
     expect(statusEl).toHaveAttribute('aria-live', 'polite');
+    unmount();
   });
 
   it('displays success variant with brand color styling', () => {
-    renderToast();
-    fireEvent.click(screen.getByTestId('toast-trigger'));
-    const toastBox = screen.getByRole('status');
+    const { unmount } = renderToast(
+      <ToastProvider>
+        <TestComponent />
+      </ToastProvider>
+    );
+
+    fireEvent.click(within(container).getByTestId('toast-trigger'));
+    const toastBox = within(container).getByRole('status');
     expect(toastBox.className).toContain('border-[#c8951e]');
     expect(toastBox.className).not.toContain('red');
+    unmount();
   });
 
   it('displays error variant with red styling', () => {
@@ -70,16 +95,17 @@ describe('Toast', () => {
       );
     }
 
-    render(
+    const { unmount } = renderToast(
       <ToastProvider>
         <ErrorTest />
       </ToastProvider>
     );
 
-    fireEvent.click(screen.getByTestId('error-trigger'));
-    const toastBox = screen.getByRole('status');
+    fireEvent.click(within(container).getByTestId('error-trigger'));
+    const toastBox = within(container).getByRole('status');
     expect(toastBox.className).toContain('text-red-600');
     expect(toastBox.className).toContain('border-red-200');
+    unmount();
   });
 
   it('shows the exact message text', () => {
@@ -95,33 +121,46 @@ describe('Toast', () => {
       );
     }
 
-    render(
+    const { unmount } = renderToast(
       <ToastProvider>
         <CustomMsg />
       </ToastProvider>
     );
 
-    fireEvent.click(screen.getByTestId('custom-trigger'));
-    expect(screen.getByText('自定义消息内容')).toBeInTheDocument();
+    fireEvent.click(within(container).getByTestId('custom-trigger'));
+    expect(within(container).getByText('自定义消息内容')).toBeInTheDocument();
+    unmount();
   });
 
   it('indicator dot has aria-hidden="true"', () => {
-    renderToast();
-    fireEvent.click(screen.getByTestId('toast-trigger'));
-    const dot = screen.getByRole('status').querySelector('[aria-hidden="true"]');
+    const { unmount } = renderToast(
+      <ToastProvider>
+        <TestComponent />
+      </ToastProvider>
+    );
+
+    fireEvent.click(within(container).getByTestId('toast-trigger'));
+    const dot = within(container).getByRole('status').querySelector('[aria-hidden="true"]');
     expect(dot).toBeInTheDocument();
+    unmount();
   });
 
   it('auto-dismisses after duration', () => {
-    renderToast();
-    fireEvent.click(screen.getByTestId('toast-trigger'));
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    const { unmount } = renderToast(
+      <ToastProvider>
+        <TestComponent />
+      </ToastProvider>
+    );
+
+    fireEvent.click(within(container).getByTestId('toast-trigger'));
+    expect(within(container).getByRole('status')).toBeInTheDocument();
 
     act(() => {
       vi.advanceTimersByTime(2100);
     });
 
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(within(container).queryByRole('status')).not.toBeInTheDocument();
+    unmount();
   });
 
   it('replaces previous toast when new one shown', () => {
@@ -139,22 +178,23 @@ describe('Toast', () => {
       );
     }
 
-    render(
+    const { unmount } = renderToast(
       <ToastProvider>
         <MultiToast />
       </ToastProvider>
     );
 
-    fireEvent.click(screen.getByTestId('first'));
+    fireEvent.click(within(container).getByTestId('first'));
 
-    // 检查 Toast 区域内显示"第一条"（排除按钮文本）
-    const statusEl = screen.getByRole('status');
+    // 检查 Toast 区域内显示"第一条"
+    const statusEl = within(container).getByRole('status');
     expect(statusEl.textContent).toContain('第一条');
 
-    fireEvent.click(screen.getByTestId('second'));
+    fireEvent.click(within(container).getByTestId('second'));
 
     // 替换后应显示"第二条"，且不再有"第一条"
     expect(statusEl.textContent).toContain('第二条');
     expect(statusEl.textContent).not.toContain('第一条');
+    unmount();
   });
 });

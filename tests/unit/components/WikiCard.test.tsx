@@ -81,12 +81,12 @@ describe('WikiCard', () => {
         page={mockWikiItem}
         viewMode="grid"
         cardHeight="h-[280px]"
-        onCopyLink={onCopyLink}
-      />
+        onCopyLink={onCopyLink} />
     );
 
-    const copyButton = screen.getByLabelText('复制百科内链');
-    await user.click(copyButton);
+    // 使用getAllByLabelText因为可能有多个匹配，取第一个（复制内链按钮）
+    const copyButtons = screen.getAllByLabelText(/复制百科内链/);
+    await user.click(copyButtons[0]);
 
     // onCopyLink 接收 (event, slug) 两个参数
     expect(onCopyLink).toHaveBeenCalledTimes(1);

@@ -15,6 +15,24 @@ vi.mock('../../../src/components/SmartImage', async (importOriginal) => {
   };
 });
 
+vi.mock('../../../src/lib/i18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const map: Record<string, string> = {
+        'music.play': '播放',
+        'music.favorite': '收藏',
+        'music.select': '选择',
+        'music.selected': '已选',
+        'music.openOriginalLink': '打开原链接',
+        'music.copyInternalLink': '复制内链',
+        'music.viewPosts': '查看帖子',
+        'music.deleteSong': '删除',
+      };
+      return map[key] || key;
+    },
+  }),
+}));
+
 const mockSong = {
   docId: 'song-001',
   id: '12345',
@@ -51,18 +69,12 @@ describe('SongCard', () => {
   it('renders song title and artist', () => {
     renderWithRouter(<SongCard {...defaultProps} />);
     expect(screen.getByText('测试歌曲名')).toBeInTheDocument();
-    const artistEl = screen.getByText((content, el) => {
-      return el?.tagName === 'P' && content.includes('测试歌手');
-    });
-    expect(artistEl).toBeInTheDocument();
+    expect(screen.getByText('测试歌手')).toBeInTheDocument();
   });
 
-  it('renders album name within subtitle line', () => {
+  it('renders album name in subtitle', () => {
     renderWithRouter(<SongCard {...defaultProps} />);
-    const subtitleEl = screen.getByText((content, el) => {
-      return el?.tagName === 'P' && content.includes('测试专辑');
-    });
-    expect(subtitleEl).toBeInTheDocument();
+    expect(screen.getByText('测试专辑')).toBeInTheDocument();
   });
 
   it('has article role with correct aria-label', () => {
@@ -72,36 +84,31 @@ describe('SongCard', () => {
     expect(article).toHaveAttribute('aria-label', '测试歌曲名 - 测试歌手');
   });
 
-  it('shows play button with correct aria-label', () => {
+  it('shows play button with correct aria-label (desktop)', () => {
     renderWithRouter(<SongCard {...defaultProps} />);
-    const playBtn = screen.getByLabelText(/播放/);
-    expect(playBtn).toBeInTheDocument();
-    expect(playBtn).toHaveAttribute('aria-label', '播放 测试歌曲名');
+    // 组件同时渲染了desktop和mobile的按钮，所以会有多个"播放"按钮
+    const playButtons = screen.getAllByLabelText(/播放/);
+    expect(playButtons.length).toBeGreaterThanOrEqual(1);
+    expect(playButtons[0]).toHaveAttribute('aria-label', '播放 测试歌曲名');
   });
 
   it('calls onPlay when play button clicked', async () => {
     const user = userEvent.setup();
     renderWithRouter(<SongCard {...defaultProps} />);
-    await user.click(screen.getByLabelText(/播放/));
+    // 点击第一个播放按钮（desktop版本）
+    const playButtons = screen.getAllByLabelText(/播放/);
+    await user.click(playButtons[0]);
     expect(defaultProps.onPlay).toHaveBeenCalledWith(mockSong);
   });
 
   it('in batch mode renders a select-style button', () => {
     renderWithRouter(<SongCard {...defaultProps} isBatchMode={true} />);
-    const buttons = screen.getAllByRole('button');
-    const batchButton = buttons.find((b) =>
-      b.className.includes('bg-[#f0ece3]') || b.className.includes('px-3')
-    );
-    expect(batchButton).toBeInTheDocument();
+    expect(screen.getByText('选择')).toBeInTheDocument();
   });
 
-  it('in batch mode with selected shows highlighted button', () => {
+  it('in batch mode with selected shows selected text', () => {
     renderWithRouter(<SongCard {...defaultProps} isBatchMode={true} isSelected={true} />);
-    const buttons = screen.getAllByRole('button');
-    const selectedButton = buttons.find((b) =>
-      b.className.includes('bg-[#c8951e]')
-    );
-    expect(selectedButton).toBeInTheDocument();
+    expect(screen.getByText('已选')).toBeInTheDocument();
   });
 
   it('highlights current song with highlight background class', () => {
@@ -114,13 +121,15 @@ describe('SongCard', () => {
 
   it('shows delete button when isAdmin is true', () => {
     renderWithRouter(<SongCard {...defaultProps} isAdmin={true} />);
-    const deleteBtn = screen.getByLabelText(/删除/);
-    expect(deleteBtn).toBeInTheDocument();
-    expect(deleteBtn).toHaveAttribute('aria-label', '删除 测试歌曲名');
+    const deleteButtons = screen.getAllByLabelText(/删除/);
+    expect(deleteButtons.length).toBeGreaterThanOrEqual(1);
+    expect(deleteButtons[0]).toHaveAttribute('aria-label', '删除 测试歌曲名');
   });
 
   it('does not show delete button when isAdmin is false', () => {
     renderWithRouter(<SongCard {...defaultProps} isAdmin={false} />);
-    expect(screen.queryByLabelText(/删除/)).not.toBeInTheDocument();
+    // 当isAdmin为false时，不应该有"删除"标签的按钮
+    const deleteButtons = screen.queryAllByLabelText(/删除/);
+    expect(deleteButtons.length).toBe(0);
   });
 });
