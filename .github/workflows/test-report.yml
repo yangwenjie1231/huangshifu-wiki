@@ -29,6 +29,7 @@ jobs:
         with:
           name: coverage-report-unit
           path: coverage/unit
+          run-id: ${{ github.event.workflow_run.id }}
         continue-on-error: true
 
       - name: Download integration test artifacts
@@ -36,6 +37,7 @@ jobs:
         with:
           name: integration-test-results
           path: results/integration
+          run-id: ${{ github.event.workflow_run.id }}
         continue-on-error: true
 
       - name: Download build artifacts
@@ -43,6 +45,7 @@ jobs:
         with:
           name: build-output
           path: build-output
+          run-id: ${{ github.event.workflow_run.id }}
         continue-on-error: true
 
       - name: Setup Node.js
