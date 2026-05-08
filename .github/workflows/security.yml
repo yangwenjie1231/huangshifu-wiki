@@ -94,8 +94,7 @@ jobs:
           npm audit --json > audit-results.json 2>&1 || true
           
           if [ -f audit-results.json ]; then
-            # 统计各级别漏洞数量
-            node -e "
+            cat > /tmp/audit-summary.mjs << 'EOF'
             const fs = require('fs');
             const data = JSON.parse(fs.readFileSync('audit-results.json', 'utf8'));
             
@@ -108,7 +107,6 @@ jobs:
               total: 0
             };
             
-            // 解析审计结果
             if (data.vulnerabilities) {
               for (const [pkg, vuln] of Object.entries(data.vulnerabilities)) {
                 summary[vuln.severity] = (summary[vuln.severity] || 0) + 1;
@@ -124,14 +122,14 @@ jobs:
             console.log('=== Vulnerability Summary ===');
             console.log(JSON.stringify(summary));
             
-            // 设置 GitHub Output
             const fs2 = require('fs');
-            fs2.appendFileSync(process.env.GITHUB_OUTPUT, \`summary=\${JSON.stringify(summary)}\n\`);
+            fs2.appendFileSync(process.env.GITHUB_OUTPUT, `summary=${JSON.stringify(summary)}\n`);
             
-            // 判断是否有高危/严重漏洞
             const hasCriticalOrHigh = (summary.critical > 0 || summary.high > 0);
-            fs2.appendFileSync(process.env.GITHUB_OUTPUT, \`has_critical_or_high=\${hasCriticalOrHigh}\n\`);
-            "
+            fs2.appendFileSync(process.env.GITHUB_OUTPUT, `has_critical_or_high=${hasCriticalOrHigh}\n`);
+            EOF
+            
+            node /tmp/audit-summary.mjs
           else
             echo "No valid audit results found"
             echo "summary={}" >> $GITHUB_OUTPUT
@@ -164,7 +162,7 @@ jobs:
           SARIF_EOF
           
           if [ -f audit-results.json ]; then
-            node -e "
+            cat > /tmp/sarif-convert.mjs << 'EOF'
             const fs = require('fs');
             const data = JSON.parse(fs.readFileSync('audit-results.json', 'utf8'));
             const sarif = JSON.parse(fs.readFileSync('sarif-npm-audit.json', 'utf8'));
@@ -182,9 +180,9 @@ jobs:
                   shortDescription: { text: vuln.title || ('Vulnerability in ' + pkg) },
                   fullDescription: { text: vuln.overview || '' },
                   help: {
-                    text: 'Package: ' + pkg + '\\n' +
-                          'Severity: ' + severity.toUpperCase() + '\\n' +
-                          'Vulnerable: ' + (vuln.via ? vuln.via.join(', ') : 'N/A') + '\\n' +
+                    text: 'Package: ' + pkg + '\n' +
+                          'Severity: ' + severity.toUpperCase() + '\n' +
+                          'Vulnerable: ' + (vuln.via ? vuln.via.join(', ') : 'N/A') + '\n' +
                           'Fix: ' + (vuln.fixAvailable === false ? 'No fix available' : 
                                 vuln.fixAvailable && vuln.fixAvailable.version ? 
                                 'Update to ' + vuln.fixAvailable.version : 'Run npm audit fix')
@@ -244,7 +242,9 @@ jobs:
             sarif.runs[0].results = results;
             fs.writeFileSync('sarif-npm-audit.json', JSON.stringify(sarif, null, 2));
             console.log('Generated SARIF with ' + results.length + ' findings');
-            "
+            EOF
+            
+            node /tmp/sarif-convert.mjs
           fi
 
       - name: Upload npm audit results to GitHub Security tab
@@ -267,24 +267,23 @@ jobs:
             const hasCriticalHigh = '${{ steps.npm-audit.outputs.has_critical_or_high }}' === 'true';
             const data = JSON.parse(summary);
             
-            const body = `## \u26A0\uFE0F Dependency Security Audit Report
+            const body = `## ⚠️ Dependency Security Audit Report
             
             | Severity | Count |
             |----------|-------|
-            | \uD83D\uDFE5 Critical | ${data.critical || 0} |
-            | \uD83D\uDD34 High | ${data.high || 0} |
-            | \uD83D\uDFE1 Moderate | ${data.moderate || 0} |
-            | \uD83D\uDFE2 Low | ${data.low || 0} |
-            | \u2139\uFE0F Info | ${data.info || 0} |
+            | 🔴 Critical | ${data.critical || 0} |
+            | 🟠 High | ${data.high || 0} |
+            | 🟡 Moderate | ${data.moderate || 0} |
+            | 🟢 Low | ${data.low || 0} |
+            | ℹ️ Info | ${data.info || 0} |
             | **Total** | **${data.total || 0}** |
             
             ---
-            ${hasCriticalHigh ? '\u274C **Action Required:** Critical or high severity vulnerabilities detected! Please review and update affected dependencies.' : '\u2705 No critical or high severity vulnerabilities found.'}
+            ${hasCriticalHigh ? '**Action Required:** Critical or high severity vulnerabilities detected! Please review and update affected dependencies.' : '✅ No critical or high severity vulnerabilities found.'}
             
             > Run \`npm audit fix\` to automatically fix fixable vulnerabilities.
             > For detailed report, check the **Security** tab or download the artifact.`;
             
-            // 查找或创建评论
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -313,143 +312,141 @@ jobs:
             }
 
       # ------------------------------------------------------------------
-      # 详细漏洞报告输出 + 失败条件判断
+      # 详细漏洞报告输出（使用临时文件避免 shell/JS 语法冲突）
       # ------------------------------------------------------------------
       - name: Generate detailed vulnerability report
         if: always()
         run: |
           echo "## 🔒 Dependency Vulnerability Detailed Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           if [ -f "audit-results.json" ]; then
-            node -e "
-            const fs = require('fs');
-            const data = JSON.parse(fs.readFileSync('audit-results.json', 'utf8'));
-            const vulns = data.vulnerabilities || {};
-            const meta = data.metadata || {};
-            
-            const summary = meta.vulnerabilities || {};
-            const totalVulns = summary.total || 0;
-            
-            // 统计信息
-            console.log('### 📊 Vulnerability Overview\\n');
-            console.log('| Severity | Count | Action Required |');
-            console.log('|----------|-------|----------------|');
-            console.log(\`| 🔴 Critical | \${summary.critical || 0} | Immediate Fix |\\n\`);
-            console.log(\`| 🟠 High | \${summary.high || 0} | High Priority |\\n\`);
-            console.log(\`| 🟡 Moderate | \${summary.moderate || 0} | Schedule Fix |\\n\`);
-            console.log(\`| 🟢 Low | \${summary.low || 0} | Optional |\\n\`);
-            console.log(\`| ℹ️ Info | \${summary.info || 0} | None |\\n\`);
-            console.log(\`| **Total** | **\${totalVulns}** | |\\n\\n\`);
-            
-            // 分类存储漏洞
-            const critical = [];
-            const high = [];
-            const moderate = [];
-            const low = [];
-            
-            for (const [pkg, vuln] of Object.entries(vulns)) {
-              const item = { package: pkg, ...vuln };
-              const severity = vuln.severity?.toLowerCase() || 'unknown';
-              
-              if (severity === 'critical') critical.push(item);
-              else if (severity === 'high') high.push(item);
-              else if (severity === 'moderate') moderate.push(item);
-              else if (severity === 'low') low.push(item);
-            }
-            
-            // 输出 Critical 漏洞详情
-            if (critical.length > 0) {
-              console.log('### 🔴 Critical Vulnerabilities (Immediate Action Required)\\n');
-              console.log('These vulnerabilities have CVSS scores ≥ 9.0 and can lead to **arbitrary code execution** or complete system compromise.\\n');
-              
-              for (const v of critical) {
-                console.log(\`#### \${v.package}\${v.isDirect ? ' *(direct dependency)*' : ' *(transitive)*'}\\n\`);
-                console.log(\`- **Severity**: 🔴 Critical\\n\`);
-                console.log(\`- **Affected Range**: \${v.range}\\n\`);
-                
-                // 输出每个 CVE 详情
-                if (Array.isArray(v.via)) {
-                  for (const cve of v.via) {
-                    if (typeof cve === 'object') {
-                      console.log(\`- **CVE**: [\${cve.name || 'N/A'}](\${cve.url || '#'})\\n\`);
-                      console.log(\`  - **Title**: \${cve.title}\\n\`);
-                      console.log(\`  - **CWE**: \${(cve.cwe || []).join(', ')}\\n\`);
-                      console.log(\`  - **CVSS Score**: \${cve.cvss?.score || 'N/A'} (\${cve.cvss?.vectorString || 'N/A'})\\n\`);
-                    }
+            cat > /tmp/generate-report.mjs << 'ENDOFSCRIPT'
+          const fs = require('fs');
+          const data = JSON.parse(fs.readFileSync('audit-results.json', 'utf8'));
+          const vulns = data.vulnerabilities || {};
+          const meta = data.metadata || {};
+
+          const summary = meta.vulnerabilities || {};
+          const totalVulns = summary.total || 0;
+
+          const lines = [];
+
+          lines.push('### 📊 Vulnerability Overview\n');
+          lines.push('| Severity | Count | Action Required |');
+          lines.push('|----------|-------|----------------|');
+          lines.push(`| 🔴 Critical | ${summary.critical || 0} | Immediate Fix |`);
+          lines.push(`| 🟠 High | ${summary.high || 0} | High Priority |`);
+          lines.push(`| 🟡 Moderate | ${summary.moderate || 0} | Schedule Fix |`);
+          lines.push(`| 🟢 Low | ${summary.low || 0} | Optional |`);
+          lines.push(`| ℹ️ Info | ${summary.info || 0} | None |`);
+          lines.push(`| **Total** | **${totalVulns}** | |\n`);
+
+          const critical = [];
+          const high = [];
+          const moderate = [];
+          const low = [];
+
+          for (const [pkg, vuln] of Object.entries(vulns)) {
+            const item = { package: pkg, ...vuln };
+            const severity = vuln.severity?.toLowerCase() || 'unknown';
+
+            if (severity === 'critical') critical.push(item);
+            else if (severity === 'high') high.push(item);
+            else if (severity === 'moderate') moderate.push(item);
+            else if (severity === 'low') low.push(item);
+          }
+
+          if (critical.length > 0) {
+            lines.push('### 🔴 Critical Vulnerabilities (Immediate Action Required)\n');
+            lines.push('These vulnerabilities have CVSS scores ≥ 9.0 and can lead to **arbitrary code execution** or complete system compromise.\n');
+
+            for (const v of critical) {
+              lines.push(`#### ${v.package}${v.isDirect ? ' *(direct dependency)*' : ' *(transitive)*'}`);
+              lines.push(`- **Severity**: 🔴 Critical`);
+              lines.push(`- **Affected Range**: ${v.range}`);
+
+              if (Array.isArray(v.via)) {
+                for (const cve of v.via) {
+                  if (typeof cve === 'object') {
+                    lines.push(`- **CVE**: [${cve.name || 'N/A'}](${cve.url || '#'})`);
+                    lines.push(`  - **Title**: ${cve.title}`);
+                    lines.push(`  - **CWE**: ${(cve.cwe || []).join(', ')}`);
+                    lines.push(`  - **CVSS Score**: ${cve.cvss?.score || 'N/A'} (${cve.cvss?.vectorString || 'N/A'})`);
                   }
                 }
-                
-                console.log(\`- **Fix Available**: \${v.fixAvailable ? '✅ Yes' : '❌ No'}\\n\`);
-                if (v.fixAvailable && v.fixAvailable.version) {
-                  console.log(\`  - **Recommended Version**: \`\${v.fixAvailable.version}\`\\n\`);
-                }
-                if (v.effects && v.effects.length > 0) {
-                  console.log(\`- **Affects**: \${v.effects.join(', ')}\\n\`);
-                }
-                console.log('');
               }
-            }
-            
-            // 输出 High 漏洞详情
-            if (high.length > 0) {
-              console.log('### 🟠 High Severity Vulnerabilities\\n');
-              
-              for (const v of high.slice(0, 10)) {
-                const cves = Array.isArray(v.via) ? v.via.filter(c => typeof c === 'object') : [];
-                const topCVE = cves[0];
-                
-                console.log(\`**\${v.package}**\${v.isDirect ? ' *(direct)*' : ' *(transitive)*'}\\n\`);
-                if (topCVE) {
-                  console.log(\`- \`${topCVE.title?.substring(0, 80) || 'N/A'}\`\\n\`);
-                  console.log(\`- CVSS: \${topCVE.cvss?.score || 'N/A'} | CWE: \${(topCVE.cwe || []).join(',')}\\n\`);
-                }
-                console.log(\`- Fix: \${v.fixAvailable?.version || 'Upgrade required'}\\n\\n\`);
+
+              lines.push(`- **Fix Available**: ${v.fixAvailable ? '✅ Yes' : '❌ No'}`);
+              if (v.fixAvailable && v.fixAvailable.version) {
+                lines.push(`  - **Recommended Version**: \`${v.fixAvailable.version}\``);
               }
-              
-              if (high.length > 10) {
-                console.log(\`*... and \${high.length - 10} more high severity vulnerabilities*\\n\\n\`);
+              if (v.effects && v.effects.length > 0) {
+                lines.push(`- **Affects**: ${v.effects.join(', ')}`);
               }
+              lines.push('');
             }
-            
-            // 修复建议
-            console.log('### 💡 Remediation Recommendations\\n');
-            console.log('#### Priority Actions:\\n');
-            console.log('1. **Critical/High Direct Dependencies**:\\n');
-            console.log('   - Run `npm update <package-name>` to patch to safe version\\n');
-            console.log('   - Or specify exact version in package.json (e.g., `\"axios\": \"^1.15.2\"`)\\n\\n');
-            console.log('2. **Transitive Dependencies**:\\n');
-            console.log('   - Use `npm audit fix` to auto-fix where possible\\n');
-            console.log('   - For complex cases, use `npm ls <package>` to identify the dependency chain\\n\\n');
-            console.log('3. **Monitor & Review**:\\n');
-            console.log('   - Check GitHub Security tab for this repository\\n');
-            console.log('   - Subscribe to security advisories for critical packages\\n\\n');
-            
-            // 直接依赖的高危包列表
-            const directCriticalHigh = [...critical, ...high].filter(v => v.isDirect);
-            if (directCriticalHigh.length > 0) {
-              console.log('#### ⚡ Direct Dependencies Requiring Immediate Attention:\\n');
-              console.log('\`\`\`bash\\n');
-              for (const v of directCriticalHigh) {
-                const targetVer = v.fixAvailable?.version || 'latest';
-                console.log(\`npm install \${v.package}@\${targetVer}\\n\`);
+          }
+
+          if (high.length > 0) {
+            lines.push('### 🟠 High Severity Vulnerabilities\n');
+
+            for (const v of high.slice(0, 10)) {
+              const cves = Array.isArray(v.via) ? v.via.filter(c => typeof c === 'object') : [];
+              const topCVE = cves[0];
+
+              lines.push(`**${v.package}**${v.isDirect ? ' *(direct)*' : ' *(transitive)*'}`);
+              if (topCVE) {
+                lines.push(`- \`${topCVE.title?.substring(0, 80) || 'N/A'}\``);
+                lines.push(`- CVSS: ${topCVE.cvss?.score || 'N/A'} | CWE: ${(topCVE.cwe || []).join(',')}`);
               }
-              console.log('\`\`\`\\n');
+              lines.push(`- Fix: ${v.fixAvailable?.version || 'Upgrade required'}\n`);
             }
-            
-            // 输出最终状态
-            const hasCriticalHigh = (summary.critical || 0) > 0 || (summary.high || 0) > 0;
-            if (hasCriticalHigh) {
-              console.log('---\\n');
-              console.log('### ❌ Security Check Failed\\n');
-              console.log(\`**\${totalVulns}** vulnerabilities detected (\${summary.critical || 0} critical, \${summary.high || 0} high).\\n\\n\`);
-              console.log('Please address these vulnerabilities before merging. Review the full report above for detailed remediation steps.\\n');
-            } else {
-              console.log('---\\n');
-              console.log('### ✅ Security Check Passed\\n');
-              console.log('No critical or high severity vulnerabilities found. Moderate/Low issues should be addressed in future updates.\\n');
+
+            if (high.length > 10) {
+              lines.push(`*... and ${high.length - 10} more high severity vulnerabilities*\n`);
             }
-            " >> $GITHUB_STEP_SUMMARY
+          }
+
+          lines.push('### 💡 Remediation Recommendations\n');
+          lines.push('#### Priority Actions:\n');
+          lines.push('1. **Critical/High Direct Dependencies**:');
+          lines.push('   - Run `npm update <package-name>` to patch to safe version');
+          lines.push('   - Or specify exact version in package.json (e.g., `"axios": "^1.15.2"`)\n');
+          lines.push('2. **Transitive Dependencies**:');
+          lines.push('   - Use `npm audit fix` to auto-fix where possible');
+          lines.push('   - For complex cases, use `npm ls <package>` to identify the dependency chain\n');
+          lines.push('3. **Monitor & Review**:');
+          lines.push('   - Check GitHub Security tab for this repository');
+          lines.push('   - Subscribe to security advisories for critical packages\n');
+
+          const directCriticalHigh = [...critical, ...high].filter(v => v.isDirect);
+          if (directCriticalHigh.length > 0) {
+            lines.push('#### ⚡ Direct Dependencies Requiring Immediate Attention:\n');
+            lines.push('```bash');
+            for (const v of directCriticalHigh) {
+              const targetVer = v.fixAvailable?.version || 'latest';
+              lines.push(`npm install ${v.package}@${targetVer}`);
+            }
+            lines.push('```\n');
+          }
+
+          const hasCriticalHigh = (summary.critical || 0) > 0 || (summary.high || 0) > 0;
+          if (hasCriticalHigh) {
+            lines.push('---');
+            lines.push('### ❌ Security Check Failed\n');
+            lines.push(`**${totalVulns}** vulnerabilities detected (${summary.critical || 0} critical, ${summary.high || 0} high).\n`);
+            lines.push('Please address these vulnerabilities before merging. Review the full report above for detailed remediation steps.');
+          } else {
+            lines.push('---');
+            lines.push('### ✅ Security Check Passed\n');
+            lines.push('No critical or high severity vulnerabilities found. Moderate/Low issues should be addressed in future updates.');
+          }
+
+          console.log(lines.join('\n'));
+          ENDOFSCRIPT
+
+            node /tmp/generate-report.mjs >> $GITHUB_STEP_SUMMARY
           else
             echo "⚠️ No audit results file found" >> $GITHUB_STEP_SUMMARY
           fi
@@ -485,7 +482,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: ${{ github.event_name == 'schedule' || inputs.full_scan == 'true' && 60 || 30 }}
 
-    # PR 时可以并行运行；schedule/push 时等待 audit 完成
     needs: dependency-audit
     if: ${{ github.event_name != 'pull_request' }}
 
@@ -503,49 +499,29 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ------------------------------------------------------------------
-      # 初始化 CodeQL
-      # ------------------------------------------------------------------
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
-          # 启用更深入的查询（仅在定时扫描或手动全量扫描时）
           queries: ${{ (github.event_name == 'schedule' || inputs.full_scan == 'true') &&
             'security-extended,security-and-quality' ||
             'security-extended' }}
-          # 使用最新的 CodeQL CLI 以获得最佳分析效果
           tools: latest
 
-      # ------------------------------------------------------------------
-      # 自动构建：CodeQL 会自动检测项目类型并进行构建
-      # 这确保了分析覆盖实际编译的代码
-      # ------------------------------------------------------------------
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
         env:
-          # 确保 Node.js 环境正确配置
           NODE_ENV: production
 
-      # ------------------------------------------------------------------
-      # 执行 CodeQL 分析
-      # --category 用于区分不同语言的扫描结果
-      # --sarif-category 确保 SARIF 文件有唯一标识
-      # ------------------------------------------------------------------
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
           category: '/language:${{ matrix.language }}'
           output: sarif-results-${{ matrix.language }}
-          # 上传到 GitHub Security tab（默认行为）
           upload-database: true
-          # 在 PR 中显示结果
           wait-for-processing: true
 
-      # ------------------------------------------------------------------
-      # 可选：导出额外的分析报告
-      # ------------------------------------------------------------------
       - name: Export analysis summary
         if: always()
         run: |
@@ -555,10 +531,9 @@ jobs:
           echo "Scan Type: ${{ (github.event_name == 'schedule' || inputs.full_scan == 'true') && 'Full Deep Scan' || 'Standard Security Scan' }}"
           echo ""
           echo "Results have been uploaded to the GitHub Security tab."
-          echo "SARIF results are available in the workflow artifacts."
 
   # ==========================================================================
-  # Job 3: 安全扫描汇总（可选通知）
+  # Job 3: 安全扫描汇总
   # ==========================================================================
   security-summary:
     name: Security Summary & Notifications
@@ -582,51 +557,14 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           
           if [[ "$DEP_STATUS" == "failure" || "$CODEQL_STATUS" == "failure" ]]; then
-            echo "### \u26A0\uFE0F Action Required" >> $GITHUB_STEP_SUMMARY
+            echo "### ⚠️ Action Required" >> $GITHUB_STEP_SUMMARY
             echo "One or more security checks failed. Please review the detailed reports." >> $GITHUB_STEP_SUMMARY
             exit 1
           else
-            echo "### \u2705 All Security Checks Passed" >> $GITHUB_STEP_SUMMARY
+            echo "### ✅ All Security Checks Passed" >> $GITHUB_STEP_SUMMARY
             echo "No critical security issues detected." >> $GITHUB_STEP_SUMMARY
           fi
 
-      # ------------------------------------------------------------------
-      # 可选：发送严重问题通知
-      # 取消下面的注释以启用 Slack/Teams/Email 通知
-      # ------------------------------------------------------------------
-      # - name: Send notification on failure
-      #   if: needs.dependency-audit.result == 'failure' || needs.codeql-analyze.result == 'failure'
-      #   uses: slackapi/slack-github-action@v1.26.0
-      #   with:
-      #     channel-id: 'security-alerts'
-      #     payload: |
-      #       {
-      #         "text": "\u26A0\uFE0F Security Scan Failed",
-      #         "blocks": [
-      #           {
-      #             "type": "section",
-      #             "text": {
-      #               "type": "mrkdwn",
-      #               "text": "*Security Scan Failed*\n\nRepository: ${{ github.repository }}\nBranch: ${{ github.ref_name }}\nTriggered by: ${{ github.actor }}\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
-      #             }
-      #           }
-      #         ]
-      #       }
-      #   env:
-      #     SLACK_BOT_TOKEN: ${{ secrets.SLACK_SECURITY_BOT_TOKEN }}
-
-      # - name: Send Teams notification on failure
-      #   if: needs.dependency-audit.result == 'failure' || needs.codeql-analyze.result == 'failure'
-      #   uses: jdcargile/ms-teams-notification@v1.4
-      #   with:
-      #     webhook-url: ${{ secrets.TEAMS_SECURITY_WEBHOOK }}
-      #     title: "\u26A0\uFE0F Security Scan Failed"
-      #     color: FF0000
-      #     message: "Security scan failed in ${{ github.repository }}. Please review immediately."
-
-      # ------------------------------------------------------------------
-      # 最终状态检查
-      # ------------------------------------------------------------------
       - name: Final status check
         run: |
           if [[ "${{ needs.dependency-audit.result }}" == "failure" || "${{ needs.codeql-analyze.result }}" == "failure" ]]; then
