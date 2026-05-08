@@ -313,8 +313,147 @@ jobs:
             }
 
       # ------------------------------------------------------------------
-      # 失败条件：发现高危或严重漏洞时失败构建
+      # 详细漏洞报告输出 + 失败条件判断
       # ------------------------------------------------------------------
+      - name: Generate detailed vulnerability report
+        if: always()
+        run: |
+          echo "## 🔒 Dependency Vulnerability Detailed Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "audit-results.json" ]; then
+            node -e "
+            const fs = require('fs');
+            const data = JSON.parse(fs.readFileSync('audit-results.json', 'utf8'));
+            const vulns = data.vulnerabilities || {};
+            const meta = data.metadata || {};
+            
+            const summary = meta.vulnerabilities || {};
+            const totalVulns = summary.total || 0;
+            
+            // 统计信息
+            console.log('### 📊 Vulnerability Overview\\n');
+            console.log('| Severity | Count | Action Required |');
+            console.log('|----------|-------|----------------|');
+            console.log(\`| 🔴 Critical | \${summary.critical || 0} | Immediate Fix |\\n\`);
+            console.log(\`| 🟠 High | \${summary.high || 0} | High Priority |\\n\`);
+            console.log(\`| 🟡 Moderate | \${summary.moderate || 0} | Schedule Fix |\\n\`);
+            console.log(\`| 🟢 Low | \${summary.low || 0} | Optional |\\n\`);
+            console.log(\`| ℹ️ Info | \${summary.info || 0} | None |\\n\`);
+            console.log(\`| **Total** | **\${totalVulns}** | |\\n\\n\`);
+            
+            // 分类存储漏洞
+            const critical = [];
+            const high = [];
+            const moderate = [];
+            const low = [];
+            
+            for (const [pkg, vuln] of Object.entries(vulns)) {
+              const item = { package: pkg, ...vuln };
+              const severity = vuln.severity?.toLowerCase() || 'unknown';
+              
+              if (severity === 'critical') critical.push(item);
+              else if (severity === 'high') high.push(item);
+              else if (severity === 'moderate') moderate.push(item);
+              else if (severity === 'low') low.push(item);
+            }
+            
+            // 输出 Critical 漏洞详情
+            if (critical.length > 0) {
+              console.log('### 🔴 Critical Vulnerabilities (Immediate Action Required)\\n');
+              console.log('These vulnerabilities have CVSS scores ≥ 9.0 and can lead to **arbitrary code execution** or complete system compromise.\\n');
+              
+              for (const v of critical) {
+                console.log(\`#### \${v.package}\${v.isDirect ? ' *(direct dependency)*' : ' *(transitive)*'}\\n\`);
+                console.log(\`- **Severity**: 🔴 Critical\\n\`);
+                console.log(\`- **Affected Range**: \${v.range}\\n\`);
+                
+                // 输出每个 CVE 详情
+                if (Array.isArray(v.via)) {
+                  for (const cve of v.via) {
+                    if (typeof cve === 'object') {
+                      console.log(\`- **CVE**: [\${cve.name || 'N/A'}](\${cve.url || '#'})\\n\`);
+                      console.log(\`  - **Title**: \${cve.title}\\n\`);
+                      console.log(\`  - **CWE**: \${(cve.cwe || []).join(', ')}\\n\`);
+                      console.log(\`  - **CVSS Score**: \${cve.cvss?.score || 'N/A'} (\${cve.cvss?.vectorString || 'N/A'})\\n\`);
+                    }
+                  }
+                }
+                
+                console.log(\`- **Fix Available**: \${v.fixAvailable ? '✅ Yes' : '❌ No'}\\n\`);
+                if (v.fixAvailable && v.fixAvailable.version) {
+                  console.log(\`  - **Recommended Version**: \`\${v.fixAvailable.version}\`\\n\`);
+                }
+                if (v.effects && v.effects.length > 0) {
+                  console.log(\`- **Affects**: \${v.effects.join(', ')}\\n\`);
+                }
+                console.log('');
+              }
+            }
+            
+            // 输出 High 漏洞详情
+            if (high.length > 0) {
+              console.log('### 🟠 High Severity Vulnerabilities\\n');
+              
+              for (const v of high.slice(0, 10)) {
+                const cves = Array.isArray(v.via) ? v.via.filter(c => typeof c === 'object') : [];
+                const topCVE = cves[0];
+                
+                console.log(\`**\${v.package}**\${v.isDirect ? ' *(direct)*' : ' *(transitive)*'}\\n\`);
+                if (topCVE) {
+                  console.log(\`- \`${topCVE.title?.substring(0, 80) || 'N/A'}\`\\n\`);
+                  console.log(\`- CVSS: \${topCVE.cvss?.score || 'N/A'} | CWE: \${(topCVE.cwe || []).join(',')}\\n\`);
+                }
+                console.log(\`- Fix: \${v.fixAvailable?.version || 'Upgrade required'}\\n\\n\`);
+              }
+              
+              if (high.length > 10) {
+                console.log(\`*... and \${high.length - 10} more high severity vulnerabilities*\\n\\n\`);
+              }
+            }
+            
+            // 修复建议
+            console.log('### 💡 Remediation Recommendations\\n');
+            console.log('#### Priority Actions:\\n');
+            console.log('1. **Critical/High Direct Dependencies**:\\n');
+            console.log('   - Run `npm update <package-name>` to patch to safe version\\n');
+            console.log('   - Or specify exact version in package.json (e.g., `\"axios\": \"^1.15.2\"`)\\n\\n');
+            console.log('2. **Transitive Dependencies**:\\n');
+            console.log('   - Use `npm audit fix` to auto-fix where possible\\n');
+            console.log('   - For complex cases, use `npm ls <package>` to identify the dependency chain\\n\\n');
+            console.log('3. **Monitor & Review**:\\n');
+            console.log('   - Check GitHub Security tab for this repository\\n');
+            console.log('   - Subscribe to security advisories for critical packages\\n\\n');
+            
+            // 直接依赖的高危包列表
+            const directCriticalHigh = [...critical, ...high].filter(v => v.isDirect);
+            if (directCriticalHigh.length > 0) {
+              console.log('#### ⚡ Direct Dependencies Requiring Immediate Attention:\\n');
+              console.log('\`\`\`bash\\n');
+              for (const v of directCriticalHigh) {
+                const targetVer = v.fixAvailable?.version || 'latest';
+                console.log(\`npm install \${v.package}@\${targetVer}\\n\`);
+              }
+              console.log('\`\`\`\\n');
+            }
+            
+            // 输出最终状态
+            const hasCriticalHigh = (summary.critical || 0) > 0 || (summary.high || 0) > 0;
+            if (hasCriticalHigh) {
+              console.log('---\\n');
+              console.log('### ❌ Security Check Failed\\n');
+              console.log(\`**\${totalVulns}** vulnerabilities detected (\${summary.critical || 0} critical, \${summary.high || 0} high).\\n\\n\`);
+              console.log('Please address these vulnerabilities before merging. Review the full report above for detailed remediation steps.\\n');
+            } else {
+              console.log('---\\n');
+              console.log('### ✅ Security Check Passed\\n');
+              console.log('No critical or high severity vulnerabilities found. Moderate/Low issues should be addressed in future updates.\\n');
+            }
+            " >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No audit results file found" >> $GITHUB_STEP_SUMMARY
+          fi
+
       - name: Check for critical/high vulnerabilities
         if: always()
         run: |
