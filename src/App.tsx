@@ -1,4 +1,4 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import {
 	BrowserRouter as Router,
 	Navigate,
@@ -13,6 +13,8 @@ import { Navbar } from "./components/Navbar";
 import { BottomNav } from "./components/BottomNav";
 import { AnnouncementBar } from "./components/AnnouncementBar";
 import { GlobalMusicPlayer } from "./components/GlobalMusicPlayer";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { PageSkeleton } from "./components/PageSkeleton";
 import { clsx } from "clsx";
 import { loginWithWeChat } from "./lib/auth";
 import {
@@ -21,18 +23,18 @@ import {
 	isMiniProgramWebView,
 } from "./lib/miniProgram";
 
-import Home from "./pages/Home";
-import Wiki from "./pages/wiki";
-import Profile from "./pages/Profile";
-import Forum from "./pages/Forum";
-import Music from "./pages/Music";
-import Gallery from "./pages/Gallery";
-import GalleryDetail from "./pages/GalleryDetail";
-import AlbumDetail from "./pages/AlbumDetail";
-import MusicDetail from "./pages/MusicDetail";
-import MusicLinks from "./pages/MusicLinks";
-import Search from "./pages/Search";
-import AdminRoutes from "./pages/Admin/AdminRoutes";
+const Home = lazy(() => import("./pages/Home").then(m => ({ default: m.default })));
+const Wiki = lazy(() => import("./pages/wiki").then(m => ({ default: m.default })));
+const Profile = lazy(() => import("./pages/Profile").then(m => ({ default: m.default })));
+const Forum = lazy(() => import("./pages/Forum").then(m => ({ default: m.default })));
+const Music = lazy(() => import("./pages/Music").then(m => ({ default: m.default })));
+const Gallery = lazy(() => import("./pages/Gallery").then(m => ({ default: m.default })));
+const GalleryDetail = lazy(() => import("./pages/GalleryDetail").then(m => ({ default: m.default })));
+const AlbumDetail = lazy(() => import("./pages/AlbumDetail").then(m => ({ default: m.default })));
+const MusicDetail = lazy(() => import("./pages/MusicDetail").then(m => ({ default: m.default })));
+const MusicLinks = lazy(() => import("./pages/MusicLinks").then(m => ({ default: m.default })));
+const Search = lazy(() => import("./pages/Search").then(m => ({ default: m.default })));
+const AdminRoutes = lazy(() => import("./pages/Admin/AdminRoutes").then(m => ({ default: m.default })));
 
 const MainLayout = () => {
 	const { currentSong } = useMusic();
@@ -62,19 +64,23 @@ const MainLayout = () => {
 				role="main"
 				id="main-content"
 			>
-				<Routes>
-					<Route path="/" element={<Home />} />
-					<Route path="/wiki/*" element={<Wiki />} />
-					<Route path="/forum/*" element={<Forum />} />
-					<Route path="/gallery" element={<Gallery />} />
-					<Route path="/gallery/:galleryId" element={<GalleryDetail />} />
-					<Route path="/music" element={<Music />} />
-					<Route path="/music/:songId" element={<MusicDetail />} />
-					<Route path="/music/links" element={<MusicLinks />} />
-					<Route path="/album/:albumId" element={<AlbumDetail />} />
-					<Route path="/search" element={<Search />} />
-					<Route path="/profile" element={<Profile />} />
-				</Routes>
+				<ErrorBoundary>
+					<Suspense fallback={<PageSkeleton />}>
+						<Routes>
+							<Route path="/" element={<Home />} />
+							<Route path="/wiki/*" element={<Wiki />} />
+							<Route path="/forum/*" element={<Forum />} />
+							<Route path="/gallery" element={<Gallery />} />
+							<Route path="/gallery/:galleryId" element={<GalleryDetail />} />
+							<Route path="/music" element={<Music />} />
+							<Route path="/music/:songId" element={<MusicDetail />} />
+							<Route path="/music/links" element={<MusicLinks />} />
+							<Route path="/album/:albumId" element={<AlbumDetail />} />
+							<Route path="/search" element={<Search />} />
+							<Route path="/profile" element={<Profile />} />
+						</Routes>
+					</Suspense>
+				</ErrorBoundary>
 			</main>
 			<GlobalMusicPlayer />
 			<BottomNav />
