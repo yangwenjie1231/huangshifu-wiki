@@ -2,107 +2,321 @@
 -- Description: Add missing location fields and other columns to Post, WikiPage, and Gallery tables
 -- This migration fixes the error: "The column Gallery.locationDetail does not exist"
 -- Generated: 2026-05-09
+-- Updated: Use safe column addition with existence checks (handles pre-existing columns)
 
 -- ============================================================================
--- 1. POST TABLE - Add missing columns
+-- Helper function: Safely add column if it doesn't exist
 -- ============================================================================
 
--- Add musicDocId field (foreign key to MusicTrack)
-ALTER TABLE "Post" ADD COLUMN "musicDocId" TEXT;
+DO $$
+BEGIN
+    -- ============================================================================
+    -- 1. POST TABLE - Add missing columns (with safety checks)
+    -- ============================================================================
+    
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Post' AND column_name = 'musicDocId'
+    ) THEN
+        ALTER TABLE "Post" ADD COLUMN "musicDocId" TEXT;
+        RAISE NOTICE 'Added column Post.musicDocId';
+    ELSE
+        RAISE NOTICE 'Column Post.musicDocId already exists, skipping';
+    END IF;
 
--- Add albumDocId field (foreign key to Album)
-ALTER TABLE "Post" ADD COLUMN "albumDocId" TEXT;
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Post' AND column_name = 'albumDocId'
+    ) THEN
+        ALTER TABLE "Post" ADD COLUMN "albumDocId" TEXT;
+        RAISE NOTICE 'Added column Post.albumDocId';
+    ELSE
+        RAISE NOTICE 'Column Post.albumDocId already exists, skipping';
+    END IF;
 
--- Add locationCode field (foreign key to Region)
-ALTER TABLE "Post" ADD COLUMN "locationCode" TEXT;
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Post' AND column_name = 'locationCode'
+    ) THEN
+        ALTER TABLE "Post" ADD COLUMN "locationCode" TEXT;
+        RAISE NOTICE 'Added column Post.locationCode';
+    ELSE
+        RAISE NOTICE 'Column Post.locationCode already exists, skipping';
+    END IF;
 
--- Add locationDetail field for detailed address/location info
-ALTER TABLE "Post" ADD COLUMN "locationDetail" TEXT;
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Post' AND column_name = 'locationDetail'
+    ) THEN
+        ALTER TABLE "Post" ADD COLUMN "locationDetail" TEXT;
+        RAISE NOTICE 'Added column Post.locationDetail';
+    ELSE
+        RAISE NOTICE 'Column Post.locationDetail already exists, skipping';
+    END IF;
 
--- Add isPinned field for pinning posts
-ALTER TABLE "Post" ADD COLUMN "isPinned" BOOLEAN NOT NULL DEFAULT false;
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Post' AND column_name = 'isPinned'
+    ) THEN
+        ALTER TABLE "Post" ADD COLUMN "isPinned" BOOLEAN NOT NULL DEFAULT false;
+        RAISE NOTICE 'Added column Post.isPinned';
+    ELSE
+        RAISE NOTICE 'Column Post.isPinned already exists, skipping';
+    END IF;
 
--- Add dislikesCount field
-ALTER TABLE "Post" ADD COLUMN "dislikesCount" INTEGER NOT NULL DEFAULT 0;
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Post' AND column_name = 'dislikesCount'
+    ) THEN
+        ALTER TABLE "Post" ADD COLUMN "dislikesCount" INTEGER NOT NULL DEFAULT 0;
+        RAISE NOTICE 'Added column Post.dislikesCount';
+    ELSE
+        RAISE NOTICE 'Column Post.dislikesCount already exists, skipping';
+    END IF;
 
--- Add parentId to PostComment for threaded comments
-ALTER TABLE "PostComment" ADD COLUMN "galleryId" TEXT;
+    -- ============================================================================
+    -- 2. POSTCOMMENT TABLE - Add galleryId for threaded comments
+    -- ============================================================================
+    
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'PostComment' AND column_name = 'galleryId'
+    ) THEN
+        ALTER TABLE "PostComment" ADD COLUMN "galleryId" TEXT;
+        RAISE NOTICE 'Added column PostComment.galleryId';
+    ELSE
+        RAISE NOTICE 'Column PostComment.galleryId already exists, skipping';
+    END IF;
 
--- Create indexes for Post table
+    -- ============================================================================
+    -- 3. WIKIPAGE TABLE - Add missing columns (with safety checks)
+    -- ============================================================================
+    
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'WikiPage' AND column_name = 'titleKey'
+    ) THEN
+        ALTER TABLE "WikiPage" ADD COLUMN "titleKey" TEXT NOT NULL DEFAULT '';
+        RAISE NOTICE 'Added column WikiPage.titleKey';
+    ELSE
+        RAISE NOTICE 'Column WikiPage.titleKey already exists, skipping';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'WikiPage' AND column_name = 'locationCode'
+    ) THEN
+        ALTER TABLE "WikiPage" ADD COLUMN "locationCode" TEXT;
+        RAISE NOTICE 'Added column WikiPage.locationCode';
+    ELSE
+        RAISE NOTICE 'Column WikiPage.locationCode already exists, skipping';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'WikiPage' AND column_name = 'locationDetail'
+    ) THEN
+        ALTER TABLE "WikiPage" ADD COLUMN "locationDetail" TEXT;
+        RAISE NOTICE 'Added column WikiPage.locationDetail';
+    ELSE
+        RAISE NOTICE 'Column WikiPage.locationDetail already exists, skipping';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'WikiPage' AND column_name = 'isPinned'
+    ) THEN
+        ALTER TABLE "WikiPage" ADD COLUMN "isPinned" BOOLEAN NOT NULL DEFAULT false;
+        RAISE NOTICE 'Added column WikiPage.isPinned';
+    ELSE
+        RAISE NOTICE 'Column WikiPage.isPinned already exists, skipping';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'WikiPage' AND column_name = 'likesCount'
+    ) THEN
+        ALTER TABLE "WikiPage" ADD COLUMN "likesCount" INTEGER NOT NULL DEFAULT 0;
+        RAISE NOTICE 'Added column WikiPage.likesCount';
+    ELSE
+        RAISE NOTICE 'Column WikiPage.likesCount already exists, skipping';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'WikiPage' AND column_name = 'dislikesCount'
+    ) THEN
+        ALTER TABLE "WikiPage" ADD COLUMN "dislikesCount" INTEGER NOT NULL DEFAULT 0;
+        RAISE NOTICE 'Added column WikiPage.dislikesCount';
+    ELSE
+        RAISE NOTICE 'Column WikiPage.dislikesCount already exists, skipping';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'WikiPage' AND column_name = 'favoritesCount'
+    ) THEN
+        ALTER TABLE "WikiPage" ADD COLUMN "favoritesCount" INTEGER NOT NULL DEFAULT 0;
+        RAISE NOTICE 'Added column WikiPage.favoritesCount';
+    ELSE
+        RAISE NOTICE 'Column WikiPage.favoritesCount already exists, skipping';
+    END IF;
+
+    -- ============================================================================
+    -- 4. GALLERY TABLE - Add missing columns (with safety checks)
+    -- ============================================================================
+    
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Gallery' AND column_name = 'copyright'
+    ) THEN
+        ALTER TABLE "Gallery" ADD COLUMN "copyright" TEXT;
+        RAISE NOTICE 'Added column Gallery.copyright';
+    ELSE
+        RAISE NOTICE 'Column Gallery.copyright already exists, skipping';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Gallery' AND column_name = 'published'
+    ) THEN
+        ALTER TABLE "Gallery" ADD COLUMN "published" BOOLEAN NOT NULL DEFAULT false;
+        RAISE NOTICE 'Added column Gallery.published';
+    ELSE
+        RAISE NOTICE 'Column Gallery.published already exists, skipping';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Gallery' AND column_name = 'publishedAt'
+    ) THEN
+        ALTER TABLE "Gallery" ADD COLUMN "publishedAt" TIMESTAMP(3);
+        RAISE NOTICE 'Added column Gallery.publishedAt';
+    ELSE
+        RAISE NOTICE 'Column Gallery.publishedAt already exists, skipping';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Gallery' AND column_name = 'locationCode'
+    ) THEN
+        ALTER TABLE "Gallery" ADD COLUMN "locationCode" TEXT;
+        RAISE NOTICE 'Added column Gallery.locationCode';
+    ELSE
+        RAISE NOTICE 'Column Gallery.locationCode already exists, skipping';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Gallery' AND column_name = 'locationDetail'
+    ) THEN
+        ALTER TABLE "Gallery" ADD COLUMN "locationDetail" TEXT;
+        RAISE NOTICE 'Added column Gallery.locationDetail';
+    ELSE
+        RAISE NOTICE 'Column Gallery.locationDetail already exists, skipping';
+    END IF;
+
+END $$;
+
+-- ============================================================================
+-- Create indexes (IF NOT EXISTS is safe for indexes)
+-- ============================================================================
+
+-- Post table indexes
 CREATE INDEX IF NOT EXISTS "Post_musicDocId_idx" ON "Post"("musicDocId");
 CREATE INDEX IF NOT EXISTS "Post_albumDocId_idx" ON "Post"("albumDocId");
 CREATE INDEX IF NOT EXISTS "Post_locationCode_idx" ON "Post"("locationCode");
 CREATE INDEX IF NOT EXISTS "Post_isPinned_idx" ON "Post"("isPinned");
 
--- Add foreign key constraints for Post table
-ALTER TABLE "Post" ADD CONSTRAINT "Post_musicDocId_fkey" FOREIGN KEY ("musicDocId") REFERENCES "MusicTrack"("docId") ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "Post" ADD CONSTRAINT "Post_albumDocId_fkey" FOREIGN KEY ("albumDocId") REFERENCES "Album"("docId") ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "Post" ADD CONSTRAINT "Post_locationCode_fkey" FOREIGN KEY ("locationCode") REFERENCES "Region"("code") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- Add foreign key constraint for PostComment -> Gallery
-ALTER TABLE "PostComment" ADD CONSTRAINT "PostComment_galleryId_fkey" FOREIGN KEY ("galleryId") REFERENCES "Gallery"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- Create index for PostComment.galleryId
+-- PostComment index
 CREATE INDEX IF NOT EXISTS "PostComment_galleryId_idx" ON "PostComment"("galleryId");
 
--- ============================================================================
--- 2. WIKIPAGE TABLE - Add missing columns
--- ============================================================================
-
--- Add titleKey field for unique title identifier
-ALTER TABLE "WikiPage" ADD COLUMN "titleKey" TEXT NOT NULL DEFAULT '';
-
--- Add locationCode field (foreign key to Region)
-ALTER TABLE "WikiPage" ADD COLUMN "locationCode" TEXT;
-
--- Add locationDetail field for detailed address/location info
-ALTER TABLE "WikiPage" ADD COLUMN "locationDetail" TEXT;
-
--- Add isPinned field for pinning wiki pages
-ALTER TABLE "WikiPage" ADD COLUMN "isPinned" BOOLEAN NOT NULL DEFAULT false;
-
--- Add likesCount field
-ALTER TABLE "WikiPage" ADD COLUMN "likesCount" INTEGER NOT NULL DEFAULT 0;
-
--- Add dislikesCount field
-ALTER TABLE "WikiPage" ADD COLUMN "dislikesCount" INTEGER NOT NULL DEFAULT 0;
-
--- Add favoritesCount field
-ALTER TABLE "WikiPage" ADD COLUMN "favoritesCount" INTEGER NOT NULL DEFAULT 0;
-
--- Create unique index for titleKey
+-- WikiPage indexes
 CREATE UNIQUE INDEX IF NOT EXISTS "WikiPage_titleKey_key" ON "WikiPage"("titleKey");
-
--- Create indexes for WikiPage table
 CREATE INDEX IF NOT EXISTS "WikiPage_locationCode_idx" ON "WikiPage"("locationCode");
 CREATE INDEX IF NOT EXISTS "WikiPage_isPinned_idx" ON "WikiPage"("isPinned");
 
--- Add foreign key constraint for WikiPage -> Region
-ALTER TABLE "WikiPage" ADD CONSTRAINT "WikiPage_locationCode_fkey" FOREIGN KEY ("locationCode") REFERENCES "Region"("code") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- ============================================================================
--- 3. GALLERY TABLE - Add missing columns
--- ============================================================================
-
--- Add copyright field for image copyright information
-ALTER TABLE "Gallery" ADD COLUMN "copyright" TEXT;
-
--- Add published field for publish/unpublish functionality
-ALTER TABLE "Gallery" ADD COLUMN "published" BOOLEAN NOT NULL DEFAULT false;
-
--- Add publishedAt field for publication timestamp
-ALTER TABLE "Gallery" ADD COLUMN "publishedAt" TIMESTAMP(3);
-
--- Add locationCode field (foreign key to Region)
-ALTER TABLE "Gallery" ADD COLUMN "locationCode" TEXT;
-
--- Add locationDetail field for detailed address/location info
-ALTER TABLE "Gallery" ADD COLUMN "locationDetail" TEXT;
-
--- Create indexes for Gallery table
+-- Gallery indexes
 CREATE INDEX IF NOT EXISTS "Gallery_published_idx" ON "Gallery"("published", "updatedAt");
 CREATE INDEX IF NOT EXISTS "Gallery_authorUid_idx" ON "Gallery"("authorUid");
 CREATE INDEX IF NOT EXISTS "Gallery_locationCode_idx" ON "Gallery"("locationCode");
 
--- Add foreign key constraint for Gallery -> Region
-ALTER TABLE "Gallery" ADD CONSTRAINT "Gallery_locationCode_fkey" FOREIGN KEY ("locationCode") REFERENCES "Region"("code") ON DELETE SET NULL ON UPDATE CASCADE;
+-- ============================================================================
+-- Add foreign key constraints (with existence checks)
+-- ============================================================================
+
+DO $$
+BEGIN
+    -- Post -> MusicTrack
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'Post_musicDocId_fkey'
+    ) THEN
+        ALTER TABLE "Post" ADD CONSTRAINT "Post_musicDocId_fkey"
+            FOREIGN KEY ("musicDocId") REFERENCES "MusicTrack"("docId")
+            ON DELETE SET NULL ON UPDATE CASCADE;
+        RAISE NOTICE 'Added constraint Post_musicDocId_fkey';
+    ELSE
+        RAISE NOTICE 'Constraint Post_musicDocId_fkey already exists, skipping';
+    END IF;
+
+    -- Post -> Album
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'Post_albumDocId_fkey'
+    ) THEN
+        ALTER TABLE "Post" ADD CONSTRAINT "Post_albumDocId_fkey"
+            FOREIGN KEY ("albumDocId") REFERENCES "Album"("docId")
+            ON DELETE SET NULL ON UPDATE CASCADE;
+        RAISE NOTICE 'Added constraint Post_albumDocId_fkey';
+    ELSE
+        RAISE NOTICE 'Constraint Post_albumDocId_fkey already exists, skipping';
+    END IF;
+
+    -- Post -> Region
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'Post_locationCode_fkey'
+    ) THEN
+        ALTER TABLE "Post" ADD CONSTRAINT "Post_locationCode_fkey"
+            FOREIGN KEY ("locationCode") REFERENCES "Region"("code")
+            ON DELETE SET NULL ON UPDATE CASCADE;
+        RAISE NOTICE 'Added constraint Post_locationCode_fkey';
+    ELSE
+        RAISE NOTICE 'Constraint Post_locationCode_fkey already exists, skipping';
+    END IF;
+
+    -- PostComment -> Gallery
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'PostComment_galleryId_fkey'
+    ) THEN
+        ALTER TABLE "PostComment" ADD CONSTRAINT "PostComment_galleryId_fkey"
+            FOREIGN KEY ("galleryId") REFERENCES "Gallery"("id")
+            ON DELETE CASCADE ON UPDATE CASCADE;
+        RAISE NOTICE 'Added constraint PostComment_galleryId_fkey';
+    ELSE
+        RAISE NOTICE 'Constraint PostComment_galleryId_fkey already exists, skipping';
+    END IF;
+
+    -- WikiPage -> Region
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'WikiPage_locationCode_fkey'
+    ) THEN
+        ALTER TABLE "WikiPage" ADD CONSTRAINT "WikiPage_locationCode_fkey"
+            FOREIGN KEY ("locationCode") REFERENCES "Region"("code")
+            ON DELETE SET NULL ON UPDATE CASCADE;
+        RAISE NOTICE 'Added constraint WikiPage_locationCode_fkey';
+    ELSE
+        RAISE NOTICE 'Constraint WikiPage_locationCode_fkey already exists, skipping';
+    END IF;
+
+    -- Gallery -> Region
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'Gallery_locationCode_fkey'
+    ) THEN
+        ALTER TABLE "Gallery" ADD CONSTRAINT "Gallery_locationCode_fkey"
+            FOREIGN KEY ("locationCode") REFERENCES "Region"("code")
+            ON DELETE SET NULL ON UPDATE CASCADE;
+        RAISE NOTICE 'Added constraint Gallery_locationCode_fkey';
+    ELSE
+        RAISE NOTICE 'Constraint Gallery_locationCode_fkey already exists, skipping';
+    END IF;
+
+END $$;
