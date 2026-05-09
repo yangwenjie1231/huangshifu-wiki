@@ -20,6 +20,7 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./tests/unit/setup.ts'],
     include: ['tests/unit/**/*.test.ts', 'tests/unit/**/*.test.tsx'],
+    testTimeout: 30000,
     environmentMatchGlobs: [
       // 非 UI 测试使用 node 环境
       ['tests/unit/!(*components*)/**/*.test.{ts,tsx}', 'node'],

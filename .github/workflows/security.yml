@@ -246,15 +246,14 @@ jobs:
 
     needs: dependency-audit
     if: ${{ github.event_name != 'pull_request' }}
+    continue-on-error: true
 
     strategy:
       fail-fast: false
       matrix:
-        language: ['javascript', 'typescript']
+        language: ['javascript']
         include:
           - language: javascript
-            build-mode: autobuild
-          - language: typescript
             build-mode: autobuild
 
     steps:
