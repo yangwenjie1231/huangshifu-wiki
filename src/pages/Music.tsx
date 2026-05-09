@@ -597,14 +597,14 @@ const Music = () => {
                 {paginatedSongs.length > 0 ? (
                   <>
                     {/* 使用虚拟滚动渲染歌曲列表 */}
-                    <VirtualList
+                    <VirtualList<SongItem>
                       ref={virtualListRef}
                       data={paginatedSongs}
                       estimateSize={120}
                       overscan={5}
                       height="auto"
                     >
-                      {(song) => (
+                      {(song: SongItem) => (
                         <SongCard
                           key={song.docId}
                           song={song}

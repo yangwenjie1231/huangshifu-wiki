@@ -165,7 +165,6 @@ export const Navbar = () => {
 
 			{(
 				<AuthModal
-					key={authInitialMode}
 					open={authModalOpen}
 					onClose={() => setAuthModalOpen(false)}
 					onAuthSuccess={() => setIsMenuOpen(false)}

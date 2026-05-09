@@ -48,7 +48,7 @@ export const AdminDashboard = () => {
     fetchStats();
   }, []);
 
-  const total = Object.values(stats).reduce((a, b) => a + b, 0);
+  const total = Object.values(stats).reduce<number>((a: number, b: number) => a + b, 0);
 
   return (
     <div className="space-y-6">

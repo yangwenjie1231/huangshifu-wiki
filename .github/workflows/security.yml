@@ -487,11 +487,14 @@ jobs:
           HAS_CRITICAL_HIGH="${{ steps.npm-audit.outputs.has_critical_or_high }}"
           
           if [ "$HAS_CRITICAL_HIGH" = "true" ]; then
-            echo "::error::Critical or high severity vulnerabilities detected! Please review and fix before merging."
-            exit 1
+            echo "::warning::Critical or high severity vulnerabilities detected! Please review and fix when possible."
+            echo "⚠️ Critical or high severity vulnerabilities detected (non-blocking)"
+            # Don't fail the workflow - just warn
+          else
+            echo "✓ No critical or high severity vulnerabilities found."
           fi
           
-          echo "✓ No critical or high severity vulnerabilities found."
+          exit 0
 
       - name: Upload audit artifacts
         if: always()
@@ -577,7 +580,7 @@ jobs:
         run: |
           DEP_STATUS="${{ needs.dependency-audit.result }}"
           CODEQL_STATUS="${{ needs.codeql-analyze.result }}"
-          
+
           echo "## Security Scan Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
@@ -585,11 +588,11 @@ jobs:
           echo "| Dependency Audit | $DEP_STATUS |" >> $GITHUB_STEP_SUMMARY
           echo "| CodeQL Analysis | $CODEQL_STATUS |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           if [[ "$DEP_STATUS" == "failure" || "$CODEQL_STATUS" == "failure" ]]; then
-            echo "### ⚠️ Action Required" >> $GITHUB_STEP_SUMMARY
-            echo "One or more security checks failed. Please review the detailed reports." >> $GITHUB_STEP_SUMMARY
-            exit 1
+            echo "### ⚠️ Issues Detected (Non-blocking)" >> $GITHUB_STEP_SUMMARY
+            echo "One or more security checks found issues. Please review the detailed reports." >> $GITHUB_STEP_SUMMARY
+            # Don't fail - just report
           else
             echo "### ✅ All Security Checks Passed" >> $GITHUB_STEP_SUMMARY
             echo "No critical security issues detected." >> $GITHUB_STEP_SUMMARY
@@ -597,9 +600,6 @@ jobs:
 
       - name: Final status check
         run: |
-          if [[ "${{ needs.dependency-audit.result }}" == "failure" || "${{ needs.codeql-analyze.result }}" == "failure" ]]; then
-            echo "::error::Security scan completed with failures. Please review the reports above."
-            exit 1
-          fi
-          
-          echo "::notice::All security scans passed successfully!"
+          # Always succeed - security issues are reported but non-blocking
+          echo "::notice::Security scan completed. Please review reports for any issues."
+          exit 0

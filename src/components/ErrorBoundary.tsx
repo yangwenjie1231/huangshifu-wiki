@@ -11,9 +11,7 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-type Props = Readonly<ErrorBoundaryProps>;
-
-export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundaryInner extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false, error: null };
 
   constructor(props: ErrorBoundaryProps) {
@@ -27,8 +25,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
-    const p = this.props as unknown as Props;
-    p.onError?.(error, errorInfo);
+    this.props.onError?.(error, errorInfo);
   }
 
   handleReset(): void {
@@ -37,8 +34,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   render(): ReactNode {
     if (this.state.hasError) {
-      const p = this.props as unknown as Props;
-      const fallback = p.fallback;
+      const { fallback } = this.props;
       if (fallback) {
         return fallback;
       }
@@ -93,7 +89,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       );
     }
 
-    const p = this.props as unknown as Props;
-    return p.children;
+    const { children } = this.props;
+    return children;
   }
+}
+
+export function ErrorBoundary(props: ErrorBoundaryProps) {
+  return React.createElement(ErrorBoundaryInner, props);
 }
