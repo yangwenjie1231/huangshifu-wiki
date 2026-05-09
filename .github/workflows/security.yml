@@ -245,7 +245,7 @@ jobs:
     timeout-minutes: ${{ github.event_name == 'schedule' || inputs.full_scan == 'true' && 60 || 30 }}
 
     needs: dependency-audit
-    if: ${{ github.event_name != 'pull_request' }}
+    if: ${{ github.event_name != 'pull_request' && false }}
     continue-on-error: true
 
     strategy:

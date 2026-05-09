@@ -173,7 +173,59 @@ export default defineConfig(({ mode }) => {
 							return "utils-vendor";
 						}
 
-						// Everything else goes to misc
+						// CSS/HTML parsing libraries - often have circular dependencies and ES module issues
+						if (
+							pkg === "css-selector-parser" ||
+							pkg.startsWith("css-") ||
+							pkg === "parse5" ||
+							pkg === "htmlparser2" ||
+							pkg === "domhandler" ||
+							pkg === "domutils" ||
+							pkg === "entities" ||
+							pkg === "domelementtype"
+						) {
+							return "parser-vendor";
+						}
+
+						// Encoding and utility libraries
+						if (
+							pkg === "iconv-lite" ||
+							pkg === "whatwg-url" ||
+							pkg === "tr46" ||
+							pkg.startsWith("punycode")
+						) {
+							return "encoding-vendor";
+						}
+
+						// Music parsing libraries
+						if (
+							pkg === "@meting/core" ||
+							pkg.startsWith("@meting/")
+						) {
+							return "music-vendor";
+						}
+
+						// Compression and archive libraries
+						if (
+							pkg === "adm-zip" ||
+							pkg === "archiver" ||
+							pkg.startsWith("zip") ||
+							pkg.startsWith("tar") ||
+							pkg === "compress-commons"
+						) {
+							return "compress-vendor";
+						}
+
+						// Native/WASM runtime libraries
+						if (
+							pkg === "@emnapi/runtime" ||
+							pkg === "@emnapi/" ||
+							pkg.startsWith("wasm-")
+						) {
+							return "runtime-vendor";
+						}
+
+						// Everything else goes to misc (should be much smaller now)
 						return "vendor-misc";
 					},
 					// Optimized file naming with content hash for better caching
