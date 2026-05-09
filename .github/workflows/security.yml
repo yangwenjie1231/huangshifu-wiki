@@ -81,9 +81,9 @@ jobs:
       - name: Install dependencies
         run: |
           echo "Installing dependencies..."
-          npm ci --ignore-scripts || {
+          npm ci --legacy-peer-deps --ignore-scripts || {
             echo "Warning: npm ci failed, attempting npm install as fallback"
-            npm install --ignore-scripts || true
+            npm install --legacy-peer-deps --ignore-scripts || true
           }
           
           # Verify node_modules exists
