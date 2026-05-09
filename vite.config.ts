@@ -11,7 +11,6 @@ export default defineConfig(({ mode }) => {
 		plugins: [
 			react(),
 			tailwindcss(),
-			// Bundle analyzer - only enabled when ANALYZE=true
 			isAnalyze &&
 				visualizer({
 					open: true,
@@ -22,20 +21,15 @@ export default defineConfig(({ mode }) => {
 		].filter(Boolean),
 		build: {
 				target: "es2020",
-				// Enable CSS code splitting
 				cssCodeSplit: true,
-				// Optimize chunk size warnings threshold (500kb)
 				chunkSizeWarningLimit: 500,
-				// Minification options
 				minify: "terser",
-				// 强制破坏缓存 - 每次构建都生成新 hash
 				sourcemap: false,
 				terserOptions: {
 					compress: {
 						drop_console: mode === "production",
 						drop_debugger: mode === "production",
 						pure_funcs: mode === "production" ? ["console.log", "console.info"] : [],
-						// 禁用可能导致 TDZ 问题的优化
 						reduce_vars: false,
 						collapse_vars: false,
 					},
@@ -47,29 +41,19 @@ export default defineConfig(({ mode }) => {
 					},
 				},
 			rollupOptions: {
-				// Suppress circular chunk warning - this is a known issue with complex dependency graphs
-				// The circular reference is between UI libraries and misc utilities, which is unavoidable
-				// without merging all dependencies into a single large chunk (which would hurt caching)
 				onwarn(warning) {
 					if (warning.code === 'CIRCULAR_DEPENDENCY') return;
 					if (warning.message?.includes('Circular chunk')) return;
 					console.warn(warning.message || warning);
 				},
 				output: {
-					// Optimize chunk splitting for route-level code splitting
 					manualChunks(id) {
-						// Route components - split into separate chunks for lazy loading
 						if (id.includes("/src/pages/")) {
-							// Admin page is large and rarely accessed - always split it
-							if (id.includes("/pages/Admin")) {
-								return "page-admin";
-							}
-							// Other page chunks
+							if (id.includes("/pages/Admin")) return "page-admin";
 							if (id.includes("/pages/Forum")) return "page-forum";
 							if (id.includes("/pages/Music")) return "page-music";
 							if (id.includes("/pages/Gallery")) return "page-gallery";
 							if (id.includes("/pages/Search")) return "page-search";
-							// Detail pages
 							if (id.includes("GalleryDetail")) return "page-gallery-detail";
 							if (id.includes("MusicDetail")) return "page-music-detail";
 							if (id.includes("AlbumDetail")) return "page-album-detail";
@@ -79,248 +63,367 @@ export default defineConfig(({ mode }) => {
 						if (!id.includes("node_modules")) return;
 
 						const pkgMatch = id.match(
-							/node_modules[\/\\](@[^\/\\]+[\/\\][^\/\\]+|[^\/\\]+)/,
+							/node_modules[\/\\](@[^\/\\]+[\/\\][[^\/\\]+|[^\/\\]+)/,
 						);
 						const pkg = pkgMatch ? pkgMatch[1] : "";
 
-						// React core - most critical, keep together with babel runtime
-						if (
-							pkg === "react" ||
-							pkg === "react-dom" ||
-							pkg === "scheduler" ||
-							pkg === "react-router" ||
-							pkg === "react-router-dom" ||
-							pkg === "@babel/runtime"
-						) {
-							return "react-core";
-						}
+						if (!pkg) return;
 
-						// UI libraries - grouped together to avoid circular dependencies
-						// Includes markdown editors, animation, icons, and their dependencies
-						if (
-							pkg === "react-markdown" ||
-							pkg === "@uiw/react-md-editor" ||
-							pkg.startsWith("@uiw/") ||
-							pkg.startsWith("rehype-") ||
-							pkg.startsWith("remark-") ||
-							pkg.startsWith("unist-") ||
-							pkg.startsWith("mdast-") ||
-							pkg.startsWith("hast") ||
-							pkg === "motion" ||
-							pkg === "motion-dom" ||
-							pkg === "motion-utils" ||
-							pkg === "framer-motion" ||
-							pkg === "lucide-react" ||
-							// Common utilities that UI libs depend on
-							pkg === "prismjs" ||
-							pkg === "tslib" ||
-							pkg === "bail" ||
-							pkg === "extend" ||
-							pkg === "character-entities" ||
-							pkg === "property-information" ||
-							pkg === "comma-separated-tokens" ||
-							pkg === "space-separated-tokens" ||
-							pkg === "hastscript" ||
-							pkg === "web-namespaces"
-						) {
-							return "vendor-ui";
-						}
+						const categorize = () => {
+							switch (pkg) {
+								case "react":
+								case "react-dom":
+								case "scheduler":
+								case "react-router":
+								case "react-router-dom":
+								case "@babel/runtime":
+									return "react-core";
 
-						// AI/ML libraries - often large
-						if (
-							pkg === "@google/genai" ||
-							pkg === "@huggingface/transformers" ||
-							pkg.startsWith("@tensorflow")
-						) {
-							return "ai-vendor";
-						}
+								case "express":
+								case "compression":
+								case "cookie-parser":
+								case "helmet":
+								case "cors":
+								case "multer":
+								case "express-rate-limit":
+									return "express-vendor";
 
-						// Date utilities
-						if (pkg === "date-fns") return "date-vendor";
+								case "@prisma/client":
+									return "prisma-vendor";
 
-						// Image processing
-						if (
-							pkg === "exifreader" ||
-							pkg === "react-image-crop" ||
-							pkg === "spark-md5" ||
-							pkg === "blurhash"
-						) {
-							return "image-vendor";
-						}
+								case "@uiw/react-md-editor":
+								case "@uiw/react-markdown-preview":
+								case "@uiw/md-editor":
+								case "react-markdown":
+								case "remark-gfm":
+								case "rehype-highlight":
+								case "remark-parse":
+								case "remark-rehype":
+								case "rehype-stringify":
+								case "rehype-raw":
+								case "unist-util-visit":
+								case "unist-util-is":
+								case "unist-util-position":
+								case "unist-util-from-selectors":
+								case "mdast-util-to-hast":
+								case "hast-util-to-jsx-runtime":
+								case "hast-util-whitespace":
+								case "hastscript":
+								case "property-information":
+								case "comma-separated-tokens":
+								case "space-separated-tokens":
+								case "web-namespaces":
+								case "character-entities":
+								case "bail":
+								case "extend":
+								case "tslib":
+								case "prismjs":
+								case "prismjs-components":
+									return "markdown-vendor";
 
-						// Charts and visualization - large bundle, keep separate
-						if (
-							pkg === "echarts" ||
-							pkg === "vis-network" ||
-							pkg.startsWith("vis-")
-						) {
-							return "chart-vendor";
-						}
+								case "motion":
+								case "motion-dom":
+								case "motion-utils":
+								case "motion-server":
+								case "framesync":
+									return "motion-vendor";
 
-						// AWS SDK - large dependencies
-						if (pkg.startsWith("@aws-sdk/")) {
-							return "aws-vendor";
-						}
+								case "framer-motion":
+									return "framer-vendor";
 
-						// Database/ORM related
-						if (
-							pkg === "@prisma/client" ||
-							pkg === "@qdrant/js-client-rest"
-						) {
-							return "db-vendor";
-						}
+								case "lucide-react":
+								case "lucide":
+									return "icons-vendor";
 
-						// Common utilities and smaller libraries that don't fit other categories
-						if (
-							pkg === "zod" ||
-							pkg === "axios" ||
-							pkg === "cheerio" ||
-							pkg === "clsx" ||
-							pkg === "tailwind-merge"
-						) {
-							return "utils-vendor";
-						}
+								case "@tanstack/react-virtual":
+								case "@tanstack/virtual-core":
+									return "virtual-vendor";
 
-						// CSS/HTML parsing libraries - often have circular dependencies and ES module issues
-						if (
-							pkg === "css-selector-parser" ||
-							pkg.startsWith("css-") ||
-							pkg === "parse5" ||
-							pkg === "htmlparser2" ||
-							pkg === "domhandler" ||
-							pkg === "domutils" ||
-							pkg === "entities" ||
-							pkg === "domelementtype"
-						) {
-							return "parser-vendor";
-						}
+								case "echarts":
+								case "zrender":
+									return "echarts-vendor";
 
-						// Encoding and utility libraries
-						if (
-							pkg === "iconv-lite" ||
-							pkg === "whatwg-url" ||
-							pkg === "tr46" ||
-							pkg.startsWith("punycode")
-						) {
-							return "encoding-vendor";
-						}
+								case "vis-data":
+								case "vis-network":
+								case "vis-util":
+								case "vis-configuration":
+								case "vis-date-i18n":
+								case "vis-timeline-graph2d":
+									return "vis-vendor";
 
-						// Music parsing libraries
-						if (
-							pkg === "@meting/core" ||
-							pkg.startsWith("@meting/")
-						) {
-							return "music-vendor";
-						}
+								case "@aws-sdk/client-s3":
+								case "@aws-sdk/s3-request-presigner":
+								case "@aws-sdk/smithy-client":
+								case "@aws-sdk/middleware-stack":
+								case "@aws-sdk/middleware-user-agent":
+								case "@aws-sdk/middleware-retry":
+								case "@aws-sdk/util-base64":
+								case "@aws-sdk/util-body-length-browser":
+								case "@aws-sdk/util-buffer-from":
+								case "@aws-sdk/util-defaults-mode-browser":
+								case "@aws-sdk/util-defaults-mode-node":
+								case "@aws-sdk/util-endpoints":
+								case "@aws-sdk/util-endpoints-v2":
+								case "@aws-sdk/format-url":
+								case "@aws-sdk/hash-node":
+								case "@aws-sdk/invalid-dependency":
+								case "@aws-sdk/is-array-buffer":
+								case "@aws-sdk/middleware-content-length":
+								case "@aws-sdk/middleware-host-header":
+								case "@aws-sdk/middleware-logger":
+								case "@aws-sdk/middleware-recursion-detection":
+								case "@aws-sdk/middleware-signing":
+								case "@aws-sdk/node-http-handler":
+								case "@aws-sdk/protocol-http":
+								case "@aws-sdk/querystring-builder":
+								case "@aws-sdk/response-metadata-extractor":
+								case "@aws-sdk/url-parser":
+								case "@aws-sdk/util-base64-browser":
+								case "@aws-sdk/util-create-request":
+								case "@aws-sdk/util-dsm":
+								case "@aws-sdk/util-format-url":
+								case "@aws-sdk/util-hex-encoding":
+								case "@aws-sdk/util-locate-window":
+								case "@aws-sdk/util-middleware":
+								case "@aws-sdk/util-retry":
+								case "@aws-sdk/util-stream-browser":
+								case "@aws-sdk/util-stream-node":
+								case "@aws-sdk/util-uri-escape":
+								case "@aws-sdk/util-utf8-browser":
+								case "@aws-sdk/util-utf8-node":
+								case "@aws-sdk/util-waiter":
+								case "@aws-sdk/xml-builder":
+								case "@aws-sdk/types":
+								case "@smithy/smithy-client":
+								case "@smithy/eventstream-codec":
+								case "@smithy/eventstream-serde-config-provider":
+								case "@smithy/eventstream-serde-universal":
+								case "@smithy/protocol-http":
+								case "@smithy/smithy-client":
+								case "@smithy/types":
+								case "@smithy/util-base64":
+								case "@smithy/util-body-length-browser":
+								case "@smithy/util-buffer-from":
+								case "@smithy/util-defaults-mode-browser":
+								case "@smithy/util-endpoints":
+								case "@smithy/util-endpoints-v2":
+								case "@smithy/util-retry":
+								case "@smithy/util-stream":
+								case "@smithy/util-utf8":
+								case "@smithy/middleware-retry":
+								case "@smithy/middleware-stack":
+								case "@aws-crypto":
+								case "@aws-crypto/sha256-browser":
+								case "@aws-crypto/sha256-js":
+								case "@aws-crypto/supports-webcrypto":
+								case "@aws-crypto/util":
+								case "@aws-sdk/signature-v4":
+								case "@aws-sdk/eventstream-codec":
+								case "@aws-sdk/eventstream-serde-config-provider":
+								case "@aws-sdk/eventstream-serde-universal":
+								case "@aws-sdk/lib-storage":
+								case "@aws-sdk/control-plane-client":
+								case "@aws-sdk/credential-provider-cognito-identity":
+								case "@aws-sdk/credential-provider-env":
+								case "@aws-sdk/credential-provider-http":
+								case "@aws-sdk/credential-provider-ini":
+								case "@aws-sdk/credential-provider-process":
+								case "@aws-sdk/credential-provider-sso":
+								case "@aws-sdk/credential-provider-web-identity":
+								case "@aws-sdk/token-providers":
+								case "@aws-sdk/util-waiter":
+									return "aws-vendor";
 
-						// Compression and archive libraries
-						if (
-							pkg === "adm-zip" ||
-							pkg === "archiver" ||
-							pkg.startsWith("zip") ||
-							pkg.startsWith("tar") ||
-							pkg === "compress-commons"
-						) {
-							return "compress-vendor";
-						}
+								case "@google/genai":
+								case "@google/generative-ai":
+									return "google-ai-vendor";
 
-						// Native/WASM runtime libraries
-						if (
-							pkg === "@emnapi/runtime" ||
-							pkg === "@emnapi/" ||
-							pkg.startsWith("wasm-") ||
-							pkg === "onnxruntime-node" ||
-							pkg.startsWith("onnxruntime")
-						) {
-							return "runtime-vendor";
-						}
+								case "@huggingface/transformers":
+								case "@huggingface/jni":
+									return "huggingface-vendor";
 
-						// Sharp and image processing
-						if (
-							pkg === "sharp" ||
-							pkg.startsWith("sharp-") ||
-							pkg === "@img/" ||
-							pkg === "color"
-						) {
-							return "sharp-vendor";
-						}
+								case "@tensorflow/tfjs":
+								case "@tensorflow/tfjs-backend-webgl":
+								case "@tensorflow/tfjs-converter":
+								case "@tensorflow/tfjs-core":
+								case "@tensorflow/tfjs-data":
+								case "@tensorflow/tfjs-layers":
+								case "@tensorflow/tfjs-backend-cpu":
+								case "@tensorflow/tfjs-backend-wasm":
+								case "@tensorflow/tfjs-converter-webcodecs-worker":
+								case "@tensorflow/tfjs-env":
+								case "@tensorflow/tfjs-io":
+								case "@tensorflow/tfjs-layers/dist":
+								case "@tensorflow/tfjs-node":
+								case "@tensorflow/tfjs-backend-common":
+								case "@tensorflow/tfjs-dist":
+								case "@tensorflow/tfjs-vis":
+								case "long":
+									return "tensorflow-vendor";
 
-						// Node.js polyfills and core modules
-						if (
-							pkg === "node-fetch" ||
-							pkg === "data-uri-to-buffer" ||
-							pkg === "fetch-blob" ||
-							pkg === "formdata-polyfill" ||
-							pkg === "node-domexception" ||
-							pkg === "web-streams-polyfill"
-						) {
-							return "polyfill-vendor";
-						}
+								case "@qdrant/js-client-rest":
+									return "qdrant-vendor";
 
-						// Security and crypto libraries
-						if (
-							pkg === "jsonwebtoken" ||
-							pkg === "bcryptjs" ||
-							pkg === "cookie-parser" ||
-							pkg === "helmet" ||
-							pkg === "cors"
-						) {
-							return "security-vendor";
-						}
+								case "date-fns":
+									return "date-fns-vendor";
 
-						// Network and HTTP utilities
-						if (
-							pkg === "axios" ||
-							pkg === "node-fetch" ||
-							pkg === "cross-fetch" ||
-							pkg === "whatwg-url"
-						) {
-							return "http-vendor";
-						}
+								case "exifreader":
+									return "exif-vendor";
 
-						// Validation libraries
-						if (
-							pkg === "zod" ||
-							pkg === "yup" ||
-							pkg === "joi" ||
-							pkg === "superstruct"
-						) {
-							return "validation-vendor";
-						}
+								case "react-image-crop":
+									return "crop-vendor";
 
-						// Utility libraries (clsx, tailwind-merge, etc.)
-						if (
-							pkg === "clsx" ||
-							pkg === "tailwind-merge" ||
-							pkg === "cheerio" ||
-							pkg === "lodash-es" ||
-							pkg.startsWith("lodash")
-						) {
-							return "util-vendor";
-						}
+								case "spark-md5":
+									return "hash-vendor";
 
-						// Everything else goes to misc (should be much smaller now)
-						return "vendor-misc";
-					},
-					// Optimized file naming with content hash for better caching
-					// v3 prefix to force cache break
-					entryFileNames: `assets/v3-[name]-[hash].js`,
-					chunkFileNames: `assets/v3-[name]-[hash].js`,
+								case "blurhash":
+								case "react-blurhash":
+									return "blurhash-vendor";
+
+								case "axios":
+									return "axios-vendor";
+
+								case "cheerio":
+								case "htmlparser2":
+								case "domhandler":
+								case "domutils":
+								case "entities":
+								case "domelementtype":
+								case "parse5":
+								case "css-selector-parser":
+								case "css-what":
+								case "nth-check":
+								case "boolbase":
+								case "dom-serializer":
+								case "dom-serializer/lib":
+									return "cheerio-vendor";
+
+								case "clsx":
+									return "clsx-vendor";
+
+								case "tailwind-merge":
+									return "tailwind-merge-vendor";
+
+								case "zod":
+									return "zod-vendor";
+
+								case "jsonwebtoken":
+								case "jws":
+								case "buffer-alloc":
+								case "buffer-from":
+								case "safe-buffer":
+								case "jwa":
+								case "ecdsa-sig-formatter":
+								case "base64url":
+								case "lodash.isequal":
+									return "jwt-vendor";
+
+								case "bcryptjs":
+								case "blakejs":
+									return "bcrypt-vendor";
+
+								case "dotenv":
+								case "dotenv-expand":
+									return "dotenv-vendor";
+
+								case "node-cache":
+									return "cache-vendor";
+
+								case "@meting/core":
+								case "@meting/utils":
+								case "@meting/types":
+								case "@meting/parser":
+								case "@meting/provider":
+									return "meting-vendor";
+
+								case "adm-zip":
+								case "archiver":
+								case "zip-stream":
+								case "compress-commons":
+								case "crc32":
+								case "crc32-stream":
+								case "readable-stream":
+								case "lodash":
+								case "lodash-es":
+									return "archive-vendor";
+
+								case "@emnapi/runtime":
+								case "@emnapi/core":
+								case "@emnapi/api":
+								case "@emnapi/wasi-threads":
+								case "@node-rs/wasm-bindgen":
+								case "@aspect-build/wasm-bindgen":
+									return "emnapi-vendor";
+
+								case "sharp":
+								case "sharp/internal":
+								case "@img/sharp-libvips-darwin-arm64":
+								case "@img/sharp-libvips-darwin-x64":
+								case "@img/sharp-libvips-linux-arm":
+								case "@img/sharp-libvips-linux-arm64":
+								case "@img/sharp-libvips-linux-x64":
+								case "@img/sharp-libvips-win32-ia32":
+								case "@img/sharp-libvips-win32-x64":
+								case "@img/sharp-win32-x64":
+								case "@img/sharp-linux-x64":
+								case "@img/sharp-linux-arm64":
+								case "@img/sharp-libvips-custom-linux-x64":
+								case "color":
+									return "sharp-vendor";
+
+								case "iconv-lite":
+								case "whatwg-url":
+								case "tr46":
+								case "punycode":
+								case "data-uri-to-buffer":
+								case "fetch-blob":
+								case "formdata-polyfill":
+								case "node-domexception":
+								case "web-streams-polyfill":
+								case "node-fetch":
+								case "cross-fetch":
+								case "undici":
+									return "polyfill-vendor";
+
+								default:
+									if (pkg.startsWith("@aws-sdk/") || pkg.startsWith("@smithy/") || pkg.startsWith("@aws-crypto/")) {
+										return "aws-vendor";
+									}
+									if (pkg.startsWith("@tensorflow/")) {
+										return "tensorflow-vendor";
+									}
+									if (pkg.startsWith("@huggingface/")) {
+										return "huggingface-vendor";
+									}
+									if (pkg.startsWith("@emnapi/")) {
+										return "emnapi-vendor";
+									}
+									if (pkg.startsWith("@img/")) {
+										return "sharp-vendor";
+									}
+									if (pkg.startsWith("sharp-")) {
+										return "sharp-vendor";
+									}
+
+									return `misc-${pkg.replace(/[@\/]/g, '_')}`;
+							};
+
+							return categorize();
+						},
+
+					entryFileNames: `assets/v4-[name]-[hash].js`,
+					chunkFileNames: `assets/v4-[name]-[hash].js`,
 					assetFileNames: (assetInfo) => {
 						const info = assetInfo.name || "";
-						// Images
 						if (/\.(png|jpe?g|gif|svg|webp|ico)$/i.test(info)) {
 							return "assets/images/[name]-[hash][extname]";
 						}
-						// Fonts
 						if (/\.(woff2?|ttf|otf|eot)$/i.test(info)) {
 							return "assets/fonts/[name]-[hash][extname]";
 						}
-						// CSS
 						if (/\.css$/i.test(info)) {
 							return "assets/css/[name]-[hash][extname]";
 						}
-						// Other assets
 						return "assets/[name]-[hash][extname]";
 					},
 				},
