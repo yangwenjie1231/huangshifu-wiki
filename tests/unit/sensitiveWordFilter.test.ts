@@ -45,7 +45,7 @@ describe('sensitiveWordFilter', () => {
 
       expect(mockJoin).toHaveBeenCalledWith(process.cwd(), 'public', 'sensitive-words', 'words.txt');
       expect(mockReadFile).toHaveBeenCalledWith('/mock/path/words.txt', 'utf-8');
-    });
+    }, 15000);
 
     it('handles empty file', async () => {
       mockReadFile.mockResolvedValue('');

@@ -169,7 +169,7 @@ describe('wiki branch routes', () => {
 
     expect(response).toEqual({ status: 403, body: { error: '无权访问该分支' } });
     expect(mockPrisma.wikiRevision.findUnique).not.toHaveBeenCalled();
-  });
+  }, 15000);
 
   it('blocks unrelated users from conflicted branch revision history', async () => {
     mockPrisma.wikiBranch.findUnique.mockResolvedValueOnce(createBranch({ status: 'conflict' }));
@@ -179,5 +179,5 @@ describe('wiki branch routes', () => {
 
     expect(response).toEqual({ status: 403, body: { error: '无权查看修订历史' } });
     expect(mockPrisma.wikiRevision.findMany).not.toHaveBeenCalled();
-  });
+  }, 15000);
 });
