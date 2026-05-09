@@ -1286,7 +1286,6 @@ const PostEditor = () => {
 						</label>
 						<div
 							className="border border-[#e0dcd3] rounded overflow-hidden bg-white"
-							onPasteCapture={handleMarkdownTextPasteCapture}
 						>
 							<MarkdownEditor
 								value={formData.content}

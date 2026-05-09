@@ -1,7 +1,6 @@
 import React from "react";
 import MDEditor from "@uiw/react-md-editor";
 import "@uiw/react-md-editor/markdown-editor.css";
-import { uploadMarkdownImage } from "../services/imageService";
 import { handleMarkdownTextPasteCapture } from "../lib/markdownEditorPaste";
 
 interface MarkdownEditorProps {
@@ -19,18 +18,6 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 	placeholder = "输入内容...",
 	enableWikiLinks = false,
 }) => {
-	const handleImageUpload = async (
-		file: File,
-	): Promise<string | undefined> => {
-		try {
-			const url = await uploadMarkdownImage(file);
-			return url;
-		} catch (error) {
-			console.error("Image upload failed:", error);
-			throw error;
-		}
-	};
-
 	const processPreviewText = (text: string): string => {
 		if (!enableWikiLinks) return text;
 
@@ -60,7 +47,6 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 				textareaProps={{
 					placeholder,
 				}}
-				onImageUpload={handleImageUpload}
 				visibleDragbar={false}
 			/>
 		</div>

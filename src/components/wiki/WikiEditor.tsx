@@ -414,7 +414,6 @@ const WikiEditor = () => {
 						</div>
 						<div
 							className="border border-[#e0dcd3] rounded overflow-hidden"
-							onPasteCapture={handleMarkdownTextPasteCapture}
 						>
 							<MarkdownEditor
 								value={formData.content}
