@@ -12,11 +12,10 @@ interface ErrorBoundaryState {
 }
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState;
+  state: ErrorBoundaryState = { hasError: false, error: null };
 
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.state = { hasError: false, error: null };
     this.handleReset = this.handleReset.bind(this);
   }
 
@@ -35,8 +34,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   render(): ReactNode {
     if (this.state.hasError) {
-      if (this.props.fallback) {
-        return this.props.fallback;
+      const fallback = (this.props as Readonly<ErrorBoundaryProps>).fallback;
+      if (fallback) {
+        return fallback;
       }
 
       return (
@@ -89,6 +89,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       );
     }
 
-    return this.props.children;
+    return (this.props as Readonly<ErrorBoundaryProps>).children;
   }
 }

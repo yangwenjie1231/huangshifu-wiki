@@ -187,7 +187,7 @@ export const SmartImage: React.FC<SmartImageProps> = ({
       priority = isAboveTheFold ? 'high' : 'auto';
       if (isAboveTheFold) loading = 'eager';
     } else if (fetchpriority !== 'auto') {
-      priority = fetchpriority;
+      priority = fetchpriority as 'high' | 'low' | 'auto';
       if (fetchpriority === 'high') loading = 'eager';
     }
 
@@ -253,12 +253,13 @@ export const SmartImage: React.FC<SmartImageProps> = ({
 
     // 使用 requestIdleCallback 在空闲时解码，避免阻塞主线程
     const decodeBlurhash = () => {
-      const dataUrl = decodeBlurhashToDataURL(
-        blurhash,
-        decodeOptions.width || 32,
-        decodeOptions.height || 32,
-        decodeOptions.punch
-      );
+      const decodeOpts = decodeOptions || {};
+    const dataUrl = decodeBlurhashToDataURL(
+      blurhash,
+      decodeOpts.width || 32,
+      decodeOpts.height || 32,
+      decodeOpts.punch
+    );
       setBlurhashDataUrl(dataUrl);
     };
 
