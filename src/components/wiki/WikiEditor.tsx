@@ -5,10 +5,8 @@ import { useToast } from "../../components/Toast";
 import { apiGet, apiPost, apiPut } from "../../lib/apiClient";
 import { randomId } from "../../lib/randomId";
 import { splitTagsInput } from "../../lib/contentUtils";
-import { handleMarkdownTextPasteCapture } from "../../lib/markdownEditorPaste";
 import { normalizeWikiPageSlug } from "../../lib/wikiSlug";
 import { generateWikiIntro } from "../../services/aiService";
-import { uploadMarkdownImage } from "../../services/imageService";
 import {
 	recommendRelations,
 	recommendRelationsByRules,
@@ -17,20 +15,12 @@ import {
 import { metadataCache } from "../../lib/metadataCache";
 import { X, Save, Sparkles, BarChart3, ChevronDown, ChevronUp, Sparkles as SparklesIcon } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import MdEditor from "react-markdown-editor-lite";
-import MarkdownIt from "markdown-it";
-import "react-markdown-editor-lite/lib/index.css";
+import MarkdownEditor from "../../components/MarkdownEditor";
 import { LocationTagInput } from "../../components/LocationTagInput";
 import WikiRelations from "./WikiRelations";
 import MiniRelationGraph from "./MiniRelationGraph";
 import type { WikiItemWithRelations, WikiRelationRecord } from "./types";
 import type { WikiPageMetadata } from "../../lib/wikiLinkParser";
-
-const mdParser = new MarkdownIt({
-	html: true,
-	linkify: true,
-	typographer: true,
-});
 
 const WikiEditor = () => {
 	const { slug } = useParams();
@@ -426,42 +416,16 @@ const WikiEditor = () => {
 							className="border border-[#e0dcd3] rounded overflow-hidden"
 							onPasteCapture={handleMarkdownTextPasteCapture}
 						>
-							<MdEditor
-								style={{ height: "500px" }}
-								renderHTML={(text) => {
-									const processed = text.replace(
-										/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,
-										(match, p1, p2) => {
-											const display = p1.trim();
-											const slug = p2 ? p2.trim() : p1.trim();
-											return `[${display}](/wiki/${slug})`;
-										},
-									);
-									return mdParser.render(processed);
-								}}
+							<MarkdownEditor
 								value={formData.content}
-								onChange={({ text }) =>
+								onChange={(content) =>
 									setFormData((prev) =>
-										prev.content === text ? prev : { ...prev, content: text },
+										prev.content === content ? prev : { ...prev, content },
 									)
 								}
-								onImageUpload={uploadMarkdownImage}
+								height="500px"
 								placeholder="在这里输入百科内容，支持 Markdown 语法..."
-								config={{
-									onChangeTrigger: "beforeRender",
-									view: {
-										menu: true,
-										md: true,
-										html: false,
-									},
-									canView: {
-										menu: true,
-										md: true,
-										html: true,
-										fullScreen: true,
-										hideMenu: false,
-									},
-								}}
+								enableWikiLinks={true}
 							/>
 						</div>
 					</div>

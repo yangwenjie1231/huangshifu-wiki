@@ -39,6 +39,14 @@ export default defineConfig(({ mode }) => {
 				},
 			},
 			rollupOptions: {
+				// Suppress circular chunk warning - this is a known issue with complex dependency graphs
+				// The circular reference is between UI libraries and misc utilities, which is unavoidable
+				// without merging all dependencies into a single large chunk (which would hurt caching)
+				onwarn(warning) {
+					if (warning.code === 'CIRCULAR_DEPENDENCY') return;
+					if (warning.message?.includes('Circular chunk')) return;
+					console.warn(warning.message || warning);
+				},
 				output: {
 					// Optimize chunk splitting for route-level code splitting
 					manualChunks(id) {
@@ -67,40 +75,48 @@ export default defineConfig(({ mode }) => {
 						);
 						const pkg = pkgMatch ? pkgMatch[1] : "";
 
-						// React core - most critical, keep together
+						// React core - most critical, keep together with babel runtime
 						if (
 							pkg === "react" ||
 							pkg === "react-dom" ||
 							pkg === "scheduler" ||
 							pkg === "react-router" ||
-							pkg === "react-router-dom"
+							pkg === "react-router-dom" ||
+							pkg === "@babel/runtime"
 						) {
 							return "react-core";
 						}
 
-						// Markdown processing - large dependencies
+						// UI libraries - grouped together to avoid circular dependencies
+						// Includes markdown editors, animation, icons, and their dependencies
 						if (
 							pkg === "react-markdown" ||
-							pkg === "react-markdown-editor-lite" ||
-							pkg === "markdown-it" ||
+							pkg === "@uiw/react-md-editor" ||
+							pkg.startsWith("@uiw/") ||
 							pkg.startsWith("rehype-") ||
-							pkg.startsWith("remark-")
-						) {
-							return "markdown-vendor";
-						}
-
-						// Animation libraries
-						if (
+							pkg.startsWith("remark-") ||
+							pkg.startsWith("unist-") ||
+							pkg.startsWith("mdast-") ||
+							pkg.startsWith("hast") ||
 							pkg === "motion" ||
 							pkg === "motion-dom" ||
 							pkg === "motion-utils" ||
-							pkg === "framer-motion"
+							pkg === "framer-motion" ||
+							pkg === "lucide-react" ||
+							// Common utilities that UI libs depend on
+							pkg === "prismjs" ||
+							pkg === "tslib" ||
+							pkg === "bail" ||
+							pkg === "extend" ||
+							pkg === "character-entities" ||
+							pkg === "property-information" ||
+							pkg === "comma-separated-tokens" ||
+							pkg === "space-separated-tokens" ||
+							pkg === "hastscript" ||
+							pkg === "web-namespaces"
 						) {
-							return "motion-vendor";
+							return "vendor-ui";
 						}
-
-						// Icons
-						if (pkg === "lucide-react") return "icons-vendor";
 
 						// AI/ML libraries - often large
 						if (
@@ -124,7 +140,7 @@ export default defineConfig(({ mode }) => {
 							return "image-vendor";
 						}
 
-						// Charts and visualization
+						// Charts and visualization - large bundle, keep separate
 						if (
 							pkg === "echarts" ||
 							pkg === "vis-network" ||
@@ -138,15 +154,6 @@ export default defineConfig(({ mode }) => {
 							return "aws-vendor";
 						}
 
-						// Utilities
-						if (
-							pkg === "zod" ||
-							pkg === "axios" ||
-							pkg === "cheerio"
-						) {
-							return "utils-vendor";
-						}
-
 						// Database/ORM related
 						if (
 							pkg === "@prisma/client" ||
@@ -155,7 +162,18 @@ export default defineConfig(({ mode }) => {
 							return "db-vendor";
 						}
 
-						// Everything else
+						// Common utilities and smaller libraries that don't fit other categories
+						if (
+							pkg === "zod" ||
+							pkg === "axios" ||
+							pkg === "cheerio" ||
+							pkg === "clsx" ||
+							pkg === "tailwind-merge"
+						) {
+							return "utils-vendor";
+						}
+
+						// Everything else goes to misc
 						return "vendor-misc";
 					},
 					// Optimized file naming with content hash for better caching

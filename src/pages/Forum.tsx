@@ -28,25 +28,15 @@ import {
 	MapPin,
 } from "lucide-react";
 import { clsx } from "clsx";
-import MdEditor from "react-markdown-editor-lite";
-import MarkdownIt from "markdown-it";
-import "react-markdown-editor-lite/lib/index.css";
-import { uploadMarkdownImage } from "../services/imageService";
+import MarkdownEditor from "../components/MarkdownEditor";
 import { apiDelete, apiGet, apiPost, apiPut } from "../lib/apiClient";
 import { useToast } from "../components/Toast";
 import { copyToClipboard, toAbsoluteInternalUrl } from "../lib/copyLink";
 import { ContentStatus, getStatusText } from "../lib/contentUtils";
 import { formatDate } from "../lib/dateUtils";
 import { DEFAULT_AVATAR, handleAvatarError } from "../lib/defaultAvatar";
-import { handleMarkdownTextPasteCapture } from "../lib/markdownEditorPaste";
 import { LocationTagInput } from "../components/LocationTagInput";
 import Pagination from "../components/Pagination";
-
-const mdParser = new MarkdownIt({
-	html: true,
-	linkify: true,
-	typographer: true,
-});
 
 type PostItem = {
 	id: string;
@@ -1298,32 +1288,15 @@ const PostEditor = () => {
 							className="border border-[#e0dcd3] rounded overflow-hidden bg-white"
 							onPasteCapture={handleMarkdownTextPasteCapture}
 						>
-							<MdEditor
-								style={{ height: "400px" }}
-								renderHTML={(text) => mdParser.render(text)}
+							<MarkdownEditor
 								value={formData.content}
-								onChange={({ text }) =>
+								onChange={(content) =>
 									setFormData((prev) =>
-										prev.content === text ? prev : { ...prev, content: text },
+										prev.content === content ? prev : { ...prev, content },
 									)
 								}
-								onImageUpload={uploadMarkdownImage}
+								height="400px"
 								placeholder="分享你的想法..."
-								config={{
-									onChangeTrigger: "beforeRender",
-									view: {
-										menu: true,
-										md: true,
-										html: false,
-									},
-									canView: {
-										menu: true,
-										md: true,
-										html: true,
-										fullScreen: true,
-										hideMenu: false,
-									},
-								}}
 							/>
 						</div>
 					</div>
