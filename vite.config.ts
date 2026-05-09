@@ -41,11 +41,9 @@ export default defineConfig(({ mode }) => {
 					},
 					format: {
 						comments: false,
-						// 使用更安全的输出格式
 						wrap_iife: true,
 					},
 					mangle: {
-						// 保留顶层变量名称以避免初始化顺序问题
 						reserve_top_level: true,
 					},
 				},
@@ -305,10 +303,12 @@ export default defineConfig(({ mode }) => {
 						// Everything else goes to misc (should be much smaller now)
 						return "vendor-misc";
 					},
+					// Preserve entry signatures to avoid TDZ issues
+					preserveEntrySignatures: "strict",
 					// Optimized file naming with content hash for better caching
-					// 添加版本号前缀强制破坏缓存
-					entryFileNames: `assets/v2-[name]-[hash].js`,
-					chunkFileNames: `assets/v2-[name]-[hash].js`,
+					// v3 prefix to force cache break
+					entryFileNames: `assets/v3-[name]-[hash].js`,
+					chunkFileNames: `assets/v3-[name]-[hash].js`,
 					assetFileNames: (assetInfo) => {
 						const info = assetInfo.name || "";
 						// Images
