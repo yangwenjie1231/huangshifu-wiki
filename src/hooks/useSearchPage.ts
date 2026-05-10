@@ -54,7 +54,7 @@ export function useSearchPage() {
     query: initialQuery,
     results: { wiki: [], posts: [], galleries: [], music: [], albums: [] },
     loading: false,
-    hasSearched: Boolean(initialQuery),
+    hasSearched: true,
     activeTab: "all",
     filters: {
       selectedTags: [],
@@ -167,18 +167,6 @@ export function useSearchPage() {
     const filters = { ...state.filters, ...filtersOverride };
 
     try {
-      if (filters.semanticImageSearch && currentQuery) {
-        const mixedSearchResults = await performMixedSearch(currentQuery, 24);
-        setState((prev) => ({
-          ...prev,
-          mixedResults: mixedSearchResults,
-          isMixedSearch: true,
-          activeTab: "semantic",
-          loading: false,
-        }));
-        return;
-      }
-
       const typeMap: Record<string, string> = {
         wiki: "wiki",
         posts: "posts",
