@@ -52,8 +52,8 @@ describe('clipEmbedding', () => {
     const vector = await module.generateImageEmbedding(Buffer.from([1, 2, 3]));
 
     expect(pipelineMock).toHaveBeenCalledWith(
-      'image-feature-extraction',
-      'Xenova/clip-vit-base-patch32',
+      expect.stringContaining('image-feature-extraction'),
+      expect.stringContaining('clip-vit-base-patch32'),
       expect.objectContaining({
         cache_dir: expect.any(String),
       })

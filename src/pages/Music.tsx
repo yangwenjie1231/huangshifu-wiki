@@ -20,7 +20,9 @@ import { SongCard } from '../components/Music/SongCard';
 import { AlbumCard } from '../components/Music/AlbumCard';
 import { MusicFilters } from '../components/Music/MusicFilters';
 import { BatchActions } from '../components/Music/BatchActions';
-import { VirtualList, type VirtualListHandle } from '../components/VirtualList';
+import { ViewModeSelector } from '../components/ViewModeSelector';
+import { VIEW_MODE_CONFIG } from '../lib/viewModes';
+import type { ViewMode } from '../types/userPreferences';
 import type { SongItem, AlbumItem, PostItem } from '../types/entities';
 
 const DEFAULT_PAGE_SIZE = 40;
@@ -97,6 +99,9 @@ const Music = () => {
   const [selectedPlatform, setSelectedPlatform] = useState<'netease' | 'qq' | 'kugou' | 'baidu' | 'kuwo'>('netease');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [albumPage, setAlbumPage] = useState(1);
+  const [albumPageSize] = useState(24);
+  const [viewMode, setViewMode] = useState<ViewMode>('medium');
   const [showAccompaniments, setShowAccompaniments] = useState(false);
   const [sortBy, setSortBy] = useState<'createdAt' | 'title' | 'artist'>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -116,9 +121,6 @@ const Music = () => {
   };
 
   const [instrumentalTargetDocIds, setInstrumentalTargetDocIds] = useState<Set<string>>(new Set());
-
-  // 虚拟滚动列表引用
-  const virtualListRef = useRef<VirtualListHandle<SongItem>>(null);
 
   useEffect(() => {
     if (activeTab === 'music') {
@@ -173,8 +175,20 @@ const Music = () => {
     setPage(1);
   };
 
+  const totalAlbumPages = Math.ceil(albums.length / albumPageSize);
+  const paginatedAlbums = useMemo(() => {
+    const start = (albumPage - 1) * albumPageSize;
+    return albums.slice(start, start + albumPageSize);
+  }, [albums, albumPage, albumPageSize]);
+
+  const handleAlbumPageChange = (newPage: number) => {
+    setAlbumPage(newPage);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   useEffect(() => {
     setPage(1);
+    setAlbumPage(1);
   }, [activeTab]);
 
   const fetchSongs = async () => {
@@ -589,6 +603,8 @@ const Music = () => {
               onShowAccompanimentsChange={setShowAccompaniments}
               musicCount={displaySongs.length}
               albumCount={albums.length}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
             />
 
             {/* Content */}
@@ -596,15 +612,8 @@ const Music = () => {
               <div className="flex flex-col mt-6">
                 {paginatedSongs.length > 0 ? (
                   <>
-                    {/* 使用虚拟滚动渲染歌曲列表 */}
-                    <VirtualList<SongItem>
-                      ref={virtualListRef}
-                      data={paginatedSongs}
-                      estimateSize={120}
-                      overscan={5}
-                      height="auto"
-                    >
-                      {(song: SongItem) => (
+                    <div className="divide-y divide-[#ebe8e0]">
+                      {paginatedSongs.map((song) => (
                         <SongCard
                           key={song.docId}
                           song={song}
@@ -621,8 +630,8 @@ const Music = () => {
                           onDelete={(docId) => setConfirmModal({ show: true, type: 'single', id: docId })}
                           onShowPosts={handleShowPosts}
                         />
-                      )}
-                    </VirtualList>
+                      ))}
+                    </div>
 
                     <AnimatePresence>
                       {selectedSongForPosts && (
@@ -691,7 +700,7 @@ const Music = () => {
             ) : (
               <div className="mt-6">
                 {loadingAlbums ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
+                  <div className={clsx("grid", VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
                     {[1,2,3,4,5,6].map(i => (
                       <div key={i} className="animate-pulse">
                         <div className="aspect-square rounded bg-[#f0ece3] mb-2.5" />
@@ -701,15 +710,28 @@ const Music = () => {
                     ))}
                   </div>
                 ) : albums.length > 0 ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-6">
-                    {albums.map((album) => (
-                      <AlbumCard
-                        key={album.docId || album.id}
-                        album={album}
-                        onCopyLink={handleCopyAlbumLink}
-                      />
-                    ))}
-                  </div>
+                  <>
+                    <div className={clsx("grid", VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
+                      {paginatedAlbums.map((album) => (
+                        <AlbumCard
+                          key={album.docId || album.id}
+                          album={album}
+                          onCopyLink={handleCopyAlbumLink}
+                        />
+                      ))}
+                    </div>
+                    {totalAlbumPages > 1 && (
+                      <div className="mt-8">
+                        <Pagination
+                          page={albumPage}
+                          totalPages={totalAlbumPages}
+                          onPageChange={handleAlbumPageChange}
+                          pageSize={albumPageSize}
+                          showPageSizeSelector={false}
+                        />
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="py-20 text-center text-[#9e968e] italic tracking-[0.1em]">{t('music.noAlbums')}</div>
                 )}

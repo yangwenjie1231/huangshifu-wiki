@@ -98,7 +98,7 @@ const GalleryCard = React.memo(({ gallery, viewMode, isAdmin, deletingGalleryId,
         </>
       ) : (
         <>
-          <div className={clsx('relative overflow-hidden', VIEW_MODE_CONFIG[viewMode].cardHeight)}>
+          <div className="relative overflow-hidden aspect-square">
             <SmartImage
               src={(Array.isArray(gallery.images) && gallery.images[0]?.url) || ''}
               alt={gallery.title}

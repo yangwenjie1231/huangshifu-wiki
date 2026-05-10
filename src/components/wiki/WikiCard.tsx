@@ -88,11 +88,6 @@ const WikiCard = React.memo(({ page, viewMode, cardHeight, onCopyLink }: WikiCar
 				) : (
 					<>
 						<div className="flex items-center gap-2 mb-3">
-							{page.isPinned && (
-								<span className="flex items-center gap-1 px-2 py-0.5 bg-[#fdf5d8] text-[#c8951e] text-[10px] font-bold uppercase tracking-wider rounded">
-									<Pin size={8} /> 已置顶
-								</span>
-							)}
 							<span className="px-2 py-0.5 bg-[#f0ece3] text-[#6b6560] text-[10px] font-bold uppercase tracking-wider rounded">
 								{getCategoryLabel(page.category)}
 							</span>

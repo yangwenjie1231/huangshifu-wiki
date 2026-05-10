@@ -378,24 +378,29 @@ export const SmartImage: React.FC<SmartImageProps> = ({
 
   // 无图片状态
   if (!imageInput) {
-    return fallback ? (
-      <>{fallback}</>
-    ) : (
+    const noImageContent = fallback || (
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          width: width || '100%',
-          height: height || '100%',
+          width: '100%',
+          height: '100%',
           backgroundColor: '#f0f0f0',
           color: '#999',
           fontSize: '14px',
-          aspectRatio: aspectRatio ? String(aspectRatio) : undefined,
-          ...style,
         }}
       >
         无图片
+      </div>
+    );
+    return (
+      <div
+        ref={containerRef}
+        className={`smart-image-container ${className}`}
+        style={containerStyle}
+      >
+        {noImageContent}
       </div>
     );
   }

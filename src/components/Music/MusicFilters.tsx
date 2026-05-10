@@ -2,6 +2,8 @@ import React from 'react';
 import { Plus, ArrowUpDown } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useI18n } from '../../lib/i18n';
+import { ViewModeSelector } from '../ViewModeSelector';
+import type { ViewMode } from '../../types/userPreferences';
 
 type SortBy = 'createdAt' | 'title' | 'artist';
 type SortOrder = 'asc' | 'desc';
@@ -20,6 +22,8 @@ interface MusicFiltersProps {
 	onShowAccompanimentsChange: (show: boolean) => void;
 	musicCount: number;
 	albumCount: number;
+	viewMode?: ViewMode;
+	onViewModeChange?: (mode: ViewMode) => void;
 }
 
 const MusicFilters: React.FC<MusicFiltersProps> = ({
@@ -35,6 +39,8 @@ const MusicFilters: React.FC<MusicFiltersProps> = ({
 	onShowAccompanimentsChange,
 	musicCount,
 	albumCount,
+	viewMode,
+	onViewModeChange,
 }) => {
 	const { t } = useI18n();
 
@@ -80,6 +86,9 @@ const MusicFilters: React.FC<MusicFiltersProps> = ({
 			</div>
 
 			<div className="flex items-center gap-3 pb-2 text-[0.8125rem] text-[#9e968e]">
+				{viewMode && onViewModeChange && (
+					<ViewModeSelector value={viewMode} onChange={onViewModeChange} size="sm" />
+				)}
 				{activeTab === 'music' && (
 					<>
 						<div className="flex items-center">
@@ -128,4 +137,4 @@ const MusicFilters: React.FC<MusicFiltersProps> = ({
 };
 
 export { MusicFilters };
-export type { MusicFiltersProps, SortBy, SortOrder, ActiveTab };
+export type { MusicFiltersProps, SortBy, SortOrder, ActiveTab, ViewMode };
