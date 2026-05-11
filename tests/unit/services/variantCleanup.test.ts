@@ -17,14 +17,20 @@ const mockAccess = vi.fn()
   .mockResolvedValue(undefined)
   .mockRejectedValueOnce(new Error('ENOENT: no such file'));
 
+// Prisma mock 函数
+const mockFindUnique = vi.fn().mockResolvedValue(null);
+const mockFindMany = vi.fn().mockResolvedValue([]);
+const mockCount = vi.fn().mockResolvedValue(0);
+const mockUpdate = vi.fn().mockResolvedValue({});
+
 // Mock prisma 模块
 vi.mock('../../../src/server/prisma', () => ({
   prisma: {
     imageMap: {
-      findUnique: vi.fn(),
-      update: vi.fn().mockResolvedValue({}),
-      count: vi.fn(),
-      findMany: vi.fn(),
+      findUnique: mockFindUnique,
+      update: mockUpdate,
+      count: mockCount,
+      findMany: mockFindMany,
     },
   },
 }));
@@ -69,9 +75,7 @@ describe('VariantCleanupService - 清理变体', () => {
   });
 
   it('cleanupByImageMapId 应该清理指定 ImageMap 的所有变体', async () => {
-    // 使用动态导入访问 mocked prisma
-    const { prisma } = await import('../../../src/server/prisma');
-    prisma.imageMap.findUnique.mockResolvedValue({
+    mockFindUnique.mockResolvedValue({
       thumbnailUrl: '/uploads/variants/test-1/thumbnail.webp',
       mediumUrl: '/uploads/variants/test-1/medium.webp',
       largeUrl: '/uploads/variants/test-1/large.webp',
@@ -92,8 +96,7 @@ describe('VariantCleanupService - 清理变体', () => {
   });
 
   it('ImageMap 不存在时应该返回空结果', async () => {
-    const { prisma } = await import('../../../src/server/prisma');
-    prisma.imageMap.findUnique.mockResolvedValue(null);
+    mockFindUnique.mockResolvedValue(null);
 
     const result = await service.cleanupByImageMapId('nonexistent', 'on_delete');
 
@@ -103,8 +106,7 @@ describe('VariantCleanupService - 清理变体', () => {
   });
 
   it('应该处理已删除的文件（ENOENT 错误）', async () => {
-    const { prisma } = await import('../../../src/server/prisma');
-    prisma.imageMap.findUnique.mockResolvedValue({
+    mockFindUnique.mockResolvedValue({
       thumbnailUrl: '/uploads/variants/test-2/thumbnail.webp',
       mediumUrl: null,
       largeUrl: null,
@@ -131,8 +133,7 @@ describe('VariantCleanupService - 孤儿文件检测', () => {
       { name: 'orphan-id', isDirectory: () => true },
     ]);
 
-    const { prisma } = await import('../../../src/server/prisma');
-    prisma.imageMap.count
+    mockCount
       .mockResolvedValueOnce(1)
       .mockResolvedValueOnce(0);
 
@@ -162,8 +163,7 @@ describe('VariantCleanupService - 失败残留清理', () => {
   });
 
   it('cleanupFailedVariants 应该清理 variantStatus=failed 的记录', async () => {
-    const { prisma } = await import('../../../src/server/prisma');
-    prisma.imageMap.findMany.mockResolvedValue([
+    mockFindMany.mockResolvedValue([
       { id: 'failed-1' },
       { id: 'failed-2' },
       { id: 'failed-3' },
@@ -176,8 +176,7 @@ describe('VariantCleanupService - 失败残留清理', () => {
   });
 
   it('没有失败记录时应该返回空结果', async () => {
-    const { prisma } = await import('../../../src/server/prisma');
-    prisma.imageMap.findMany.mockResolvedValue([]);
+    mockFindMany.mockResolvedValue([]);
 
     const result = await service.cleanupFailedVariants();
 
