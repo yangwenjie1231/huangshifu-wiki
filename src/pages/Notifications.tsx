@@ -3,7 +3,6 @@ import {
 	Bell,
 	CheckCheck,
 	ChevronLeft,
-	ChevronRight,
 	MessageCircle,
 	ThumbsUp,
 	ShieldCheck,
@@ -12,6 +11,7 @@ import {
 import { clsx } from "clsx";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { apiGet, apiPost } from "../lib/apiClient";
+import Pagination from "../components/Pagination";
 
 type NotificationType = "reply" | "like" | "review_result";
 
@@ -370,30 +370,14 @@ const Notifications = () => {
 						)}
 					</div>
 
-				{/* Pagination */}
-				<div className="flex items-center justify-between mt-6 flex-wrap gap-3">
-					<p className="text-xs text-[#9e968e]">
-						第 {Math.min(page, totalPages)} / {totalPages} 页
-					</p>
-					<div className="flex items-center gap-2">
-						<button
-							onClick={() => updateQuery(filter, Math.max(1, page - 1))}
-							disabled={page <= 1}
-							className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-						>
-							<ChevronLeft size={14} /> 上一页
-						</button>
-						<button
-							onClick={() =>
-								updateQuery(filter, Math.min(totalPages, page + 1))
-							}
-							disabled={page >= totalPages}
-							className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-						>
-							下一页 <ChevronRight size={14} />
-						</button>
-					</div>
-				</div>
+				{totalPages > 1 && (
+				<Pagination
+					page={page}
+					totalPages={totalPages}
+					onPageChange={(newPage) => updateQuery(filter, newPage)}
+					showPageSizeSelector={false}
+				/>
+			)}
 			</div>
 		</div>
 	);

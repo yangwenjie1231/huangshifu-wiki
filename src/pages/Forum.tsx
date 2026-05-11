@@ -37,6 +37,7 @@ import { formatDate } from "../lib/dateUtils";
 import { DEFAULT_AVATAR, handleAvatarError } from "../lib/defaultAvatar";
 import { LocationTagInput } from "../components/LocationTagInput";
 import Pagination from "../components/Pagination";
+import { usePagination } from "../hooks/usePagination";
 
 type PostItem = {
 	id: string;
@@ -178,6 +179,23 @@ const PostList = () => {
 	const [totalPages, setTotalPages] = useState(1);
 	const { user, profile, isBanned } = useAuth();
 	const { show } = useToast();
+	const pagination = usePagination({
+		serverTotalPages: totalPages,
+		defaultPageSize: 20,
+		onPageChange: (newPage) => {
+			setPage(newPage);
+			setSearchParams((prev) => {
+				const next = new URLSearchParams(prev);
+				if (newPage > 1) {
+					next.set("page", String(newPage));
+				} else {
+					next.delete("page");
+				}
+				return next;
+			});
+			window.scrollTo({ top: 0, behavior: "smooth" });
+		},
+	});
 
 	useEffect(() => {
 		const fetchSections = async () => {
@@ -216,13 +234,6 @@ const PostList = () => {
 
 		fetchPosts();
 	}, [section, sort, page]);
-
-	const handlePageChange = (newPage: number) => {
-		setPage(newPage);
-		setSearchParams(
-		);
-		window.scrollTo({ top: 0, behavior: "smooth" });
-	};
 
 	const handleCopyPostLink = async (
 		event: React.MouseEvent<HTMLButtonElement>,
@@ -337,11 +348,11 @@ const PostList = () => {
 								/>
 							))}
 						</div>
-						{totalPages > 1 && (
+						{pagination.totalPages > 1 && (
 							<Pagination
 								page={page}
-								totalPages={totalPages}
-								onPageChange={handlePageChange}
+								totalPages={pagination.totalPages}
+								onPageChange={pagination.handlePageChange}
 							/>
 						)}
 					</>

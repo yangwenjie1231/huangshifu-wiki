@@ -6,6 +6,7 @@ import { clsx } from 'clsx';
 import { apiGet } from '../lib/apiClient';
 import { useAuth } from '../context/AuthContext';
 import Pagination from '../components/Pagination';
+import { usePagination } from '../hooks/usePagination';
 import { Platform, PlatformIds } from '../types/PlatformIds';
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -43,25 +44,7 @@ const MusicLinks = () => {
   const [filterPlatform, setFilterPlatform] = useState<Platform | 'all'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'partial' | 'unlinked'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const { isAdmin } = useAuth();
-
-  useEffect(() => {
-    const fetchSongs = async () => {
-      setLoading(true);
-      try {
-        const data = await apiGet<{ songs: SongItem[] }>('/api/music');
-        setSongs(data.songs || []);
-      } catch (error) {
-        console.error('Fetch songs error:', error);
-        setSongs([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchSongs();
-  }, []);
 
   const filteredSongs = useMemo(() => {
     let result = songs;
@@ -98,24 +81,31 @@ const MusicLinks = () => {
     return result;
   }, [songs, filterPlatform, filterStatus, searchQuery]);
 
-  const totalFilteredPages = Math.ceil(filteredSongs.length / pageSize);
-  const paginatedSongs = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filteredSongs.slice(start, start + pageSize);
-  }, [filteredSongs, page, pageSize]);
-
-  const handlePageChange = (newPage: number) => {
-    setPage(newPage);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handlePageSizeChange = (newSize: number) => {
-    setPageSize(newSize);
-    setPage(1);
-  };
+  const pagination = usePagination({ totalCount: filteredSongs.length, defaultPageSize: 50 });
 
   useEffect(() => {
-    setPage(1);
+    const fetchSongs = async () => {
+      setLoading(true);
+      try {
+        const data = await apiGet<{ songs: SongItem[] }>('/api/music', { limit: 100 });
+        setSongs(data.songs || []);
+      } catch (error) {
+        console.error('Fetch songs error:', error);
+        setSongs([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSongs();
+  }, []);
+
+  const paginatedSongs = useMemo(() => {
+    const start = (pagination.page - 1) * pagination.pageSize;
+    return filteredSongs.slice(start, start + pagination.pageSize);
+  }, [filteredSongs, pagination.page, pagination.pageSize]);
+
+  useEffect(() => {
+    pagination.setPage(1);
   }, [filterPlatform, filterStatus, searchQuery]);
 
   const stats = useMemo(() => {
@@ -311,13 +301,13 @@ const MusicLinks = () => {
               <p className="text-xs text-[#9e968e]">
                 显示 {paginatedSongs.length} / {filteredSongs.length} 首歌曲（共 {songs.length} 首）
               </p>
-              {totalFilteredPages > 1 && (
+              {pagination.totalPages > 1 && (
                 <Pagination
-                  page={page}
-                  totalPages={totalFilteredPages}
-                  onPageChange={handlePageChange}
-                  pageSize={pageSize}
-                  onPageSizeChange={handlePageSizeChange}
+                  page={pagination.page}
+                  totalPages={pagination.totalPages}
+                  onPageChange={pagination.handlePageChange}
+                  pageSize={pagination.pageSize}
+                  onPageSizeChange={pagination.handlePageSizeChange}
                   showPageSizeSelector
                 />
               )}

@@ -43,6 +43,8 @@ import { registerConfigRoutes } from './src/server/routes/config.routes';
 import { registerS3Routes } from './src/server/routes/s3.routes';
 import { registerMusicSongRoutes } from './src/server/routes/music-song.routes';
 import { registerUploadRoutes } from './src/server/routes/uploads.routes';
+import { registerAdminSystemRoutes } from './src/server/routes/admin.system.routes';
+import { registerAdminVariantsRoutes } from './src/server/routes/admin.variants.routes';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -163,6 +165,10 @@ registerConfigRoutes(app);
 registerS3Routes(app);
 registerMusicSongRoutes(app);
 registerUploadRoutes(app);
+
+// v2.1 增强功能路由
+registerAdminSystemRoutes(app);
+registerAdminVariantsRoutes(app);
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof multer.MulterError) {

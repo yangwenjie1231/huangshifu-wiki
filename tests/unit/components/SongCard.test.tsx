@@ -1,9 +1,24 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SongCard } from '../../../src/components/Music/SongCard';
+
+// Mock IntersectionObserver (jsdom 环境不支持)
+const MockIntersectionObserver = class IntersectionObserver {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+};
+
+beforeAll(() => {
+  global.IntersectionObserver = MockIntersectionObserver as unknown as typeof IntersectionObserver;
+});
+
+afterAll(() => {
+  delete (global as any).IntersectionObserver;
+});
 
 vi.mock('../../../src/components/SmartImage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../src/components/SmartImage')>();

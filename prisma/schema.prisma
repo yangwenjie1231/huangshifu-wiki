@@ -104,6 +104,21 @@ enum StorageType {
   external
 }
 
+enum VariantStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+enum CloudSyncStatus {
+  pending
+  syncing
+  completed
+  skipped
+  failed
+}
+
 enum WikiBranchStatus {
   draft
   pending_review
@@ -775,15 +790,20 @@ model MusicPlatformConfig {
 }
 
 model ImageMap {
-  id          String      @id
-  md5         String      @unique
-  localUrl    String
-  externalUrl String?
-  s3Url       String?
-  storageType StorageType @default(local)
-  blurhash    String?
-  thumbhash   String?
-  createdAt   DateTime    @default(now())
+  id            String        @id
+  md5           String        @unique
+  localUrl      String
+  externalUrl   String?
+  s3Url         String?
+  storageType   StorageType   @default(local)
+  blurhash      String?
+  thumbhash     String?
+  thumbnailUrl  String?
+  mediumUrl     String?
+  largeUrl      String?
+  variantStatus VariantStatus @default(pending)
+  cloudSyncStatus CloudSyncStatus @default(pending)
+  createdAt     DateTime      @default(now())
 }
 
 model SiteConfig {

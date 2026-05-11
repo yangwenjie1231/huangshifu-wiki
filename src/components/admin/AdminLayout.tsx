@@ -24,6 +24,8 @@ import {
   Menu,
   X,
   ChevronRight,
+  HardDrive,
+  RefreshCw,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuth } from '../../context/AuthContext';
@@ -51,6 +53,8 @@ const siteNav = [
   { id: 'sensitive_check', label: '敏感词检测', path: '/admin/sensitive_check', icon: ShieldCheck },
   { id: 'birthday', label: '生贺配置', path: '/admin/birthday', icon: Gift },
   { id: 'markdown_links', label: '链接更新', path: '/admin/markdown_links', icon: LinkIcon },
+  { id: 'disk-monitor', label: '磁盘监控', path: '/admin/disk-monitor', icon: HardDrive },
+  { id: 'variant-manager', label: '变体管理', path: '/admin/variant-manager', icon: RefreshCw },
 ];
 
 const NavGroup = ({

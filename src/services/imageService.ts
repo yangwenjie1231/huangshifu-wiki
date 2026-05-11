@@ -9,6 +9,12 @@ export interface ImageMap {
   externalUrl?: string;
   s3Url?: string;
   storageType?: 'local' | 's3' | 'external';
+  
+  // WebP 变体 URL (新增)
+  thumbnailUrl?: string;   // 缩略图 (400px)
+  mediumUrl?: string;      // 中图 (800px)
+  largeUrl?: string;       // 大图 (1200px)
+  
   blurhash?: string;
   thumbhash?: string;
   createdAt: string;

@@ -18,6 +18,7 @@ import { LocationTagInput } from '../components/LocationTagInput';
 import Pagination from '../components/Pagination';
 import { extractGpsFromMultipleFiles, findMostFrequentGpsCoordinates } from '../services/exifService';
 import { useVirtualGrid } from '../hooks/useVirtualGrid';
+import { usePagination } from '../hooks/usePagination';
 import type { GalleryItem } from '../types/entities';
 import type { UploadSessionResponse, UploadFileResponse, GalleryCreateResponse } from '../types/api';
 
@@ -154,8 +155,7 @@ const GalleryList = () => {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [galleryToDelete, setGalleryToDelete] = useState<{ id: string; title: string } | null>(null);
   const [deletingGalleryId, setDeletingGalleryId] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [totalGalleries, setTotalGalleries] = useState(0);
   const { show } = useToast();
   const { preferences, setViewMode } = useUserPreferences();
   const viewMode = preferences.viewMode;
@@ -163,11 +163,10 @@ const GalleryList = () => {
   // 虚拟滚动容器引用
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const totalGalleryPages = Math.ceil(galleries.length / pageSize);
-  const paginatedGalleries = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return galleries.slice(start, start + pageSize);
-  }, [galleries, page, pageSize]);
+  const galleryPagination = usePagination({
+    totalCount: totalGalleries,
+    defaultPageSize: 24,
+  });
 
   // 虚拟网格配置：根据 viewMode 动态计算列数和预估尺寸
   const columnCount = useMemo(() => parseColumnCount(VIEW_MODE_CONFIG[viewMode].gridCols), [viewMode]);
@@ -183,34 +182,34 @@ const GalleryList = () => {
     columnCount,
     estimateSize,
     overscan: 5,
-    count: paginatedGalleries.length,
+    count: galleries.length,
     getScrollElement: () => scrollContainerRef.current,
   });
 
-  const handlePageChange = (newPage: number) => {
-    setPage(newPage);
-    // 使用虚拟滚动容器滚动到顶部
-    virtualScrollToTop({ behavior: 'smooth' });
-  };
-
-  const handlePageSizeChange = (newSize: number) => {
-    setPageSize(newSize);
-    setPage(1);
-  };
+  // 自定义页面更改处理，包含滚动到顶部
+  const handleGalleryPageChange = useCallback((newPage: number) => {
+    galleryPagination.setPage(newPage);
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [galleryPagination]);
 
   useEffect(() => {
     const fetchGalleries = async () => {
       try {
-        const data = await apiGet<{ galleries: GalleryItem[] }>('/api/galleries');
+        const data = await apiGet<{ galleries: GalleryItem[]; total: number }>('/api/galleries', {
+          page: galleryPagination.page,
+          limit: galleryPagination.pageSize,
+        });
         setGalleries(data.galleries || []);
+        setTotalGalleries(data.total ?? 0);
       } catch (error) {
         console.error('Fetch galleries error:', error);
         setGalleries([]);
+        setTotalGalleries(0);
       }
     };
 
     fetchGalleries();
-  }, []);
+  }, [galleryPagination.page, galleryPagination.pageSize]);
 
   const handleCopyGalleryLink = async (event: React.MouseEvent<HTMLButtonElement>, galleryId: string) => {
     event.preventDefault();
@@ -241,7 +240,15 @@ const GalleryList = () => {
     try {
       setDeletingGalleryId(galleryToDelete.id);
       await apiDelete(`/api/galleries/${galleryToDelete.id}`);
-      setGalleries((prev) => prev.filter((gallery) => gallery.id !== galleryToDelete.id));
+      setGalleries((prev) => {
+        const next = prev.filter((gallery) => gallery.id !== galleryToDelete.id);
+        // 如果当前页删空了且不是第一页，自动回退一页
+        if (next.length === 0 && galleryPagination.page > 1) {
+          galleryPagination.setPage(galleryPagination.page - 1);
+        }
+        return next;
+      });
+      setTotalGalleries((prev) => Math.max(0, prev - 1));
       show('图集已删除');
       setGalleryToDelete(null);
     } catch (error) {
@@ -294,7 +301,7 @@ const GalleryList = () => {
               >
                 {virtualRows.map((virtualRow) => {
                   const { start, end } = getRowDataRange(virtualRow.index);
-                  const rowItems = paginatedGalleries.slice(start, end);
+                  const rowItems = galleries.slice(start, end);
 
                   return (
                     <div
@@ -329,14 +336,14 @@ const GalleryList = () => {
                 })}
               </div>
             </div>
-            {totalGalleryPages > 1 && (
+            {galleryPagination.totalPages > 1 && (
               <div className="mt-8">
                 <Pagination
-                  page={page}
-                  totalPages={totalGalleryPages}
-                  onPageChange={handlePageChange}
-                  pageSize={pageSize}
-                  onPageSizeChange={handlePageSizeChange}
+                  page={galleryPagination.page}
+                  totalPages={galleryPagination.totalPages}
+                  onPageChange={handleGalleryPageChange}
+                  pageSize={galleryPagination.pageSize}
+                  onPageSizeChange={galleryPagination.handlePageSizeChange}
                   showPageSizeSelector
                 />
               </div>

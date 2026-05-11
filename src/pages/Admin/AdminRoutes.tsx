@@ -8,6 +8,8 @@ import AdminUsers from './AdminUsers';
 import AdminLocks from './AdminLocks';
 import AdminLogs from './AdminLogs';
 import AdminToolPage from './AdminToolPage';
+import AdminDiskMonitor from './AdminDiskMonitor';
+import AdminVariantManager from './AdminVariantManager';
 
 export const AdminRoutes = () => (
   <Routes>
@@ -30,6 +32,8 @@ export const AdminRoutes = () => (
       <Route path="sensitive_check" element={<AdminToolPage type="sensitive_check" />} />
       <Route path="birthday" element={<AdminToolPage type="birthday" />} />
       <Route path="markdown_links" element={<AdminToolPage type="markdown_links" />} />
+      <Route path="disk-monitor" element={<AdminDiskMonitor />} />
+      <Route path="variant-manager" element={<AdminVariantManager />} />
     </Route>
   </Routes>
 );

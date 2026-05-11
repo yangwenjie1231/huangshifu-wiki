@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { auth } from '../lib/auth';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useUserPreferences } from '../context/UserPreferencesContext';
 import { useMusic } from '../context/MusicContext';
 import { Search, Plus, List, Sparkles, X, Heart, MessageSquare, Link2 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -13,6 +14,7 @@ import { useToast } from '../components/Toast';
 import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import Pagination from '../components/Pagination';
+import { usePagination } from '../hooks/usePagination';
 import { PlatformIds } from '../types/PlatformIds';
 import { useI18n } from '../lib/i18n';
 import { Loader2 } from 'lucide-react';
@@ -22,7 +24,6 @@ import { MusicFilters } from '../components/Music/MusicFilters';
 import { BatchActions } from '../components/Music/BatchActions';
 import { ViewModeSelector } from '../components/ViewModeSelector';
 import { VIEW_MODE_CONFIG } from '../lib/viewModes';
-import type { ViewMode } from '../types/userPreferences';
 import type { SongItem, AlbumItem, PostItem } from '../types/entities';
 
 const DEFAULT_PAGE_SIZE = 40;
@@ -97,43 +98,19 @@ const Music = () => {
   const [loadingAlbums, setLoadingAlbums] = useState(false);
   const [activeTab, setActiveTab] = useState<'music' | 'albums'>('music');
   const [selectedPlatform, setSelectedPlatform] = useState<'netease' | 'qq' | 'kugou' | 'baidu' | 'kuwo'>('netease');
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [albumPage, setAlbumPage] = useState(1);
-  const [albumPageSize] = useState(24);
-  const [viewMode, setViewMode] = useState<ViewMode>('medium');
-  const [showAccompaniments, setShowAccompaniments] = useState(false);
-  const [sortBy, setSortBy] = useState<'createdAt' | 'title' | 'artist'>('createdAt');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [filterPlatform, setFilterPlatform] = useState<'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo' | 'all'>('all');
   const { user, isAdmin, isBanned } = useAuth();
   const { currentSong, setCurrentSong, setIsPlaying, setPlaylist, playSongAtIndex } = useMusic();
+  const { preferences, setViewMode } = useUserPreferences();
+  const viewMode = preferences.viewMode;
   const { show } = useToast();
   const { t } = useI18n();
 
-  const fetchInstrumentalTargets = async () => {
-    try {
-      const data = await apiGet<{ docIds: string[] }>('/api/music/instrumental-targets');
-      return new Set(data.docIds || []);
-    } catch {
-      return new Set<string>();
-    }
-  };
-
-  const [instrumentalTargetDocIds, setInstrumentalTargetDocIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (activeTab === 'music') {
-      fetchInstrumentalTargets().then(setInstrumentalTargetDocIds);
-    }
-  }, [activeTab]);
+  const [sortBy, setSortBy] = useState<'createdAt' | 'title' | 'artist'>('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [filterPlatform, setFilterPlatform] = useState<'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo' | 'all'>('all');
 
   const displaySongs = useMemo(() => {
     let result = [...songs];
-
-    if (!showAccompaniments) {
-      result = result.filter(song => !instrumentalTargetDocIds.has(song.docId));
-    }
 
     if (filterPlatform !== 'all') {
       const fieldKey = `${filterPlatform}Id` as keyof PlatformIds;
@@ -157,44 +134,35 @@ const Music = () => {
     });
 
     return result;
-  }, [songs, showAccompaniments, instrumentalTargetDocIds, filterPlatform, sortBy, sortOrder]);
+  }, [songs, filterPlatform, sortBy, sortOrder]);
 
-  const totalMusicPages = Math.ceil(displaySongs.length / pageSize);
+  const musicPagination = usePagination({ totalCount: displaySongs.length, defaultPageSize: 40 });
+  const albumPagination = usePagination({ totalCount: albums.length, defaultPageSize: 24 });
+  const [showAccompaniments, setShowAccompaniments] = useState(false);
+
   const paginatedSongs = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return displaySongs.slice(start, start + pageSize);
-  }, [displaySongs, page, pageSize]);
+    const start = (musicPagination.page - 1) * musicPagination.pageSize;
+    return displaySongs.slice(start, start + musicPagination.pageSize);
+  }, [displaySongs, musicPagination.page, musicPagination.pageSize]);
 
-  const handleMusicPageChange = (newPage: number) => {
-    setPage(newPage);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handlePageSizeChange = (newSize: number) => {
-    setPageSize(newSize);
-    setPage(1);
-  };
-
-  const totalAlbumPages = Math.ceil(albums.length / albumPageSize);
   const paginatedAlbums = useMemo(() => {
-    const start = (albumPage - 1) * albumPageSize;
-    return albums.slice(start, start + albumPageSize);
-  }, [albums, albumPage, albumPageSize]);
-
-  const handleAlbumPageChange = (newPage: number) => {
-    setAlbumPage(newPage);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+    const start = (albumPagination.page - 1) * albumPagination.pageSize;
+    return albums.slice(start, start + albumPagination.pageSize);
+  }, [albums, albumPagination.page, albumPagination.pageSize]);
 
   useEffect(() => {
-    setPage(1);
-    setAlbumPage(1);
+    musicPagination.setPage(1);
+    albumPagination.setPage(1);
   }, [activeTab]);
 
   const fetchSongs = async () => {
     setLoading(true);
     try {
-      const data = await apiGet<{ songs: SongItem[] }>('/api/music');
+      const data = await apiGet<{ songs: SongItem[]; total: number }>('/api/music', {
+        limit: 100,
+        page: 1,
+        includeInstrumentals: showAccompaniments,
+      });
       const fetchedSongs = data.songs || [];
       setSongs(fetchedSongs);
       setPlaylist(fetchedSongs);
@@ -206,8 +174,7 @@ const Music = () => {
 
   useEffect(() => {
     fetchSongs();
-    fetchAlbums();
-  }, []);
+  }, [showAccompaniments]);
 
   const fetchAlbums = async () => {
     setLoadingAlbums(true);
@@ -220,6 +187,10 @@ const Music = () => {
     }
     setLoadingAlbums(false);
   };
+
+  useEffect(() => {
+    fetchAlbums();
+  }, []);
 
   const fetchSongPosts = async (song: SongItem) => {
     setLoadingPosts(true);
@@ -596,7 +567,7 @@ const Music = () => {
                 setIsAlbumModalOpen(true);
               }}
               sortBy={sortBy}
-              onSortByChange={(value) => { setSortBy(value); setPage(1); }}
+              onSortByChange={(value) => { setSortBy(value); musicPagination.setPage(1); }}
               sortOrder={sortOrder}
               onSortOrderChange={setSortOrder}
               showAccompaniments={showAccompaniments}
@@ -680,14 +651,14 @@ const Music = () => {
                       )}
                     </AnimatePresence>
 
-                    {totalMusicPages > 1 && (
+                    {musicPagination.totalPages > 1 && (
                       <div className="mt-8">
                         <Pagination
-                          page={page}
-                          totalPages={totalMusicPages}
-                          onPageChange={handleMusicPageChange}
-                          pageSize={pageSize}
-                          onPageSizeChange={handlePageSizeChange}
+                          page={musicPagination.page}
+                          totalPages={musicPagination.totalPages}
+                          onPageChange={musicPagination.handlePageChange}
+                          pageSize={musicPagination.pageSize}
+                          onPageSizeChange={musicPagination.handlePageSizeChange}
                           showPageSizeSelector
                         />
                       </div>
@@ -716,17 +687,18 @@ const Music = () => {
                         <AlbumCard
                           key={album.docId || album.id}
                           album={album}
+                          viewMode={viewMode === 'list' ? 'list' : 'grid'}
                           onCopyLink={handleCopyAlbumLink}
                         />
                       ))}
                     </div>
-                    {totalAlbumPages > 1 && (
+                    {albumPagination.totalPages > 1 && (
                       <div className="mt-8">
                         <Pagination
-                          page={albumPage}
-                          totalPages={totalAlbumPages}
-                          onPageChange={handleAlbumPageChange}
-                          pageSize={albumPageSize}
+                          page={albumPagination.page}
+                          totalPages={albumPagination.totalPages}
+                          onPageChange={albumPagination.handlePageChange}
+                          pageSize={albumPagination.pageSize}
                           showPageSizeSelector={false}
                         />
                       </div>

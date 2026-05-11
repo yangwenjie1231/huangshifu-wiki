@@ -54,7 +54,7 @@ export function useSearchPage() {
     query: initialQuery,
     results: { wiki: [], posts: [], galleries: [], music: [], albums: [] },
     loading: false,
-    hasSearched: true,
+    hasSearched: Boolean(initialQuery),
     activeTab: "all",
     filters: {
       selectedTags: [],

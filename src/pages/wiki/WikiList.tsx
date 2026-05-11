@@ -14,6 +14,7 @@ import Pagination from "../../components/Pagination";
 import type { WikiItem } from "./types";
 import { DEFAULT_PAGE_SIZE } from "./types";
 import { useVirtualGrid } from "../../hooks/useVirtualGrid";
+import { usePagination } from "../../hooks/usePagination";
 
 const WikiList = () => {
 	const [searchParams] = useSearchParams();
@@ -22,8 +23,6 @@ const WikiList = () => {
 	const [pages, setPages] = useState<WikiItem[]>([]);
 	const [total, setTotal] = useState(0);
 	const [loading, setLoading] = useState(true);
-	const [page, setPage] = useState(1);
-	const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 	const { user, isBanned } = useAuth();
 	const { show } = useToast();
 	const { preferences, setViewMode } = useUserPreferences();
@@ -65,21 +64,19 @@ const WikiList = () => {
 		getScrollElement: () => scrollContainerRef.current,
 	});
 
-	const totalWikiPages = Math.max(1, Math.ceil(total / pageSize));
+	const pagination = usePagination({
+		totalCount: total,
+		defaultPageSize: DEFAULT_PAGE_SIZE,
+	});
 
-	const handlePageChange = (newPage: number) => {
-		setPage(newPage);
-		// 使用虚拟化器的 scrollToIndex 滚动到顶部
+	// 自定义页面更改处理，包含滚动到顶部
+	const handleWikiPageChange = React.useCallback((newPage: number) => {
+		pagination.setPage(newPage);
 		virtualizer.scrollToIndex(0, { behavior: 'instant' });
-	};
-
-	const handlePageSizeChange = (newSize: number) => {
-		setPageSize(newSize);
-		setPage(1);
-	};
+	}, [pagination, virtualizer]);
 
 	useEffect(() => {
-		setPage(1);
+		pagination.setPage(1);
 	}, [category, tag]);
 
 	useEffect(() => {
@@ -90,8 +87,8 @@ const WikiList = () => {
 				const data = await apiGet<{ pages: WikiItem[]; total: number }>("/api/wiki", {
 					category: category !== "all" ? category : undefined,
 					tag: tag || undefined,
-					page,
-					pageSize,
+					page: pagination.page,
+					pageSize: pagination.pageSize,
 				});
 				if (cancelled) return;
 				setPages(data.pages || []);
@@ -104,7 +101,7 @@ const WikiList = () => {
 		};
 		fetchPages();
 		return () => { cancelled = true; };
-	}, [category, tag, page, pageSize]);
+	}, [category, tag, pagination.page, pagination.pageSize]);
 
 	const handleCopyWikiLink = async (
 		event: React.MouseEvent<HTMLButtonElement>,
@@ -248,13 +245,13 @@ const WikiList = () => {
 							})}
 						</div>
 					</div>
-					{(import.meta.env.DEV || totalWikiPages > 1) && (
+					{(import.meta.env.DEV || pagination.totalPages > 1) && (
 						<Pagination
-							page={page}
-							totalPages={totalWikiPages}
-							onPageChange={handlePageChange}
-							pageSize={pageSize}
-							onPageSizeChange={handlePageSizeChange}
+							page={pagination.page}
+							totalPages={pagination.totalPages}
+							onPageChange={handleWikiPageChange}
+							pageSize={pagination.pageSize}
+							onPageSizeChange={pagination.handlePageSizeChange}
 							showPageSizeSelector
 						/>
 					)}

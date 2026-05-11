@@ -40,6 +40,16 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     const limit = parseInteger(req.query.limit, 20, { min: 1, max: 100 });
     const page = parseInteger(req.query.page, 1, { min: 1 });
     const skip = (page - 1) * limit;
+    const includeInstrumentals = parseBoolean(req.query.includeInstrumentals, true);
+
+    let instrumentalDocIds: string[] = [];
+    if (!includeInstrumentals) {
+      const relations = await prismaAny.songInstrumentalRelation.findMany({
+        select: { songDocId: true },
+        distinct: ['songDocId'],
+      });
+      instrumentalDocIds = relations.map((r: any) => r.songDocId);
+    }
 
     const where = albumDocId
       ? {
@@ -49,7 +59,9 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
             },
           },
         }
-      : undefined;
+      : instrumentalDocIds.length > 0
+        ? { docId: { notIn: instrumentalDocIds } }
+        : undefined;
 
     const [songs, total] = await Promise.all([
       fetchSongsWithRelations(where, { take: limit, skip }),
