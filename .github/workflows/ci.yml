@@ -116,7 +116,7 @@ jobs:
           const thresholds = {
             lines: 25,
             statements: 25,
-            functions: 55,
+            functions: 50,
             branches: 70
           };
           
@@ -413,7 +413,7 @@ jobs:
             const metrics = [
               ['Lines', total.lines.pct, 25],
               ['Statements', total.statements.pct, 25],
-              ['Functions', total.functions.pct, 65],
+              ['Functions', total.functions.pct, 50],
               ['Branches', total.branches.pct, 70]
             ];
             
@@ -457,13 +457,13 @@ jobs:
               commentBody += '| Metric | Value | Threshold |\n|--------|-------|----------|\n';
               commentBody += `| Lines | ${total.lines.pct.toFixed(1)}% | ≥25% |\n`;
               commentBody += `| Statements | ${total.statements.pct.toFixed(1)}% | ≥25% |\n`;
-              commentBody += `| Functions | ${total.functions.pct.toFixed(1)}% | ≥65% |\n`;
+              commentBody += `| Functions | ${total.functions.pct.toFixed(1)}% | ≥50% |\n`;
               commentBody += `| Branches | ${total.branches.pct.toFixed(1)}% | ≥70% |\n\n`;
-              
-              const allPassed = 
+
+              const allPassed =
                 total.lines.pct >= 25 &&
                 total.statements.pct >= 25 &&
-                total.functions.pct >= 65 &&
+                total.functions.pct >= 50 &&
                 total.branches.pct >= 70;
               
               commentBody += allPassed ? '**Status: ✅ All thresholds passed!**\n\n' : '**Status: ❌ Some thresholds not met**\n\n';

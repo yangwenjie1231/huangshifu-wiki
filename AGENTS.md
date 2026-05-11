@@ -52,11 +52,30 @@
 - If you touch backend or shared logic, run the narrowest relevant test command first, then `lint`, then `test:coverage` if the change is broad.
 - Keep generated artifacts out of commits: `dist/`, `coverage/`, Prisma client output, uploads, and backup archives.
 
+### CI verification — mandatory before delivery
+After completing code changes, you **must** run the full local verification suite to ensure all three parallel GitHub CI jobs pass:
+
+1. **Lint** (`npm run lint` → `tsc --noEmit`) — zero TypeScript errors. All code must conform to project type definitions.
+2. **Unit tests** (`npm run test:unit` → `vitest run`) — all test cases must pass with zero failures. If any pre-existing test failure is discovered during verification, it must be fixed as part of the current change set.
+3. **Build** (`npm run build` → `vite build`) — must complete successfully and produce valid output in `dist/`.
+
+**Local pre-validation** is required before considering work done. Run each of the three commands above in sequence. Record the results (pass/fail counts for tests, error count for lint). Do not deliver changes until all three checks report success.
+
+**CI environment validation** is the final gate. The `.github/workflows/ci.yml` pipeline runs `lint`, `test-unit`, and `build` jobs in parallel. A change is only considered complete when the CI workflow shows green across all three jobs.
+
+**Success criteria summary**:
+| Job | Command | Success Standard |
+|-----|---------|-----------------|
+| Lint | `tsc --noEmit` | Exit code 0, 0 errors |
+| Unit Tests | `vitest run` | Exit code 0, 0 failed tests |
+| Build | `vite build` | Exit code 0, `dist/` produced |
+
 ---
 
 This version addresses:
-- Clarifying the “loop independently” phrasing.
+- Clarifying the "loop independently" phrasing.
 - Adding explicit Prisma setup and migration steps.
 - Reminding about test database isolation.
 - Specifying that the embedding scripts are `npm run` commands.
 - Instructing to write a test if none exists.
+- Mandating full CI verification (lint + unit tests + build) with documented success standards before delivery.
