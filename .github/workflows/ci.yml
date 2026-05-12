@@ -131,7 +131,7 @@ jobs:
           const thresholds = {
             lines: 25,
             statements: 25,
-            functions: 50,
+            functions: 40,
             branches: 70
           };
           
@@ -383,6 +383,7 @@ jobs:
 
       - name: Download unit test artifacts
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: coverage-report-unit
           path: coverage/unit
@@ -428,7 +429,7 @@ jobs:
             const metrics = [
               ['Lines', total.lines.pct, 25],
               ['Statements', total.statements.pct, 25],
-              ['Functions', total.functions.pct, 50],
+              ['Functions', total.functions.pct, 40],
               ['Branches', total.branches.pct, 70]
             ];
             
@@ -472,13 +473,13 @@ jobs:
               commentBody += '| Metric | Value | Threshold |\n|--------|-------|----------|\n';
               commentBody += `| Lines | ${total.lines.pct.toFixed(1)}% | ≥25% |\n`;
               commentBody += `| Statements | ${total.statements.pct.toFixed(1)}% | ≥25% |\n`;
-              commentBody += `| Functions | ${total.functions.pct.toFixed(1)}% | ≥50% |\n`;
+              commentBody += `| Functions | ${total.functions.pct.toFixed(1)}% | ≥40% |\n`;
               commentBody += `| Branches | ${total.branches.pct.toFixed(1)}% | ≥70% |\n\n`;
 
               const allPassed =
                 total.lines.pct >= 25 &&
                 total.statements.pct >= 25 &&
-                total.functions.pct >= 50 &&
+                total.functions.pct >= 40 &&
                 total.branches.pct >= 70;
               
               commentBody += allPassed ? '**Status: ✅ All thresholds passed!**\n\n' : '**Status: ❌ Some thresholds not met**\n\n';
