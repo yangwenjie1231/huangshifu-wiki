@@ -100,11 +100,30 @@ function normalizeWikiRelationLabel(value: unknown) {
   return normalized.slice(0, 60);
 }
 
-function normalizeWikiRelationList(value: unknown, sourceSlug?: string) {
-  if (!Array.isArray(value)) {
-    return [] as WikiRelationRecord[];
+function normalizeWikiRelationList(value: unknown, sourceSlug?: string): WikiRelationRecord[] {
+  if (Array.isArray(value)) {
+    return doNormalizeArray(value, sourceSlug);
   }
 
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return doNormalizeArray(parsed, sourceSlug);
+      }
+    } catch {
+      // JSON parse failed — fall through to default empty return
+    }
+  }
+
+  if (value != null && typeof value !== 'string') {
+    console.warn('[normalizeWikiRelationList] Unexpected non-array input, data dropped:', typeof value);
+  }
+
+  return [] as WikiRelationRecord[];
+}
+
+function doNormalizeArray(value: unknown[], sourceSlug: string | undefined): WikiRelationRecord[] {
   const normalizedSourceSlug = normalizeWikiSlug(sourceSlug);
   const deduped = new Set<string>();
   const relations: WikiRelationRecord[] = [];
