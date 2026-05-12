@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { requireAuth, requireAdmin, type AuthenticatedRequest } from '../middleware/auth';
+import { searchLimiter } from '../middleware/rateLimiter';
 import {
   parseInteger,
   parseBoolean,
@@ -18,6 +19,8 @@ import {
   toMusicResponse,
   toAlbumResponse,
   parseDate,
+  enhancedCache,
+  logger,
 } from '../utils';
 import { prisma } from '../prisma';
 import { getEmbeddingModelName, getEmbeddingVectorSize, generateImageEmbedding, generateTextEmbedding } from '../vector/clipEmbedding';
@@ -383,7 +386,7 @@ export function buildHybridResponse(
   };
 }
 
-router.get('/', async (req: AuthenticatedRequest, res) => {
+router.get('/', searchLimiter, async (req: AuthenticatedRequest, res) => {
   try {
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     const type = typeof req.query.type === 'string' ? req.query.type : 'all';
@@ -406,6 +409,10 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
 
     const wikiVisibilityWhere = buildWikiVisibilityWhere(req.authUser);
     const postVisibilityWhere = buildPostVisibilityWhere(req.authUser);
+
+    const cacheKey = `search:${q}:${category || 'all'}:${type}`;
+    const cached = enhancedCache.get(cacheKey);
+    if (cached) return res.json(cached);
 
     const wikiPromise = wantsWiki
       ? prisma.wikiPage.findMany({
@@ -464,14 +471,6 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
 
     const galleriesPromise = wantsGalleries
       ? prisma.gallery.findMany({
-          include: {
-            images: {
-              include: {
-                asset: true,
-              },
-              orderBy: { sortOrder: 'asc' },
-            },
-          },
           where: {
             ...(q
               ? {
@@ -549,7 +548,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
       } catch (error) {
         degraded = true;
         degradationReason = '向量搜索不可用：' + (error instanceof Error ? error.message : '未知错误');
-        console.warn('[HybridSearch] Vector search failed, degrading to keyword-only:', error);
+        logger.warn({ err: error }, 'Vector search failed, degrading to keyword-only');
       }
 
       const keywordRaw = {
@@ -561,19 +560,22 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
       };
 
       const hybridResponse = buildHybridResponse(keywordRaw, vectorResults, mode, q, degraded, degradationReason);
+      enhancedCache.set(cacheKey, hybridResponse, 30);
       return res.json(hybridResponse);
     }
 
-    res.json({
+    const keywordResult = {
       wiki: wiki.map(toWikiResponse),
       posts: posts.map(toPostResponse),
       galleries: await Promise.all(galleries.map(g => toGalleryResponse(g))),
       music: music.map(toMusicResponse),
       albums: albums.map(toAlbumResponse),
       searchMeta: { mode: 'keyword', query: q, degraded: false, keywordResultCount: wiki.length + posts.length + galleries.length + music.length + albums.length, vectorResultCount: 0 },
-    });
+    };
+    enhancedCache.set(cacheKey, keywordResult, 30);
+    res.json(keywordResult);
   } catch (error) {
-    console.error('Search error:', error);
+    logger.error({ err: error }, 'Search error');
     res.status(500).json({ error: '搜索失败' });
   }
 });
@@ -592,7 +594,7 @@ router.get('/hot-keywords', async (_req, res) => {
       })),
     });
   } catch (error) {
-    console.error('Fetch hot keywords error:', error);
+    logger.error({ err: error }, 'Fetch hot keywords error');
     res.status(500).json({ error: '获取热门关键词失败' });
   }
 });
@@ -648,7 +650,7 @@ router.post('/by-image', searchImageUpload.single('image'), async (req: Authenti
       results,
     });
   } catch (error) {
-    console.error('Image semantic search error:', error);
+    logger.error({ err: error }, 'Image semantic search error');
     res.status(500).json({ error: '图片语义搜索失败' });
   } finally {
     if (tempFile?.path) {
@@ -691,7 +693,7 @@ router.get('/semantic-search', async (req: AuthenticatedRequest, res) => {
       results,
     });
   } catch (error) {
-    console.error('Semantic search error:', error);
+    logger.error({ err: error }, 'Semantic search error');
     res.status(500).json({ error: '语义搜索失败' });
   }
 });
@@ -799,12 +801,12 @@ router.get('/semantic-galleries', async (req: AuthenticatedRequest, res) => {
       galleries,
     });
   } catch (error) {
-    console.error('Semantic gallery search error:', error);
+    logger.error({ err: error }, 'Semantic gallery search error');
     res.status(500).json({ error: '语义搜索画廊失败' });
   }
 });
 
-router.get('/suggest', async (req: AuthenticatedRequest, res) => {
+router.get('/suggest', searchLimiter, async (req: AuthenticatedRequest, res) => {
   try {
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     if (!q || q.length < 2) {
@@ -892,7 +894,7 @@ router.get('/suggest', async (req: AuthenticatedRequest, res) => {
 
     res.json({ suggestions });
   } catch (error) {
-    console.error('Search suggest error:', error);
+    logger.error({ err: error }, 'Search suggest error');
     res.status(500).json({ error: '搜索建议失败' });
   }
 });

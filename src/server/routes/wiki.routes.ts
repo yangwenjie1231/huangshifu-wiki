@@ -15,6 +15,7 @@ import {
   toWikiPullRequestResponse,
   hasTag,
   buildWikiRelationBundle,
+  logger,
 } from '../utils';
 import { enhancedCache, CACHE_KEYS } from '../utils/cache';
 import type {
@@ -65,46 +66,17 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     };
 
     let pages: Awaited<ReturnType<typeof prisma.wikiPage.findMany>>;
-    let total: number;
 
-    if (tag) {
-      const visibilityWhereClause = !req.authUser
-        ? `status = 'published'`
-        : isAdminRole(req.authUser.role)
-          ? `1=1`
-          : `(status = 'published' OR "lastEditorUid" = '${req.authUser.uid.replace(/'/g, "''")}')`;
-
-      const [countResult] = await prisma.$queryRaw<{ count: bigint }[]>`
-        SELECT COUNT(*)::bigint as count
-        FROM "WikiPage"
-        WHERE ${Prisma.raw(visibilityWhereClause)}
-          ${category && category !== 'all' ? Prisma.raw(`AND category = '${category.replace(/'/g, "''")}'`) : Prisma.raw('')}
-          AND tags @> ARRAY[${tag}]::text[]
-      `;
-      total = Number(countResult.count);
-
-      pages = await prisma.$queryRaw`
-        SELECT *
-        FROM "WikiPage"
-        WHERE ${Prisma.raw(visibilityWhereClause)}
-          ${category && category !== 'all' ? Prisma.raw(`AND category = '${category.replace(/'/g, "''")}'`) : Prisma.raw('')}
-          AND tags @> ARRAY[${tag}]::text[]
-        ORDER BY "isPinned" DESC, "updatedAt" DESC
-        LIMIT ${limit} OFFSET ${skip}
-      ` as Awaited<ReturnType<typeof prisma.wikiPage.findMany>>;
-    } else {
-      const [dbPages, count] = await Promise.all([
-        prisma.wikiPage.findMany({
-          where,
-          orderBy: [{ isPinned: 'desc' }, { updatedAt: 'desc' }],
-          take: limit,
-          skip,
-        }),
-        prisma.wikiPage.count({ where }),
-      ]);
-      pages = dbPages;
-      total = count;
-    }
+    const [dbPages, total] = await Promise.all([
+      prisma.wikiPage.findMany({
+        where,
+        orderBy: [{ isPinned: 'desc' }, { updatedAt: 'desc' }],
+        take: limit,
+        skip,
+      }),
+      prisma.wikiPage.count({ where }),
+    ]);
+    pages = dbPages;
 
     const favoritedWikiSet = new Set<string>();
     const likedWikiSet = new Set<string>();
@@ -153,7 +125,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
       hasMore: page * limit < total,
     });
   } catch (error) {
-    console.error('Fetch wiki pages error:', error);
+    logger.error({ err: error }, 'Fetch wiki pages error');
     res.status(500).json({ error: '获取百科失败' });
   }
 });
@@ -209,7 +181,7 @@ mpWikiRouter.get('/', async (req: AuthenticatedRequest, res) => {
       limit,
     });
   } catch (error) {
-    console.error('Fetch mp wiki list error:', error);
+    logger.error({ err: error }, 'Fetch mp wiki list error');
     res.status(500).json({ error: '获取小程序百科失败' });
   }
 });
@@ -226,6 +198,7 @@ router.get('/timeline', async (req: AuthenticatedRequest, res) => {
       orderBy: {
         eventDate: 'asc',
       },
+      take: 500,
     });
 
     const favoritedWikiSet = new Set<string>();
@@ -248,7 +221,7 @@ router.get('/timeline', async (req: AuthenticatedRequest, res) => {
       })),
     });
   } catch (error) {
-    console.error('Fetch wiki timeline error:', error);
+    logger.error({ err: error }, 'Fetch wiki timeline error');
     res.status(500).json({ error: '获取时间轴失败' });
   }
 });
@@ -283,8 +256,20 @@ router.get('/recommended', async (req: AuthenticatedRequest, res) => {
         ...visibilityWhere,
         ...(slug ? { slug: { not: slug } } : {}),
       },
+      select: {
+        slug: true,
+        title: true,
+        category: true,
+        coverUrl: true,
+        favoritesCount: true,
+        viewCount: true,
+        updatedAt: true,
+        eventDate: true,
+        status: true,
+        tags: true,
+      },
       orderBy: [{ favoritesCount: 'desc' }, { viewCount: 'desc' }, { updatedAt: 'desc' }],
-      take: 120,
+      take: 50,
     });
 
     const baseTags = new Set<string>(serializeTags(basePage?.tags).map((item) => String(item).toLowerCase()));
@@ -334,7 +319,7 @@ router.get('/recommended', async (req: AuthenticatedRequest, res) => {
       })),
     });
   } catch (error) {
-    console.error('Fetch wiki recommended error:', error);
+    logger.error({ err: error }, 'Fetch wiki recommended error');
     res.status(500).json({ error: '获取推荐百科失败' });
   }
 });
@@ -363,7 +348,6 @@ router.get('/:slug', async (req: AuthenticatedRequest, res) => {
 
     const page = await prisma.wikiPage.findUnique({
       where: { slug },
-      include: { lastEditor: { select: { displayName: true } } },
     });
 
     if (!page || !canViewWikiPage(page, req.authUser)) {
@@ -371,16 +355,8 @@ router.get('/:slug', async (req: AuthenticatedRequest, res) => {
       return;
     }
 
-    await prisma.$executeRaw`UPDATE "WikiPage" SET "viewCount" = "viewCount" + 1 WHERE "slug" = ${slug}`;
-    const freshPage = await prisma.wikiPage.findUnique({
-      where: { slug },
-      include: { lastEditor: { select: { displayName: true } } },
-    });
-
-    if (!freshPage) {
-      res.status(404).json({ error: '页面未找到' });
-      return;
-    }
+    prisma.$executeRaw`UPDATE "WikiPage" SET "viewCount" = "viewCount" + 1 WHERE "slug" = ${slug}`.catch(() => {});
+    page.viewCount = (page.viewCount ?? 0) + 1;
 
     if (req.authUser) {
       await recordBrowsingHistory(req.authUser.uid, 'wiki', slug);
@@ -405,12 +381,12 @@ router.get('/:slug', async (req: AuthenticatedRequest, res) => {
 
     const relationBundle = await buildWikiRelationBundle(
       {
-        slug: freshPage.slug,
-        title: freshPage.title,
-        category: freshPage.category,
-        status: freshPage.status,
-        lastEditorUid: freshPage.lastEditorUid,
-        relations: freshPage.relations,
+        slug: page.slug,
+        title: page.title,
+        category: page.category,
+        status: page.status,
+        lastEditorUid: page.lastEditorUid,
+        relations: page.relations,
       },
       req.authUser,
     );
@@ -445,7 +421,7 @@ router.get('/:slug', async (req: AuthenticatedRequest, res) => {
 
     const response = {
       page: {
-        ...toWikiResponse(freshPage),
+        ...toWikiResponse(page),
         favoritedByMe,
         likedByMe,
         dislikedByMe,
@@ -462,7 +438,7 @@ router.get('/:slug', async (req: AuthenticatedRequest, res) => {
 
     res.json(response);
   } catch (error) {
-    console.error('Fetch wiki page error:', error);
+    logger.error({ err: error }, 'Fetch wiki page error');
     res.status(500).json({ error: '获取页面失败' });
   }
 });
@@ -484,6 +460,9 @@ router.post('/:slug/like', requireAuth, requireActiveUser, async (req: Authentic
       return;
     }
 
+    let likesCount: number;
+    let dislikesCount: number;
+
     await prisma.$transaction(async (tx) => {
       await tx.wikiDislike.deleteMany({
         where: { pageSlug: slug, userUid: req.authUser!.uid },
@@ -500,7 +479,7 @@ router.post('/:slug/like', requireAuth, requireActiveUser, async (req: Authentic
         // already liked
       }
 
-      const [likesCount, dislikesCount] = await Promise.all([
+      [likesCount, dislikesCount] = await Promise.all([
         tx.wikiLike.count({ where: { pageSlug: slug } }),
         tx.wikiDislike.count({ where: { pageSlug: slug } }),
       ]);
@@ -511,15 +490,10 @@ router.post('/:slug/like', requireAuth, requireActiveUser, async (req: Authentic
       });
     });
 
-    const [likesCount, dislikesCount] = await Promise.all([
-      prisma.wikiLike.count({ where: { pageSlug: slug } }),
-      prisma.wikiDislike.count({ where: { pageSlug: slug } }),
-    ]);
-
     clearWikiPageCache(slug);
     res.json({ liked: true, likesCount, dislikesCount });
   } catch (error) {
-    console.error('Like wiki page error:', error);
+    logger.error({ err: error }, 'Like wiki page error');
     res.status(500).json({ error: '点赞失败' });
   }
 });
@@ -553,7 +527,7 @@ router.delete('/:slug/like', requireAuth, requireActiveUser, async (req: Authent
     clearWikiPageCache(slug);
     res.json({ liked: false, likesCount });
   } catch (error) {
-    console.error('Unlike wiki page error:', error);
+    logger.error({ err: error }, 'Unlike wiki page error');
     res.status(500).json({ error: '取消点赞失败' });
   }
 });
@@ -575,6 +549,9 @@ router.post('/:slug/dislike', requireAuth, requireActiveUser, async (req: Authen
       return;
     }
 
+    let likesCount: number;
+    let dislikesCount: number;
+
     await prisma.$transaction(async (tx) => {
       await tx.wikiLike.deleteMany({
         where: { pageSlug: slug, userUid: req.authUser!.uid },
@@ -591,7 +568,7 @@ router.post('/:slug/dislike', requireAuth, requireActiveUser, async (req: Authen
         // already disliked
       }
 
-      const [likesCount, dislikesCount] = await Promise.all([
+      [likesCount, dislikesCount] = await Promise.all([
         tx.wikiLike.count({ where: { pageSlug: slug } }),
         tx.wikiDislike.count({ where: { pageSlug: slug } }),
       ]);
@@ -602,15 +579,10 @@ router.post('/:slug/dislike', requireAuth, requireActiveUser, async (req: Authen
       });
     });
 
-    const [likesCount, dislikesCount] = await Promise.all([
-      prisma.wikiLike.count({ where: { pageSlug: slug } }),
-      prisma.wikiDislike.count({ where: { pageSlug: slug } }),
-    ]);
-
     clearWikiPageCache(slug);
     res.json({ disliked: true, dislikesCount, likesCount });
   } catch (error) {
-    console.error('Dislike wiki page error:', error);
+    logger.error({ err: error }, 'Dislike wiki page error');
     res.status(500).json({ error: '踩失败' });
   }
 });
@@ -644,7 +616,7 @@ router.delete('/:slug/dislike', requireAuth, requireActiveUser, async (req: Auth
     clearWikiPageCache(slug);
     res.json({ disliked: false, dislikesCount });
   } catch (error) {
-    console.error('Undislike wiki page error:', error);
+    logger.error({ err: error }, 'Undislike wiki page error');
     res.status(500).json({ error: '取消踩失败' });
   }
 });
@@ -671,7 +643,7 @@ router.post('/:slug/pin', requireAdmin, async (req: AuthenticatedRequest, res) =
     clearWikiPageCache(slug);
     res.json({ isPinned: updatedPage.isPinned });
   } catch (error) {
-    console.error('Pin wiki page error:', error);
+    logger.error({ err: error }, 'Pin wiki page error');
     res.status(500).json({ error: '置顶页面失败' });
   }
 });
@@ -698,7 +670,7 @@ router.delete('/:slug/pin', requireAdmin, async (req: AuthenticatedRequest, res)
     clearWikiPageCache(slug);
     res.json({ isPinned: updatedPage.isPinned });
   } catch (error) {
-    console.error('Unpin wiki page error:', error);
+    logger.error({ err: error }, 'Unpin wiki page error');
     res.status(500).json({ error: '取消置顶失败' });
   }
 });
@@ -736,7 +708,7 @@ router.get('/:slug/history', async (req: AuthenticatedRequest, res) => {
       })),
     });
   } catch (error) {
-    console.error('Fetch wiki history error:', error);
+    logger.error({ err: error }, 'Fetch wiki history error');
     res.status(500).json({ error: '获取历史记录失败' });
   }
 });
@@ -815,7 +787,7 @@ router.post('/:slug/submit', requireAuth, requireActiveUser, async (req: Authent
     clearWikiPageCache(slug);
     res.json({ page: toWikiResponse(updated) });
   } catch (error) {
-    console.error('Submit wiki review error:', error);
+    logger.error({ err: error }, 'Submit wiki review error');
     res.status(500).json({ error: '提交审核失败' });
   }
 });
@@ -853,6 +825,12 @@ router.post('/', requireAuth, requireActiveUser, async (req: AuthenticatedReques
 
     if (!titleKey || !pageSlug || !category || !content) {
       res.status(400).json({ error: '缺少必要字段' });
+      return;
+    }
+
+    const MAX_CONTENT_SIZE = 500 * 1024;
+    if (content && content.length > MAX_CONTENT_SIZE) {
+      res.status(400).json({ error: '内容超出限制，最大500KB' });
       return;
     }
 
@@ -939,7 +917,7 @@ router.post('/', requireAuth, requireActiveUser, async (req: AuthenticatedReques
     res.status(201).json({ page: toWikiResponse(page) });
   } catch (error) {
     if (sendWikiUniqueConflict(error, res)) return;
-    console.error('Create wiki page error:', error);
+    logger.error({ err: error }, 'Create wiki page error');
     res.status(500).json({ error: '保存页面失败' });
   }
 });
@@ -974,6 +952,12 @@ router.put('/:slug', requireAuth, requireActiveUser, async (req: AuthenticatedRe
 
     if (!titleKey || !category || !content) {
       res.status(400).json({ error: '缺少必要字段' });
+      return;
+    }
+
+    const MAX_CONTENT_SIZE = 500 * 1024;
+    if (content && content.length > MAX_CONTENT_SIZE) {
+      res.status(400).json({ error: '内容超出限制，最大500KB' });
       return;
     }
 
@@ -1032,7 +1016,7 @@ router.put('/:slug', requireAuth, requireActiveUser, async (req: AuthenticatedRe
     res.json({ page: toWikiResponse(updated) });
   } catch (error) {
     if (sendWikiUniqueConflict(error, res)) return;
-    console.error('Update wiki page error:', error);
+    logger.error({ err: error }, 'Update wiki page error');
     res.status(500).json({ error: '更新页面失败' });
   }
 });
@@ -1098,7 +1082,7 @@ router.post('/:slug/branches', requireAuth, requireActiveUser, async (req: Authe
 
     res.status(201).json({ branch: toWikiBranchResponse(branch as WikiBranchWithPage) });
   } catch (error) {
-    console.error('Create wiki branch error:', error);
+    logger.error({ err: error }, 'Create wiki branch error');
     res.status(500).json({ error: '创建分支失败' });
   }
 });
@@ -1125,7 +1109,7 @@ router.get('/:slug/branches', requireAuth, async (req: AuthenticatedRequest, res
 
     res.json({ branches: branches.map((branch) => toWikiBranchResponse(branch as WikiBranchWithPage)) });
   } catch (error) {
-    console.error('Get wiki branches error:', error);
+    logger.error({ err: error }, 'Get wiki branches error');
     res.status(500).json({ error: '获取分支失败' });
   }
 });
@@ -1145,7 +1129,7 @@ router.get('/branches/mine', requireAuth, requireActiveUser, async (req: Authent
 
     res.json({ branches: branches.map((branch) => toWikiBranchResponse(branch as WikiBranchWithPage)) });
   } catch (error) {
-    console.error('Get my wiki branches error:', error);
+    logger.error({ err: error }, 'Get my wiki branches error');
     res.status(500).json({ error: '获取分支失败' });
   }
 });
@@ -1183,7 +1167,7 @@ router.get('/branches/:branchId', requireAuth, async (req: AuthenticatedRequest,
         : null,
     });
   } catch (error) {
-    console.error('Get wiki branch error:', error);
+    logger.error({ err: error }, 'Get wiki branch error');
     res.status(500).json({ error: '获取分支失败' });
   }
 });
@@ -1218,7 +1202,7 @@ router.get('/branches/:branchId/revisions', requireAuth, async (req: Authenticat
       })),
     });
   } catch (error) {
-    console.error('Get wiki branch revisions error:', error);
+    logger.error({ err: error }, 'Get wiki branch revisions error');
     res.status(500).json({ error: '获取分支版本失败' });
   }
 });
@@ -1319,7 +1303,7 @@ router.post('/branches/:branchId/revisions', requireAuth, requireActiveUser, asy
       },
     });
   } catch (error) {
-    console.error('Create wiki branch revision error:', error);
+    logger.error({ err: error }, 'Create wiki branch revision error');
     res.status(500).json({ error: '保存分支版本失败' });
   }
 });
@@ -1405,7 +1389,7 @@ router.post('/branches/:branchId/pull-request', requireAuth, requireActiveUser, 
 
     res.status(201).json({ pullRequest: toWikiPullRequestResponse(prWithRelations as WikiPullRequestWithRelations) });
   } catch (error) {
-    console.error('Create wiki pull request error:', error);
+    logger.error({ err: error }, 'Create wiki pull request error');
     res.status(500).json({ error: '提交 PR 失败' });
   }
 });
@@ -1433,7 +1417,7 @@ router.get('/pull-requests/list', requireAuth, async (req: AuthenticatedRequest,
 
     res.json({ pullRequests: pullRequests.map((pr) => toWikiPullRequestResponse(pr as WikiPullRequestWithRelations)) });
   } catch (error) {
-    console.error('List wiki pull requests error:', error);
+    logger.error({ err: error }, 'List wiki pull requests error');
     res.status(500).json({ error: '获取 PR 列表失败' });
   }
 });
@@ -1466,7 +1450,7 @@ router.get('/pull-requests/:prId', requireAuth, async (req: AuthenticatedRequest
 
     res.json({ pullRequest: toWikiPullRequestResponse(pr as WikiPullRequestWithRelations) });
   } catch (error) {
-    console.error('Get wiki pull request error:', error);
+    logger.error({ err: error }, 'Get wiki pull request error');
     res.status(500).json({ error: '获取 PR 失败' });
   }
 });
@@ -1530,7 +1514,7 @@ router.get('/pull-requests/:prId/diff', requireAuth, async (req: AuthenticatedRe
       },
     });
   } catch (error) {
-    console.error('Get wiki pull request diff error:', error);
+    logger.error({ err: error }, 'Get wiki pull request diff error');
     res.status(500).json({ error: '获取 PR Diff 失败' });
   }
 });
@@ -1569,7 +1553,7 @@ router.post('/pull-requests/:prId/comments', requireAuth, requireActiveUser, asy
       },
     });
   } catch (error) {
-    console.error('Create wiki PR comment error:', error);
+    logger.error({ err: error }, 'Create wiki PR comment error');
     res.status(500).json({ error: '发表评论失败' });
   }
 });
@@ -1688,7 +1672,7 @@ router.post('/pull-requests/:prId/merge', requireAuth, requireAdmin, async (req:
     res.json({ page: updatedPage ? toWikiResponse(updatedPage) : null });
   } catch (error) {
     if (sendWikiUniqueConflict(error, res)) return;
-    console.error('Merge wiki PR error:', error);
+    logger.error({ err: error }, 'Merge wiki PR error');
     res.status(500).json({ error: '合并 PR 失败' });
   }
 });
@@ -1734,7 +1718,7 @@ router.post('/pull-requests/:prId/reject', requireAuth, requireAdmin, async (req
     clearWikiPageCache(pr.pageSlug);
     res.json({ success: true });
   } catch (error) {
-    console.error('Reject wiki PR error:', error);
+    logger.error({ err: error }, 'Reject wiki PR error');
     res.status(500).json({ error: '驳回 PR 失败' });
   }
 });
@@ -1840,7 +1824,7 @@ router.post('/branches/:branchId/resolve-conflict', requireAuth, requireActiveUs
       },
     });
   } catch (error) {
-    console.error('Resolve wiki conflict error:', error);
+    logger.error({ err: error }, 'Resolve wiki conflict error');
     res.status(500).json({ error: '解决冲突失败' });
   }
 });
@@ -1905,7 +1889,7 @@ router.post('/:slug/rollback/:revisionId', requireAuth, requireActiveUser, async
     res.json({ page: toWikiResponse(page) });
   } catch (error) {
     if (sendWikiUniqueConflict(error, res)) return;
-    console.error('Rollback wiki page error:', error);
+    logger.error({ err: error }, 'Rollback wiki page error');
     res.status(500).json({ error: '回滚失败' });
   }
 });
@@ -1939,7 +1923,7 @@ router.post('/:slug/revisions', requireAuth, requireActiveUser, async (req: Auth
       },
     });
   } catch (error) {
-    console.error('Create wiki revision error:', error);
+    logger.error({ err: error }, 'Create wiki revision error');
     res.status(500).json({ error: '保存历史版本失败' });
   }
 });

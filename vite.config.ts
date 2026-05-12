@@ -27,13 +27,13 @@ export default defineConfig(({ mode }) => {
 			sourcemap: false,
 			terserOptions: {
 				compress: {
-					drop_console: mode === "production",
-					drop_debugger: mode === "production",
-					pure_funcs: mode === "production" ? ["console.log", "console.info"] : [],
-					reduce_vars: false,
-					collapse_vars: false,
-					passes: 2,
-				},
+				drop_console: mode === "production",
+				drop_debugger: mode === "production",
+				pure_funcs: mode === "production" ? ["console.log", "console.info"] : [],
+				reduce_vars: true,
+				collapse_vars: true,
+				passes: 2,
+			},
 				format: {
 					comments: false,
 				},

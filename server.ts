@@ -14,13 +14,16 @@ import helmet from 'helmet';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import multer from 'multer';
 import { initSensitiveWords } from './src/lib/sensitiveWordFilter';
 import { prisma } from './src/server/prisma';
+import { logger } from './src/server/utils/logger';
 import { authMiddleware } from './src/server/middleware/auth';
 import { requestLoggerMiddleware } from './src/server/middleware/requestLogger';
+import { globalLimiter } from './src/server/middleware/rateLimiter';
 import { registerRegionRoutes } from './src/server/location/routes';
 import { registerExifRoutes } from './src/server/location/exifRoutes';
 import { registerBirthdayRoutes } from './src/server/birthday/routes';
@@ -82,13 +85,27 @@ if (CORS_ORIGIN) {
     optionsSuccessStatus: 204,
   }));
 } else {
-  // 开发环境或同源部署：允许所有来源，但仍配置 maxAge 优化性能
+  // 开发环境：白名单模式，仅允许已知的前端开发服务器
+  const allowedOrigins = [
+    'http://localhost:5173',
+    'http://localhost:4173',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:4173',
+  ];
   app.use(cors({
-    origin: true,
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('不允许的 CORS 来源'));
+      }
+    },
     credentials: true,
     maxAge: CORS_MAX_AGE,
   }));
 }
+
+app.use(globalLimiter);
 
 app.use(helmet({
   contentSecurityPolicy: false,
@@ -196,7 +213,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     return;
   }
 
-  console.error('Unhandled server error:', err);
+  logger.error({ err: err }, 'Unhandled server error');
   res.status(500).json({ error: '服务器内部错误' });
 });
 
@@ -204,10 +221,28 @@ async function startServer() {
   await initSensitiveWords();
 
   app.use((_req, res, next) => {
-    res.setHeader(
-      'Content-Security-Policy',
-      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' data: https://*.amap.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; font-src 'self' data:; img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net http://music.163.com https://music.163.com http://*.music.163.com https://*.music.163.com https://picsum.photos https://*.picsum.photos https://fastly.picsum.photos https://*.googleusercontent.com; connect-src 'self' https://*.amap.com http://music.163.com https://music.163.com http://*.music.163.com https://*.music.163.net http://*.music.126.net https://*.music.126.net https://analysis.chatglm.cn https://gator.volces.com https://picsum.photos https://*.picsum.photos https://fastly.picsum.photos https://*.googleusercontent.com; worker-src 'self' blob:; media-src 'self' http://music.163.com https://music.163.com http://*.music.163.com https://*.music.163.com http://*.music.126.net https://*.music.126.net;"
-    );
+    const nonce = crypto.randomBytes(16).toString('base64');
+    res.locals.nonce = nonce;
+
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    const directives: string[] = [
+      "default-src 'self'",
+      isProduction
+        ? `script-src 'self' 'nonce-${nonce}' 'unsafe-inline' https://*.amap.com`
+        : `script-src 'self' 'unsafe-inline' https://*.amap.com`,
+      isProduction
+        ? `style-src 'self' 'nonce-${nonce}' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com`
+        : `style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com`,
+      "font-src 'self' data:",
+      "img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net http://music.163.com https://music.163.com http://*.music.163.com https://*.music.163.com https://picsum.photos https://*.picsum.photos https://fastly.picsum.photos https://*.googleusercontent.com",
+      "connect-src 'self' https://*.amap.com http://music.163.com https://music.163.com http://*.music.163.com https://*.music.163.net http://*.music.126.net https://*.music.126.net https://analysis.chatglm.cn https://gator.volces.com https://picsum.photos https://*.picsum.photos https://fastly.picsum.photos https://*.googleusercontent.com wss://localhost:* ws://localhost:*",
+      "worker-src 'self' blob:",
+      "media-src 'self' http://music.163.com https://music.163.com http://*.music.163.com https://*.music.163.com http://*.music.126.net https://*.music.126.net",
+      "frame-src https://open.weixin.qq.com",
+    ];
+
+    res.setHeader('Content-Security-Policy', directives.join('; '));
     next();
   });
 
@@ -226,7 +261,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    logger.info(`Server running on http://localhost:${PORT}`);
 
     setInterval(async () => {
       try {
@@ -234,14 +269,14 @@ async function startServer() {
           where: { expiresAt: { lt: new Date() } },
         });
       } catch (error) {
-        console.error('[EditLock] Cleanup error:', error);
+        logger.error({ err: error }, 'Clean up expired edit locks failed');
       }
     }, 5 * 60 * 1000);
   });
 }
 
 startServer().catch((error) => {
-  console.error('Failed to start server:', error);
+  logger.error({ err: error }, 'Failed to start server');
   process.exit(1);
 });
 

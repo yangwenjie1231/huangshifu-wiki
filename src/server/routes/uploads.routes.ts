@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { prisma } from '../prisma';
 import { requireAuth, requireActiveUser, AuthenticatedRequest } from '../middleware/auth';
+import { uploadLimiter } from '../middleware/rateLimiter';
 import {
   createUploadSessionExpiresAt,
   isUploadSessionExpired,
@@ -145,6 +146,7 @@ router.post(
   '/sessions/:sessionId/files',
   requireAuth,
   requireActiveUser,
+  uploadLimiter,
   upload.single('file'),
   async (req: AuthenticatedRequest, res) => {
     try {
@@ -224,7 +226,7 @@ router.post(
 
       // 始终创建 ImageMap 记录，用于统一图片管理
       const imageId = `${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-      const imageMd5 = crypto.randomUUID(); // 生成唯一的 MD5 占位符
+      const imageMd5 = crypto.createHash('md5').update(fs.readFileSync(file.path)).digest('hex');
       await prisma.imageMap.create({
         data: {
           id: imageId,

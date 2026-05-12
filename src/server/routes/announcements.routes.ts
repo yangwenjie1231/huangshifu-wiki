@@ -1,19 +1,19 @@
 import { Router } from 'express';
 import { prisma } from '../prisma';
 import { requireAdmin } from '../middleware/auth';
-import { apiCache, CACHE_KEYS, CACHE_TTL } from '../utils/cache';
+import { enhancedCache, CACHE_KEYS, CACHE_TTL } from '../utils/cache';
 
 const router = Router();
 
 // 清除公告缓存的辅助函数
 function clearAnnouncementCache(): void {
-  apiCache.delete(CACHE_KEYS.ANNOUNCEMENT_LATEST);
+  enhancedCache.delete(CACHE_KEYS.ANNOUNCEMENT_LATEST);
 }
 
 router.get('/latest', async (_req, res) => {
   try {
     // 尝试从缓存获取
-    const cached = apiCache.get(CACHE_KEYS.ANNOUNCEMENT_LATEST);
+    const cached = enhancedCache.get(CACHE_KEYS.ANNOUNCEMENT_LATEST);
     if (cached) {
       res.json(cached);
       return;
@@ -27,7 +27,7 @@ router.get('/latest', async (_req, res) => {
     const result = { announcement };
 
     // 缓存结果
-    apiCache.set(CACHE_KEYS.ANNOUNCEMENT_LATEST, result, CACHE_TTL.ANNOUNCEMENT);
+    enhancedCache.set(CACHE_KEYS.ANNOUNCEMENT_LATEST, result, CACHE_TTL.ANNOUNCEMENT / 1000);
 
     res.json(result);
   } catch (error) {

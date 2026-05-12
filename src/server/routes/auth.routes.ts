@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { UserRole as PrismaUserRole } from '@prisma/client';
 import { requireAuth, requireActiveUser, userToApiUser, createToken, setAuthCookie, clearAuthCookie, clearUserCache } from '../middleware/auth';
 import { authRateLimiter } from '../middleware/rateLimiter';
-import { exchangeWechatLoginCode, buildUniqueWechatEmail } from '../utils';
+import { exchangeWechatLoginCode, buildUniqueWechatEmail, logger } from '../utils';
 import { prisma } from '../prisma';
 import type { AuthenticatedRequest } from '../types';
 
@@ -78,15 +78,19 @@ router.post('/register', authRateLimiter, async (req, res) => {
 
     const normalizedEmail = email.toLowerCase().trim();
     const name = (displayName || normalizedEmail.split('@')[0] || '匿名用户').trim();
+    if (name.length > 50) {
+      res.status(400).json({ error: '显示名称过长，最多50个字符' });
+      return;
+    }
 
-    console.log('[Auth] Register attempt:', { email: normalizedEmail, name });
+    logger.info({ email: normalizedEmail, name }, 'Register attempt');
 
     const existing = await prisma.user.findUnique({
       where: { email: normalizedEmail },
     });
 
     if (existing) {
-      console.log('[Auth] Register failed - email already exists:', normalizedEmail);
+      logger.info({ email: normalizedEmail }, 'Register failed - email already exists');
       res.status(409).json({ error: '该邮箱已注册' });
       return;
     }
@@ -94,7 +98,7 @@ router.post('/register', authRateLimiter, async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 12);
     const role = SUPER_ADMIN_EMAIL && normalizedEmail === SUPER_ADMIN_EMAIL ? PrismaUserRole.super_admin : PrismaUserRole.user;
 
-    console.log('[Auth] Creating user:', { email: normalizedEmail, role });
+    logger.info({ email: normalizedEmail, role }, 'Creating user');
 
     const user = await prisma.user.create({
       data: {
@@ -107,19 +111,19 @@ router.post('/register', authRateLimiter, async (req, res) => {
     });
 
     const apiUser = userToApiUser(user);
-    console.log('[Auth] Creating token for user:', { uid: user.uid });
+    logger.info({ uid: user.uid }, 'Creating token for user');
 
     const token = createToken(apiUser);
     setAuthCookie(req, res, token);
 
-    console.log('[Auth] Register success:', { uid: user.uid, email: user.email });
+    logger.info({ uid: user.uid, email: user.email }, 'Register success');
     res.status(201).json({ user: apiUser });
   } catch (error) {
-    console.error('[Auth] Register error:', {
+    logger.error({
       message: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
       body: { ...req.body, password: '[REDACTED]' },
-    });
+    }, 'Register error');
     res.status(500).json({ error: '注册失败，请稍后重试' });
   }
 });
@@ -132,45 +136,45 @@ router.post('/login', authRateLimiter, async (req, res) => {
     };
 
     if (!email || !password) {
-      console.log('[Auth] Login failed - missing credentials');
+      logger.info('Login failed - missing credentials');
       res.status(400).json({ error: '邮箱和密码不能为空' });
       return;
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    console.log('[Auth] Login attempt:', { email: normalizedEmail });
+    logger.info({ email: normalizedEmail }, 'Login attempt');
 
     const user = await prisma.user.findUnique({
       where: { email: normalizedEmail },
     });
 
     if (!user) {
-      console.log('[Auth] Login failed - user not found:', normalizedEmail);
+      logger.info({ email: normalizedEmail }, 'Login failed - user not found');
       res.status(401).json({ error: '邮箱或密码错误' });
       return;
     }
 
     const validPassword = await bcrypt.compare(password, user.passwordHash);
     if (!validPassword) {
-      console.log('[Auth] Login failed - invalid password for:', normalizedEmail);
+      logger.info({ email: normalizedEmail }, 'Login failed - invalid password');
       res.status(401).json({ error: '邮箱或密码错误' });
       return;
     }
 
     const apiUser = userToApiUser(user);
-    console.log('[Auth] Creating token for login:', { uid: user.uid });
+    logger.info({ uid: user.uid }, 'Creating token for login');
 
     const token = createToken(apiUser);
     setAuthCookie(req, res, token);
 
-    console.log('[Auth] Login success:', { uid: user.uid, email: user.email });
+    logger.info({ uid: user.uid, email: user.email }, 'Login success');
     res.json({ user: apiUser });
   } catch (error) {
-    console.error('[Auth] Login error:', {
+    logger.error({
       message: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
       body: { ...req.body, password: '[REDACTED]' },
-    });
+    }, 'Login error');
     res.status(500).json({ error: '登录失败，请稍后重试' });
   }
 });
@@ -182,20 +186,20 @@ router.post('/wechat/login', authRateLimiter, async (req, res) => {
     const photoURLRawInput = typeof req.body?.photoURL === 'string' ? req.body.photoURL.trim() : '';
     const photoURLRaw = sanitizeWechatPhotoUrl(photoURLRawInput);
     if (photoURLRawInput && !photoURLRaw) {
-      console.warn('[Auth] WeChat login: photoURL rejected by validation:', photoURLRawInput.slice(0, 80));
+      logger.warn({ photoURL: photoURLRawInput.slice(0, 80) }, 'WeChat login: photoURL rejected by validation');
     }
 
     if (!code.trim()) {
-      console.log('[Auth] WeChat login failed - missing code');
+      logger.info('WeChat login failed - missing code');
       res.status(400).json({ error: 'code 不能为空' });
       return;
     }
 
-    console.log('[Auth] WeChat login attempt');
+    logger.info('WeChat login attempt');
 
     const { openId, unionId } = await exchangeWechatLoginCode(code);
 
-    console.log('[Auth] WeChat code exchanged:', { openId, hasUnionId: !!unionId });
+    logger.info({ openId, hasUnionId: !!unionId }, 'WeChat code exchanged');
 
     let user = await prisma.user.findFirst({
       where: {
@@ -212,7 +216,7 @@ router.post('/wechat/login', authRateLimiter, async (req, res) => {
       const passwordHash = await bcrypt.hash(generatedPassword, 12);
       const fallbackName = displayNameRaw || `微信用户${openId.slice(-6)}`;
 
-      console.log('[Auth] Creating new WeChat user:', { generatedEmail, fallbackName });
+      logger.info({ generatedEmail, fallbackName }, 'Creating new WeChat user');
 
       user = await prisma.user.create({
         data: {
@@ -233,7 +237,7 @@ router.post('/wechat/login', authRateLimiter, async (req, res) => {
         (!user.wechatUnionId && !!unionId);
 
       if (shouldUpdateProfile) {
-        console.log('[Auth] Updating WeChat user profile:', { uid: user.uid });
+        logger.info({ uid: user.uid }, 'Updating WeChat user profile');
         user = await prisma.user.update({
           where: { uid: user.uid },
           data: {
@@ -251,7 +255,7 @@ router.post('/wechat/login', authRateLimiter, async (req, res) => {
     const token = createToken(apiUser);
     setAuthCookie(req, res, token);
 
-    console.log('[Auth] WeChat login success:', { uid: user.uid, openId });
+    logger.info({ uid: user.uid, openId }, 'WeChat login success');
 
     res.json({
       user: apiUser,
@@ -262,12 +266,12 @@ router.post('/wechat/login', authRateLimiter, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('[Auth] WeChat login error:', {
+    logger.error({
       message: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
       body: req.body,
-    });
-    res.status(500).json({ error: error instanceof Error ? error.message : '微信登录失败' });
+    }, 'WeChat login error');
+    res.status(500).json({ error: '登录服务暂时不可用，请稍后重试' });
   }
 });
 

@@ -18,6 +18,11 @@ export interface CacheStats {
   hitRate: number;
 }
 
+/**
+ * @deprecated MemoryCache 已废弃，请使用 EnhancedCache（基于 node-cache）。
+ * 该类保留仅为了向后兼容，新代码应使用 enhancedCache 实例。
+ * 计划在后续版本中移除。
+ */
 class MemoryCache {
   private cache = new Map<string, CacheEntry<unknown>>();
   private hits = 0;
@@ -258,7 +263,9 @@ class EnhancedCache {
   }
 }
 
-// 全局缓存实例（保留原有 MemoryCache 以兼容已有代码）
+// 全局缓存实例（已废弃，保留仅为了向后兼容）
+// 新代码请使用 enhancedCache（基于 node-cache，TTL 单位为秒）
+/** @deprecated 使用 enhancedCache 替代 */
 export const apiCache = new MemoryCache();
 
 // 增强缓存实例（用于新场景）

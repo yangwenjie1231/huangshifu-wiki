@@ -1,10 +1,11 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import {
   requireAdmin,
   requireSuperAdmin,
   requireAuth,
   requireActiveUser,
   isAdminRole,
+  type AuthenticatedRequest,
 } from '../middleware/auth';
 import {
   prisma,
@@ -26,6 +27,7 @@ import {
   cleanupOldBackups,
   encryptBuffer,
   decryptBuffer,
+  logger,
 } from '../utils';
 import multer from 'multer';
 import fs from 'fs';
@@ -49,25 +51,25 @@ fs.mkdirSync(backupsDir, { recursive: true });
 
 const BACKUP_PASSWORD = process.env.BACKUP_PASSWORD || '';
 
-async function handleBackupList(_req: any, res: any) {
+async function handleBackupList(_req: Request, res: Response) {
   try {
-    const files = fs.readdirSync(backupsDir)
-      .filter((f) => f.startsWith('backup_') && f.endsWith('.zip'))
-      .map((f) => {
+    const files = (await fs.promises.readdir(backupsDir)).filter((f) => f.startsWith('backup_') && f.endsWith('.zip'));
+    const mapped = (await Promise.all(
+      files.map(async (f) => {
         const filePath = path.join(backupsDir, f);
-        const stat = fs.statSync(filePath);
+        const stat = await fs.promises.stat(filePath);
         return { filename: f, size: stat.size, sizeFormatted: formatFileSize(stat.size), createdAt: stat.mtime.toISOString() };
-      })
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      }),
+    )).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    res.json({ backups: files });
+    res.json({ backups: mapped });
   } catch (error) {
-    console.error('List backups error:', error);
+    logger.error({ err: error }, 'List backups error');
     res.status(500).json({ error: '获取备份列表失败' });
   }
-}
+});
 
-async function handleBackupDelete(req: any, res: any) {
+async function handleBackupDelete(req: AuthenticatedRequest, res: Response) {
   try {
     const { password } = req.query as { password?: string };
     const filename = req.params.filename;
@@ -89,15 +91,17 @@ async function handleBackupDelete(req: any, res: any) {
     }
 
     const filePath = path.join(backupsDir, filename);
-    if (!fs.existsSync(filePath)) {
+    try {
+      await fs.promises.access(filePath);
+    } catch {
       res.status(404).json({ error: '备份文件不存在' });
       return;
     }
 
-    fs.unlinkSync(filePath);
+    await fs.promises.unlink(filePath);
     res.json({ success: true });
   } catch (error) {
-    console.error('Delete backup error:', error);
+    logger.error({ err: error }, 'Delete backup error');
     res.status(500).json({ error: '删除备份失败' });
   }
 }
@@ -194,13 +198,13 @@ router.get('/review-queue', requireAdmin, async (req, res) => {
     });
     res.json({ type: 'posts', status, items: items.map(toPostResponse) });
   } catch (error) {
-    console.error('Fetch review queue error:', error);
+    logger.error({ err: error }, 'Fetch review queue error');
     res.status(500).json({ error: '获取审核队列失败' });
   }
 });
 
 // PUT /api/admin/review-queue/:id/approve - Approve a review item
-router.put('/review-queue/:id/approve', requireAdmin, async (req: any, res) => {
+router.put('/review-queue/:id/approve', requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
     const targetType = normalizeModerationTargetType(req.body.type) || 'wiki';
     const targetId = req.params.id;
@@ -215,13 +219,13 @@ router.put('/review-queue/:id/approve', requireAdmin, async (req: any, res) => {
     const result = await handleReviewAction(targetType, targetId, 'approve', reqAuthUser, note);
     res.json(result);
   } catch (error) {
-    console.error('Approve review item error:', error);
+    logger.error({ err: error }, 'Approve review item error');
     res.status(500).json({ error: '审核通过失败' });
   }
 });
 
 // PUT /api/admin/review-queue/:id/reject - Reject a review item
-router.put('/review-queue/:id/reject', requireAdmin, async (req: any, res) => {
+router.put('/review-queue/:id/reject', requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
     const targetType = normalizeModerationTargetType(req.body.type) || 'wiki';
     const targetId = req.params.id;
@@ -236,14 +240,14 @@ router.put('/review-queue/:id/reject', requireAdmin, async (req: any, res) => {
     const result = await handleReviewAction(targetType, targetId, 'reject', reqAuthUser, note);
     res.json(result);
   } catch (error) {
-    console.error('Reject review item error:', error);
+    logger.error({ err: error }, 'Reject review item error');
     res.status(500).json({ error: '驳回失败' });
   }
 });
 
 // POST /api/admin/review/:type/:id/:action - Legacy compatible route
 // Redirects to PUT /api/admin/review-queue/:id/:action
-router.post('/review/:type/:id/:action', requireAdmin, async (req: any, res) => {
+router.post('/review/:type/:id/:action', requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
     const { type, id, action } = req.params;
     const { note } = req.body;
@@ -262,7 +266,7 @@ router.post('/review/:type/:id/:action', requireAdmin, async (req: any, res) => 
     const result = await handleReviewAction(targetType, id, action, req.authUser, typeof req.body?.note === 'string' ? req.body.note.trim() : '');
     res.json(result);
   } catch (error) {
-    console.error('Review action error:', error);
+    logger.error({ err: error }, 'Review action error');
     res.status(500).json({ error: '审核操作失败' });
   }
 });
@@ -284,7 +288,7 @@ router.get('/sensitive-words', requireAdmin, async (req, res) => {
     const isSensitive = isSensitiveWord(word);
     res.json({ word, isSensitive });
   } catch (error) {
-    console.error('Check sensitive word error:', error);
+    logger.error({ err: error }, 'Check sensitive word error');
     res.status(500).json({ error: '检查敏感词失败' });
   }
 });
@@ -305,7 +309,7 @@ router.post('/sensitive-words', requireSuperAdmin, async (req, res) => {
       hint: '将敏感词添加到 public/sensitive-words/words.txt 文件中，每行一个词'
     });
   } catch (error) {
-    console.error('Add sensitive word error:', error);
+    logger.error({ err: error }, 'Add sensitive word error');
     res.status(500).json({ error: '添加敏感词失败' });
   }
 });
@@ -326,7 +330,7 @@ router.delete('/sensitive-words/:id', requireSuperAdmin, async (req, res) => {
       hint: '从 public/sensitive-words/words.txt 文件中删除该敏感词'
     });
   } catch (error) {
-    console.error('Remove sensitive word error:', error);
+    logger.error({ err: error }, 'Remove sensitive word error');
     res.status(500).json({ error: '删除敏感词失败' });
   }
 });
@@ -349,13 +353,13 @@ router.get('/locks', requireAdmin, async (_req, res) => {
 
     res.json({ locks: locks.map(toEditLockResponse) });
   } catch (error) {
-    console.error('Fetch edit locks error:', error);
+    logger.error({ err: error }, 'Fetch edit locks error');
     res.status(500).json({ error: '获取编辑锁列表失败' });
   }
 });
 
 // POST /api/admin/locks - Create/edit lock (generic endpoint)
-router.post('/locks', requireAuth, requireActiveUser, async (req: any, res) => {
+router.post('/locks', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
     await prisma.editLock.deleteMany({
       where: {
@@ -433,13 +437,13 @@ router.post('/locks', requireAuth, requireActiveUser, async (req: any, res) => {
 
     res.status(201).json({ lock: toEditLockResponse(created), acquired: true });
   } catch (error) {
-    console.error('Acquire edit lock error:', error);
+    logger.error({ err: error }, 'Acquire edit lock error');
     res.status(500).json({ error: '申请编辑锁失败' });
   }
 });
 
 // DELETE /api/admin/locks/:id - Delete lock by ID
-router.delete('/locks/:id', requireAuth, requireActiveUser, async (req: any, res) => {
+router.delete('/locks/:id', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
   try {
     const lock = await prisma.editLock.findUnique({ where: { id: req.params.id } });
     if (!lock) {
@@ -456,7 +460,7 @@ router.delete('/locks/:id', requireAuth, requireActiveUser, async (req: any, res
     await prisma.editLock.delete({ where: { id: lock.id } });
     res.json({ success: true });
   } catch (error) {
-    console.error('Release edit lock error:', error);
+    logger.error({ err: error }, 'Release edit lock error');
     res.status(500).json({ error: '释放编辑锁失败' });
   }
 });
@@ -493,7 +497,7 @@ router.get('/moderation_logs', requireAdmin, async (_req, res) => {
       })),
     });
   } catch (error) {
-    console.error('Fetch moderation logs error:', error);
+    logger.error({ err: error }, 'Fetch moderation logs error');
     res.status(500).json({ error: '获取操作日志失败' });
   }
 });
@@ -527,7 +531,7 @@ router.get('/ban_logs', requireAdmin, async (_req, res) => {
       })),
     });
   } catch (error) {
-    console.error('Fetch ban logs error:', error);
+    logger.error({ err: error }, 'Fetch ban logs error');
     res.status(500).json({ error: '获取封禁日志失败' });
   }
 });
@@ -553,7 +557,7 @@ router.post('/batch-delete-posts', requireAdmin, async (req, res) => {
 
     res.json({ deleted: postIds.length });
   } catch (error) {
-    console.error('Batch delete posts error:', error);
+    logger.error({ err: error }, 'Batch delete posts error');
     res.status(500).json({ error: '批量删除帖子失败' });
   }
 });
@@ -601,7 +605,7 @@ router.post('/batch-delete-galleries', requireAdmin, async (req, res) => {
 
     res.json({ deleted });
   } catch (error) {
-    console.error('Batch delete galleries error:', error);
+    logger.error({ err: error }, 'Batch delete galleries error');
     res.status(500).json({ error: '批量删除图集失败' });
   }
 });
@@ -621,7 +625,7 @@ router.post('/batch-delete-comments', requireAdmin, async (req, res) => {
 
     res.json({ deleted: commentIds.length });
   } catch (error) {
-    console.error('Batch delete comments error:', error);
+    logger.error({ err: error }, 'Batch delete comments error');
     res.status(500).json({ error: '批量删除评论失败' });
   }
 });
@@ -638,7 +642,7 @@ router.get('/wiki-links/scan', requireAuth, requireAdmin, async (_req, res) => {
     const result = await scanAllWikiLinks();
     res.json(result);
   } catch (error) {
-    console.error('Scan wiki links error:', error);
+    logger.error({ err: error }, 'Scan wiki links error');
     res.status(500).json({ error: '扫描 Wiki 链接失败' });
   }
 });
@@ -650,7 +654,7 @@ router.get('/wiki-links/:slug', requireAuth, requireAdmin, async (req, res) => {
     const result = await getWikiPageLinks(slug);
     res.json(result);
   } catch (error) {
-    console.error('Get wiki page links error:', error);
+    logger.error({ err: error }, 'Get wiki page links error');
     const message = error instanceof Error ? error.message : '获取 Wiki 页面链接失败';
     res.status(500).json({ error: message });
   }
@@ -672,7 +676,7 @@ router.put('/wiki-links/:id', requireAuth, requireAdmin, async (req, res) => {
     const result = await previewLinkUpdate(mappings, { specificSlugs: slugs });
     res.json(result);
   } catch (error) {
-    console.error('Preview link update error:', error);
+    logger.error({ err: error }, 'Preview link update error');
     res.status(500).json({ error: '预览链接更新失败' });
   }
 });
@@ -693,7 +697,7 @@ router.post('/wiki-links/update', requireAuth, requireAdmin, async (req, res) =>
     const result = await batchUpdateWikiLinks(mappings, { dryRun });
     res.json(result);
   } catch (error) {
-    console.error('Batch update wiki links error:', error);
+    logger.error({ err: error }, 'Batch update wiki links error');
     res.status(500).json({ error: '批量更新链接失败' });
   }
 });
@@ -725,7 +729,7 @@ router.post('/wiki-links/switch-storage', requireAuth, requireAdmin, async (req,
     const result = await switchWikiStorage(fromStorage, toStorage, config, { dryRun });
     res.json(result);
   } catch (error) {
-    console.error('Switch wiki storage error:', error);
+    logger.error({ err: error }, 'Switch wiki storage error');
     res.status(500).json({ error: '切换存储策略失败' });
   }
 });
@@ -757,7 +761,7 @@ router.post('/wiki-links/sync-with-imagemap', requireAuth, requireAdmin, async (
     const result = await batchUpdateWikiLinks(mappings, { dryRun });
     res.json({ message: dryRun ? '预览同步完成' : '同步完成', result });
   } catch (error) {
-    console.error('Sync wiki links with ImageMap error:', error);
+    logger.error({ err: error }, 'Sync wiki links with ImageMap error');
     res.status(500).json({ error: '同步 ImageMap 失败' });
   }
 });
@@ -809,8 +813,8 @@ router.post('/backup/create', requireSuperAdmin, async (req, res) => {
 
     await execFileAsync('pg_dump', pgDumpArgs, { env: pgDumpEnv, timeout: 300000 });
 
-    const sqlContent = fs.readFileSync(sqlFilePath);
-    fs.unlinkSync(sqlFilePath);
+    const sqlContent = await fs.promises.readFile(sqlFilePath);
+    await fs.promises.unlink(sqlFilePath);
 
     const encryptedContent = encryptBuffer(sqlContent, backupPassword);
 
@@ -826,7 +830,7 @@ router.post('/backup/create', requireSuperAdmin, async (req, res) => {
       archive.finalize();
     });
 
-    const stat = fs.statSync(zipFilePath);
+    const stat = await fs.promises.stat(zipFilePath);
 
     await cleanupOldBackups();
 
@@ -839,7 +843,7 @@ router.post('/backup/create', requireSuperAdmin, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Create backup error:', error);
+    logger.error({ err: error }, 'Create backup error');
     res.status(500).json({ error: '创建备份失败：' + (error instanceof Error ? error.message : String(error)) });
   }
 });
@@ -847,24 +851,25 @@ router.post('/backup/create', requireSuperAdmin, async (req, res) => {
 // GET /api/admin/backup/list - List backups (frontend compatible)
 router.get('/backup/list', requireSuperAdmin, async (_req, res) => {
   try {
-    const files = fs.readdirSync(backupsDir)
-      .filter((f) => f.startsWith('backup_') && f.endsWith('.zip'))
-      .map((f) => {
+    const files = (await fs.promises.readdir(backupsDir))
+      .filter((f) => f.startsWith('backup_') && f.endsWith('.zip'));
+    const mapped = (await Promise.all(
+      files.map(async (f) => {
         const filePath = path.join(backupsDir, f);
-        const stat = fs.statSync(filePath);
+        const stat = await fs.promises.stat(filePath);
         return {
           filename: f,
           size: stat.size,
           sizeFormatted: formatFileSize(stat.size),
           createdAt: stat.mtime.toISOString(),
         };
-      })
+      }),
+    ))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    res.json({ backups: files });
+    res.json({ backups: mapped });
   } catch (error) {
-    console.error('List backups error:', error);
-    res.status(500).json({ error: '获取备份列表失败' });
+    logger.error({ err: error }, 'List backups error');
   }
 });
 
@@ -880,7 +885,9 @@ router.get('/backup/:filename/download', requireSuperAdmin, async (req, res) => 
     }
 
     const filePath = path.join(backupsDir, filename);
-    if (!fs.existsSync(filePath)) {
+    try {
+      await fs.promises.access(filePath);
+    } catch {
       res.status(404).json({ error: '备份文件不存在' });
       return;
     }
@@ -890,7 +897,7 @@ router.get('/backup/:filename/download', requireSuperAdmin, async (req, res) => 
     const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);
   } catch (error) {
-    console.error('Download backup error:', error);
+    logger.error({ err: error }, 'Download backup error');
     res.status(500).json({ error: '下载备份失败' });
   }
 });
@@ -928,7 +935,7 @@ router.post('/backup/restore', requireSuperAdmin, uploadBackup.single('file'), a
 
     const sqlEntry = zipEntries.find((e) => e.entryName.endsWith('.sql'));
     if (!sqlEntry) {
-      fs.unlinkSync(file.path);
+      await fs.promises.unlink(file.path);
       res.status(400).json({ error: '备份文件中未找到 SQL 数据' });
       return;
     }
@@ -939,20 +946,20 @@ router.post('/backup/restore', requireSuperAdmin, uploadBackup.single('file'), a
     try {
       sqlContent = decryptBuffer(encryptedContent, password);
     } catch {
-      fs.unlinkSync(file.path);
+      await fs.promises.unlink(file.path);
       res.status(401).json({ error: '备份密码错误或文件已损坏' });
       return;
     }
 
     const sqlContentStr = sqlContent.toString('utf-8');
     if (!sqlContentStr.includes('PostgreSQL database dump') && !sqlContentStr.includes('pg_dump')) {
-      fs.unlinkSync(file.path);
+      await fs.promises.unlink(file.path);
       res.status(400).json({ error: '备份文件格式无效' });
       return;
     }
 
     const tempSqlPath = path.join(backupsDir, `restore_${Date.now()}.sql`);
-    fs.writeFileSync(tempSqlPath, sqlContent);
+    await fs.promises.writeFile(tempSqlPath, sqlContent);
 
     try {
       const psqlArgs = [
@@ -968,15 +975,16 @@ router.post('/backup/restore', requireSuperAdmin, uploadBackup.single('file'), a
 
       await execFileAsync('psql', psqlArgs, { env: psqlEnv, timeout: 600000 });
     } finally {
-      fs.unlinkSync(tempSqlPath);
-      fs.unlinkSync(file.path);
+      await fs.promises.unlink(tempSqlPath).catch(() => {});
+      await fs.promises.unlink(file.path).catch(() => {});
     }
 
     res.json({ success: true, message: '数据库恢复成功' });
   } catch (error) {
-    console.error('Restore backup error:', error);
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
+    logger.error({ err: error }, 'Restore backup error');
+    if (req.file) {
+      try { await fs.promises.access(req.file.path); } catch { /* already gone */ }
+      await fs.promises.unlink(req.file.path).catch(() => {});
     }
     res.status(500).json({ error: '恢复数据库失败: ' + (error instanceof Error ? error.message : String(error)) });
   }
@@ -985,23 +993,25 @@ router.post('/backup/restore', requireSuperAdmin, uploadBackup.single('file'), a
 // GET /api/admin/backups - List backups
 router.get('/backups', requireSuperAdmin, async (_req, res) => {
   try {
-    const files = fs.readdirSync(backupsDir)
-      .filter((f) => f.startsWith('backup_') && f.endsWith('.zip'))
-      .map((f) => {
+    const files = (await fs.promises.readdir(backupsDir))
+      .filter((f) => f.startsWith('backup_') && f.endsWith('.zip'));
+    const mapped = (await Promise.all(
+      files.map(async (f) => {
         const filePath = path.join(backupsDir, f);
-        const stat = fs.statSync(filePath);
+        const stat = await fs.promises.stat(filePath);
         return {
           filename: f,
           size: stat.size,
           sizeFormatted: formatFileSize(stat.size),
           createdAt: stat.mtime.toISOString(),
         };
-      })
+      }),
+    ))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    res.json({ backups: files });
+    res.json({ backups: mapped });
   } catch (error) {
-    console.error('List backups error:', error);
+    logger.error({ err: error }, 'List backups error');
     res.status(500).json({ error: '获取备份列表失败' });
   }
 });
@@ -1029,15 +1039,17 @@ router.delete('/backup/:filename', requireSuperAdmin, async (req, res) => {
     }
 
     const filePath = path.join(backupsDir, filename);
-    if (!fs.existsSync(filePath)) {
+    try {
+      await fs.promises.access(filePath);
+    } catch {
       res.status(404).json({ error: '备份文件不存在' });
       return;
     }
 
-    fs.unlinkSync(filePath);
+    await fs.promises.unlink(filePath);
     res.json({ success: true });
   } catch (error) {
-    console.error('Delete backup error:', error);
+    logger.error({ err: error }, 'Delete backup error');
     res.status(500).json({ error: '删除备份失败' });
   }
 });
@@ -1065,15 +1077,17 @@ router.delete('/backups/:filename', requireSuperAdmin, async (req, res) => {
     }
 
     const filePath = path.join(backupsDir, filename);
-    if (!fs.existsSync(filePath)) {
+    try {
+      await fs.promises.access(filePath);
+    } catch {
       res.status(404).json({ error: '备份文件不存在' });
       return;
     }
 
-    fs.unlinkSync(filePath);
+    await fs.promises.unlink(filePath);
     res.json({ success: true });
   } catch (error) {
-    console.error('Delete backup error:', error);
+    logger.error({ err: error }, 'Delete backup error');
     res.status(500).json({ error: '删除备份失败' });
   }
 });
@@ -1111,7 +1125,7 @@ router.get('/stats', requireAdmin, async (_req, res) => {
       },
     });
   } catch (error) {
-    console.error('Fetch admin stats error:', error);
+    logger.error({ err: error }, 'Fetch admin stats error');
     res.status(500).json({ error: '获取统计数据失败' });
   }
 });
@@ -1225,7 +1239,7 @@ router.get('/:tab', requireAdmin, async (req, res) => {
 
     res.status(400).json({ error: '未知数据类型' });
   } catch (error) {
-    console.error('Fetch admin data error:', error);
+    logger.error({ err: error }, 'Fetch admin data error');
     res.status(500).json({ error: '获取管理数据失败' });
   }
 });
@@ -1314,13 +1328,13 @@ router.get('/:tab/:id', requireAdmin, async (req, res) => {
 
     res.status(400).json({ error: '未知数据类型' });
   } catch (error) {
-    console.error('Fetch admin item error:', error);
+    logger.error({ err: error }, 'Fetch admin item error');
     res.status(500).json({ error: '获取详情失败' });
   }
 });
 
 // DELETE /api/admin/:tab/:id - Delete admin item
-router.delete('/:tab/:id', requireAdmin, async (req: any, res) => {
+router.delete('/:tab/:id', requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
     const tab = req.params.tab;
     const id = req.params.id;
@@ -1386,7 +1400,7 @@ router.delete('/:tab/:id', requireAdmin, async (req: any, res) => {
 
     res.status(400).json({ error: '未知删除类型' });
   } catch (error) {
-    console.error('Delete admin data error:', error);
+    logger.error({ err: error }, 'Delete admin data error');
     res.status(500).json({ error: '删除失败' });
   }
 });

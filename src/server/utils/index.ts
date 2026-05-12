@@ -171,6 +171,9 @@ export {
   decryptBuffer,
 } from './backup';
 
+// === 日志 ===
+export { logger } from './logger';
+
 // === 已有独立模块（保持原导出方式）===
 export * from './cache';
 export { calculateFileMD5, calculateBufferMD5 } from './hash';
