@@ -48,6 +48,59 @@ const backupsDir = path.join(__dirname, '..', '..', '..', 'backups');
 fs.mkdirSync(backupsDir, { recursive: true });
 
 const BACKUP_PASSWORD = process.env.BACKUP_PASSWORD || '';
+
+async function handleBackupList(_req: any, res: any) {
+  try {
+    const files = fs.readdirSync(backupsDir)
+      .filter((f) => f.startsWith('backup_') && f.endsWith('.zip'))
+      .map((f) => {
+        const filePath = path.join(backupsDir, f);
+        const stat = fs.statSync(filePath);
+        return { filename: f, size: stat.size, sizeFormatted: formatFileSize(stat.size), createdAt: stat.mtime.toISOString() };
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    res.json({ backups: files });
+  } catch (error) {
+    console.error('List backups error:', error);
+    res.status(500).json({ error: '获取备份列表失败' });
+  }
+}
+
+async function handleBackupDelete(req: any, res: any) {
+  try {
+    const { password } = req.query as { password?: string };
+    const filename = req.params.filename;
+    const normalized = path.normalize(filename);
+
+    if (!BACKUP_PASSWORD) {
+      res.status(500).json({ error: '未配置 BACKUP_PASSWORD 环境变量' });
+      return;
+    }
+
+    if (!password || !verifyBackupPassword(password)) {
+      res.status(401).json({ error: '备份密码错误' });
+      return;
+    }
+
+    if (normalized.includes('..') || !sanitizeFilename(filename)) {
+      res.status(400).json({ error: '无效的文件名' });
+      return;
+    }
+
+    const filePath = path.join(backupsDir, filename);
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ error: '备份文件不存在' });
+      return;
+    }
+
+    fs.unlinkSync(filePath);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete backup error:', error);
+    res.status(500).json({ error: '删除备份失败' });
+  }
+}
 const BACKUP_RETAIN_COUNT = Math.max(1, Number(process.env.BACKUP_RETAIN_COUNT || 20));
 
 const uploadBackup = multer({
@@ -60,6 +113,52 @@ const uploadBackup = multer({
     },
   }),
 });
+
+async function handleReviewAction(
+  targetType: 'wiki' | 'post',
+  targetId: string,
+  action: 'approve' | 'reject',
+  reqAuthUser: { uid: string; role: string },
+  note: string,
+) {
+  const reviewedAt = new Date();
+  const rejectNote = action === 'reject' ? (note || '内容未通过审核') : note || null;
+
+  if (targetType === 'wiki') {
+    const page = await prisma.wikiPage.update({
+      where: { slug: targetId },
+      data: {
+        status: action === 'approve' ? 'published' : 'rejected',
+        reviewNote: action === 'approve' ? (note || null) : rejectNote,
+        reviewedBy: reqAuthUser.uid,
+        reviewedAt,
+      },
+    });
+
+    await prisma.moderationLog.create({
+      data: { targetType: 'wiki', targetId, action, operatorUid: reqAuthUser.uid, note: action === 'approve' ? note || null : rejectNote },
+    });
+
+    if (page.lastEditorUid && page.lastEditorUid !== reqAuthUser.uid) {
+      await createNotification(page.lastEditorUid, 'review_result', { approved: action === 'approve', targetType: 'wiki', targetId, title: page.title, note: action === 'approve' ? note || null : rejectNote });
+    }
+
+    return { item: { ...toWikiResponse(page), sensitiveWords: containsSensitive(page.content || '') }, targetType };
+  }
+
+  const post = await prisma.post.update({
+    where: { id: targetId },
+    data: { status: action === 'approve' ? 'published' : 'rejected', reviewNote: action === 'approve' ? (note || null) : rejectNote, reviewedBy: reqAuthUser.uid, reviewedAt },
+  });
+
+  await prisma.moderationLog.create({ data: { targetType: 'post', targetId, action, operatorUid: reqAuthUser.uid, note: action === 'approve' ? note || null : rejectNote } });
+
+  if (post.authorUid && post.authorUid !== reqAuthUser.uid) {
+    await createNotification(post.authorUid, 'review_result', { approved: action === 'approve', targetType: 'post', targetId, title: post.title, note: action === 'approve' ? note || null : rejectNote });
+  }
+
+  return { item: action === 'approve' ? { ...toPostResponse(post), sensitiveWords: containsSensitive(post.content || '') } : toPostResponse(post), targetType };
+}
 
 /**
  * ====================
@@ -113,74 +212,8 @@ router.put('/review-queue/:id/approve', requireAdmin, async (req: any, res) => {
       return;
     }
 
-    const reviewedAt = new Date();
-
-    if (targetType === 'wiki') {
-      const page = await prisma.wikiPage.update({
-        where: { slug: targetId },
-        data: {
-          status: 'published',
-          reviewNote: note || null,
-          reviewedBy: reqAuthUser!.uid,
-          reviewedAt,
-        },
-      });
-
-      await prisma.moderationLog.create({
-        data: {
-          targetType: 'wiki',
-          targetId,
-          action: 'approve',
-          operatorUid: reqAuthUser!.uid,
-          note: note || null,
-        },
-      });
-
-      if (page.lastEditorUid && page.lastEditorUid !== reqAuthUser!.uid) {
-        await createNotification(page.lastEditorUid, 'review_result', {
-          approved: true,
-          targetType: 'wiki',
-          targetId,
-          title: page.title,
-          note: note || null,
-        });
-      }
-
-      res.json({ item: { ...toWikiResponse(page), sensitiveWords: containsSensitive(page.content || '') } });
-      return;
-    }
-
-    const post = await prisma.post.update({
-      where: { id: targetId },
-      data: {
-        status: 'published',
-        reviewNote: note || null,
-        reviewedBy: reqAuthUser!.uid,
-        reviewedAt,
-      },
-    });
-
-    await prisma.moderationLog.create({
-      data: {
-        targetType: 'post',
-        targetId,
-        action: 'approve',
-        operatorUid: reqAuthUser!.uid,
-        note: note || null,
-      },
-    });
-
-    if (post.authorUid && post.authorUid !== reqAuthUser!.uid) {
-      await createNotification(post.authorUid, 'review_result', {
-        approved: true,
-        targetType: 'post',
-        targetId,
-        title: post.title,
-        note: note || null,
-      });
-    }
-
-    res.json({ item: { ...toPostResponse(post), sensitiveWords: containsSensitive(post.content || '') } });
+    const result = await handleReviewAction(targetType, targetId, 'approve', reqAuthUser, note);
+    res.json(result);
   } catch (error) {
     console.error('Approve review item error:', error);
     res.status(500).json({ error: '审核通过失败' });
@@ -200,75 +233,8 @@ router.put('/review-queue/:id/reject', requireAdmin, async (req: any, res) => {
       return;
     }
 
-    const reviewedAt = new Date();
-    const rejectNote = note || '内容未通过审核';
-
-    if (targetType === 'wiki') {
-      const page = await prisma.wikiPage.update({
-        where: { slug: targetId },
-        data: {
-          status: 'rejected',
-          reviewNote: rejectNote,
-          reviewedBy: reqAuthUser!.uid,
-          reviewedAt,
-        },
-      });
-
-      await prisma.moderationLog.create({
-        data: {
-          targetType: 'wiki',
-          targetId,
-          action: 'reject',
-          operatorUid: reqAuthUser!.uid,
-          note: rejectNote,
-        },
-      });
-
-      if (page.lastEditorUid && page.lastEditorUid !== reqAuthUser!.uid) {
-        await createNotification(page.lastEditorUid, 'review_result', {
-          approved: false,
-          targetType: 'wiki',
-          targetId,
-          title: page.title,
-          note: rejectNote,
-        });
-      }
-
-      res.json({ item: { ...toWikiResponse(page), sensitiveWords: containsSensitive(page.content || '') } });
-      return;
-    }
-
-    const post = await prisma.post.update({
-      where: { id: targetId },
-      data: {
-        status: 'rejected',
-        reviewNote: rejectNote,
-        reviewedBy: reqAuthUser!.uid,
-        reviewedAt,
-      },
-    });
-
-    await prisma.moderationLog.create({
-      data: {
-        targetType: 'post',
-        targetId,
-        action: 'reject',
-        operatorUid: reqAuthUser!.uid,
-        note: rejectNote,
-      },
-    });
-
-    if (post.authorUid && post.authorUid !== reqAuthUser!.uid) {
-      await createNotification(post.authorUid, 'review_result', {
-        approved: false,
-        targetType: 'post',
-        targetId,
-        title: post.title,
-        note: rejectNote,
-      });
-    }
-
-    res.json({ item: toPostResponse(post) });
+    const result = await handleReviewAction(targetType, targetId, 'reject', reqAuthUser, note);
+    res.json(result);
   } catch (error) {
     console.error('Reject review item error:', error);
     res.status(500).json({ error: '驳回失败' });
@@ -281,160 +247,20 @@ router.post('/review/:type/:id/:action', requireAdmin, async (req: any, res) => 
   try {
     const { type, id, action } = req.params;
     const { note } = req.body;
-    
+
     if (action !== 'approve' && action !== 'reject') {
       res.status(400).json({ error: '无效的操作' });
       return;
     }
-    
-    // Validate type
+
     const targetType = normalizeModerationTargetType(type);
     if (!targetType) {
       res.status(400).json({ error: '无效的类型' });
       return;
     }
-    
-    const targetId = id;
-    const reqAuthUser = req.authUser;
-    const reviewedAt = new Date();
-    
-    if (action === 'approve') {
-      // Approve logic - same as PUT /review-queue/:id/approve
-      if (targetType === 'wiki') {
-        const page = await prisma.wikiPage.update({
-          where: { slug: targetId },
-          data: {
-            status: 'published',
-            reviewNote: note || null,
-            reviewedBy: reqAuthUser!.uid,
-            reviewedAt,
-          },
-        });
 
-        await prisma.moderationLog.create({
-          data: {
-            targetType: 'wiki',
-            targetId,
-            action: 'approve',
-            operatorUid: reqAuthUser!.uid,
-            note: note || null,
-          },
-        });
-
-        if (page.lastEditorUid && page.lastEditorUid !== reqAuthUser!.uid) {
-          await createNotification(page.lastEditorUid, 'review_result', {
-            approved: true,
-            targetType: 'wiki',
-            targetId,
-            title: page.title,
-            note: note || null,
-          });
-        }
-
-        res.json({ item: toWikiResponse(page) });
-      } else {
-        const post = await prisma.post.update({
-          where: { id: targetId },
-          data: {
-            status: 'published',
-            reviewNote: note || null,
-            reviewedBy: reqAuthUser!.uid,
-            reviewedAt,
-          },
-        });
-
-        await prisma.moderationLog.create({
-          data: {
-            targetType: 'post',
-            targetId,
-            action: 'approve',
-            operatorUid: reqAuthUser!.uid,
-            note: note || null,
-          },
-        });
-
-        if (post.authorUid && post.authorUid !== reqAuthUser!.uid) {
-          await createNotification(post.authorUid, 'review_result', {
-            approved: true,
-            targetType: 'post',
-            targetId,
-            title: post.title,
-            note: note || null,
-          });
-        }
-
-        res.json({ item: toPostResponse(post) });
-      }
-    } else {
-      // Reject logic - same as PUT /review-queue/:id/reject
-      const rejectNote = note || '审核未通过';
-      
-      if (targetType === 'wiki') {
-        const page = await prisma.wikiPage.update({
-          where: { slug: targetId },
-          data: {
-            status: 'rejected',
-            reviewNote: rejectNote,
-            reviewedBy: reqAuthUser!.uid,
-            reviewedAt,
-          },
-        });
-
-        await prisma.moderationLog.create({
-          data: {
-            targetType: 'wiki',
-            targetId,
-            action: 'reject',
-            operatorUid: reqAuthUser!.uid,
-            note: rejectNote,
-          },
-        });
-
-        if (page.lastEditorUid && page.lastEditorUid !== reqAuthUser!.uid) {
-          await createNotification(page.lastEditorUid, 'review_result', {
-            approved: false,
-            targetType: 'wiki',
-            targetId,
-            title: page.title,
-            note: rejectNote,
-          });
-        }
-
-        res.json({ item: toWikiResponse(page) });
-      } else {
-        const post = await prisma.post.update({
-          where: { id: targetId },
-          data: {
-            status: 'rejected',
-            reviewNote: rejectNote,
-            reviewedBy: reqAuthUser!.uid,
-            reviewedAt,
-          },
-        });
-
-        await prisma.moderationLog.create({
-          data: {
-            targetType: 'post',
-            targetId,
-            action: 'reject',
-            operatorUid: reqAuthUser!.uid,
-            note: rejectNote,
-          },
-        });
-
-        if (post.authorUid && post.authorUid !== reqAuthUser!.uid) {
-          await createNotification(post.authorUid, 'review_result', {
-            approved: false,
-            targetType: 'post',
-            targetId,
-            title: post.title,
-            note: rejectNote,
-          });
-        }
-
-        res.json({ item: toPostResponse(post) });
-      }
-    }
+    const result = await handleReviewAction(targetType, id, action, req.authUser, typeof req.body?.note === 'string' ? req.body.note.trim() : '');
+    res.json(result);
   } catch (error) {
     console.error('Review action error:', error);
     res.status(500).json({ error: '审核操作失败' });
@@ -514,14 +340,6 @@ router.delete('/sensitive-words/:id', requireSuperAdmin, async (req, res) => {
 // GET /api/admin/locks - Get all edit locks
 router.get('/locks', requireAdmin, async (_req, res) => {
   try {
-    await prisma.editLock.deleteMany({
-      where: {
-        expiresAt: {
-          lt: new Date(),
-        },
-      },
-    });
-
     const locks = await prisma.editLock.findMany({
       orderBy: {
         createdAt: 'desc',
@@ -1334,7 +1152,7 @@ router.get('/:tab', requireAdmin, async (req, res) => {
         orderBy: { updatedAt: 'desc' },
         take: 100,
       });
-      res.json({ data: await Promise.all(data.map(toGalleryResponse)) });
+      res.json({ data: await Promise.all(data.map(g => toGalleryResponse(g))) });
       return;
     }
 

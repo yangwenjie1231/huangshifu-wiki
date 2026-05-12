@@ -7,7 +7,7 @@ interface SensitiveWordNode {
 }
 
 let rootNode: SensitiveWordNode | null = null;
-let initialized = false;
+let initPromise: Promise<void> | null = null;
 
 function createNode(): SensitiveWordNode {
   return {
@@ -16,41 +16,56 @@ function createNode(): SensitiveWordNode {
   };
 }
 
-export async function initSensitiveWords(): Promise<void> {
-  if (initialized) return;
-
+async function doInit(): Promise<void> {
   const filePath = path.join(process.cwd(), 'public', 'sensitive-words', 'words.txt');
 
-  try {
-    const content = await fs.promises.readFile(filePath, 'utf-8');
-    const words = content.split('\n').map((w) => w.trim().toLowerCase()).filter(Boolean);
+  const content = await fs.promises.readFile(filePath, 'utf-8');
+  const words = content.split('\n').map((w) => w.trim().toLowerCase()).filter(Boolean);
 
-    rootNode = createNode();
+  rootNode = createNode();
 
-    for (const word of words) {
-      if (!word) continue;
-      let current = rootNode;
-      for (const char of word) {
-        if (!current.children.has(char)) {
-          current.children.set(char, createNode());
-        }
-        current = current.children.get(char)!;
+  for (const word of words) {
+    if (!word) continue;
+    let current = rootNode;
+    for (const char of word) {
+      if (!current.children.has(char)) {
+        current.children.set(char, createNode());
       }
-      current.isEnd = true;
+      current = current.children.get(char)!;
     }
+    current.isEnd = true;
+  }
 
-    initialized = true;
-    console.log(`[SensitiveWord] Loaded ${words.length} sensitive words`);
-  } catch (error) {
-    console.error('[SensitiveWord] Failed to load sensitive words:', error);
-    rootNode = createNode();
-    initialized = true;
+  console.log(`[SensitiveWord] Loaded ${words.length} sensitive words`);
+}
+
+export async function ensureSensitiveWords(): Promise<void> {
+  if (rootNode !== null) return;
+
+  if (initPromise) return initPromise;
+
+  initPromise = doInit().catch((err) => {
+    console.error('[SensitiveWord] Init failed, will retry next call:', err);
+    initPromise = null;
+    throw err;
+  });
+
+  return initPromise;
+}
+
+export async function initSensitiveWords(): Promise<void> {
+  if (rootNode !== null) return;
+
+  try {
+    await doInit();
+  } catch (err) {
+    console.error('[SensitiveWord] Init failed (backward compat):', err);
   }
 }
 
 export function containsSensitive(text: string): string[] {
-  if (!initialized || !rootNode) {
-    console.warn('[SensitiveWord] Sensitive words not initialized');
+  if (!rootNode) {
+    console.warn('[SensitiveWord] Not initialized, attempting lazy init...');
     return [];
   }
 
@@ -93,9 +108,7 @@ function searchFromPosition(text: string, startPos: number): string | null {
 }
 
 export function isSensitiveWord(keyword: string): boolean {
-  if (!initialized || !rootNode) {
-    return false;
-  }
+  if (!rootNode) return false;
 
   const normalized = keyword.toLowerCase();
   let current = rootNode;

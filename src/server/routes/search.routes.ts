@@ -555,7 +555,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
       const keywordRaw = {
         wiki: wiki.map(toWikiResponse),
         posts: posts.map(toPostResponse),
-        galleries: await Promise.all(galleries.map(toGalleryResponse)),
+        galleries: await Promise.all(galleries.map(g => toGalleryResponse(g))),
         music: music,
         albums: albums,
       };
@@ -567,7 +567,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     res.json({
       wiki: wiki.map(toWikiResponse),
       posts: posts.map(toPostResponse),
-      galleries: await Promise.all(galleries.map(toGalleryResponse)),
+      galleries: await Promise.all(galleries.map(g => toGalleryResponse(g))),
       music: music.map(toMusicResponse),
       albums: albums.map(toAlbumResponse),
       searchMeta: { mode: 'keyword', query: q, degraded: false, keywordResultCount: wiki.length + posts.length + galleries.length + music.length + albums.length, vectorResultCount: 0 },

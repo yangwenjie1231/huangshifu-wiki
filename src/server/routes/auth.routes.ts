@@ -109,23 +109,8 @@ router.post('/register', authRateLimiter, async (req, res) => {
     const apiUser = userToApiUser(user);
     console.log('[Auth] Creating token for user:', { uid: user.uid });
 
-    let token: string;
-    try {
-      token = createToken(apiUser);
-      console.log('[Auth] Token created successfully');
-    } catch (tokenError) {
-      console.error('[Auth] Token creation failed:', tokenError);
-      throw tokenError;
-    }
-
-    console.log('[Auth] Setting auth cookie...');
-    try {
-      setAuthCookie(req, res, token);
-      console.log('[Auth] Cookie set successfully');
-    } catch (cookieError) {
-      console.error('[Auth] Cookie setting failed:', cookieError);
-      throw cookieError;
-    }
+    const token = createToken(apiUser);
+    setAuthCookie(req, res, token);
 
     console.log('[Auth] Register success:', { uid: user.uid, email: user.email });
     res.status(201).json({ user: apiUser });
@@ -133,7 +118,7 @@ router.post('/register', authRateLimiter, async (req, res) => {
     console.error('[Auth] Register error:', {
       message: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
-      body: req.body,
+      body: { ...req.body, password: '[REDACTED]' },
     });
     res.status(500).json({ error: '注册失败，请稍后重试' });
   }
@@ -175,23 +160,8 @@ router.post('/login', authRateLimiter, async (req, res) => {
     const apiUser = userToApiUser(user);
     console.log('[Auth] Creating token for login:', { uid: user.uid });
 
-    let token: string;
-    try {
-      token = createToken(apiUser);
-      console.log('[Auth] Token created successfully for login');
-    } catch (tokenError) {
-      console.error('[Auth] Token creation failed for login:', tokenError);
-      throw tokenError;
-    }
-
-    console.log('[Auth] Setting auth cookie for login...');
-    try {
-      setAuthCookie(req, res, token);
-      console.log('[Auth] Cookie set successfully for login');
-    } catch (cookieError) {
-      console.error('[Auth] Cookie setting failed for login:', cookieError);
-      throw cookieError;
-    }
+    const token = createToken(apiUser);
+    setAuthCookie(req, res, token);
 
     console.log('[Auth] Login success:', { uid: user.uid, email: user.email });
     res.json({ user: apiUser });
@@ -199,13 +169,13 @@ router.post('/login', authRateLimiter, async (req, res) => {
     console.error('[Auth] Login error:', {
       message: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
-      body: req.body,
+      body: { ...req.body, password: '[REDACTED]' },
     });
     res.status(500).json({ error: '登录失败，请稍后重试' });
   }
 });
 
-router.post('/wechat/login', async (req, res) => {
+router.post('/wechat/login', authRateLimiter, async (req, res) => {
   try {
     const code = typeof req.body?.code === 'string' ? req.body.code : '';
     const displayNameRaw = typeof req.body?.displayName === 'string' ? req.body.displayName.trim().slice(0, 100) : '';

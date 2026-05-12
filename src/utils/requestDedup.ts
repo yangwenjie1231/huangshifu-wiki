@@ -147,13 +147,14 @@ export async function dedupedRequest<T>(
       // 后台重新验证，不阻塞当前返回
       const revalidatePromise = requestFn()
         .then((data) => {
-          cache.set(key, { data, timestamp: Date.now(), staleTime });
+          if (data !== undefined && data !== null) {
+            cache.set(key, { data, timestamp: Date.now(), staleTime });
+          }
           console.log(`[RequestDedup] SWR revalidate success: ${key}`);
           return data;
         })
         .catch((error) => {
           console.warn(`[RequestDedup] SWR revalidate failed: ${key}`, error);
-          // SWR 失败不影响已有缓存
         })
         .finally(() => {
           inFlightRequests.delete(key);
@@ -173,12 +174,12 @@ export async function dedupedRequest<T>(
 
   const promise = requestFn()
     .then((data) => {
-      // 更新缓存
-      cache.set(key, { data, timestamp: Date.now(), staleTime });
+      if (data !== undefined && data !== null) {
+        cache.set(key, { data, timestamp: Date.now(), staleTime });
+      }
       return data;
     })
     .catch((error) => {
-      // 如果请求失败但有缓存（即使过期），返回过期缓存（优雅降级）
       if (cached && swr) {
         console.warn(
           `[RequestDedup] Request failed, using stale cache: ${key}`

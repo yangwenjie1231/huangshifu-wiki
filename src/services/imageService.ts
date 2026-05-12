@@ -289,6 +289,7 @@ const calculateMD5 = (file: File): Promise<string> => {
  * 通过会话模式上传图片到 CDN
  * 使用上传会话流程：创建会话 -> 上传文件 -> 完成会话
  */
+/** @deprecated 请使用 uploadImageWithStrategy 替代 */
 export const uploadImageToCDNs = async (file: File): Promise<string> => {
   const md5 = await calculateMD5(file);
 

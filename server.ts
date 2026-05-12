@@ -133,9 +133,20 @@ if (process.env.NODE_ENV === 'production') {
   }));
 }
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
+
+// 请求超时中间件（30秒）— 防止慢请求占用连接
+// 注意：备份等长时操作路由需自行处理超时（如使用 AbortSignal）
+app.use((_req, res, next) => {
+  res.setTimeout(30_000, () => {
+    if (!res.headersSent) {
+      res.sendStatus(503);
+    }
+  });
+  next();
+});
 
 app.use(authMiddleware);
 app.use(requestLoggerMiddleware);
@@ -216,6 +227,16 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://localhost:${PORT}`);
+
+    setInterval(async () => {
+      try {
+        await prisma.editLock.deleteMany({
+          where: { expiresAt: { lt: new Date() } },
+        });
+      } catch (error) {
+        console.error('[EditLock] Cleanup error:', error);
+      }
+    }, 5 * 60 * 1000);
   });
 }
 

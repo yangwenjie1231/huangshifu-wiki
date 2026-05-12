@@ -184,6 +184,14 @@ export function classifyError(status: number, data: unknown): AppError {
     return new NotFoundError(errorMessage || '资源未找到');
   }
 
+  if (status === 413) {
+    return new BusinessError(errorMessage || '上传内容过大，请减小文件大小后重试');
+  }
+
+  if (status === 429) {
+    return new BusinessError(errorMessage || '请求过于频繁，请稍后再试');
+  }
+
   if (status >= 400 && status < 500) {
     return new BusinessError(errorMessage || '请求失败');
   }

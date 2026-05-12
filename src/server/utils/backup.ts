@@ -1,6 +1,6 @@
 // 备份加密/解密/清理/文件安全工具
 
-import crypto from 'crypto';
+import crypto, { timingSafeEqual } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { backupsDir, BACKUP_PASSWORD, BACKUP_RETAIN_COUNT } from './config';
@@ -24,7 +24,8 @@ export function parseDatabaseUrl(url: string): { host: string; port: string; use
 
 export function verifyBackupPassword(password: string): boolean {
   if (!BACKUP_PASSWORD) return false;
-  return password === BACKUP_PASSWORD;
+  if (password.length !== BACKUP_PASSWORD.length) return false;
+  return timingSafeEqual(Buffer.from(password), Buffer.from(BACKUP_PASSWORD));
 }
 
 export function sanitizeFilename(name: string): boolean {
@@ -68,19 +69,33 @@ export async function cleanupOldBackups(): Promise<void> {
 // ─── 加密 / 解密 ────────────────────────────────────────────────────
 
 export function encryptBuffer(buffer: Buffer, password: string): Buffer {
-  const key = crypto.scryptSync(password, 'huangshifu-backup-salt', 32);
+  const salt = crypto.randomBytes(32);
+  const key = crypto.scryptSync(password, salt, 32);
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-  const encrypted = Buffer.concat([iv, cipher.update(buffer), cipher.final()]);
-  return encrypted;
+  const encrypted = Buffer.concat([cipher.update(buffer), cipher.final()]);
+  return Buffer.concat([salt, iv, encrypted]);
 }
 
 export function decryptBuffer(buffer: Buffer, password: string): Buffer {
-  const key = crypto.scryptSync(password, 'huangshifu-backup-salt', 32);
-  const iv = buffer.subarray(0, 16);
-  const encrypted = buffer.subarray(16);
-  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-  return Buffer.concat([decipher.update(encrypted), decipher.final()]);
+  if (buffer.length < 48) {
+    throw new Error('Invalid encrypted buffer: too short');
+  }
+
+  try {
+    const salt = buffer.subarray(0, 32);
+    const iv = buffer.subarray(32, 48);
+    const encrypted = buffer.subarray(48);
+    const key = crypto.scryptSync(password, salt, 32);
+    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+    return Buffer.concat([decipher.update(encrypted), decipher.final()]);
+  } catch {
+    const iv = buffer.subarray(0, 16);
+    const encrypted = buffer.subarray(16);
+    const key = crypto.scryptSync(password, 'huangshifu-backup-salt', 32);
+    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+    return Buffer.concat([decipher.update(encrypted), decipher.final()]);
+  }
 }
 
 // ─── Embedding Payload（原始位置靠近 embedding 区域）─────────────────

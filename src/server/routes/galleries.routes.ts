@@ -74,7 +74,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     ]);
 
     res.json({
-      galleries: await Promise.all(galleries.map(toGalleryResponse)),
+      galleries: await Promise.all(galleries.map(g => toGalleryResponse(g))),
       total,
       page,
       limit,

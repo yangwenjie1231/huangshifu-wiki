@@ -242,7 +242,7 @@ export const SmartImage: React.FC<SmartImageProps> = ({
     };
 
     optimize();
-  }, [resolvedUrl, formatOptimization, quality]);
+  }, [resolvedUrl, formatOptimization, effectiveQuality]);
 
   // 解码 blurhash
   useEffect(() => {

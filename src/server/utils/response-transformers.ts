@@ -370,17 +370,23 @@ export async function toGalleryResponse(gallery: {
       storageKey: string;
     } | null;
   }[];
-}) {
-  let storageStrategy: 'local' | 's3' | 'external' = 'local';
-  try {
-    const storageConfig = await prisma.siteConfig.findUnique({
-      where: { key: 'image_preference' },
-      select: { value: true },
-    });
-    const preference = storageConfig?.value as { strategy?: 'local' | 's3' | 'external' } | undefined;
-    storageStrategy = preference?.strategy || 'local';
-  } catch (error) {
-    console.warn('Failed to get storage strategy:', error);
+}, storageStrategy?: string,
+) {
+  let resolvedStorageStrategy: 'local' | 's3' | 'external' = 'local';
+
+  if (storageStrategy && ['local', 's3', 'external'].includes(storageStrategy)) {
+    resolvedStorageStrategy = storageStrategy as 'local' | 's3' | 'external';
+  } else {
+    try {
+      const storageConfig = await prisma.siteConfig.findUnique({
+        where: { key: 'image_preference' },
+        select: { value: true },
+      });
+      const preference = storageConfig?.value as { strategy?: 'local' | 's3' | 'external' } | undefined;
+      resolvedStorageStrategy = preference?.strategy || 'local';
+    } catch (error) {
+      console.warn('Failed to get storage strategy:', error);
+    }
   }
 
   const storageKeys: string[] = [];
@@ -432,7 +438,7 @@ export async function toGalleryResponse(gallery: {
           const imageMap = imageMapByLocalUrl.get(localUrl);
 
           if (imageMap) {
-            switch (storageStrategy) {
+            switch (resolvedStorageStrategy) {
               case 'external':
                 url = imageMap.externalUrl || imageMap.s3Url || imageMap.localUrl || url;
                 break;
