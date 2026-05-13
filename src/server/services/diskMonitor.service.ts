@@ -64,10 +64,11 @@ const CONFIG_KEY = 'disk_monitor_config';
 
 export class DiskMonitorService {
   private static instance: DiskMonitorService;
-  
+
   private currentStatus: DiskStatus | null = null;
   private currentConfig: DiskMonitorConfig = { ...DEFAULT_CONFIG };
   private checkInterval: ReturnType<typeof setInterval> | null = null;
+  private isChecking: boolean = false;
 
   private constructor() {
     this.loadConfigFromDB().then(() => {
@@ -203,6 +204,11 @@ export class DiskMonitorService {
    * 检查磁盘空间
    */
   public async checkDiskSpace(): Promise<DiskStatus> {
+    if (this.isChecking && this.currentStatus) {
+      return this.currentStatus;
+    }
+
+    this.isChecking = true;
     try {
       const stats = await fs.promises.statfs(uploadsDir);
 
@@ -240,6 +246,8 @@ export class DiskMonitorService {
     } catch (error) {
       console.error('[DiskMonitor] ❌ Failed to check disk space:', error);
       throw error;
+    } finally {
+      this.isChecking = false;
     }
   }
 

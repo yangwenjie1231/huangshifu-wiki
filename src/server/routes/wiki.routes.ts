@@ -143,7 +143,7 @@ mpWikiRouter.get('/', async (req: AuthenticatedRequest, res) => {
     const skip = (page - 1) * limit;
 
     const where = {
-      status: 'published' as ContentStatus,
+      ...buildWikiVisibilityWhere(req.authUser),
       ...(category && category !== 'all' ? { category } : {}),
     };
 
@@ -268,7 +268,7 @@ router.get('/recommended', async (req: AuthenticatedRequest, res) => {
         tags: true,
       },
       orderBy: [{ favoritesCount: 'desc' }, { viewCount: 'desc' }, { updatedAt: 'desc' }],
-      take: 50,
+      take: Math.min(limit + 10, 50),
     });
 
     const baseTags = new Set<string>(serializeTags(basePage?.tags).map((item) => String(item).toLowerCase()));
@@ -354,7 +354,10 @@ router.get('/:slug', async (req: AuthenticatedRequest, res) => {
       return;
     }
 
-    prisma.$executeRaw`UPDATE "WikiPage" SET "viewCount" = "viewCount" + 1 WHERE "slug" = ${slug}`.catch(() => {});
+    prisma.$executeRaw`UPDATE "WikiPage" SET "viewCount" = "viewCount" + 1 WHERE "slug" = ${slug}`.catch((err) => {
+      const logger = require('../utils/logger').logger;
+      logger?.warn({ err, slug }, 'Increment viewCount failed');
+    });
     page.viewCount = (page.viewCount ?? 0) + 1;
 
     if (req.authUser) {
@@ -374,7 +377,7 @@ router.get('/:slug', async (req: AuthenticatedRequest, res) => {
           },
         ],
       },
-      take: 100,
+      take: 20,
       orderBy: { updatedAt: 'desc' },
     });
 

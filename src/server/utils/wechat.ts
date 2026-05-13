@@ -2,6 +2,7 @@
 
 import axios from 'axios';
 import { prisma, WECHAT_MP_APPID, WECHAT_MP_APP_SECRET, WECHAT_LOGIN_MOCK } from './config';
+import { enhancedCache, CACHE_KEYS } from './cache';
 import type { WechatCodeSessionResponse } from '../types';
 
 axios.defaults.timeout = 5000;
@@ -26,6 +27,11 @@ export async function exchangeWechatLoginCode(rawCode: string): Promise<{ openId
     return { openId, unionId };
   }
 
+  const usedKey = `${CACHE_KEYS.AUTH_USER}:wechat_code:${code}`;
+  if (enhancedCache.get(usedKey)) {
+    throw new Error('该登录凭证已使用，请重新获取');
+  }
+
   if (!WECHAT_MP_APPID || !WECHAT_MP_APP_SECRET) {
     throw new Error('服务器未配置微信登录参数');
   }
@@ -48,6 +54,8 @@ export async function exchangeWechatLoginCode(rawCode: string): Promise<{ openId
   if (!data?.openid) {
     throw new Error('微信登录失败：未获取到 openid');
   }
+
+  enhancedCache.set(usedKey, true, 300);
 
   return {
     openId: data.openid,

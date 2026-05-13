@@ -4,7 +4,6 @@ import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
 import { apiGet, apiPost, apiPut } from "../../lib/apiClient";
 import { randomId } from "../../lib/randomId";
-import { splitTagsInput } from "../../lib/contentUtils";
 import { normalizeWikiPageSlug } from "../../lib/wikiSlug";
 import { generateWikiIntro } from "../../services/aiService";
 import {
@@ -13,12 +12,11 @@ import {
 	type RelationRecommendation,
 } from "../../services/aiRelationRecommendation";
 import { metadataCache } from "../../lib/metadataCache";
-import { X, Save, Sparkles, BarChart3, ChevronDown, ChevronUp, Sparkles as SparklesIcon } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
-import MarkdownEditor from "../../components/MarkdownEditor";
-import { LocationTagInput } from "../../components/LocationTagInput";
-import WikiRelations from "./WikiRelations";
-import MiniRelationGraph from "./MiniRelationGraph";
+import { X } from "lucide-react";
+import WikiEditorForm from "./WikiEditorForm";
+import WikiEditorRelationPanel from "./WikiEditorRelationPanel";
+import WikiEditorActionBar from "./WikiEditorActionBar";
+import WikiEditorMetaSidebar from "./WikiEditorMetaSidebar";
 import type { WikiItemWithRelations, WikiRelationRecord } from "./types";
 import type { WikiPageMetadata } from "../../lib/wikiLinkParser";
 
@@ -45,8 +43,7 @@ const WikiEditor = () => {
 	const [generating, setGenerating] = useState(false);
 	const { show } = useToast();
 
-	// 图谱预览状态
-	const [showGraphPreview, setShowGraphPreview] = useState(false);
+	// 图谱预览状态（由子组件内部管理，此处保留 metadataMap）
 	const [metadataMap, setMetadataMap] = useState<Map<string, WikiPageMetadata>>(
 		new Map(),
 	);
@@ -56,7 +53,6 @@ const WikiEditor = () => {
 	const [recommendations, setRecommendations] = useState<
 		RelationRecommendation[]
 	>([]);
-	const [showRecommendations, setShowRecommendations] = useState(false);
 	const [abortController, setAbortController] =
 		useState<AbortController | null>(null);
 
@@ -98,17 +94,24 @@ const WikiEditor = () => {
 		loadMetadata();
 	}, [formData.relations]);
 
-	const handleLocationChange = (locationName: string, locationCode: string) => {
-		setFormData({ ...formData, locationName, locationCode });
-	};
-
-	const handleLocationClear = () => {
-		setFormData({ ...formData, locationName: "", locationCode: "" });
-	};
-
 	const handleRelationsChange = (relations: WikiRelationRecord[]) => {
 		setFormData({ ...formData, relations });
 	};
+
+	// AI 辅助生成开头
+	const handleGenerateIntro = useCallback(async () => {
+		setGenerating(true);
+		try {
+			const intro = await generateWikiIntro(formData.title);
+			if (intro)
+				setFormData({
+					...formData,
+					content: intro + "\n\n" + formData.content,
+				});
+		} finally {
+			setGenerating(false);
+		}
+	}, [formData.title, formData.content]);
 
 	// AI 推荐处理函数
 	const handleAIRecommend = useCallback(async () => {
@@ -118,7 +121,6 @@ const WikiEditor = () => {
 		}
 
 		setIsRecommending(true);
-		setShowRecommendations(true);
 
 		const controller = new AbortController();
 		setAbortController(controller);
@@ -316,7 +318,7 @@ const WikiEditor = () => {
 
 	return (
 		<div className="max-w-5xl mx-auto px-4 py-12">
-				<div className="bg-white rounded p-8 sm:p-12 border border-[#e0dcd3]">
+			<div className="bg-white rounded p-8 sm:p-12 border border-[#e0dcd3]">
 				<div className="flex justify-between items-center mb-12">
 					<h1 className="text-[1.75rem] font-bold text-[#2c2c2c] tracking-[0.12em]">
 						{isNew ? "创建新百科" : "编辑百科"}
@@ -337,126 +339,17 @@ const WikiEditor = () => {
 					}}
 					className="space-y-8"
 				>
-					<div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-						<div className="space-y-2">
-							<label className="text-xs font-medium text-[#9e968e]">
-								标题
-							</label>
-							<input
-								type="text"
-								required
-								value={formData.title}
-								onChange={(e) =>
-									setFormData({ ...formData, title: e.target.value })
-								}
-								placeholder="例如：黄诗扶"
-								className="w-full px-4 py-3 bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:outline-none focus:border-[#c8951e] font-serif text-base"
-							/>
-						</div>
-						<div className="space-y-2">
-							<label className="text-xs font-medium text-[#9e968e]">
-								分类
-							</label>
-							<select
-								value={formData.category}
-								onChange={(e) =>
-									setFormData({ ...formData, category: e.target.value })
-								}
-								className="w-full px-4 py-3 bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:outline-none focus:border-[#c8951e] font-serif text-base appearance-none"
-							>
-								<option value="biography">人物介绍</option>
-								<option value="music">音乐作品</option>
-								<option value="album">专辑一览</option>
-								<option value="timeline">时间线</option>
-								<option value="event">活动记录</option>
-							</select>
-						</div>
-						<div className="space-y-2">
-							<label className="text-xs font-medium text-[#9e968e]">
-								事件日期 (可选)
-							</label>
-							<input
-								type="date"
-								value={formData.eventDate}
-								onChange={(e) =>
-									setFormData({ ...formData, eventDate: e.target.value })
-								}
-								className="w-full px-4 py-3 bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:outline-none focus:border-[#c8951e] font-serif text-base"
-							/>
-						</div>
-					</div>
+					<WikiEditorForm
+						formData={formData}
+						generating={generating}
+						onFormDataChange={(partial) =>
+							setFormData((prev) => ({ ...prev, ...partial }))
+						}
+						onGenerateIntro={handleGenerateIntro}
+						showToast={show}
+					/>
 
-					<div className="space-y-2">
-						<div className="flex justify-between items-center">
-							<label className="text-xs font-medium text-[#9e968e]">
-								内容 (Markdown) <span className="text-red-500">*</span>
-							</label>
-							<button
-								type="button"
-								onClick={async () => {
-									if (!formData.title)
-										return show("请先输入标题", { variant: "error" });
-									setGenerating(true);
-									const intro = await generateWikiIntro(formData.title);
-									if (intro)
-										setFormData({
-											...formData,
-											content: intro + "\n\n" + formData.content,
-										});
-									setGenerating(false);
-								}}
-								disabled={generating}
-								className="text-xs font-medium text-[#c8951e] flex items-center gap-1 hover:underline disabled:opacity-50"
-							>
-								<Sparkles size={12} />{" "}
-								{generating ? "生成中..." : "AI 辅助写开头"}
-							</button>
-						</div>
-						<div
-							className="border border-[#e0dcd3] rounded overflow-hidden"
-						>
-							<MarkdownEditor
-								value={formData.content}
-								onChange={(content) =>
-									setFormData((prev) =>
-										prev.content === content ? prev : { ...prev, content },
-									)
-								}
-								height="500px"
-								placeholder="在这里输入百科内容，支持 Markdown 语法..."
-								enableWikiLinks={true}
-							/>
-						</div>
-					</div>
-
-					<div className="space-y-2">
-						<label className="text-xs font-medium text-[#9e968e]">
-							标签 (逗号分隔)
-						</label>
-						<input
-							type="text"
-							value={formData.tags}
-							onChange={(e) =>
-								setFormData({ ...formData, tags: e.target.value })
-							}
-							placeholder="例如：古风, 原创, 歌手"
-							className="w-full px-4 py-3 bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:outline-none focus:border-[#c8951e]"
-						/>
-					</div>
-
-					<div className="space-y-2">
-						<label className="text-xs font-medium text-[#9e968e]">
-							地点
-						</label>
-						<LocationTagInput
-							value={formData.locationName || null}
-							locationCode={formData.locationCode || null}
-							onChange={handleLocationChange}
-							onClear={handleLocationClear}
-						/>
-					</div>
-
-					<WikiRelations
+					<WikiEditorRelationPanel
 						relations={formData.relations}
 						onRelationsChange={handleRelationsChange}
 						currentPage={
@@ -473,247 +366,28 @@ const WikiEditor = () => {
 										description: "",
 									} as any
 						}
+						metadataMap={metadataMap}
+						isNew={isNew}
+						slug={slug}
+						formDataTitle={formData.title}
 					/>
 
-					{/* 图谱预览面板 */}
-					<div className="space-y-3">
-						<button
-							type="button"
-							onClick={() => setShowGraphPreview(!showGraphPreview)}
-							className={`w-full px-4 py-2.5 rounded text-sm font-medium transition-all flex items-center justify-between ${
-								showGraphPreview
-									? "bg-[#c8951e] text-white"
-									: "bg-[#f7f5f0] text-[#6b6560] hover:bg-[#e8e4db]"
-							}`}
-						>
-							<div className="flex items-center gap-2">
-								<BarChart3 size={18} />
-								<span>📊 图谱预览</span>
-							</div>
-							<div className="flex items-center gap-1">
-								<span className="text-xs opacity-75">
-									{formData.relations.length} 个关联
-								</span>
-								{showGraphPreview ? (
-									<ChevronUp size={16} />
-								) : (
-									<ChevronDown size={16} />
-								)}
-							</div>
-						</button>
+					<WikiEditorActionBar
+						isRecommending={isRecommending}
+						recommendations={recommendations}
+						formDataTitle={formData.title}
+						formDataContent={formData.content}
+						onAIRecommend={handleAIRecommend}
+						onCancelRecommendation={handleCancelRecommendation}
+						onAddRecommendation={handleAddRecommendation}
+						abortController={abortController}
+						showToast={show}
+					/>
 
-						<AnimatePresence>
-							{showGraphPreview && (
-								<motion.div
-									initial={{ height: 0, opacity: 0 }}
-									animate={{ height: "auto", opacity: 1 }}
-									exit={{ height: 0, opacity: 0 }}
-									className="overflow-hidden"
-								>
-									<div className="p-4 bg-[#faf9f6] rounded border border-[#e0dcd3]">
-										<div className="flex items-center justify-between mb-3">
-											<h3 className="text-sm font-semibold text-[#2c2c2c]">
-												关联图谱
-											</h3>
-											<button
-												type="button"
-												onClick={() => setShowGraphPreview(false)}
-												className="p-1.5 text-[#9e968e] hover:text-[#6b6560] rounded hover:bg-[#f7f5f0]"
-											>
-												<X size={16} />
-											</button>
-										</div>
-										{formData.relations.length === 0 ? (
-											<div className="py-8 text-center text-[#9e968e] text-sm">
-												暂无关联数据，请先添加关联
-											</div>
-										) : (
-											<>
-												<MiniRelationGraph
-													relations={formData.relations}
-													metadata={metadataMap}
-													currentSlug={isNew ? "new" : slug || ""}
-													currentTitle={formData.title || "新页面"}
-													height={360}
-												/>
-												<div className="mt-3 flex items-center justify-center gap-4 text-xs text-[#9e968e]">
-													<span>💡 提示：拖动图谱查看，滚轮缩放</span>
-												</div>
-											</>
-										)}
-									</div>
-								</motion.div>
-							)}
-						</AnimatePresence>
-					</div>
-
-					{/* AI 推荐面板 */}
-					<div className="space-y-3">
-						<button
-							type="button"
-							onClick={handleAIRecommend}
-							disabled={isRecommending || !formData.title || !formData.content}
-							className={`w-full px-4 py-2.5 rounded text-sm font-medium transition-all flex items-center justify-between ${
-								showRecommendations
-									? "bg-[#c8951e] text-white"
-									: "bg-[#f7f5f0] text-[#c8951e] hover:bg-[#e8e4db]"
-							} disabled:opacity-50 disabled:cursor-not-allowed`}
-						>
-							<div className="flex items-center gap-2">
-								<SparklesIcon size={18} />
-								<span>AI 推荐</span>
-							</div>
-							<div className="flex items-center gap-2">
-								{isRecommending ? (
-									<span className="text-xs">推荐中...</span>
-								) : (
-									<>
-										<span className="text-xs opacity-75">
-											{recommendations.length} 个推荐
-										</span>
-										<ChevronDown size={16} />
-									</>
-								)}
-							</div>
-						</button>
-
-						<AnimatePresence>
-							{showRecommendations && (
-								<motion.div
-									initial={{ height: 0, opacity: 0 }}
-									animate={{ height: "auto", opacity: 1 }}
-									exit={{ height: 0, opacity: 0 }}
-									className="overflow-hidden"
-								>
-									<div className="p-4 bg-[#faf9f6] rounded border border-[#e0dcd3]">
-										<div className="flex items-center justify-between mb-3">
-											<h3 className="text-sm font-semibold text-[#c8951e]">
-												AI 推荐关联
-											</h3>
-											<div className="flex items-center gap-2">
-												{isRecommending && abortController && (
-													<button
-														type="button"
-														onClick={handleCancelRecommendation}
-														className="px-3 py-1.5 bg-red-50 text-red-600 rounded text-xs font-medium hover:bg-red-100 transition-all"
-													>
-														取消
-													</button>
-												)}
-												<button
-													type="button"
-													onClick={() => setShowRecommendations(false)}
-													className="p-1.5 text-[#9e968e] hover:text-[#6b6560] rounded hover:bg-[#f7f5f0]"
-												>
-													<X size={16} />
-												</button>
-											</div>
-										</div>
-
-										{isRecommending ? (
-											<div className="py-8 text-center">
-												<div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#c8951e]"></div>
-												<p className="mt-3 text-sm text-[#6b6560]">
-													AI 正在分析内容并推荐关联...
-												</p>
-											</div>
-										) : recommendations.length === 0 ? (
-											<div className="py-8 text-center text-[#9e968e] text-sm">
-												暂无推荐，请先填写标题和内容后重试
-											</div>
-										) : (
-											<div className="space-y-3">
-												{recommendations.map((rec, index) => (
-													<div
-														key={rec.targetSlug}
-														className="p-4 bg-white rounded border border-[#e0dcd3] hover:border-[#c8951e] transition-all"
-													>
-														<div className="flex items-start justify-between gap-3">
-															<div className="flex-1">
-																<div className="flex items-center gap-2 mb-2">
-																	<h4 className="font-semibold text-[#2c2c2c] text-sm">
-																		{rec.targetTitle}
-																	</h4>
-																	<span className="px-2 py-0.5 bg-[#f7f5f0] text-[#9e968e] text-[10px] rounded">
-																		{rec.category}
-																	</span>
-																</div>
-																<p className="text-xs text-[#6b6560] mb-2">
-																	{rec.reason}
-																</p>
-																<div className="flex items-center gap-3 mb-2">
-																	<div className="flex-1">
-																		<div className="flex items-center justify-between text-[10px] text-[#9e968e] mb-1">
-																			<span>置信度</span>
-																			<span className="font-bold text-[#c8951e]">
-																				{(rec.confidence * 100).toFixed(0)}%
-																			</span>
-																		</div>
-																		<div className="h-1.5 bg-[#f0ece0] rounded-full overflow-hidden">
-																			<div
-																				className="h-full bg-[#c8951e] rounded-full transition-all"
-																				style={{
-																					width: `${rec.confidence * 100}%`,
-																				}}
-																			/>
-																		</div>
-																	</div>
-																</div>
-																<div className="flex items-center gap-2 text-[10px] text-[#9e968e]">
-																	<span>建议类型：</span>
-																	<span className="px-1.5 py-0.5 bg-[#f7f5f0] rounded">
-																		{
-																			{
-																				related_person: "相关人物",
-																				work_relation: "作品关联",
-																				timeline_relation: "时间线关联",
-																				custom: "自定义关系",
-																			}[
-																				rec.suggestedType
-																			]
-																		}
-																	</span>
-																</div>
-															</div>
-															<button
-																type="button"
-																onClick={() =>
-																	handleAddRecommendation(rec)
-																}
-																className="px-3 py-1.5 bg-[#c8951e] text-white rounded text-xs font-medium hover:bg-[#dca828] transition-all whitespace-nowrap"
-															>
-																添加关联
-															</button>
-														</div>
-													</div>
-												))}
-											</div>
-										)}
-									</div>
-								</motion.div>
-							)}
-						</AnimatePresence>
-					</div>
-
-					<div className="pt-8 flex flex-wrap justify-end gap-3">
-						<button
-							type="button"
-							onClick={() => handleSubmit("draft")}
-							disabled={Boolean(savingMode)}
-							className="px-6 py-2.5 bg-[#f7f5f0] text-[#6b6560] rounded font-medium hover:bg-[#e8e4db] transition-all flex items-center gap-2 disabled:opacity-50"
-						>
-							<Save size={18} />{" "}
-							{savingMode === "draft" ? "保存中..." : "保存草稿"}
-						</button>
-						<button
-							type="submit"
-							disabled={Boolean(savingMode)}
-							className="px-8 py-2.5 bg-[#c8951e] text-white rounded font-medium hover:bg-[#dca828] transition-all flex items-center gap-2 disabled:opacity-50"
-						>
-							<Sparkles size={18} />{" "}
-							{savingMode === "pending" ? "提交中..." : "提交审核"}
-						</button>
-					</div>
+					<WikiEditorMetaSidebar
+						savingMode={savingMode}
+						onSubmit={handleSubmit}
+					/>
 				</form>
 			</div>
 		</div>

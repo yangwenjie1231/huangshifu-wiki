@@ -69,32 +69,44 @@ export async function cleanupOldBackups(): Promise<void> {
 // ─── 加密 / 解密 ────────────────────────────────────────────────────
 
 export function encryptBuffer(buffer: Buffer, password: string): Buffer {
+  const version = Buffer.from([0x01]);
   const salt = crypto.randomBytes(32);
   const key = crypto.scryptSync(password, salt, 32);
-  const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
   const encrypted = Buffer.concat([cipher.update(buffer), cipher.final()]);
-  return Buffer.concat([salt, iv, encrypted]);
+  const authTag = cipher.getAuthTag();
+  return Buffer.concat([version, salt, iv, encrypted, authTag]);
 }
 
 export function decryptBuffer(buffer: Buffer, password: string): Buffer {
-  if (buffer.length < 48) {
+  if (buffer.length < 49) {
     throw new Error('Invalid encrypted buffer: too short');
   }
 
+  const versionByte = buffer[0];
+
   try {
-    const salt = buffer.subarray(0, 32);
-    const iv = buffer.subarray(32, 48);
-    const encrypted = buffer.subarray(48);
-    const key = crypto.scryptSync(password, salt, 32);
-    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-    return Buffer.concat([decipher.update(encrypted), decipher.final()]);
-  } catch {
+    if (versionByte === 0x01) {
+      const salt = buffer.subarray(1, 33);
+      const iv = buffer.subarray(33, 45);
+      const encryptedEnd = buffer.length - 16;
+      const encrypted = buffer.subarray(45, encryptedEnd);
+      const authTag = buffer.subarray(encryptedEnd);
+      const key = crypto.scryptSync(password, salt, 32);
+      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+      decipher.setAuthTag(authTag);
+      return Buffer.concat([decipher.update(encrypted), decipher.final()]);
+    }
+
+    console.warn('[Backup] ⚠️ Decrypting legacy format (AES-256-CBC). Please re-encrypt with new format.');
     const iv = buffer.subarray(0, 16);
     const encrypted = buffer.subarray(16);
     const key = crypto.scryptSync(password, 'huangshifu-backup-salt', 32);
     const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
     return Buffer.concat([decipher.update(encrypted), decipher.final()]);
+  } catch (error) {
+    throw new Error(`Failed to decrypt backup: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 

@@ -18,10 +18,8 @@ export interface CacheStats {
   hitRate: number;
 }
 
-/**
- * 基于 node-cache 的增强缓存类
- * 支持 TTL、最大键数量限制、命中率统计
- */
+const NAMESPACE_QUOTA_RATIO = 0.4;
+
 class EnhancedCache {
   private cache: NodeCache;
   private hits = 0;
@@ -29,8 +27,10 @@ class EnhancedCache {
   private readonly maxKeys: number;
 
   constructor(options?: { stdTTL?: number; maxKeys?: number; checkperiod?: number }) {
-    const stdTTL = typeof options === 'object' ? options.stdTTL ?? 300 : 300; // 默认 5 分钟（秒）
-    this.maxKeys = typeof options === 'object' && options.maxKeys !== undefined ? options.maxKeys : 1000;
+    const stdTTL = typeof options === 'object' ? options.stdTTL ?? 300 : 300;
+    this.maxKeys = typeof options === 'object' && options.maxKeys !== undefined
+      ? options.maxKeys
+      : Number(process.env.CACHE_MAX_KEYS) || 5000;
     const checkperiod = typeof options === 'object' ? options.checkperiod ?? 60 : 60;
 
     this.cache = new NodeCache({
@@ -41,14 +41,9 @@ class EnhancedCache {
     });
 
     this.cache.on('evict', (_key, _value) => {
-      // 当达到 maxKeys 时，node-cache 会自动驱逐最老的键
     });
   }
 
-  /**
-   * 获取缓存值
-   * @param key 缓存键
-   */
   get<T>(key: string): T | undefined {
     const value = this.cache.get<T>(key);
     if (value === undefined) {
@@ -59,43 +54,27 @@ class EnhancedCache {
     return value;
   }
 
-  /**
-   * 设置缓存值
-   * @param key 缓存键
-   * @param value 缓存值
-   * @param ttl 过期时间（秒），默认使用构造时的 stdTTL
-   */
   set<T>(key: string, value: T, ttl?: number): boolean {
+    if (this.isNamespaceOverQuota(key)) {
+      this.evictOldestInNamespace(key);
+    }
     return ttl !== undefined ? this.cache.set(key, value, ttl) : this.cache.set(key, value);
   }
 
-  /**
-   * 删除缓存
-   * @param key 缓存键
-   */
   delete(key: string): number {
     return this.cache.del(key);
   }
 
-  /**
-   * 清空缓存
-   */
   clear(): void {
     this.cache.flushAll();
     this.hits = 0;
     this.misses = 0;
   }
 
-  /**
-   * 检查是否存在（未过期）
-   */
   has(key: string): boolean {
     return this.cache.has(key);
   }
 
-  /**
-   * 获取缓存统计
-   */
   getStats(): CacheStats {
     const total = this.hits + this.misses;
     return {
@@ -107,38 +86,54 @@ class EnhancedCache {
     };
   }
 
-  /**
-   * 获取 node-cache 原生统计（keys、hits、misses）
-   */
   getNativeStats(): NodeCache.Stats {
     return this.cache.getStats();
   }
 
-  /**
-   * 销毁缓存实例
-   */
   destroy(): void {
     this.cache.close();
     this.hits = 0;
     this.misses = 0;
   }
 
-  /**
-   * 生成缓存键
-   */
   static generateKey(prefix: string, ...parts: (string | number | boolean | undefined)[]): string {
     return `${prefix}:${parts.filter(p => p !== undefined).join(':')}`;
   }
+
+  private getNamespacePrefix(key: string): string {
+    const colonIndex = key.indexOf(':');
+    return colonIndex > 0 ? key.slice(0, colonIndex) : '';
+  }
+
+  private isNamespaceOverQuota(key: string): boolean {
+    const prefix = this.getNamespacePrefix(key);
+    if (!prefix) return false;
+    const keys = this.cache.keys().filter((k) => k.startsWith(prefix + ':'));
+    return keys.length >= Math.floor(this.maxKeys * NAMESPACE_QUOTA_RATIO);
+  }
+
+  private evictOldestInNamespace(key: string): void {
+    const prefix = this.getNamespacePrefix(key);
+    if (!prefix) return;
+    const nsKeys = this.cache.keys()
+      .filter((k) => k.startsWith(prefix + ':'))
+      .sort((a, b) => {
+        const tA = this.cache.getTtl(a);
+        const tB = this.cache.getTtl(b);
+        return (tA ?? 0) - (tB ?? 0);
+      });
+    if (nsKeys.length > 0) {
+      this.cache.del(nsKeys[0]);
+    }
+  }
 }
 
-// 全局增强缓存实例
 export const enhancedCache = new EnhancedCache({
-  stdTTL: 300, // 5 分钟
-  maxKeys: 1000,
+  stdTTL: 300,
+  maxKeys: Number(process.env.CACHE_MAX_KEYS) || 5000,
   checkperiod: 60,
 });
 
-// 缓存键前缀常量
 export const CACHE_KEYS = {
   ANNOUNCEMENT_LATEST: 'announcement:latest',
   AUTH_USER: 'auth:user',

@@ -191,6 +191,14 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
     });
 
     return () => {
+      network.off('click');
+      network.off('hoverNode');
+      network.off('blurNode');
+      network.off('dragStart');
+      network.off('dragEnd');
+      if (containerRef.current) {
+        containerRef.current.style.cursor = '';
+      }
       network.destroy();
       networkRef.current = null;
     };

@@ -54,13 +54,27 @@ export const ConfirmModal = ({
 	// 保存打开前的活动元素（用于关闭时恢复焦点）
 	const previousActiveElement = useRef<HTMLElement | null>(null);
 
-	// Escape 键关闭功能
+	// Escape 键关闭 + Tab 焦点循环
 	useEffect(() => {
 		if (!open) return;
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if (e.key === 'Escape') {
 				e.stopPropagation();
 				onClose();
+				return;
+			}
+			if (e.key === 'Tab') {
+				const focusableSelectors = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+				const modal = document.querySelector('[role="dialog"][aria-labelledby="confirm-modal-title"]');
+				if (!modal) return;
+				const focusables = Array.from(modal.querySelectorAll<HTMLElement>(focusableSelectors));
+				const first = focusables[0];
+				const last = focusables[focusables.length - 1];
+				if (e.shiftKey) {
+					if (document.activeElement === first) { e.preventDefault(); last?.focus(); }
+				} else {
+					if (document.activeElement === last) { e.preventDefault(); first?.focus(); }
+				}
 			}
 		};
 		document.addEventListener('keydown', handleKeyDown);
@@ -110,7 +124,7 @@ export const ConfirmModal = ({
 							</h3>
 						</div>
 
-						<p className="text-sm text-[#6b6560] leading-relaxed mb-6">
+						<p id="confirm-modal-message" className="text-sm text-[#6b6560] leading-relaxed mb-6">
 							{message}
 						</p>
 

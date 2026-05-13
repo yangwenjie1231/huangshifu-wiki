@@ -125,7 +125,7 @@ export function hasTag(value: unknown, tag: string) {
 }
 
 export function normalizeWikiSlug(value: unknown) {
-  if (typeof value !== 'string') return '';
+  if (typeof value !== 'string') return null;
   return value.trim().toLowerCase();
 }
 

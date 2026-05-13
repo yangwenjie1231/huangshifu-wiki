@@ -274,7 +274,7 @@ async function startServer() {
       } catch (error) {
         logger.error({ err: error }, 'Clean up expired edit locks failed');
       }
-    }, 5 * 60 * 1000);
+    }, parseInt(process.env.EDIT_LOCK_CLEANUP_INTERVAL_MS || '90000', 10));
 
     function shutdown(signal: string): void {
       logger.info({ signal }, 'Starting graceful shutdown');

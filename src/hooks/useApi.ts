@@ -1,5 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import type { AppError } from '../lib/errorHandler';
+import { getUserFriendlyMessage } from '../lib/errorHandler';
+import { useToast } from '../components/Toast';
 
 interface UseApiState<T> {
   data: T | null;
@@ -72,6 +74,7 @@ export function useApiWithToast<T>(showToast: boolean = true): UseApiWithToastRe
   });
 
   const requestIdRef = useRef(0);
+  const { show: showToastFn } = useToast();
 
   const execute = useCallback(async (fn: () => Promise<T>) => {
     const currentRequestId = ++requestIdRef.current;
@@ -95,12 +98,16 @@ export function useApiWithToast<T>(showToast: boolean = true): UseApiWithToastRe
       }));
 
       if (showToast) {
-        console.warn('[useApiWithToast] Error:', appError.message);
+        try {
+          showToastFn(getUserFriendlyMessage(appError), { variant: 'error' });
+        } catch {
+          console.warn('[useApiWithToast] Error:', getUserFriendlyMessage(appError));
+        }
       }
 
       throw appError;
     }
-  }, [showToast]);
+  }, [showToast, showToastFn]);
 
   const reset = useCallback(() => {
     setState({ data: null, error: null, loading: false });

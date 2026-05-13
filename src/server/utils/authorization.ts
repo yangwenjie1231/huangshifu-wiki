@@ -3,11 +3,18 @@
 import type { ContentStatus, ApiUser } from '../types';
 import { isAdminRole } from '../middleware/auth';
 
-export function canViewWikiPage(page: { status: ContentStatus; lastEditorUid: string }, authUser?: ApiUser) {
+const VIEWABLE_STATUSES: ReadonlySet<ContentStatus> = new Set(['published']);
+const EDITABLE_STATUSES: ReadonlySet<ContentStatus> = new Set(['draft', 'pending', 'published']);
+
+export function canViewWikiPage(page: { status: string; lastEditorUid: string }, authUser?: ApiUser): boolean {
   if (page.status === 'published') return true;
   if (!authUser) return false;
-  if (isAdminRole(authUser.role)) return true;
-  return page.lastEditorUid === authUser.uid;
+  if (isAdminRole(authUser.role)) {
+    if (page.status === 'rejected' || page.status === 'archived') return true;
+    return EDITABLE_STATUSES.has(page.status as ContentStatus);
+  }
+  if (page.status === 'rejected' || page.status === 'archived') return false;
+  return page.lastEditorUid === authUser.uid && EDITABLE_STATUSES.has(page.status as ContentStatus);
 }
 
 export function canViewPost(post: { status: ContentStatus; authorUid: string }, authUser?: ApiUser) {

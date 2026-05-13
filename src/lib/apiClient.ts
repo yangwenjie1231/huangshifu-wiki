@@ -15,13 +15,19 @@ import {
   getCacheStats,
   type DedupOptions,
 } from '../utils/requestDedup';
+import type { z } from 'zod';
 
-interface RequestOptions extends RequestInit {
+interface BaseRequestOptions extends RequestInit {
   query?: Record<string, string | number | boolean | undefined | null>;
   /** 是否启用请求去重，默认 true */
   dedup?: boolean;
   /** 去重和缓存选项 */
   dedupOptions?: DedupOptions;
+}
+
+interface RequestOptions<T = unknown> extends BaseRequestOptions {
+  /** 可选的 Zod schema 运行时验证 */
+  schema?: z.ZodSchema<T>;
 }
 
 const API_JSON_HEADERS = {
@@ -86,7 +92,7 @@ async function executeRequest<T>(
   path: string,
   options: RequestOptions = {}
 ): Promise<T> {
-  const { query, headers, dedup: _dedup, dedupOptions: _dedupOptions, ...rest } = options;
+  const { query, headers, dedup: _dedup, dedupOptions: _dedupOptions, schema, ...rest } = options;
   const url = buildUrl(path, query);
 
   const context: Omit<ApiErrorContext, 'statusCode' | 'responseData'> = {
@@ -104,7 +110,13 @@ async function executeRequest<T>(
     ...rest,
   });
 
-  return parseResponse<T>(response, context);
+  const data = await parseResponse<T>(response, context);
+
+  if (schema) {
+    return schema.parse(data) as T;
+  }
+
+  return data;
 }
 
 /**

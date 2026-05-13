@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import { Bell } from "lucide-react";
 import { clsx } from "clsx";
 import { motion, AnimatePresence } from "framer-motion";
@@ -19,62 +19,16 @@ interface NotificationPanelProps {
 	onNavigate: (link: string) => void;
 }
 
-export const NotificationPanel = ({ onNavigate }: NotificationPanelProps) => {
-	const { user } = useAuth();
-	const [notifPanelOpen, setNotifPanelOpen] = useState(false);
-	const [notifications, setNotifications] = useState<NotificationItem[]>(
-		[],
-	);
-	const [unreadCount, setUnreadCount] = useState(0);
-	const [notifLoading, setNotifLoading] = useState(false);
-
-	const fetchNotifications = React.useCallback(async () => {
-		if (!user) return;
-		try {
-			setNotifLoading(true);
-			const data = await apiGet<NotificationsResponse>("/api/notifications", {
-				limit: 10,
-			});
-			setNotifications(data.notifications || []);
-			setUnreadCount(data.unreadCount || 0);
-		} catch (error) {
-			console.error("Fetch notifications error:", error);
-		} finally {
-			setNotifLoading(false);
-		}
-	}, [user]);
-
-	React.useEffect(() => {
-		if (user) {
-			fetchNotifications();
-			const interval = setInterval(fetchNotifications, 60000);
-			return () => clearInterval(interval);
-		}
-	}, [user, fetchNotifications]);
-
-	const markNotificationRead = async (id: string) => {
-		try {
-			await apiPost("/api/notifications/" + id + "/read");
-			setNotifications((prev) =>
-				prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
-			);
-			setUnreadCount((prev) => Math.max(0, prev - 1));
-		} catch (error) {
-			console.error("Mark notification read error:", error);
-		}
-	};
-
-	const markAllNotificationsRead = async () => {
-		try {
-			await apiPost("/api/notifications/read-all");
-			setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-			setUnreadCount(0);
-		} catch (error) {
-			console.error("Mark all notifications read error:", error);
-		}
-	};
-
-	const getNotificationText = (notif: NotificationItem) => {
+const NotificationItem = React.memo(({
+	notif,
+	isRead: isItemRead,
+	onClick,
+}: {
+	notif: NotificationItem;
+	isRead: boolean;
+	onClick: () => void;
+}) => {
+	const text = useMemo(() => {
 		switch (notif.type) {
 			case "reply":
 				return "回复了你的" + (notif.payload.parentId ? "评论" : "帖子");
@@ -106,33 +60,92 @@ export const NotificationPanel = ({ onNavigate }: NotificationPanelProps) => {
 			default:
 				return "有新通知";
 		}
-	};
+	}, [notif]);
 
-	const getNotificationLink = (notif: NotificationItem) => {
-		if (notif.type === "reply" || notif.type === "like") {
-			const postId =
-				typeof notif.payload.postId === "string" ? notif.payload.postId : null;
-			return postId ? `/forum/${postId}` : null;
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			className={clsx(
+				"w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors",
+				!isItemRead && "bg-blue-50/50",
+			)}
+		>
+			<p className={clsx(
+				"text-sm",
+				!isItemRead
+					? "font-medium text-[#2c2c2c]"
+					: "text-[#6b6560]",
+			)}>
+				{text}
+			</p>
+			<p className="text-xs text-[#9e968e] mt-0.5">
+				{new Date(notif.createdAt).toLocaleString("zh-CN")}
+			</p>
+		</button>
+	);
+});
+
+NotificationItem.displayName = 'NotificationItem';
+
+export const NotificationPanel = React.memo(({ onNavigate }: NotificationPanelProps) => {
+	const { user } = useAuth();
+	const [notifPanelOpen, setNotifPanelOpen] = useState(false);
+	const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+	const [unreadCount, setUnreadCount] = useState(0);
+	const [notifLoading, setNotifLoading] = useState(false);
+
+	const fetchNotifications = useCallback(async () => {
+		if (!user) return;
+		try {
+			setNotifLoading(true);
+			const data = await apiGet<NotificationsResponse>("/api/notifications", {
+				limit: 10,
+			});
+			setNotifications(data.notifications || []);
+			setUnreadCount(data.unreadCount || 0);
+		} catch (error) {
+			console.error("Fetch notifications error:", error);
+		} finally {
+			setNotifLoading(false);
 		}
+	}, [user?.uid]);
 
-		if (notif.type === "review_result") {
-			const payload = notif.payload as ReviewNotificationPayload;
-			if (
-				payload.targetType === "wiki" &&
-				typeof payload.targetId === "string"
-			) {
-				return `/wiki/${payload.targetId}`;
-			}
-			if (
-				payload.targetType === "post" &&
-				typeof payload.targetId === "string"
-			) {
-				return `/forum/${payload.targetId}`;
-			}
+	React.useEffect(() => {
+		if (user) {
+			fetchNotifications();
+			const interval = setInterval(fetchNotifications, 60000);
+			return () => clearInterval(interval);
 		}
+	}, [user, fetchNotifications]);
 
-		return null;
-	};
+	const markNotificationRead = useCallback(async (id: string) => {
+		try {
+			await apiPost("/api/notifications/" + id + "/read");
+			setNotifications((prev) =>
+				prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
+			);
+			setUnreadCount((prev) => Math.max(0, prev - 1));
+		} catch (error) {
+			console.error("Mark notification read error:", error);
+		}
+	}, []);
+
+	const markAllNotificationsRead = useCallback(async () => {
+		try {
+			await apiPost("/api/notifications/read-all");
+			setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+			setUnreadCount(0);
+		} catch (error) {
+			console.error("Mark all notifications read error:", error);
+		}
+	}, []);
+
+	const handleItemClick = useCallback((notif: NotificationItem) => {
+		if (!notif.isRead)
+			markNotificationRead(notif.id);
+		setNotifPanelOpen(false);
+	}, [markNotificationRead]);
 
 	if (!user) return null;
 
@@ -193,38 +206,12 @@ export const NotificationPanel = ({ onNavigate }: NotificationPanelProps) => {
 									</div>
 								) : (
 									notifications.map((notif) => (
-										<button
-											type="button"
+										<NotificationItem
 											key={notif.id}
-											onClick={() => {
-												if (!notif.isRead)
-													markNotificationRead(notif.id);
-												const link = getNotificationLink(notif);
-												if (link) {
-												}
-												setNotifPanelOpen(false);
-											}}
-											className={clsx(
-												"w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors",
-												!notif.isRead && "bg-blue-50/50",
-											)}
-										>
-											<p
-												className={clsx(
-													"text-sm",
-													!notif.isRead
-														? "font-medium text-[#2c2c2c]"
-														: "text-[#6b6560]",
-												)}
-											>
-												{getNotificationText(notif)}
-											</p>
-											<p className="text-xs text-[#9e968e] mt-0.5">
-												{new Date(
-													notif.createdAt,
-												).toLocaleString("zh-CN")}
-											</p>
-										</button>
+											notif={notif}
+											isRead={notif.isRead}
+											onClick={() => handleItemClick(notif)}
+										/>
 									))
 								)}
 							</div>
@@ -234,4 +221,6 @@ export const NotificationPanel = ({ onNavigate }: NotificationPanelProps) => {
 			</AnimatePresence>
 		</div>
 	);
-};
+});
+
+NotificationPanel.displayName = 'NotificationPanel';

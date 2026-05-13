@@ -4,8 +4,6 @@ import { Prisma } from '@prisma/client';
 import {
   prisma,
   PLAY_URL_CACHE_TTL_MS,
-  /** @deprecated 使用 enhancedCache 替代，保留仅作向后兼容读取 */
-  playUrlCache,
   DEFAULT_MUSIC_PLATFORMS,
 } from './config';
 import { enhancedCache, CACHE_KEYS } from './cache';
@@ -213,32 +211,29 @@ export function buildPlaybackPlatformCandidates(song: {
 // ─── 播放缓存函数 ────────────────────────────────────────────────
 
 export function clearExpiredPlayUrlCache() {
-  // 仅清理增强缓存中的过期条目（playUrlCache 已废弃，不再主动管理）
-  // enhancedCache 自带 TTL 机制会自动淘汰过期条目，此处为显式清理入口
+  const prefix = `${CACHE_KEYS.MUSIC_PLAY_URL}:`;
+  const allKeys = enhancedCache.getNativeStats().keys as unknown as string[] | undefined;
+  if (!allKeys) {
+    try { enhancedCache.delete(prefix + '__sentinel__'); } catch { return; }
+    return;
+  }
+  for (let i = 0; i < allKeys.length; i++) {
+    if (allKeys[i].startsWith(prefix)) {
+      enhancedCache.delete(allKeys[i]);
+    }
+  }
 }
 
 export function getCachedPlayUrl(cacheKey: string) {
-  // 优先使用增强缓存（限制大小）
   const enhancedKey = `${CACHE_KEYS.MUSIC_PLAY_URL}:${cacheKey}`;
-  const enhancedCached = enhancedCache.get<PlayUrlCacheValue>(enhancedKey);
-  if (enhancedCached) {
-    if (enhancedCached.expiresAt > Date.now()) {
-      return enhancedCached;
-    }
+  const cached = enhancedCache.get<PlayUrlCacheValue>(enhancedKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached;
+  }
+  if (cached) {
     enhancedCache.delete(enhancedKey);
   }
-
-  // 回退到旧版内存缓存
-  // @deprecated fallback — 仅读取旧数据，不再写入
-  const cached = playUrlCache.get(cacheKey);
-  if (!cached) {
-    return null;
-  }
-  if (cached.expiresAt <= Date.now()) {
-    playUrlCache.delete(cacheKey);
-    return null;
-  }
-  return cached;
+  return null;
 }
 
 export function setCachedPlayUrl(cacheKey: string, value: Omit<PlayUrlCacheValue, 'fetchedAt' | 'expiresAt'>) {

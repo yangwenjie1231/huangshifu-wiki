@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import { Link } from "react-router-dom";
 import { clsx } from "clsx";
 import { motion, AnimatePresence } from "motion/react";
@@ -11,6 +11,7 @@ import type { SearchState } from "../../hooks/useSearchPage";
 import type { WikiItem, PostItem, GalleryItem, SongItem, AlbumItem } from "../../types/entities";
 import { MixedSearchResultCard } from "../MixedSearchResultCard";
 import { SearchResultCard } from "./SearchResultCard";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
 interface SearchResultsProps {
   state: SearchState;
@@ -75,6 +76,24 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
   const { loading, hasSearched, activeTab, isMixedSearch, mixedResults, results, filters } = state;
 
   const hasFilters = filters.selectedTags.length > 0 || filters.dateRange.start || filters.dateRange.end;
+  const mixedParentRef = useRef<HTMLDivElement>(null);
+  const wikiParentRef = useRef<HTMLDivElement>(null);
+
+  const mixedVirtualizer = useVirtualizer({
+    count: isMixedSearch
+      ? mixedResults.filter((r) => activeTab === "semantic" || r.sourceType === activeTab).length
+      : 0,
+    getScrollElement: () => mixedParentRef.current,
+    overscan: 5,
+    estimateSize: () => VIEW_MODE_CONFIG[viewMode].cardHeight === 'auto' ? 180 : parseInt(VIEW_MODE_CONFIG[viewMode].cardHeight as string, 10) || 200,
+  });
+
+  const wikiVirtualizer = useVirtualizer({
+    count: (!isMixedSearch && (activeTab === "all" || activeTab === "wiki")) ? results.wiki.length : 0,
+    getScrollElement: () => wikiParentRef.current,
+    overscan: 5,
+    estimateSize: () => VIEW_MODE_CONFIG[viewMode].cardHeight === 'auto' ? 180 : parseInt(VIEW_MODE_CONFIG[viewMode].cardHeight as string, 10) || 200,
+  });
 
   if (loading) {
     return (
@@ -154,29 +173,50 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -12 }}
-              className="space-y-4"
             >
               <div
-                className={clsx(
-                  "grid",
-                  VIEW_MODE_CONFIG[viewMode].gridCols,
-                  VIEW_MODE_CONFIG[viewMode].gap
-                )}
+                ref={mixedParentRef}
+                className="max-h-[70vh] overflow-auto"
+                style={{ contain: 'strict' }}
               >
-                {mixedResults
-                  .filter((result) => {
-                    if (activeTab === "semantic") return true;
-                    return result.sourceType === activeTab;
-                  })
-                  .map((result, index) => (
-                    <MixedSearchResultCard
-                      key={`${result.sourceType}-${result.sourceId}-${index}`}
-                      result={result}
-                      viewMode={viewMode}
-                      cardHeight={VIEW_MODE_CONFIG[viewMode].cardHeight}
-                      showSimilarity={true}
-                    />
-                  ))}
+                <div
+                  className={clsx(
+                    "grid",
+                    VIEW_MODE_CONFIG[viewMode].gridCols,
+                    VIEW_MODE_CONFIG[viewMode].gap
+                  )}
+                  style={{
+                    height: `${mixedVirtualizer.getTotalSize()}px`,
+                    position: 'relative',
+                  }}
+                >
+                  {mixedVirtualizer.getVirtualItems().map((virtualItem) => {
+                    const filtered = mixedResults.filter((r) =>
+                      activeTab === "semantic" ? true : r.sourceType === activeTab
+                    );
+                    const result = filtered[virtualItem.index];
+                    if (!result) return null;
+                    return (
+                      <div
+                        key={`${result.sourceType}-${result.sourceId}-${virtualItem.index}`}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          transform: `translateY(${virtualItem.start}px)`,
+                        }}
+                      >
+                        <MixedSearchResultCard
+                          result={result}
+                          viewMode={viewMode}
+                          cardHeight={VIEW_MODE_CONFIG[viewMode].cardHeight}
+                          showSimilarity={true}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </motion.section>
           )}
@@ -193,23 +233,67 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                 >
                   <h2 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-4 flex items-center gap-2">
                     <Book size={14} className="text-[#c8951e]" /> 百科页面
+                    {results.wiki.length > 50 && <span className="text-xs text-[#9e968e] font-normal">（虚拟滚动已启用）</span>}
                   </h2>
-                  <div
-                    className={clsx(
-                      "grid",
-                      VIEW_MODE_CONFIG[viewMode].gridCols,
-                      VIEW_MODE_CONFIG[viewMode].gap
-                    )}
-                  >
-                    {results.wiki.map((page) => (
-                      <SearchResultCard
-                        key={page.id}
-                        config={wikiToConfig(page)}
-                        viewMode={viewMode}
-                        cardHeight={VIEW_MODE_CONFIG[viewMode].cardHeight}
-                      />
-                    ))}
-                  </div>
+                  {results.wiki.length > 30 ? (
+                    <div
+                      ref={wikiParentRef}
+                      className="max-h-[60vh] overflow-auto"
+                      style={{ contain: 'strict' }}
+                    >
+                      <div
+                        className={clsx(
+                          "grid",
+                          VIEW_MODE_CONFIG[viewMode].gridCols,
+                          VIEW_MODE_CONFIG[viewMode].gap
+                        )}
+                        style={{
+                          height: `${wikiVirtualizer.getTotalSize()}px`,
+                          position: 'relative',
+                        }}
+                      >
+                        {wikiVirtualizer.getVirtualItems().map((virtualItem) => {
+                          const page = results.wiki[virtualItem.index];
+                          if (!page) return null;
+                          return (
+                            <div
+                              key={page.id}
+                              style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: '100%',
+                                transform: `translateY(${virtualItem.start}px)`,
+                              }}
+                            >
+                              <SearchResultCard
+                                config={wikiToConfig(page)}
+                                viewMode={viewMode}
+                                cardHeight={VIEW_MODE_CONFIG[viewMode].cardHeight}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      className={clsx(
+                        "grid",
+                        VIEW_MODE_CONFIG[viewMode].gridCols,
+                        VIEW_MODE_CONFIG[viewMode].gap
+                      )}
+                    >
+                      {results.wiki.map((page) => (
+                        <SearchResultCard
+                          key={page.id}
+                          config={wikiToConfig(page)}
+                          viewMode={viewMode}
+                          cardHeight={VIEW_MODE_CONFIG[viewMode].cardHeight}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </motion.section>
               )}
 
