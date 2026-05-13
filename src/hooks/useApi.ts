@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { AppError } from '../lib/errorHandler';
 
 interface UseApiState<T> {
@@ -12,10 +12,6 @@ interface UseApiReturn<T> extends UseApiState<T> {
   reset: () => void;
 }
 
-/**
- * 自定义 Hook 用于简化 API 调用的状态管理
- * @returns 状态和执行函数
- */
 export function useApi<T>(): UseApiReturn<T> {
   const [state, setState] = useState<UseApiState<T>>({
     data: null,
@@ -23,13 +19,22 @@ export function useApi<T>(): UseApiReturn<T> {
     loading: false,
   });
 
+  const requestIdRef = useRef(0);
+
   const execute = useCallback(async (fn: () => Promise<T>) => {
+    const currentRequestId = ++requestIdRef.current;
     setState((prev) => ({ ...prev, loading: true, error: null }));
-    
+
     try {
       const data = await fn();
+
+      if (currentRequestId !== requestIdRef.current) return;
+
       setState({ data, error: null, loading: false });
+      return data;
     } catch (error) {
+      if (currentRequestId !== requestIdRef.current) return;
+
       setState((prev) => ({
         ...prev,
         loading: false,
@@ -66,28 +71,33 @@ export function useApiWithToast<T>(showToast: boolean = true): UseApiWithToastRe
     loading: false,
   });
 
+  const requestIdRef = useRef(0);
+
   const execute = useCallback(async (fn: () => Promise<T>) => {
+    const currentRequestId = ++requestIdRef.current;
     setState((prev) => ({ ...prev, loading: true, error: null }));
-    
+
     try {
       const data = await fn();
+
+      if (currentRequestId !== requestIdRef.current) return;
+
       setState({ data, error: null, loading: false });
       return data;
     } catch (error) {
+      if (currentRequestId !== requestIdRef.current) return;
+
       const appError = error as AppError;
       setState((prev) => ({
         ...prev,
         loading: false,
         error: appError,
       }));
-      
-      // 自动显示错误提示
+
       if (showToast) {
-        // 这里可以集成 Toast 系统
-        // 例如：toast.error(getUserFriendlyMessage(appError));
         console.warn('[useApiWithToast] Error:', appError.message);
       }
-      
+
       throw appError;
     }
   }, [showToast]);

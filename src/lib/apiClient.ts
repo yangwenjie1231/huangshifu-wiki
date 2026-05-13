@@ -244,7 +244,8 @@ export async function apiUpload<T>(path: string, formData: FormData, options?: A
 export function apiUploadWithProgress<T>(
   path: string,
   formData: FormData,
-  onProgress: (percent: number) => void
+  onProgress: (percent: number) => void,
+  options?: { signal?: AbortSignal }
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -277,6 +278,9 @@ export function apiUploadWithProgress<T>(
 
     xhr.open('POST', path);
     xhr.withCredentials = true;
+    if (options?.signal) {
+      options.signal.addEventListener('abort', () => xhr.abort());
+    }
     xhr.send(formData);
   });
 }

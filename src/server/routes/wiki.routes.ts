@@ -501,7 +501,7 @@ router.delete('/:slug/like', requireAuth, requireActiveUser, async (req: Authent
   try {
     const slug = req.params.slug;
 
-    await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const deleted = await tx.wikiLike.deleteMany({
         where: {
           pageSlug: slug,
@@ -510,21 +510,20 @@ router.delete('/:slug/like', requireAuth, requireActiveUser, async (req: Authent
       });
 
       if (!deleted.count) {
-        return;
+        return { liked: false, likesCount: 0 };
       }
 
       await tx.wikiPage.update({
         where: { slug },
-        data: {
-          likesCount: { decrement: 1 },
-        },
+        data: { likesCount: { decrement: 1 } },
       });
+
+      const likesCount = await tx.wikiLike.count({ where: { pageSlug: slug } });
+      return { liked: false, likesCount };
     });
 
-    const likesCount = await prisma.wikiLike.count({ where: { pageSlug: slug } });
-
     clearWikiPageCache(slug);
-    res.json({ liked: false, likesCount });
+    res.json(result);
   } catch (error) {
     logger.error({ err: error }, 'Unlike wiki page error');
     res.status(500).json({ error: '取消点赞失败' });
@@ -590,7 +589,7 @@ router.delete('/:slug/dislike', requireAuth, requireActiveUser, async (req: Auth
   try {
     const slug = req.params.slug;
 
-    await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const deleted = await tx.wikiDislike.deleteMany({
         where: {
           pageSlug: slug,
@@ -599,21 +598,20 @@ router.delete('/:slug/dislike', requireAuth, requireActiveUser, async (req: Auth
       });
 
       if (!deleted.count) {
-        return;
+        return { disliked: false, dislikesCount: 0 };
       }
 
       await tx.wikiPage.update({
         where: { slug },
-        data: {
-          dislikesCount: { decrement: 1 },
-        },
+        data: { dislikesCount: { decrement: 1 } },
       });
+
+      const dislikesCount = await tx.wikiDislike.count({ where: { pageSlug: slug } });
+      return { disliked: false, dislikesCount };
     });
 
-    const dislikesCount = await prisma.wikiDislike.count({ where: { pageSlug: slug } });
-
     clearWikiPageCache(slug);
-    res.json({ disliked: false, dislikesCount });
+    res.json(result);
   } catch (error) {
     logger.error({ err: error }, 'Undislike wiki page error');
     res.status(500).json({ error: '取消踩失败' });
@@ -738,50 +736,52 @@ router.post('/:slug/submit', requireAuth, requireActiveUser, async (req: Authent
     }
 
     if (isAdminRole(req.authUser!.role)) {
-      const published = await prisma.wikiPage.update({
-        where: { slug },
-        data: {
-          status: 'published',
-          reviewNote: null,
-          reviewedBy: req.authUser!.uid,
-          reviewedAt: new Date(),
-        },
-      });
-
-      await prisma.moderationLog.create({
-        data: {
-          targetType: 'wiki',
-          targetId: slug,
-          action: 'approve',
-          operatorUid: req.authUser!.uid,
-          note: note || null,
-        },
-      });
+      const [published] = await prisma.$transaction([
+        prisma.wikiPage.update({
+          where: { slug },
+          data: {
+            status: 'published',
+            reviewNote: null,
+            reviewedBy: req.authUser!.uid,
+            reviewedAt: new Date(),
+          },
+        }),
+        prisma.moderationLog.create({
+          data: {
+            targetType: 'wiki',
+            targetId: slug,
+            action: 'approve',
+            operatorUid: req.authUser!.uid,
+            note: note || null,
+          },
+        }),
+      ]);
 
       clearWikiPageCache(slug);
       res.json({ page: toWikiResponse(published) });
       return;
     }
 
-    const updated = await prisma.wikiPage.update({
-      where: { slug },
-      data: {
-        status: 'pending',
-        reviewNote: note || null,
-        reviewedBy: null,
-        reviewedAt: null,
-      },
-    });
-
-    await prisma.moderationLog.create({
-      data: {
-        targetType: 'wiki',
-        targetId: slug,
-        action: 'submit',
-        operatorUid: req.authUser!.uid,
-        note: note || null,
-      },
-    });
+    const [updated] = await prisma.$transaction([
+      prisma.wikiPage.update({
+        where: { slug },
+        data: {
+          status: 'pending',
+          reviewNote: note || null,
+          reviewedBy: null,
+          reviewedAt: null,
+        },
+      }),
+      prisma.moderationLog.create({
+        data: {
+          targetType: 'wiki',
+          targetId: slug,
+          action: 'submit',
+          operatorUid: req.authUser!.uid,
+          note: note || null,
+        },
+      }),
+    ]);
 
     clearWikiPageCache(slug);
     res.json({ page: toWikiResponse(updated) });
@@ -846,71 +846,72 @@ router.post('/', requireAuth, requireActiveUser, async (req: AuthenticatedReques
       ? (Array.isArray(tags) ? tags : [])
       : [];
 
-    const page = await prisma.wikiPage.create({
-      data: {
-        slug: pageSlug,
-        title: title!,
-        titleKey,
-        category,
-        content,
-        tags: normalizedTags,
-        relations: normalizedRelations,
-        eventDate: eventDate || null,
-        status: nextStatus,
-        reviewNote: null,
-        reviewedBy: null,
-        reviewedAt: null,
-        lastEditorUid: req.authUser!.uid,
-        locationCode: locationCode || null,
-        locationDetail: locationDetail || null,
-      },
-    });
+    const page = await prisma.$transaction(async (tx) => {
+      const createdPage = await tx.wikiPage.create({
+        data: {
+          slug: pageSlug,
+          title: title!,
+          titleKey,
+          category,
+          content,
+          tags: normalizedTags,
+          relations: normalizedRelations,
+          eventDate: eventDate || null,
+          status: nextStatus,
+          reviewNote: null,
+          reviewedBy: null,
+          reviewedAt: null,
+          lastEditorUid: req.authUser!.uid,
+          locationCode: locationCode || null,
+          locationDetail: locationDetail || null,
+        },
+      });
 
-    const revision = await prisma.wikiRevision.create({
-      data: {
-        pageSlug,
-        title: title!,
-        content: content!,
-        slug: pageSlug,
-        category,
-        tags: normalizedTags,
-        relations: normalizedRelations,
-        eventDate: eventDate || null,
-        editorUid: req.authUser!.uid,
-        editorName: req.authUser!.displayName,
-      },
-    });
-
-    if (!page.mainBranchId) {
-      const mainBranch = await prisma.wikiBranch.create({
+      const revision = await tx.wikiRevision.create({
         data: {
           pageSlug,
+          title: title!,
+          content: content!,
+          slug: pageSlug,
+          category,
+          tags: normalizedTags,
+          relations: normalizedRelations,
+          eventDate: eventDate || null,
           editorUid: req.authUser!.uid,
           editorName: req.authUser!.displayName,
-          status: 'merged',
-          latestRevisionId: revision.id,
         },
       });
-      await prisma.wikiPage.update({
-        where: { slug: pageSlug },
-        data: {
-          mainBranchId: mainBranch.id,
-          mergedAt: new Date(),
-        },
-      });
-    }
 
-    if (nextStatus === 'pending') {
-      await prisma.moderationLog.create({
-        data: {
-          targetType: 'wiki',
-          targetId: pageSlug,
-          action: 'submit',
-          operatorUid: req.authUser!.uid,
-          note: null,
-        },
-      });
-    }
+      if (!createdPage.mainBranchId) {
+        const mainBranch = await tx.wikiBranch.create({
+          data: {
+            pageSlug,
+            editorUid: req.authUser!.uid,
+            editorName: req.authUser!.displayName,
+            status: 'merged',
+            latestRevisionId: revision.id,
+          },
+        });
+        await tx.wikiPage.update({
+          where: { slug: pageSlug },
+          data: { mainBranchId: mainBranch.id, mergedAt: new Date() },
+        });
+      }
+
+      if (nextStatus === 'pending') {
+        await tx.moderationLog.create({
+          data: {
+            targetType: 'wiki',
+            targetId: pageSlug,
+            action: 'submit',
+            operatorUid: req.authUser!.uid,
+            note: null,
+          },
+        });
+      }
+
+      return createdPage;
+    });
 
     clearWikiPageCache(pageSlug);
     res.status(201).json({ page: toWikiResponse(page) });

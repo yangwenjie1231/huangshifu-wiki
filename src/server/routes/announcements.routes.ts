@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../prisma';
 import { requireAdmin } from '../middleware/auth';
-import { enhancedCache, CACHE_KEYS, CACHE_TTL } from '../utils/cache';
+import { enhancedCache, CACHE_KEYS, CACHE_TTL_SEC } from '../utils/cache';
 
 const router = Router();
 

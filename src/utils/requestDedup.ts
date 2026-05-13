@@ -31,13 +31,30 @@ export interface DedupOptions {
 }
 
 // 内存缓存存储
+const MAX_CACHE_SIZE = 200;
+const INFLIGHT_TIMEOUT_MS = 30000;
+
 const cache = new Map<string, CacheEntry<unknown>>();
 
-// 正在进行的请求存储
 const inFlightRequests = new Map<string, InFlightRequest<unknown>>();
 
-// SWR 重新验证冷却记录
 const swrCooldowns = new Map<string, number>();
+
+function evictOldestCacheEntry(): void {
+  if (cache.size >= MAX_CACHE_SIZE) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey) cache.delete(oldestKey);
+  }
+}
+
+function cleanupStaleInFlightRequests(): void {
+  const now = Date.now();
+  for (const [key, req] of inFlightRequests.entries()) {
+    if (now - req.timestamp > INFLIGHT_TIMEOUT_MS) {
+      inFlightRequests.delete(key);
+    }
+  }
+}
 
 /**
  * 生成请求的唯一标识键
@@ -120,10 +137,12 @@ export async function dedupedRequest<T>(
   options: DedupOptions = {}
 ): Promise<T> {
   const {
-    staleTime = 60000, // 默认 1 分钟
+    staleTime = 60000,
     swr = true,
-    swrCooldown: swrCooldownMs = 5000, // 默认 5 秒冷却
+    swrCooldown: swrCooldownMs = 5000,
   } = options;
+
+  cleanupStaleInFlightRequests();
 
   // 1. 检查是否有正在进行的相同请求，直接复用 Promise
   const inFlight = inFlightRequests.get(key) as InFlightRequest<T> | undefined;
@@ -148,6 +167,7 @@ export async function dedupedRequest<T>(
       const revalidatePromise = requestFn()
         .then((data) => {
           if (data !== undefined && data !== null) {
+            evictOldestCacheEntry();
             cache.set(key, { data, timestamp: Date.now(), staleTime });
           }
           console.log(`[RequestDedup] SWR revalidate success: ${key}`);
@@ -170,11 +190,13 @@ export async function dedupedRequest<T>(
   }
 
   // 3. 缓存无效或不存在，发起新请求
+  evictOldestCacheEntry();
   console.log(`[RequestDedup] Cache miss, fetching: ${key}`);
 
   const promise = requestFn()
     .then((data) => {
       if (data !== undefined && data !== null) {
+        evictOldestCacheEntry();
         cache.set(key, { data, timestamp: Date.now(), staleTime });
       }
       return data;

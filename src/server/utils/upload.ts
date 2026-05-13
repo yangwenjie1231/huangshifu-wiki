@@ -156,8 +156,8 @@ export async function uploadFileToS3(
   contentType: string,
 ): Promise<{ success: boolean; url?: string; error?: string }> {
   try {
-    const { getS3ClientWrite, getPublicConfig } = await import('../s3/s3Service');
-    const { PutObjectCommand } = await import('@aws-sdk/client-s3');
+    const { getS3ClientWrite, getPublicConfig } = (await getS3Modules()).s3Service;
+    const { PutObjectCommand } = (await getS3Modules()).clientS3;
 
     const s3Client = getS3ClientWrite();
     const config = getPublicConfig();

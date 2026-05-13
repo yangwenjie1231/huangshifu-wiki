@@ -1,12 +1,18 @@
 import rateLimit from 'express-rate-limit';
 import type { AuthenticatedRequest } from './auth';
 
+function extractUidOrIp(req: Parameters<Parameters<typeof rateLimit>[0]['keyGenerator']>[0]): string {
+  const authReq = req as AuthenticatedRequest;
+  return authReq.authUser?.uid ?? req.ip ?? 'unknown';
+}
+
 export const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   message: { error: '请求过于频繁，请15分钟后再试' },
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: extractUidOrIp,
 });
 
 export const globalLimiter = rateLimit({
@@ -14,6 +20,7 @@ export const globalLimiter = rateLimit({
   max: 200,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: extractUidOrIp,
   handler: (_req, res) => {
     res.status(429).json({ error: '请求过于频繁，请稍后再试' });
   },

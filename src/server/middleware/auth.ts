@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { UserRole as PrismaUserRole } from '@prisma/client';
 import type { ApiUser, SessionJwtPayload, UserStatus, AuthenticatedRequest } from '../types';
 import { prisma } from '../prisma';
-import { enhancedCache, CACHE_KEYS, CACHE_TTL } from '../utils/cache';
+import { enhancedCache, CACHE_KEYS, CACHE_TTL_SEC } from '../utils/cache';
 
 const JWT_SECRET = process.env.JWT_SECRET || '';
 const AUTH_COOKIE_NAME = 'hsf_token';
@@ -147,7 +147,7 @@ async function authMiddleware(req: AuthenticatedRequest, _res: Response, next: N
       req.authUser = apiUser;
     }
   } catch (error) {
-    console.error('Invalid auth token:', error);
+    logger.warn({ err: error }, 'Invalid auth token');
   }
 
   next();

@@ -63,41 +63,45 @@ fs.mkdirSync(backupsDir, { recursive: true });
 const PORT = Number(process.env.PORT) || 3003;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '';
 
-// ============================================================================
-// CORS 配置 - 优化预检请求性能
-// ============================================================================
-// 配置 Access-Control-Max-Age 缓存预检结果，减少 OPTIONS 请求次数
-// 浏览器默认缓存时间：Chrome 10分钟，Firefox 24小时，Safari 5分钟
-// 设置为 86400 秒 (24小时) 以最大化缓存效果
-const CORS_MAX_AGE = 86400; // 24小时
+function parseCorsOrigins(envValue: string): string[] {
+  return envValue
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+const CORS_MAX_AGE = 86400;
 
 if (CORS_ORIGIN) {
+  const origins = parseCorsOrigins(CORS_ORIGIN);
+  if (origins.length === 1 && origins[0] === '*') {
+    throw new Error('CORS_ORIGIN=* is not allowed in production. Use specific origins.');
+  }
   app.use(cors({
-    origin: CORS_ORIGIN,
+    origin: origins.length === 1 ? origins[0] : origins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    // 只保留必要的请求头，减少预检请求复杂度
-    // Content-Type: application/json 会触发预检，但这是必需的
-    // Authorization 用于认证，也是必需的
     allowedHeaders: ['Content-Type', 'Authorization'],
-    maxAge: CORS_MAX_AGE, // 缓存预检结果 24 小时
+    maxAge: CORS_MAX_AGE,
     preflightContinue: false,
     optionsSuccessStatus: 204,
   }));
 } else {
-  // 开发环境：白名单模式，仅允许已知的前端开发服务器
-  const allowedOrigins = [
-    'http://localhost:5173',
-    'http://localhost:4173',
-    'http://127.0.0.1:5173',
-    'http://127.0.0.1:4173',
-  ];
+  const devOriginsEnv = process.env.DEV_CORS_ORIGINS;
+  const allowedOrigins = devOriginsEnv
+    ? parseCorsOrigins(devOriginsEnv)
+    : [
+        'http://localhost:5173',
+        'http://localhost:4173',
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:4173',
+      ];
   app.use(cors({
     origin: (origin, callback) => {
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        callback(new Error('不允许的 CORS 来源'));
+        callback(new Error('CORS origin not allowed'));
       }
     },
     credentials: true,
@@ -109,8 +113,8 @@ app.use(globalLimiter);
 
 app.use(helmet({
   contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false,
-  crossOriginOpenerPolicy: false,
+  crossOriginEmbedderPolicy: true,
+  crossOriginOpenerPolicy: true,
 }));
 
 // 启用 gzip 压缩 - 优化传输性能
@@ -134,7 +138,6 @@ if (process.env.NODE_ENV === 'production') {
     maxAge: '1y', // 静态资源缓存1年
     immutable: true, // 文件名带hash，内容不变则永不失效
     setHeaders: (res, filePath) => {
-      // 确保正确的 MIME 类型
       if (filePath.endsWith('.js')) {
         res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
       } else if (filePath.endsWith('.css')) {
@@ -142,9 +145,9 @@ if (process.env.NODE_ENV === 'production') {
       } else if (filePath.endsWith('.html')) {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
       }
-      // 启用跨源资源策略（CORS）用于字体和图标
       if (filePath.match(/\.(woff2?|ttf|otf|eot|svg)$/)) {
         res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
       }
     },
   }));
@@ -260,10 +263,10 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     logger.info(`Server running on http://localhost:${PORT}`);
 
-    setInterval(async () => {
+    const editLockCleanupInterval = setInterval(async () => {
       try {
         await prisma.editLock.deleteMany({
           where: { expiresAt: { lt: new Date() } },
@@ -272,6 +275,30 @@ async function startServer() {
         logger.error({ err: error }, 'Clean up expired edit locks failed');
       }
     }, 5 * 60 * 1000);
+
+    function shutdown(signal: string): void {
+      logger.info({ signal }, 'Starting graceful shutdown');
+
+      server.close(() => {
+        logger.info('HTTP server closed');
+
+        Promise.allSettled([
+          prisma.$disconnect(),
+        ]).then(() => {
+          clearInterval(editLockCleanupInterval);
+          logger.info('Graceful shutdown complete');
+          process.exit(0);
+        });
+      });
+
+      setTimeout(() => {
+        logger.warn('Forced shutdown after timeout');
+        process.exit(1);
+      }, 10_000);
+    }
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
   });
 }
 
