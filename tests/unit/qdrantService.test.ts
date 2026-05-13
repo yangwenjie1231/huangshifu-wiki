@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const qdrantClientInstanceMock = {
   getCollections: vi.fn(),
+  getCollection: vi.fn(),
   createCollection: vi.fn(),
+  deleteCollection: vi.fn(),
+  createPayloadIndex: vi.fn(),
   upsert: vi.fn(),
   search: vi.fn(),
   delete: vi.fn(),
@@ -60,9 +63,12 @@ describe('qdrantService', () => {
     );
   });
 
-  it('skips creation when collection already exists', async () => {
+  it('skips creation when collection already exists with matching dimensions', async () => {
     qdrantClientInstanceMock.getCollections.mockResolvedValueOnce({
       collections: [{ name: 'hsf_image_embeddings' }],
+    });
+    qdrantClientInstanceMock.getCollection.mockResolvedValueOnce({
+      config: { params: { vectors: { size: 512 } } },
     });
 
     const { ensureQdrantCollection } = await import('../../src/server/vector/qdrantService');

@@ -1,16 +1,18 @@
-import { RawImage, pipeline, CLIPTextModelWithProjection, CLIPTokenizer, env } from '@huggingface/transformers';
+import { RawImage, pipeline, CLIPTextModelWithProjection, CLIPTokenizer, ChineseCLIPModel, AutoTokenizer, env, PreTrainedTokenizer } from '@huggingface/transformers'
+import type { DataType } from '@huggingface/transformers'
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { execSync } from 'child_process';
 
-const DEFAULT_MODEL_NAME = 'Xenova/clip-vit-base-patch32';
-const DEFAULT_VECTOR_SIZE = 512;
+const DEFAULT_MODEL_NAME = 'OFA-Sys/chinese-clip-vit-base-patch16'
+const DEFAULT_VECTOR_SIZE = 512
 
 // 配置 transformers 环境
 // 设置模型缓存目录
 const MODEL_CACHE_DIR = process.env.TRANSFORMERS_CACHE || path.join(process.cwd(), 'models', 'transformers');
 env.cacheDir = MODEL_CACHE_DIR;
+
 
 // 设置远程模型下载超时（毫秒）
 (env as unknown as Record<string, unknown>).remoteHostTimeout = 5000;
@@ -33,9 +35,9 @@ type ExtractorFunc = (
   },
 ) => Promise<TensorLike>;
 
-let imageExtractorPromise: Promise<ExtractorFunc> | null = null;
-let textModelPromise: Promise<CLIPTextModelWithProjection> | null = null;
-let textTokenizerPromise: Promise<CLIPTokenizer> | null = null;
+let imageExtractorPromise: Promise<ExtractorFunc> | null = null
+let textModelPromise: Promise<CLIPTextModelWithProjection | ChineseCLIPModel> | null = null
+let textTokenizerPromise: Promise<CLIPTokenizer | PreTrainedTokenizer> | null = null
 let modelLoadError: Error | null = null;
 let isUsingModelScope = false;
 
@@ -60,7 +62,11 @@ export function getEmbeddingModelName() {
 }
 
 export function getEmbeddingVectorSize() {
-  return parseInteger(process.env.IMAGE_EMBEDDING_VECTOR_SIZE, DEFAULT_VECTOR_SIZE);
+  return parseInteger(process.env.IMAGE_EMBEDDING_VECTOR_SIZE, DEFAULT_VECTOR_SIZE)
+}
+
+export function getEmbeddingDtype(): DataType {
+  return (process.env.IMAGE_EMBEDDING_DTYPE || 'q8') as DataType
 }
 
 export function getModelCacheDir() {
@@ -89,7 +95,142 @@ function isNetworkError(error: Error): boolean {
     errorMessage.includes('network') ||
     errorMessage.includes('timeout') ||
     errorMessage.includes('abort')
-  );
+  )
+}
+
+let hfReachabilityCache: boolean | null = null;
+const HF_PROBE_URL = 'https://huggingface.co';
+const DEFAULT_HF_PROBE_TIMEOUT = 5000;
+
+export async function probeHuggingFaceReachability(): Promise<boolean> {
+  if (hfReachabilityCache !== null) {
+    return hfReachabilityCache;
+  }
+
+  const timeout = parseInteger(process.env.HF_PROBE_TIMEOUT_MS, DEFAULT_HF_PROBE_TIMEOUT);
+
+  if (process.env.TRANSFORMERS_OFFLINE === 'true' || process.env.SKIP_NETWORK_PROBE === 'true') {
+    console.log('[CLIP] 网络探测已跳过 (离线模式或 SKIP_NETWORK_PROBE=true)');
+    hfReachabilityCache = false;
+    return false;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+
+    const response = await fetch(HF_PROBE_URL, {
+      method: 'HEAD',
+      signal: controller.signal,
+      redirect: 'follow',
+    });
+
+    clearTimeout(timer);
+    const reachable = response.ok || response.status < 500;
+    console.log(`[CLIP] HuggingFace 可达性检测: ${reachable ? '可达' : '不可达'} (${response.status}, ${timeout}ms 超时)`);
+    hfReachabilityCache = reachable;
+    return reachable;
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.log(`[CLIP] HuggingFace 不可达 (${msg})，将使用备用源`);
+    hfReachabilityCache = false;
+    return false;
+  }
+}
+
+export function getHfReachability(): boolean | null {
+  return hfReachabilityCache;
+}
+
+function findOnnxFiles(dir: string): string[] {
+  try {
+    if (!fs.existsSync(dir)) return [];
+    const files = fs.readdirSync(dir).filter(f => f.endsWith('.onnx') && !f.includes('.q8.'));
+    return files.map(f => path.join(dir, f));
+  } catch {
+    return [];
+  }
+}
+
+async function quantizeModelIfNeeded(onnxModelPath: string): Promise<string> {
+  const q8Path = onnxModelPath.replace(/\.onnx$/, '.q8.onnx');
+
+  if (fs.existsSync(q8Path)) {
+    console.log(`[CLIP] 已存在 int8 量化模型: ${q8Path}`);
+    return q8Path;
+  }
+
+  if (!fs.existsSync(onnxModelPath)) {
+    return onnxModelPath;
+  }
+
+  const dtype = getEmbeddingDtype();
+  if (dtype !== 'q8') {
+    return onnxModelPath;
+  }
+
+  console.log(`[CLIP] 首次运行，正在对模型进行 int8 动态量化...`);
+  console.log(`[CLIP] 源文件: ${onnxModelPath} → 目标: ${q8Path}`);
+
+  try {
+    const pythonScript = [
+      'import sys, os',
+      'sys.path.insert(0, os.path.join("' + process.cwd().replace(/\\/g, '/') + '", "node_modules"))',
+      'try:',
+      '    from onnxruntime.quantization import quantize_dynamic, QuantType',
+      '    quantize_dynamic(',
+      "      r'" + onnxModelPath.replace(/\\/g, '/') + "',",
+      "      r'" + q8Path.replace(/\\/g, '/') + "',",
+      '      weight_type=QuantType.QUInt8)',
+      '    )',
+      '    print("OK")',
+      'except ImportError:',
+      '    print("NO_ORT")',
+      'except Exception as e:',
+      '    print(f"ERROR:{e}")',
+    ].join('\n');
+
+    const result = execSync(`python -c "${pythonScript.replace(/"/g, '\\"')}"`, {
+      timeout: 120000,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      cwd: process.cwd(),
+    });
+
+    if (result.includes('OK') && fs.existsSync(q8Path)) {
+      const stats = fs.statSync(q8Path);
+      const sizeMB = (stats.size / (1024 * 1024)).toFixed(1);
+      console.log(`[CLIP] 动态量化完成: ${q8Path} (~${sizeMB}MB)`);
+      return q8Path;
+    } else if (result.includes('NO_ORT')) {
+      console.warn('[CLIP] Python onnxruntime 未安装，跳过动态量化（将使用 fp32 模型）');
+      return onnxModelPath;
+    } else {
+      throw new Error(result.trim());
+    }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.warn(`[CLIP] 动态量化失败，回退到 fp32 模型: ${msg}`);
+    return onnxModelPath;
+  }
+}
+
+async function detectModelType(modelPath: string): Promise<'chinese_clip' | 'clip'> {
+  const configPath = path.join(modelPath, 'config.json')
+  try {
+    const raw = await fs.promises.readFile(configPath, 'utf-8')
+    const config = JSON.parse(raw)
+    const modelType = config.model_type
+    if (modelType === 'chinese_clip') {
+      console.log(`[CLIP] 检测到模型架构: chinese_clip (${modelPath})`)
+      return 'chinese_clip'
+    }
+    console.log(`[CLIP] 检测到模型架构: ${modelType || 'clip'} (${modelPath})`)
+    return 'clip'
+  } catch {
+    console.log(`[CLIP] 无法读取 config.json，默认使用 clip 架构: ${modelPath}`)
+    return 'clip'
+  }
 }
 
 function getModelLocalPath(modelName: string): string | null {
@@ -257,7 +398,6 @@ async function loadModelWithFallback<T>(
   loadFn: (modelPath: string) => Promise<T>,
   modelType: string
 ): Promise<T> {
-  // 首先检查本地是否已有模型
   const localPath = getModelLocalPath(modelName);
   if (localPath) {
     console.log(`[CLIP] 使用本地模型: ${localPath}`);
@@ -267,20 +407,27 @@ async function loadModelWithFallback<T>(
       console.warn(`[CLIP] 本地模型加载失败，尝试重新下载:`, error);
     }
   }
-  
-  // 尝试从 Hugging Face 下载
+
+  const isHfReachable = await probeHuggingFaceReachability();
+
+  if (!isHfReachable) {
+    console.log(`[CLIP] HuggingFace 不可达，直接使用 ModelScope 镜像`);
+    const modelScopePath = await downloadFromModelScope(modelName);
+    console.log(`[CLIP] 从 ModelScope 加载${modelType}: ${modelScopePath}`);
+    return await loadFn(modelScopePath);
+  }
+
   try {
-    console.log(`[CLIP] 尝试从 Hugging Face 加载${modelType}`);
+    console.log(`[CLIP] 尝试从 HuggingFace 加载${modelType}`);
     isUsingModelScope = false;
     return await loadFn(modelName);
   } catch (error) {
     if (!isNetworkError(error as Error)) {
       throw error;
     }
-    console.warn(`[CLIP] 从 Hugging Face 加载${modelType}失败，准备使用 ModelScope`);
+    console.warn(`[CLIP] 从 HuggingFace 加载${modelType}失败，准备使用 ModelScope`);
   }
-  
-  // 使用 ModelScope 下载并加载
+
   const modelScopePath = await downloadFromModelScope(modelName);
   console.log(`[CLIP] 从 ModelScope 加载${modelType}: ${modelScopePath}`);
   return await loadFn(modelScopePath);
@@ -305,7 +452,13 @@ async function getImageExtractor() {
         const extractor = await pipeline('image-feature-extraction', modelPath, {
           cache_dir: MODEL_CACHE_DIR,
           local_files_only: isLocalPath,
-        });
+          dtype: getEmbeddingDtype(),
+        })
+        const modelDir = getModelLocalPath(modelName) || modelName;
+        const onnxFiles = findOnnxFiles(modelDir);
+        if (onnxFiles.length > 0) {
+          await quantizeModelIfNeeded(onnxFiles[0]);
+        }
         return extractor as ExtractorFunc;
       },
       '图像特征提取模型'
@@ -339,80 +492,98 @@ async function getImageExtractor() {
 
 async function getTextModel() {
   if (modelLoadError) {
-    throw new Error(`模型加载失败: ${modelLoadError.message}`);
+    throw new Error(`模型加载失败: ${modelLoadError.message}`)
   }
 
   if (!textModelPromise) {
-    const modelName = getEmbeddingModelName();
-    console.log(`[CLIP] 正在加载文本模型: ${modelName}`);
+    const modelName = getEmbeddingModelName()
+    console.log(`[CLIP] 正在加载文本模型: ${modelName}`)
 
     textModelPromise = loadModelWithFallback(
       modelName,
       async (modelPath) => {
-        const isLocalPath = modelPath.includes('/') && fs.existsSync(modelPath);
-        console.log(`[CLIP] 加载文本模型，路径: ${modelPath}, 本地模式: ${isLocalPath}`);
+        const isLocalPath = modelPath.includes('/') && fs.existsSync(modelPath)
+        console.log(`[CLIP] 加载文本模型，路径: ${modelPath}, 本地模式: ${isLocalPath}`)
+        const modelType = await detectModelType(modelPath)
+        if (modelType === 'chinese_clip') {
+          console.log(`[CLIP] 使用 ChineseCLIPModel 加载文本编码器`)
+          return await ChineseCLIPModel.from_pretrained(modelPath, {
+            cache_dir: MODEL_CACHE_DIR,
+            local_files_only: isLocalPath,
+            dtype: getEmbeddingDtype(),
+          })
+        }
         return await CLIPTextModelWithProjection.from_pretrained(modelPath, {
           cache_dir: MODEL_CACHE_DIR,
           local_files_only: isLocalPath,
-        });
+        })
       },
       '文本模型'
     )
       .then((model) => {
-        console.log(`[CLIP] 文本模型加载成功`);
-        return model;
+        console.log(`[CLIP] 文本模型加载成功`)
+        return model
       })
       .catch((error) => {
-        console.error(`[CLIP] 文本模型加载失败:`, error);
-        modelLoadError = error;
-        textModelPromise = null;
-        throw error;
-      });
+        console.error(`[CLIP] 文本模型加载失败:`, error)
+        modelLoadError = error
+        textModelPromise = null
+        throw error
+      })
   }
-  return textModelPromise;
+  return textModelPromise
 }
 
 async function getTextTokenizer() {
   if (modelLoadError) {
-    throw new Error(`模型加载失败: ${modelLoadError.message}`);
+    throw new Error(`模型加载失败: ${modelLoadError.message}`)
   }
 
   if (!textTokenizerPromise) {
-    const modelName = getEmbeddingModelName();
-    console.log(`[CLIP] 正在加载文本分词器: ${modelName}`);
+    const modelName = getEmbeddingModelName()
+    console.log(`[CLIP] 正在加载文本分词器: ${modelName}`)
 
     textTokenizerPromise = loadModelWithFallback(
       modelName,
       async (modelPath) => {
-        const isLocalPath = modelPath.includes('/') && fs.existsSync(modelPath);
-        console.log(`[CLIP] 加载分词器，路径: ${modelPath}, 本地模式: ${isLocalPath}`);
+        const isLocalPath = modelPath.includes('/') && fs.existsSync(modelPath)
+        console.log(`[CLIP] 加载分词器，路径: ${modelPath}, 本地模式: ${isLocalPath}`)
+        const modelType = await detectModelType(modelPath)
+        if (modelType === 'chinese_clip') {
+          console.log(`[CLIP] 使用 AutoTokenizer 加载 ChineseCLIP 分词器`)
+          return await AutoTokenizer.from_pretrained(modelPath, {
+            cache_dir: MODEL_CACHE_DIR,
+            local_files_only: isLocalPath,
+          })
+        }
         return await CLIPTokenizer.from_pretrained(modelPath, {
           cache_dir: MODEL_CACHE_DIR,
           local_files_only: isLocalPath,
-        });
+        })
       },
       '文本分词器'
     )
       .then((tokenizer) => {
-        console.log(`[CLIP] 文本分词器加载成功`);
-        return tokenizer;
+        console.log(`[CLIP] 文本分词器加载成功`)
+        return tokenizer
       })
       .catch((error) => {
-        console.error(`[CLIP] 文本分词器加载失败:`, error);
-        modelLoadError = error;
-        textTokenizerPromise = null;
-        throw error;
-      });
+        console.error(`[CLIP] 文本分词器加载失败:`, error)
+        modelLoadError = error
+        textTokenizerPromise = null
+        throw error
+      })
   }
-  return textTokenizerPromise;
+  return textTokenizerPromise
 }
 
 export async function generateImageEmbedding(imageBuffer: Buffer) {
   if (!imageBuffer || imageBuffer.byteLength === 0) {
-    throw new Error('图片内容为空，无法生成向量');
+    throw new Error('图片内容为空，无法生成向量')
   }
 
-  const extractor = await getImageExtractor();
+  const startTime = Date.now()
+  const extractor = await getImageExtractor()
   const tmpPath = path.join(os.tmpdir(), `embedding_${Date.now()}_${Math.random().toString(36).slice(2)}.tmp`);
   try {
     await fs.promises.writeFile(tmpPath, imageBuffer);
@@ -427,13 +598,15 @@ export async function generateImageEmbedding(imageBuffer: Buffer) {
       throw new Error('未获取到图像向量数据');
     }
 
-    const vector = normalizeVector(Array.from(vectorData));
-    const expectedSize = getEmbeddingVectorSize();
+    const vector = normalizeVector(Array.from(vectorData))
+    const expectedSize = getEmbeddingVectorSize()
     if (vector.length !== expectedSize) {
-      throw new Error(`向量维度异常: expected=${expectedSize}, actual=${vector.length}`);
+      throw new Error(`向量维度异常: expected=${expectedSize}, actual=${vector.length}`)
     }
 
-    return vector;
+    const elapsed = Date.now() - startTime
+    console.log(`[CLIP] 图像嵌入生成完成，耗时: ${elapsed}ms`)
+    return vector
   } finally {
     await fs.promises.unlink(tmpPath).catch(() => {});
   }
@@ -441,10 +614,11 @@ export async function generateImageEmbedding(imageBuffer: Buffer) {
 
 export async function generateTextEmbedding(text: string): Promise<number[]> {
   if (!text || text.trim().length === 0) {
-    throw new Error('文本内容为空，无法生成向量');
+    throw new Error('文本内容为空，无法生成向量')
   }
 
-  const model = await getTextModel();
+  const startTime = Date.now()
+  const model = await getTextModel()
   const tokenizer = await getTextTokenizer();
 
   const outputs = await model.forward(tokenizer(text));
@@ -454,13 +628,15 @@ export async function generateTextEmbedding(text: string): Promise<number[]> {
     throw new Error('未获取到文本向量数据');
   }
 
-  const vector = normalizeVector(Array.from(vectorData));
-  const expectedSize = getEmbeddingVectorSize();
+  const vector = normalizeVector(Array.from(vectorData))
+  const expectedSize = getEmbeddingVectorSize()
   if (vector.length !== expectedSize) {
-    throw new Error(`向量维度异常: expected=${expectedSize}, actual=${vector.length}`);
+    throw new Error(`向量维度异常: expected=${expectedSize}, actual=${vector.length}`)
   }
 
-  return vector;
+  const elapsed = Date.now() - startTime
+  console.log(`[CLIP] 文本嵌入生成完成，耗时: ${elapsed}ms`)
+  return vector
 }
 
 export async function warmup(): Promise<void> {

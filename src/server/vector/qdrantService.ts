@@ -49,7 +49,18 @@ export async function ensureQdrantCollection() {
       const collections = await client.getCollections();
       const exists = collections.collections.some((collection) => collection.name === collectionName);
       if (exists) {
-        return;
+        try {
+          const existing = await client.getCollection(collectionName)
+          const existingSize = existing.config?.params?.vectors?.size
+          if (existingSize === getVectorSize()) {
+            return
+          }
+          console.warn(`[Qdrant] 向量维度不匹配: existing=${existingSize}, required=${getVectorSize()}，将重建 collection`)
+          await client.deleteCollection(collectionName)
+        } catch (error) {
+          console.error('[Qdrant] 获取现有 collection 信息失败:', error)
+          throw error
+        }
       }
 
       await client.createCollection(collectionName, {
@@ -59,9 +70,15 @@ export async function ensureQdrantCollection() {
         },
         hnsw_config: {
           m: 16,
-          ef_construct: 128,
+          ef_construct: 256,
         },
-      });
+      })
+
+      await client.createPayloadIndex(collectionName, {
+        field_name: 'sourceType',
+        field_schema: 'keyword',
+        wait: true,
+      })
     })().catch((error) => {
       ensureCollectionPromise = null;
       throw error;

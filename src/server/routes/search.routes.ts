@@ -539,7 +539,7 @@ router.get('/', searchLimiter, async (req: AuthenticatedRequest, res) => {
       let degradationReason: string | undefined;
 
       try {
-        const vectorResponse = await fetchVectorSearchWithTimeout(q, IMAGE_SEARCH_RESULT_LIMIT, 0.3, QDRANT_TIMEOUT_MS);
+        const vectorResponse = await fetchVectorSearchWithTimeout(q, IMAGE_SEARCH_RESULT_LIMIT, 0.25, QDRANT_TIMEOUT_MS);
         vectorResults = vectorResponse.results;
         if (vectorResponse.timedOut) {
           degraded = true;

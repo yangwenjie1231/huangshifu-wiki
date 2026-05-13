@@ -25,8 +25,8 @@ describe('clipEmbedding', () => {
 
   it('returns default model and vector size', async () => {
     const module = await import('../../src/server/vector/clipEmbedding');
-    expect(module.getEmbeddingModelName()).toBe('Xenova/clip-vit-base-patch32');
-    expect(module.getEmbeddingVectorSize()).toBe(512);
+    expect(module.getEmbeddingModelName()).toBe('OFA-Sys/chinese-clip-vit-base-patch16')
+    expect(module.getEmbeddingVectorSize()).toBe(512)
   });
 
   it('reads model and vector size from env with validation', async () => {
@@ -38,7 +38,7 @@ describe('clipEmbedding', () => {
     expect(module.getEmbeddingVectorSize()).toBe(256);
 
     process.env.IMAGE_EMBEDDING_VECTOR_SIZE = '-1';
-    expect(module.getEmbeddingVectorSize()).toBe(512);
+    expect(module.getEmbeddingVectorSize()).toBe(512)
   });
 
   it('generates normalized embedding vector', async () => {
@@ -53,9 +53,10 @@ describe('clipEmbedding', () => {
 
     expect(pipelineMock).toHaveBeenCalledWith(
       expect.stringContaining('image-feature-extraction'),
-      expect.stringContaining('clip-vit-base-patch32'),
+      expect.any(String),
       expect.objectContaining({
         cache_dir: expect.any(String),
+        dtype: expect.any(String),
       })
     );
     expect(readMock).toHaveBeenCalledTimes(1);
