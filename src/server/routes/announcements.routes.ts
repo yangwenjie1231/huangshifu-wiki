@@ -27,7 +27,7 @@ router.get('/latest', async (_req, res) => {
     const result = { announcement };
 
     // 缓存结果
-    enhancedCache.set(CACHE_KEYS.ANNOUNCEMENT_LATEST, result, CACHE_TTL.ANNOUNCEMENT / 1000);
+    enhancedCache.set(CACHE_KEYS.ANNOUNCEMENT_LATEST, result, CACHE_TTL_SEC.ANNOUNCEMENT);
 
     res.json(result);
   } catch (error) {

@@ -150,6 +150,21 @@ export async function safeDeleteUploadFileByUrl(url: string): Promise<void> {
 
 // ─── 存储上传（S3 / External / Superbed）─────────────────────────────
 
+let s3ModuleCache: {
+  s3Service: typeof import('../s3/s3Service');
+  clientS3: typeof import('@aws-sdk/client-s3');
+} | null = null;
+
+async function getS3Modules() {
+  if (!s3ModuleCache) {
+    s3ModuleCache = await Promise.all([
+      import('../s3/s3Service'),
+      import('@aws-sdk/client-s3'),
+    ]).then(([s3Service, clientS3]) => ({ s3Service, clientS3 }));
+  }
+  return s3ModuleCache;
+}
+
 export async function uploadFileToS3(
   filePath: string,
   objectKey: string,

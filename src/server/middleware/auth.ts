@@ -5,14 +5,18 @@ import { UserRole as PrismaUserRole } from '@prisma/client';
 import type { ApiUser, SessionJwtPayload, UserStatus, AuthenticatedRequest } from '../types';
 import { prisma } from '../prisma';
 import { enhancedCache, CACHE_KEYS, CACHE_TTL_SEC } from '../utils/cache';
+import { logger } from '../utils/logger';
 
-const JWT_SECRET = process.env.JWT_SECRET || '';
+const JWT_SECRET = process.env.JWT_SECRET;
 const AUTH_COOKIE_NAME = 'hsf_token';
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const IS_PROD = process.env.NODE_ENV === 'production';
 
-if (!JWT_SECRET) {
-  throw new Error('Missing JWT_SECRET. Please set it in .env.local');
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  throw new Error(
+    `Invalid JWT_SECRET: length must be >= 32 characters. ` +
+    `Generate one with: node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`
+  );
 }
 
 function userToApiUser(user: {
@@ -139,7 +143,7 @@ async function authMiddleware(req: AuthenticatedRequest, _res: Response, next: N
       if (user) {
         apiUser = userToApiUser(user);
         // 缓存用户数据
-        enhancedCache.set(cacheKey, apiUser, CACHE_TTL.AUTH_USER / 1000);
+        enhancedCache.set(cacheKey, apiUser, CACHE_TTL_SEC.AUTH_USER);
       }
     }
 

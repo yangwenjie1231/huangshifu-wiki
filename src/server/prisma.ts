@@ -1,29 +1,28 @@
 import { PrismaClient } from '@prisma/client';
+import os from 'os';
 
-// 全局 Prisma 客户端实例
-// 在开发环境中使用 globalThis 来保持热重载时的连接
-// 避免每次 HMR 都创建新的 PrismaClient 实例（会导致连接数泄漏）
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-// 连接池配置说明：
-// Prisma v5+ 不直接在构造参数中支持 connection_limit。
-// 推荐通过 DATABASE_URL 查询参数设置连接池：
-//   postgresql://user:pass@host:5432/db?connection_limit=20&pool_timeout=10&connect_timeout=10
-//
-// 参数说明：
-//   connection_limit: 最大连接数（默认按 pg 库的默认值，通常 10）
-//   pool_timeout: 从池中获取连接的超时时间（秒）
-//   connect_timeout: 建立新连接的超时时间（秒）
-//
-// 生产环境建议：根据 CPU 核心数 * 2 + 1 设置 connection_limit
+function buildDatabaseUrl(): string {
+  const baseUrl = process.env.DATABASE_URL;
+  if (!baseUrl) return baseUrl;
+  try {
+    const url = new URL(baseUrl);
+    const connectionLimit = Number(process.env.DB_CONNECTION_LIMIT) || (os.cpus().length * 2 + 1);
+    const poolTimeout = Number(process.env.DB_POOL_TIMEOUT) || 10;
+    url.searchParams.set('connection_limit', String(connectionLimit));
+    url.searchParams.set('pool_timeout', String(poolTimeout));
+    return url.toString();
+  } catch { return baseUrl; }
+}
+
+const isDev = process.env.NODE_ENV !== 'production';
+
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL,
-    },
-  },
+  datasources: { db: { url: buildDatabaseUrl() } },
+  log: isDev ? ['query', 'error', 'warn'] : ['error'],
 });
 
 if (isDev) {
