@@ -52,6 +52,7 @@ vi.mock('../../src/server/utils', () => ({
   toWikiPullRequestResponse: vi.fn((pullRequest) => pullRequest),
   hasTag: vi.fn(() => false),
   buildWikiRelationBundle: vi.fn(),
+  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
 }));
 
 type TestUser = {
