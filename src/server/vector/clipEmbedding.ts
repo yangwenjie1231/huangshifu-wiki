@@ -38,8 +38,12 @@ type ExtractorFunc = (
 let imageExtractorPromise: Promise<ExtractorFunc> | null = null
 let textModelPromise: Promise<CLIPTextModelWithProjection | ChineseCLIPModel> | null = null
 let textTokenizerPromise: Promise<CLIPTokenizer | PreTrainedTokenizer> | null = null
-let modelLoadError: Error | null = null;
-let isUsingModelScope = false;
+let imageModelError: Error | null = null
+let textModelError: Error | null = null
+let textTokenizerError: Error | null = null
+let isUsingModelScope = false
+let cachedModelType: 'chinese_clip' | 'clip' | null = null
+let actualDtypeUsed: DataType | null = null
 
 function parseInteger(value: string | undefined, fallback: number) {
   const parsed = Number(value);
@@ -73,12 +77,24 @@ export function getModelCacheDir() {
   return MODEL_CACHE_DIR;
 }
 
-export function isModelLoaded() {
-  return imageExtractorPromise !== null && modelLoadError === null;
+export function isImageModelLoaded() {
+  return imageExtractorPromise !== null && imageModelError === null
+}
+
+export function isTextModelLoaded() {
+  return textModelPromise !== null && textModelError === null
+}
+
+export function isTokenizerLoaded() {
+  return textTokenizerPromise !== null && textTokenizerError === null
 }
 
 export function getModelLoadError() {
-  return modelLoadError;
+  return { image: imageModelError, text: textModelError, tokenizer: textTokenizerError }
+}
+
+export function getActualDtype(): DataType {
+  return actualDtypeUsed || getEmbeddingDtype()
 }
 
 export function isModelScopeActive() {
@@ -216,6 +232,9 @@ async function quantizeModelIfNeeded(onnxModelPath: string): Promise<string> {
 }
 
 async function detectModelType(modelPath: string): Promise<'chinese_clip' | 'clip'> {
+  if (cachedModelType !== null) {
+    return cachedModelType
+  }
   const configPath = path.join(modelPath, 'config.json')
   try {
     const raw = await fs.promises.readFile(configPath, 'utf-8')
@@ -223,13 +242,16 @@ async function detectModelType(modelPath: string): Promise<'chinese_clip' | 'cli
     const modelType = config.model_type
     if (modelType === 'chinese_clip') {
       console.log(`[CLIP] 检测到模型架构: chinese_clip (${modelPath})`)
-      return 'chinese_clip'
+      cachedModelType = 'chinese_clip'
+      return cachedModelType
     }
     console.log(`[CLIP] 检测到模型架构: ${modelType || 'clip'} (${modelPath})`)
-    return 'clip'
+    cachedModelType = 'clip'
+    return cachedModelType
   } catch {
     console.log(`[CLIP] 无法读取 config.json，默认使用 clip 架构: ${modelPath}`)
-    return 'clip'
+    cachedModelType = 'clip'
+    return cachedModelType
   }
 }
 
@@ -434,8 +456,8 @@ async function loadModelWithFallback<T>(
 }
 
 async function getImageExtractor() {
-  if (modelLoadError) {
-    throw new Error(`模型加载失败: ${modelLoadError.message}`);
+  if (imageModelError) {
+    throw new Error(`模型加载失败: ${imageModelError.message}`)
   }
 
   if (!imageExtractorPromise) {
@@ -446,34 +468,44 @@ async function getImageExtractor() {
     imageExtractorPromise = loadModelWithFallback(
       modelName,
       async (modelPath) => {
-        // 判断是否是本地路径（包含 / 且目录存在）
-        const isLocalPath = modelPath.includes('/') && fs.existsSync(modelPath);
-        console.log(`[CLIP] 加载图像模型，路径: ${modelPath}, 本地模式: ${isLocalPath}`);
+        const isLocalPath = modelPath.includes('/') && fs.existsSync(modelPath)
+        console.log(`[CLIP] 加载图像模型，路径: ${modelPath}, 本地模式: ${isLocalPath}`)
+
+        const modelDir = getModelLocalPath(modelName) || modelName
+        const onnxFiles = findOnnxFiles(modelDir)
+        let actualDtype = getEmbeddingDtype()
+        if (onnxFiles.length > 0) {
+          try {
+            const quantizedPath = await quantizeModelIfNeeded(onnxFiles[0])
+            if (quantizedPath !== onnxFiles[0]) {
+              console.log(`[CLIP] 量化模型已就绪: ${quantizedPath}`)
+            }
+          } catch (e) {
+            console.warn(`[CLIP] 预量化失败，将使用 fp32:`, e)
+            actualDtype = 'fp32' as DataType
+          }
+        }
+
         const extractor = await pipeline('image-feature-extraction', modelPath, {
           cache_dir: MODEL_CACHE_DIR,
           local_files_only: isLocalPath,
-          dtype: getEmbeddingDtype(),
+          dtype: actualDtype,
         })
-        const modelDir = getModelLocalPath(modelName) || modelName;
-        const onnxFiles = findOnnxFiles(modelDir);
-        if (onnxFiles.length > 0) {
-          await quantizeModelIfNeeded(onnxFiles[0]);
-        }
-        return extractor as ExtractorFunc;
+        actualDtypeUsed = actualDtype
+        return extractor as ExtractorFunc
       },
       '图像特征提取模型'
     )
       .then((extractor) => {
         console.log(`[CLIP] 图像特征提取模型加载成功`);
-        modelLoadError = null;
+        imageModelError = null;
         return extractor;
       })
       .catch((error) => {
         console.error(`[CLIP] 图像特征提取模型加载失败:`, error);
-        modelLoadError = error;
+        imageModelError = error;
         imageExtractorPromise = null;
 
-        // 提供更友好的错误信息
         if (isNetworkError(error)) {
           throw new Error(
             `模型下载失败: 无法连接到 Hugging Face 或 ModelScope 服务器。\n` +
@@ -491,8 +523,8 @@ async function getImageExtractor() {
 }
 
 async function getTextModel() {
-  if (modelLoadError) {
-    throw new Error(`模型加载失败: ${modelLoadError.message}`)
+  if (textModelError) {
+    throw new Error(`文本模型加载失败: ${textModelError.message}`)
   }
 
   if (!textModelPromise) {
@@ -522,11 +554,12 @@ async function getTextModel() {
     )
       .then((model) => {
         console.log(`[CLIP] 文本模型加载成功`)
+        textModelError = null
         return model
       })
       .catch((error) => {
         console.error(`[CLIP] 文本模型加载失败:`, error)
-        modelLoadError = error
+        textModelError = error
         textModelPromise = null
         throw error
       })
@@ -535,8 +568,8 @@ async function getTextModel() {
 }
 
 async function getTextTokenizer() {
-  if (modelLoadError) {
-    throw new Error(`模型加载失败: ${modelLoadError.message}`)
+  if (textTokenizerError) {
+    throw new Error(`分词器加载失败: ${textTokenizerError.message}`)
   }
 
   if (!textTokenizerPromise) {
@@ -565,11 +598,12 @@ async function getTextTokenizer() {
     )
       .then((tokenizer) => {
         console.log(`[CLIP] 文本分词器加载成功`)
+        textTokenizerError = null
         return tokenizer
       })
       .catch((error) => {
         console.error(`[CLIP] 文本分词器加载失败:`, error)
-        modelLoadError = error
+        textTokenizerError = error
         textTokenizerPromise = null
         throw error
       })

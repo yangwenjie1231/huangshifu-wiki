@@ -250,7 +250,7 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
             className="text-sm text-[#6b6560] cursor-pointer select-none"
           >
             <span className="font-medium">智能混合搜索</span>
-            <span className="ml-1.5 text-xs text-[#9e968e]">(RRF融合算法)</span>
+            <span className="ml-1.5 text-xs text-[#9e968e]">(关键词+图片+文本三路融合)</span>
           </label>
         </div>
         <div className="text-xs text-[#9e968e]">

@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { requireAuth, requireAdmin, type AuthenticatedRequest } from '../middleware/auth';
+import type { ApiUser } from '../types';
 import { searchLimiter } from '../middleware/rateLimiter';
 import {
   parseInteger,
@@ -23,8 +24,8 @@ import {
   logger,
 } from '../utils';
 import { prisma } from '../prisma';
-import { getEmbeddingModelName, getEmbeddingVectorSize, generateImageEmbedding, generateTextEmbedding } from '../vector/clipEmbedding';
-import { getQdrantCollectionName, searchImageEmbeddingPoints, toEmbeddingPayload, type ImageSourceType, type ImageEmbeddingPayload } from '../vector/qdrantService';
+import { getEmbeddingModelName, getEmbeddingVectorSize, generateImageEmbedding, generateTextEmbedding, isTextModelLoaded } from '../vector/clipEmbedding';
+import { getQdrantCollectionName, searchImageEmbeddingPoints, searchTextEmbeddingPoints, toEmbeddingPayload, type ImageSourceType, type ImageEmbeddingPayload } from '../vector/qdrantService';
 import { createUploadStorageInfo } from '../uploadPath';
 
 const router = Router();
@@ -38,10 +39,11 @@ interface HybridSearchItem {
   type: 'wiki' | 'post' | 'gallery' | 'music' | 'album';
   data: unknown;
   relevanceScore: number;
-  matchType: 'keyword' | 'vector' | 'hybrid';
+  matchType: 'keyword' | 'vector' | 'hybrid' | 'text';
   vectorDistance?: number;
   keywordRank?: number;
   vectorRank?: number;
+  textRank?: number;
 }
 
 interface HybridSearchResponse {
@@ -57,6 +59,7 @@ interface HybridSearchResponse {
     degradationReason?: string;
     keywordResultCount: number;
     vectorResultCount: number;
+    textVectorResultCount: number;
   };
 }
 
@@ -94,15 +97,20 @@ const searchImageUpload = multer({
   },
 });
 
-/**
- * 语义搜索结果项类型
- */
 interface SemanticSearchResult {
   sourceType: ImageSourceType;
   sourceId: string;
   imageUrl: string;
   similarity: number;
   data: unknown;
+}
+
+type TextSearchResult = {
+  sourceType: string
+  sourceId: string
+  score: number
+  chunkPreview: string
+  entity: any
 }
 
 /**
@@ -137,7 +145,7 @@ async function fetchGalleryData(galleryIds: string[]): Promise<Map<string, Await
 /**
  * 获取 WikiPage 数据
  */
-async function fetchWikiData(slugs: string[]): Promise<Map<string, ReturnType<typeof toWikiResponse>>> {
+async function fetchWikiData(slugs: string[], authUser?: ApiUser): Promise<Map<string, ReturnType<typeof toWikiResponse>>> {
   if (!slugs.length) {
     return new Map();
   }
@@ -145,6 +153,7 @@ async function fetchWikiData(slugs: string[]): Promise<Map<string, ReturnType<ty
   const wikiRows = await prisma.wikiPage.findMany({
     where: {
       slug: { in: slugs },
+      ...buildWikiVisibilityWhere(authUser),
     },
     include: {
       location: true,
@@ -161,7 +170,7 @@ async function fetchWikiData(slugs: string[]): Promise<Map<string, ReturnType<ty
 /**
  * 获取 Post 数据
  */
-async function fetchPostData(ids: string[]): Promise<Map<string, ReturnType<typeof toPostResponse>>> {
+async function fetchPostData(ids: string[], authUser?: ApiUser): Promise<Map<string, ReturnType<typeof toPostResponse>>> {
   if (!ids.length) {
     return new Map();
   }
@@ -169,6 +178,7 @@ async function fetchPostData(ids: string[]): Promise<Map<string, ReturnType<type
   const postRows = await prisma.post.findMany({
     where: {
       id: { in: ids },
+      ...buildPostVisibilityWhere(authUser),
     },
     include: {
       location: true,
@@ -187,7 +197,7 @@ async function fetchPostData(ids: string[]): Promise<Map<string, ReturnType<type
  */
 async function processSemanticSearchResults(
   matches: Array<{ id: string | number; score: number; payload: ImageEmbeddingPayload | null }>,
-  options?: { visibilityCheck?: { wiki: ReturnType<typeof buildWikiVisibilityWhere>; post: ReturnType<typeof buildPostVisibilityWhere> } }
+  authUser?: ApiUser
 ): Promise<SemanticSearchResult[]> {
   // 按 sourceType 分组
   const galleryIds: string[] = [];
@@ -229,8 +239,8 @@ async function processSemanticSearchResults(
   // 并行获取各类数据
   const [galleryData, wikiData, postData] = await Promise.all([
     fetchGalleryData(galleryIds),
-    fetchWikiData(wikiSlugs),
-    fetchPostData(postIds),
+    fetchWikiData(wikiSlugs, authUser),
+    fetchPostData(postIds, authUser),
   ]);
 
   // 构建结果数组
@@ -295,7 +305,8 @@ export async function fetchVectorSearchWithTimeout(
   q: string,
   limit: number,
   minScore: number,
-  timeoutMs: number
+  timeoutMs: number,
+  authUser?: ApiUser
 ): Promise<{ results: SemanticSearchResult[]; timedOut: boolean }> {
   const results = await Promise.race([
     (async (): Promise<{ results: SemanticSearchResult[]; timedOut: boolean }> => {
@@ -305,7 +316,7 @@ export async function fetchVectorSearchWithTimeout(
         limit,
         minScore,
       });
-      return { results: await processSemanticSearchResults(matches), timedOut: false };
+      return { results: await processSemanticSearchResults(matches, authUser), timedOut: false };
     })(),
     new Promise<{ results: SemanticSearchResult[]; timedOut: boolean }>((resolve) =>
       setTimeout(() => resolve({ results: [], timedOut: true }), timeoutMs)
@@ -314,13 +325,112 @@ export async function fetchVectorSearchWithTimeout(
   return results;
 }
 
+async function fetchTextVectorSearchWithTimeout(
+  q: string,
+  limit: number,
+  minScore: number,
+  timeoutMs: number,
+  authUser?: ApiUser
+): Promise<{ results: TextSearchResult[]; timedOut: boolean }> {
+  if (!isTextModelLoaded()) {
+    return { results: [], timedOut: false }
+  }
+
+  const results = await Promise.race([
+    (async (): Promise<{ results: TextSearchResult[]; timedOut: boolean }> => {
+      const queryVector = await generateTextEmbedding(q)
+      const matches = await searchTextEmbeddingPoints(queryVector, limit, minScore)
+      return { results: await processTextSearchResults(matches, authUser), timedOut: false }
+    })(),
+    new Promise<{ results: TextSearchResult[]; timedOut: boolean }>((resolve) =>
+      setTimeout(() => resolve({ results: [], timedOut: true }), timeoutMs)
+    ),
+  ])
+  return results
+}
+
+async function processTextSearchResults(
+  matches: Array<{ sourceType: string; sourceId: string; chunkIndex: number; chunkPreview: string; score: number }>,
+  authUser?: ApiUser
+): Promise<TextSearchResult[]> {
+  const entityMap = new Map<string, { score: number; chunkPreview: string }>()
+
+  for (const match of matches) {
+    if (!match.sourceId || !match.sourceType) continue
+    const key = `${match.sourceType}:${match.sourceId}`
+    const existing = entityMap.get(key)
+    if (!existing || match.score > existing.score) {
+      entityMap.set(key, { score: match.score, chunkPreview: match.chunkPreview })
+    }
+  }
+
+  const wikiSlugs: string[] = []
+  const postIds: string[] = []
+  const musicDocIds: string[] = []
+  const albumDocIds: string[] = []
+
+  for (const [key] of entityMap) {
+    const [sourceType, sourceId] = key.split(':')
+    if (sourceType === 'wiki' && !wikiSlugs.includes(sourceId)) wikiSlugs.push(sourceId)
+    else if (sourceType === 'post' && !postIds.includes(sourceId)) postIds.push(sourceId)
+    else if (sourceType === 'music' && !musicDocIds.includes(sourceId)) musicDocIds.push(sourceId)
+    else if (sourceType === 'album' && !albumDocIds.includes(sourceId)) albumDocIds.push(sourceId)
+  }
+
+  const [wikiRows, postRows, musicRows, albumRows] = await Promise.all([
+    wikiSlugs.length
+      ? prisma.wikiPage.findMany({ where: { slug: { in: wikiSlugs }, ...buildWikiVisibilityWhere(authUser) }, include: { location: true } })
+      : Promise.resolve([]),
+    postIds.length
+      ? prisma.post.findMany({ where: { id: { in: postIds }, ...buildPostVisibilityWhere(authUser) }, include: { location: true } })
+      : Promise.resolve([]),
+    musicDocIds.length
+      ? prisma.musicTrack.findMany({ where: { docId: { in: musicDocIds } } })
+      : Promise.resolve([]),
+    albumDocIds.length
+      ? prisma.album.findMany({ where: { docId: { in: albumDocIds } } })
+      : Promise.resolve([]),
+  ])
+
+  const wikiBySlug = new Map(wikiRows.map((w) => [w.slug, w]))
+  const postById = new Map(postRows.map((p) => [p.id, p]))
+  const musicByDocId = new Map(musicRows.map((m) => [m.docId, m]))
+  const albumByDocId = new Map(albumRows.map((a) => [a.docId, a]))
+
+  const results: TextSearchResult[] = []
+
+  for (const [key, meta] of entityMap) {
+    const [sourceType, sourceId] = key.split(':')
+    let entity: any = null
+
+    if (sourceType === 'wiki') entity = wikiBySlug.get(sourceId)
+    else if (sourceType === 'post') entity = postById.get(sourceId)
+    else if (sourceType === 'music') entity = musicByDocId.get(sourceId)
+    else if (sourceType === 'album') entity = albumByDocId.get(sourceId)
+
+    if (!entity) continue
+
+    results.push({
+      sourceType,
+      sourceId,
+      score: meta.score,
+      chunkPreview: meta.chunkPreview,
+      entity,
+    })
+  }
+
+  results.sort((a, b) => b.score - a.score)
+  return results
+}
+
 export function buildHybridResponse(
   keywordResults: { wiki: any[]; posts: any[]; galleries: any[]; music: any[]; albums: any[] },
   vectorResults: SemanticSearchResult[],
   mode: string,
   query: string,
   degraded: boolean,
-  degradationReason?: string
+  degradationReason?: string,
+  textResults?: TextSearchResult[]
 ): HybridSearchResponse {
   const keywordFlat: HybridSearchItem[] = [
     ...keywordResults.wiki.map((d, i) => ({ id: d.slug || String(i), type: 'wiki' as const, data: d, relevanceScore: 0, matchType: 'keyword' as const, keywordRank: i })),
@@ -340,24 +450,54 @@ export function buildHybridResponse(
     vectorRank: i,
   }));
 
-  if (mode === 'hybrid' && vectorResults.length > 0 && keywordFlat.length > 0) {
-    const vectorMap = new Map(vectorFlat.map(v => [v.id, v]));
+  const textFlat: HybridSearchItem[] = (textResults || []).map((r, i) => ({
+    id: `${r.sourceType}:${r.sourceId}`,
+    type: r.sourceType as HybridSearchItem['type'],
+    data: r.entity,
+    relevanceScore: 0,
+    matchType: 'text' as const,
+    textRank: i,
+  }));
+
+  const hasVectorResults = vectorResults.length > 0
+  const hasTextResults = (textResults || []).length > 0
+  const hasKeywordResults = keywordFlat.length > 0
+
+  if (mode === 'hybrid' && (hasVectorResults || hasTextResults) && hasKeywordResults) {
+    const vectorMap = new Map(vectorFlat.map(v => [v.id, v]))
+    const textMap = new Map(textFlat.map(v => [v.id, v]))
+
     for (const kw of keywordFlat) {
-      const vec = vectorMap.get(kw.id);
+      const vec = vectorMap.get(kw.id)
+      const txt = textMap.get(kw.id)
       if (vec) {
-        kw.matchType = 'hybrid';
-        kw.vectorDistance = vec.vectorDistance;
-        kw.vectorRank = vec.vectorRank;
+        kw.matchType = 'hybrid'
+        kw.vectorDistance = vec.vectorDistance
+        kw.vectorRank = vec.vectorRank
       }
-      kw.relevanceScore = rrfScore([kw.keywordRank, kw.vectorRank]);
+      if (txt) {
+        kw.matchType = 'hybrid'
+        kw.textRank = txt.textRank
+      }
+      kw.relevanceScore = rrfScore([kw.keywordRank, kw.vectorRank, kw.textRank])
     }
     for (const v of vectorFlat) {
       if (!keywordFlat.find(k => k.id === v.id)) {
-        v.relevanceScore = rrfScore([undefined, v.vectorRank]);
-        keywordFlat.push(v);
+        const txt = textMap.get(v.id)
+        if (txt) v.textRank = txt.textRank
+        v.relevanceScore = rrfScore([undefined, v.vectorRank, v.textRank])
+        keywordFlat.push(v)
       }
     }
-    keywordFlat.sort((a, b) => b.relevanceScore - a.relevanceScore);
+    for (const t of textFlat) {
+      if (!keywordFlat.find(k => k.id === t.id)) {
+        const vec = vectorMap.get(t.id)
+        if (vec) t.vectorRank = vec.vectorRank
+        t.relevanceScore = rrfScore([undefined, t.vectorRank, t.textRank])
+        keywordFlat.push(t)
+      }
+    }
+    keywordFlat.sort((a, b) => b.relevanceScore - a.relevanceScore)
   } else if (mode === 'vector') {
     return {
       wiki: vectorFlat.filter(v => v.type === 'wiki').map(v => v.data as Awaited<ReturnType<typeof toWikiResponse>>),
@@ -365,7 +505,7 @@ export function buildHybridResponse(
       galleries: vectorFlat.filter(v => v.type === 'gallery').map(v => v.data as Awaited<ReturnType<typeof toGalleryResponse>>),
       music: [],
       albums: [],
-      searchMeta: { mode: 'vector', query, degraded: false, keywordResultCount: 0, vectorResultCount: vectorResults.length },
+      searchMeta: { mode: 'vector', query, degraded: false, keywordResultCount: 0, vectorResultCount: vectorResults.length, textVectorResultCount: (textResults || []).length },
     };
   }
 
@@ -382,6 +522,7 @@ export function buildHybridResponse(
       ...(degradationReason ? { degradationReason } : {}),
       keywordResultCount: keywordFlat.length,
       vectorResultCount: vectorResults.length,
+      textVectorResultCount: (textResults || []).length,
     },
   };
 }
@@ -535,20 +676,29 @@ router.get('/', searchLimiter, async (req: AuthenticatedRequest, res) => {
 
     if ((mode === 'hybrid' || mode === 'vector') && q) {
       let vectorResults: SemanticSearchResult[] = [];
+      let textResults: TextSearchResult[] = [];
       let degraded = false;
       let degradationReason: string | undefined;
 
-      try {
-        const vectorResponse = await fetchVectorSearchWithTimeout(q, IMAGE_SEARCH_RESULT_LIMIT, 0.25, QDRANT_TIMEOUT_MS);
-        vectorResults = vectorResponse.results;
-        if (vectorResponse.timedOut) {
+      const [vectorResponse, textResponse] = await Promise.all([
+        fetchVectorSearchWithTimeout(q, IMAGE_SEARCH_RESULT_LIMIT, 0.25, QDRANT_TIMEOUT_MS, req.authUser).catch((error) => {
           degraded = true;
-          degradationReason = '向量搜索超时（>' + (QDRANT_TIMEOUT_MS / 1000) + 's），已自动降级为关键词搜索模式';
-        }
-      } catch (error) {
+          degradationReason = '向量搜索不可用：' + (error instanceof Error ? error.message : '未知错误');
+          logger.warn({ err: error }, 'Vector search failed, degrading to keyword-only');
+          return { results: [] as SemanticSearchResult[], timedOut: false };
+        }),
+        fetchTextVectorSearchWithTimeout(q, IMAGE_SEARCH_RESULT_LIMIT, 0.25, QDRANT_TIMEOUT_MS, req.authUser).catch((error) => {
+          logger.warn({ err: error }, 'Text vector search failed');
+          return { results: [] as TextSearchResult[], timedOut: false };
+        }),
+      ]);
+
+      vectorResults = vectorResponse.results;
+      textResults = textResponse.results;
+
+      if (vectorResponse.timedOut || textResponse.timedOut) {
         degraded = true;
-        degradationReason = '向量搜索不可用：' + (error instanceof Error ? error.message : '未知错误');
-        logger.warn({ err: error }, 'Vector search failed, degrading to keyword-only');
+        degradationReason = '向量搜索超时（>' + (QDRANT_TIMEOUT_MS / 1000) + 's），已自动降级为关键词搜索模式';
       }
 
       const keywordRaw = {
@@ -559,7 +709,7 @@ router.get('/', searchLimiter, async (req: AuthenticatedRequest, res) => {
         albums: albums,
       };
 
-      const hybridResponse = buildHybridResponse(keywordRaw, vectorResults, mode, q, degraded, degradationReason);
+      const hybridResponse = buildHybridResponse(keywordRaw, vectorResults, mode, q, degraded, degradationReason, textResults);
       enhancedCache.set(cacheKey, hybridResponse, 30);
       return res.json(hybridResponse);
     }
@@ -570,7 +720,7 @@ router.get('/', searchLimiter, async (req: AuthenticatedRequest, res) => {
       galleries: await Promise.all(galleries.map(g => toGalleryResponse(g))),
       music: music.map(toMusicResponse),
       albums: albums.map(toAlbumResponse),
-      searchMeta: { mode: 'keyword', query: q, degraded: false, keywordResultCount: wiki.length + posts.length + galleries.length + music.length + albums.length, vectorResultCount: 0 },
+      searchMeta: { mode: 'keyword', query: q, degraded: false, keywordResultCount: wiki.length + posts.length + galleries.length + music.length + albums.length, vectorResultCount: 0, textVectorResultCount: 0 },
     };
     enhancedCache.set(cacheKey, keywordResult, 30);
     res.json(keywordResult);
@@ -579,6 +729,34 @@ router.get('/', searchLimiter, async (req: AuthenticatedRequest, res) => {
     res.status(500).json({ error: '搜索失败' });
   }
 });
+
+router.get('/text-semantic', searchLimiter, async (req: AuthenticatedRequest, res) => {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : ''
+    const requestedLimit = parseInteger(req.query.limit as string, IMAGE_SEARCH_RESULT_LIMIT, {
+      min: 1,
+      max: 60,
+    })
+    const minScore = parseMinSimilarityScore(req.query.minScore as string)
+
+    if (!q) {
+      res.status(400).json({ error: '请提供搜索文字 (q 参数)' })
+      return
+    }
+
+    const textResponse = await fetchTextVectorSearchWithTimeout(q, requestedLimit, minScore, QDRANT_TIMEOUT_MS, req.authUser)
+
+    res.json({
+      results: textResponse.results,
+      total: textResponse.results.length,
+      query: q,
+      minScore,
+    })
+  } catch (error) {
+    logger.error({ err: error }, 'Text semantic search error')
+    res.status(500).json({ error: '文本语义搜索失败' })
+  }
+})
 
 router.get('/hot-keywords', async (_req, res) => {
   try {
@@ -641,8 +819,7 @@ router.post('/by-image', searchImageUpload.single('image'), async (req: Authenti
       minScore,
     });
 
-    // 处理搜索结果
-    const results = await processSemanticSearchResults(matches);
+    const results = await processSemanticSearchResults(matches, req.authUser);
 
     res.json({
       mode: 'semantic_image',
@@ -683,8 +860,7 @@ router.get('/semantic-search', async (req: AuthenticatedRequest, res) => {
       minScore,
     });
 
-    // 处理搜索结果
-    const results = await processSemanticSearchResults(matches);
+    const results = await processSemanticSearchResults(matches, req.authUser);
 
     res.json({
       mode: 'semantic_text',

@@ -1,10 +1,12 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
 
 const DEFAULT_COLLECTION = 'hsf_image_embeddings';
+const DEFAULT_TEXT_COLLECTION = 'hsf_text_embeddings';
 const DEFAULT_DISTANCE: 'Cosine' | 'Dot' | 'Euclid' | 'Manhattan' = 'Cosine';
 
 let qdrantClient: QdrantClient | null = null;
 let ensureCollectionPromise: Promise<void> | null = null;
+let ensureTextCollectionPromise: Promise<void> | null = null;
 
 function parseInteger(value: string | undefined, fallback: number) {
   const parsed = Number(value);
@@ -16,6 +18,10 @@ function parseInteger(value: string | undefined, fallback: number) {
 
 export function getQdrantCollectionName() {
   return process.env.QDRANT_COLLECTION || DEFAULT_COLLECTION;
+}
+
+export function getTextCollectionName(): string {
+  return process.env.QDRANT_TEXT_COLLECTION || DEFAULT_TEXT_COLLECTION;
 }
 
 function getQdrantUrl() {
@@ -86,6 +92,54 @@ export async function ensureQdrantCollection() {
   }
 
   return ensureCollectionPromise;
+}
+
+export async function ensureTextQdrantCollection() {
+  if (!ensureTextCollectionPromise) {
+    ensureTextCollectionPromise = (async () => {
+      const client = getQdrantClient();
+      const collectionName = getTextCollectionName();
+
+      const collections = await client.getCollections();
+      const exists = collections.collections.some((collection) => collection.name === collectionName);
+      if (exists) {
+        try {
+          const existing = await client.getCollection(collectionName)
+          const existingSize = existing.config?.params?.vectors?.size
+          if (existingSize === 512) {
+            return
+          }
+          console.warn(`[Qdrant] 文本向量维度不匹配: existing=${existingSize}, required=512，将重建 collection`)
+          await client.deleteCollection(collectionName)
+        } catch (error) {
+          console.error('[Qdrant] 获取现有文本 collection 信息失败:', error)
+          throw error
+        }
+      }
+
+      await client.createCollection(collectionName, {
+        vectors: {
+          size: 512,
+          distance: DEFAULT_DISTANCE,
+        },
+        hnsw_config: {
+          m: 16,
+          ef_construct: 256,
+        },
+      })
+
+      await client.createPayloadIndex(collectionName, {
+        field_name: 'sourceType',
+        field_schema: 'keyword',
+        wait: true,
+      })
+    })().catch((error) => {
+      ensureTextCollectionPromise = null;
+      throw error;
+    });
+  }
+
+  return ensureTextCollectionPromise;
 }
 
 /**
@@ -253,4 +307,113 @@ export async function healthCheck(): Promise<{ status: string; latencyMs: number
   } catch (error) {
     return { status: 'error', latencyMs: Date.now() - start };
   }
+}
+
+export async function upsertTextEmbeddingPoint(params: {
+  pointId: string
+  vector: number[]
+  sourceType: string
+  sourceId: string
+  chunkIndex: number
+  chunkPreview: string
+  updatedAt: string
+}): Promise<void> {
+  await ensureTextQdrantCollection()
+  const client = getQdrantClient()
+  const collectionName = getTextCollectionName()
+
+  await client.upsert(collectionName, {
+    wait: true,
+    points: [
+      {
+        id: params.pointId,
+        vector: params.vector,
+        payload: {
+          sourceType: params.sourceType,
+          sourceId: params.sourceId,
+          chunkIndex: params.chunkIndex,
+          chunkPreview: params.chunkPreview,
+          updatedAt: params.updatedAt,
+        },
+      },
+    ],
+  })
+}
+
+export async function searchTextEmbeddingPoints(
+  queryVector: number[],
+  limit?: number,
+  minScore?: number
+): Promise<Array<{
+  sourceType: string
+  sourceId: string
+  chunkIndex: number
+  chunkPreview: string
+  score: number
+}>> {
+  await ensureTextQdrantCollection()
+  const client = getQdrantClient()
+  const collectionName = getTextCollectionName()
+
+  const results = await client.search(collectionName, {
+    vector: queryVector,
+    limit: limit ?? 10,
+    score_threshold: minScore,
+    with_payload: true,
+    with_vector: false,
+  })
+
+  return results.map((result) => ({
+    sourceType: String(result.payload?.sourceType ?? ''),
+    sourceId: String(result.payload?.sourceId ?? ''),
+    chunkIndex: Number(result.payload?.chunkIndex ?? 0),
+    chunkPreview: String(result.payload?.chunkPreview ?? ''),
+    score: result.score,
+  }))
+}
+
+export async function deleteTextEmbeddingPointsBySource(
+  sourceType: string,
+  sourceId: string
+): Promise<number> {
+  await ensureTextQdrantCollection()
+  const client = getQdrantClient()
+  const collectionName = getTextCollectionName()
+
+  const filtered = await client.scroll(collectionName, {
+    filter: {
+      must: [
+        { key: 'sourceType', match: { value: sourceType } },
+        { key: 'sourceId', match: { value: sourceId } },
+      ],
+    },
+    with_payload: false,
+    with_vector: false,
+    limit: 1000,
+  })
+
+  const pointIds = filtered.points.map((p) => p.id)
+  if (pointIds.length === 0) {
+    return 0
+  }
+
+  await client.delete(collectionName, {
+    wait: true,
+    points: pointIds,
+  })
+
+  return pointIds.length
+}
+
+export async function deleteTextEmbeddingPoint(
+  pointId: string
+): Promise<void> {
+  await ensureTextQdrantCollection()
+  const client = getQdrantClient()
+  const collectionName = getTextCollectionName()
+
+  await client.delete(collectionName, {
+    wait: true,
+    points: [pointId],
+  })
 }

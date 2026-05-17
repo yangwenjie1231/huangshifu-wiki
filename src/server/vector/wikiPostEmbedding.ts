@@ -1,6 +1,11 @@
-import { EmbeddingStatus, PrismaClient } from '@prisma/client';
+import fs from 'fs'
+import path from 'path'
 
-import { getEmbeddingModelName, getEmbeddingVectorSize } from './clipEmbedding';
+import { EmbeddingStatus, PrismaClient } from '@prisma/client'
+
+import { generateImageEmbedding, getEmbeddingModelName, getEmbeddingVectorSize } from './clipEmbedding'
+import { buildQdrantPointId } from './embeddingSync'
+import { upsertImageEmbeddingPoint } from './qdrantService'
 
 /**
  * 从 Markdown 内容中提取图片 URL
@@ -351,5 +356,330 @@ export async function enqueueMissingPostImageEmbeddings(
   return {
     requested: posts.length,
     queued: newTasks.length,
-  };
+  }
+}
+
+type WikiPostSyncOptions = {
+  limit?: number
+  includeFailed?: boolean
+}
+
+type WikiPostSyncResult = {
+  requested: number
+  picked: number
+  ready: number
+  failed: number
+  skipped: number
+  details: Array<{ id: string; status: 'ready' | 'failed' | 'skipped'; reason?: string }>
+}
+
+function resolveLocalPathFromUrl(imageUrl: string, uploadsDir: string): string | null {
+  if (!imageUrl || !imageUrl.startsWith('/uploads/')) {
+    return null
+  }
+
+  const relativePath = imageUrl.slice('/uploads/'.length)
+  if (!relativePath) {
+    return null
+  }
+
+  const base = path.resolve(uploadsDir)
+  const target = path.resolve(base, relativePath)
+
+  if (target !== base && !target.startsWith(`${base}${path.sep}`)) {
+    return null
+  }
+
+  return target
+}
+
+async function resolveImageBuffer(
+  imageUrl: string,
+  uploadsDir: string,
+  imageMapByUrl?: Map<string, { localUrl: string; s3Url: string | null; externalUrl: string | null }>
+): Promise<Buffer | null> {
+  if (imageMapByUrl) {
+    const im = imageMapByUrl.get(imageUrl)
+    if (im?.localUrl) {
+      const localPath = resolveLocalPathFromUrl(im.localUrl, uploadsDir)
+      if (localPath) {
+        try {
+          return await fs.promises.readFile(localPath)
+        } catch {
+          // fall through
+        }
+      }
+    }
+  }
+
+  const localPath = resolveLocalPathFromUrl(imageUrl, uploadsDir)
+  if (localPath) {
+    try {
+      return await fs.promises.readFile(localPath)
+    } catch {
+      return null
+    }
+  }
+
+  return null
+}
+
+export async function syncWikiImageEmbeddingBatch(
+  prisma: PrismaClient,
+  uploadsDir: string,
+  options: WikiPostSyncOptions = {}
+): Promise<WikiPostSyncResult> {
+  const limit = Math.max(1, options.limit ?? 100)
+
+  const acceptedStatuses: EmbeddingStatus[] = [EmbeddingStatus.pending]
+  if (options.includeFailed) {
+    acceptedStatuses.push(EmbeddingStatus.failed)
+  }
+
+  const candidates = await prisma.wikiImageEmbedding.findMany({
+    where: {
+      status: { in: acceptedStatuses },
+    },
+    orderBy: {
+      updatedAt: 'asc',
+    },
+    take: limit,
+  })
+
+  if (candidates.length === 0) {
+    return { requested: limit, picked: 0, ready: 0, failed: 0, skipped: 0, details: [] }
+  }
+
+  const imageUrls = candidates.map((c) => c.imageUrl)
+
+  const imageMaps = imageUrls.length > 0
+    ? await prisma.imageMap.findMany({
+        where: {
+          OR: [
+            { localUrl: { in: imageUrls } },
+            { s3Url: { in: imageUrls } },
+            { externalUrl: { in: imageUrls } },
+          ],
+        },
+        select: {
+          localUrl: true,
+          s3Url: true,
+          externalUrl: true,
+        },
+      })
+    : []
+
+  const imageMapByUrl = new Map<string, (typeof imageMaps)[0]>()
+  for (const im of imageMaps) {
+    if (im.localUrl) imageMapByUrl.set(im.localUrl, im)
+    if (im.s3Url) imageMapByUrl.set(im.s3Url, im)
+    if (im.externalUrl) imageMapByUrl.set(im.externalUrl, im)
+  }
+
+  await prisma.wikiImageEmbedding.updateMany({
+    where: {
+      id: { in: candidates.map((c) => c.id) },
+    },
+    data: {
+      status: EmbeddingStatus.processing,
+      lastError: null,
+    },
+  })
+
+  const result: WikiPostSyncResult = {
+    requested: limit,
+    picked: candidates.length,
+    ready: 0,
+    failed: 0,
+    skipped: 0,
+    details: [],
+  }
+
+  for (const item of candidates) {
+    const imageBuffer = await resolveImageBuffer(item.imageUrl, uploadsDir, imageMapByUrl)
+
+    if (!imageBuffer) {
+      const reason = '无法定位本地图片文件'
+      await prisma.wikiImageEmbedding.update({
+        where: { id: item.id },
+        data: {
+          status: EmbeddingStatus.failed,
+          lastError: reason,
+        },
+      })
+      result.failed += 1
+      result.details.push({ id: item.id, status: 'failed', reason })
+      continue
+    }
+
+    try {
+      const vector = await generateImageEmbedding(imageBuffer)
+      await upsertImageEmbeddingPoint({
+        pointId: buildQdrantPointId(`wiki:${item.wikiPageSlug}:${item.imageUrl}`),
+        vector,
+        sourceType: 'wiki',
+        sourceId: item.wikiPageSlug,
+        imageUrl: item.imageUrl,
+        wikiPageSlug: item.wikiPageSlug,
+        updatedAt: new Date().toISOString(),
+      })
+
+      await prisma.wikiImageEmbedding.update({
+        where: { id: item.id },
+        data: {
+          status: EmbeddingStatus.ready,
+          lastError: null,
+          embeddedAt: new Date(),
+          modelName: getEmbeddingModelName(),
+          vectorSize: getEmbeddingVectorSize(),
+        },
+      })
+
+      result.ready += 1
+      result.details.push({ id: item.id, status: 'ready' })
+    } catch (error) {
+      const reason = `生成向量失败: ${(error as Error).message}`
+      await prisma.wikiImageEmbedding.update({
+        where: { id: item.id },
+        data: {
+          status: EmbeddingStatus.failed,
+          lastError: reason,
+        },
+      })
+      result.failed += 1
+      result.details.push({ id: item.id, status: 'failed', reason })
+    }
+  }
+
+  return result
+}
+
+export async function syncPostImageEmbeddingBatch(
+  prisma: PrismaClient,
+  uploadsDir: string,
+  options: WikiPostSyncOptions = {}
+): Promise<WikiPostSyncResult> {
+  const limit = Math.max(1, options.limit ?? 100)
+
+  const acceptedStatuses: EmbeddingStatus[] = [EmbeddingStatus.pending]
+  if (options.includeFailed) {
+    acceptedStatuses.push(EmbeddingStatus.failed)
+  }
+
+  const candidates = await prisma.postImageEmbedding.findMany({
+    where: {
+      status: { in: acceptedStatuses },
+    },
+    orderBy: {
+      updatedAt: 'asc',
+    },
+    take: limit,
+  })
+
+  if (candidates.length === 0) {
+    return { requested: limit, picked: 0, ready: 0, failed: 0, skipped: 0, details: [] }
+  }
+
+  const imageUrls = candidates.map((c) => c.imageUrl)
+
+  const imageMaps = imageUrls.length > 0
+    ? await prisma.imageMap.findMany({
+        where: {
+          OR: [
+            { localUrl: { in: imageUrls } },
+            { s3Url: { in: imageUrls } },
+            { externalUrl: { in: imageUrls } },
+          ],
+        },
+        select: {
+          localUrl: true,
+          s3Url: true,
+          externalUrl: true,
+        },
+      })
+    : []
+
+  const imageMapByUrl = new Map<string, (typeof imageMaps)[0]>()
+  for (const im of imageMaps) {
+    if (im.localUrl) imageMapByUrl.set(im.localUrl, im)
+    if (im.s3Url) imageMapByUrl.set(im.s3Url, im)
+    if (im.externalUrl) imageMapByUrl.set(im.externalUrl, im)
+  }
+
+  await prisma.postImageEmbedding.updateMany({
+    where: {
+      id: { in: candidates.map((c) => c.id) },
+    },
+    data: {
+      status: EmbeddingStatus.processing,
+      lastError: null,
+    },
+  })
+
+  const result: WikiPostSyncResult = {
+    requested: limit,
+    picked: candidates.length,
+    ready: 0,
+    failed: 0,
+    skipped: 0,
+    details: [],
+  }
+
+  for (const item of candidates) {
+    const imageBuffer = await resolveImageBuffer(item.imageUrl, uploadsDir, imageMapByUrl)
+
+    if (!imageBuffer) {
+      const reason = '无法定位本地图片文件'
+      await prisma.postImageEmbedding.update({
+        where: { id: item.id },
+        data: {
+          status: EmbeddingStatus.failed,
+          lastError: reason,
+        },
+      })
+      result.failed += 1
+      result.details.push({ id: item.id, status: 'failed', reason })
+      continue
+    }
+
+    try {
+      const vector = await generateImageEmbedding(imageBuffer)
+      await upsertImageEmbeddingPoint({
+        pointId: buildQdrantPointId(`post:${item.postId}:${item.imageUrl}`),
+        vector,
+        sourceType: 'post',
+        sourceId: item.postId,
+        imageUrl: item.imageUrl,
+        postId: item.postId,
+        updatedAt: new Date().toISOString(),
+      })
+
+      await prisma.postImageEmbedding.update({
+        where: { id: item.id },
+        data: {
+          status: EmbeddingStatus.ready,
+          lastError: null,
+          embeddedAt: new Date(),
+          modelName: getEmbeddingModelName(),
+          vectorSize: getEmbeddingVectorSize(),
+        },
+      })
+
+      result.ready += 1
+      result.details.push({ id: item.id, status: 'ready' })
+    } catch (error) {
+      const reason = `生成向量失败: ${(error as Error).message}`
+      await prisma.postImageEmbedding.update({
+        where: { id: item.id },
+        data: {
+          status: EmbeddingStatus.failed,
+          lastError: reason,
+        },
+      })
+      result.failed += 1
+      result.details.push({ id: item.id, status: 'failed', reason })
+    }
+  }
+
+  return result
 }

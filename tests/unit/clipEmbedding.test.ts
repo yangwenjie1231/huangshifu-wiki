@@ -21,6 +21,7 @@ describe('clipEmbedding', () => {
     vi.clearAllMocks();
     delete process.env.IMAGE_EMBEDDING_MODEL;
     delete process.env.IMAGE_EMBEDDING_VECTOR_SIZE;
+    delete process.env.IMAGE_EMBEDDING_DTYPE;
   });
 
   it('returns default model and vector size', async () => {
@@ -82,5 +83,37 @@ describe('clipEmbedding', () => {
 
     const module = await import('../../src/server/vector/clipEmbedding');
     await expect(module.generateImageEmbedding(Buffer.from([9]))).rejects.toThrow('向量维度异常');
+  });
+
+  it('isImageModelLoaded returns false when no model is loaded', async () => {
+    const module = await import('../../src/server/vector/clipEmbedding');
+    expect(module.isImageModelLoaded()).toBe(false)
+  });
+
+  it('isTextModelLoaded returns false when no model is loaded', async () => {
+    const module = await import('../../src/server/vector/clipEmbedding');
+    expect(module.isTextModelLoaded()).toBe(false)
+  });
+
+  it('isTokenizerLoaded returns false when no model is loaded', async () => {
+    const module = await import('../../src/server/vector/clipEmbedding');
+    expect(module.isTokenizerLoaded()).toBe(false)
+  });
+
+  it('getModelLoadError returns aggregated object with all nulls initially', async () => {
+    const module = await import('../../src/server/vector/clipEmbedding');
+    const errors = module.getModelLoadError()
+    expect(errors).toEqual({ image: null, text: null, tokenizer: null })
+  });
+
+  it('getActualDtype falls back to getEmbeddingDtype when no model loaded', async () => {
+    const module = await import('../../src/server/vector/clipEmbedding');
+    expect(module.getActualDtype()).toBe('q8')
+  });
+
+  it('getActualDtype respects IMAGE_EMBEDDING_DTYPE env', async () => {
+    process.env.IMAGE_EMBEDDING_DTYPE = 'fp32';
+    const module = await import('../../src/server/vector/clipEmbedding');
+    expect(module.getActualDtype()).toBe('fp32')
   });
 });

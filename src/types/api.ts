@@ -322,3 +322,22 @@ export interface AdminReviewQueueResponse {
   items: AdminReviewQueueItem[];
   total: number;
 }
+
+// ============================================================================
+// 文本语义搜索类型
+// ============================================================================
+
+export interface TextSearchResult {
+  sourceType: 'wiki' | 'post' | 'music' | 'album'
+  sourceId: string
+  score: number
+  chunkPreview: string
+  entity: Record<string, unknown>
+}
+
+export interface TextSearchResponse {
+  results: TextSearchResult[]
+  total: number
+  query: string
+  minScore: number
+}

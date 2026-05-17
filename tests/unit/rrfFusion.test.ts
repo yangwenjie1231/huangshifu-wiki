@@ -274,6 +274,92 @@ describe('buildHybridResponse - fusion logic', () => {
     expect(result.wiki).toHaveLength(0);
     expect(result.searchMeta.vectorResultCount).toBe(0);
   });
+
+  it('includes textVectorResultCount in searchMeta when no textResults', () => {
+    const kwResults = { wiki: [{ slug: 'a', title: 'A' }], posts: [], galleries: [], music: [], albums: [] };
+    const result = buildHybridResponse(kwResults, [], 'keyword', 'q', false);
+    expect(result.searchMeta.textVectorResultCount).toBe(0);
+  });
+
+  it('includes textVectorResultCount in searchMeta with textResults', () => {
+    const kwResults = { wiki: [], posts: [], galleries: [], music: [], albums: [] };
+    const textResults = [
+      { sourceType: 'wiki', sourceId: 'w1', score: 0.9, chunkPreview: 'preview', entity: { title: 'W1' } },
+      { sourceType: 'post', sourceId: 'p1', score: 0.8, chunkPreview: 'preview', entity: { title: 'P1' } },
+    ];
+    const result = buildHybridResponse(kwResults, [], 'hybrid', 'q', false, undefined, textResults);
+    expect(result.searchMeta.textVectorResultCount).toBe(2);
+  });
+});
+
+describe('Three-way RRF Fusion', () => {
+  it('item in all three lists gets highest score', () => {
+    const allThree = rrfScore([0, 0, 0]);
+    const kwVec = rrfScore([0, 0, undefined]);
+    const kwText = rrfScore([0, undefined, 0]);
+    const vecText = rrfScore([undefined, 0, 0]);
+    expect(allThree).toBeGreaterThan(kwVec);
+    expect(allThree).toBeGreaterThan(kwText);
+    expect(allThree).toBeGreaterThan(vecText);
+  });
+
+  it('two-list match beats single-list match', () => {
+    const twoLists = rrfScore([0, 0, undefined]);
+    const singleList = rrfScore([0, undefined, undefined]);
+    expect(twoLists).toBeGreaterThan(singleList);
+  });
+
+  it('text-only results still get meaningful scores', () => {
+    const textOnlyTop = rrfScore([undefined, undefined, 0]);
+    const textOnlyMid = rrfScore([undefined, undefined, 5]);
+    expect(textOnlyTop).toBeGreaterThan(0);
+    expect(textOnlyTop).toBeGreaterThan(textOnlyMid);
+  });
+
+  it('three-way RRF with buildHybridResponse merges text results', () => {
+    const kwResults = {
+      wiki: [{ slug: 'shared', title: 'Shared' }],
+      posts: [],
+      galleries: [],
+      music: [],
+      albums: [],
+    };
+    const vecResults = [
+      { sourceType: 'wiki' as const, sourceId: 'shared', imageUrl: '', data: { title: 'Shared-V' }, similarity: 0.9 },
+    ];
+    const textResults = [
+      { sourceType: 'wiki', sourceId: 'shared', score: 0.85, chunkPreview: 'preview', entity: { title: 'Shared-T' } },
+      { sourceType: 'music', sourceId: 'm1', score: 0.7, chunkPreview: 'preview', entity: { title: 'Music-T' } },
+    ];
+    const result = buildHybridResponse(kwResults, vecResults, 'hybrid', 'q', false, undefined, textResults);
+    expect(result.searchMeta.textVectorResultCount).toBe(2);
+    expect(result.searchMeta.vectorResultCount).toBe(1);
+    expect(result.searchMeta.keywordResultCount).toBeGreaterThan(0);
+  });
+
+  it('text-only items appear in hybrid mode output', () => {
+    const kwResults = {
+      wiki: [{ slug: 'kw-only', title: 'KwOnly' }],
+      posts: [],
+      galleries: [],
+      music: [],
+      albums: [],
+    };
+    const textResults = [
+      { sourceType: 'music', sourceId: 'm1', score: 0.8, chunkPreview: 'preview', entity: { docId: 'm1', title: 'MusicText' } },
+    ];
+    const result = buildHybridResponse(kwResults, [], 'hybrid', 'q', false, undefined, textResults);
+    expect(result.searchMeta.textVectorResultCount).toBe(1);
+  });
+
+  it('vector mode includes textVectorResultCount', () => {
+    const kwResults = { wiki: [], posts: [], galleries: [], music: [], albums: [] };
+    const textResults = [
+      { sourceType: 'wiki', sourceId: 'w1', score: 0.9, chunkPreview: 'preview', entity: { title: 'W1' } },
+    ];
+    const result = buildHybridResponse(kwResults, [], 'vector', 'q', false, undefined, textResults);
+    expect(result.searchMeta.textVectorResultCount).toBe(1);
+  });
 });
 
 describe('fetchVectorSearchWithTimeout - timeout behavior', () => {

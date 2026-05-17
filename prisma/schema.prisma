@@ -861,3 +861,23 @@ model BirthdayConfig {
 
   @@index([type, isActive])
 }
+
+model TextEmbeddingChunk {
+  id            String          @id @default(cuid())
+  sourceType    String
+  sourceId      String
+  chunkIndex    Int             @default(0)
+  chunkText     String
+  chunkPreview  String?
+  modelName     String          @default("OFA-Sys/chinese-clip-vit-base-patch16")
+  vectorSize    Int             @default(512)
+  status        EmbeddingStatus @default(pending)
+  lastError     String?
+  qdrantPointId String?
+  embeddedAt    DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@unique([sourceType, sourceId, chunkIndex])
+  @@index([sourceType, status])
+}

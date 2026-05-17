@@ -5,8 +5,10 @@ import type {
   MixedSearchResult,
   SearchSuggestion,
   SearchFilters,
+  SearchMeta,
 } from "./useSearch";
-import { useMixedSearch, useTraditionalSearch } from "./useSearch";
+import { useMixedSearch, useTraditionalSearch, useTextSemanticSearch } from "./useSearch";
+import type { TextSearchResult } from "../types/api";
 import { useSearchHistory } from "./useSearchHistory";
 
 // 向后兼容：re-export SearchFilters，供 SearchFilters 组件使用
@@ -33,14 +35,8 @@ export interface SearchState {
   aiSearching: boolean;
   hotKeywords: string[];
   showFilters: boolean;
-  searchMeta?: {
-    mode: string;
-    query: string;
-    degraded: boolean;
-    degradationReason?: string;
-    keywordResultCount: number;
-    vectorResultCount: number;
-  };
+  searchMeta?: SearchMeta
+  textSemanticResults: TextSearchResult[]
 }
 
 export function useSearchPage() {
@@ -53,6 +49,7 @@ export function useSearchPage() {
   // --- 原子搜索 hooks（委托层）---
   const mixedSearch = useMixedSearch();
   const traditionalSearch = useTraditionalSearch();
+  const textSemanticSearch = useTextSemanticSearch();
 
   const [state, setState] = useState<SearchState>({
     query: initialQuery,
@@ -73,6 +70,7 @@ export function useSearchPage() {
     hotKeywords: [],
     showFilters: false,
     searchMeta: undefined,
+    textSemanticResults: [],
   });
 
   const suggestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -148,20 +146,25 @@ export function useSearchPage() {
       sp.set("q", currentQuery);
       setSearchParams(sp);
 
-      const filters = { ...state.filters, ...filtersOverride };
+      const filters = { ...state.filters, ...filtersOverride }
+      const searchMode = filters.semanticImageSearch ? 'hybrid' : 'keyword'
 
       try {
-        const data = await traditionalSearch.search(currentQuery, filters);
+        const data = await traditionalSearch.search(currentQuery, filters, { mode: searchMode })
 
-        // 客户端标签过滤
+        let textResults: TextSearchResult[] = []
+        if (searchMode === 'hybrid') {
+          textResults = await textSemanticSearch.search(currentQuery, { limit: 24 })
+        }
+
         const filterFn = (item: WikiItem | PostItem | GalleryItem) => {
           const matchesTags =
             filters.selectedTags.length === 0 ||
             filters.selectedTags.every((tag: string) =>
               (item.tags || []).includes(tag)
-            );
-          return matchesTags;
-        };
+            )
+          return matchesTags
+        }
 
         setState((prev) => ({
           ...prev,
@@ -175,6 +178,8 @@ export function useSearchPage() {
           isMixedSearch: false,
           mixedResults: [],
           loading: false,
+          searchMeta: data.searchMeta,
+          textSemanticResults: textResults,
         }));
       } catch (e) {
         console.error("Search error:", e);
@@ -182,7 +187,7 @@ export function useSearchPage() {
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
     },
-    [state.filters, state.query, searchParams, addToHistory, traditionalSearch]
+    [state.filters, state.query, searchParams, addToHistory, traditionalSearch, textSemanticSearch]
   );
 
   // 图片搜索 -- 委托给 mixedSearch.searchByImage()
@@ -282,6 +287,7 @@ export function useSearchPage() {
       ]
     : [
         { id: "all", label: "全部", count: totalResults },
+        { id: "textSemantic", label: "语义匹配", count: state.textSemanticResults.length },
         { id: "wiki", label: "百科", count: state.results.wiki.length },
         { id: "posts", label: "帖子", count: state.results.posts.length },
         { id: "galleries", label: "图集", count: state.results.galleries.length },

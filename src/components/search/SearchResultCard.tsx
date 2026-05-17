@@ -17,6 +17,8 @@ export interface SearchResultCardConfig {
   tags?: string[];
   meta?: string;
   type: SearchResultType;
+  chunkPreview?: string;
+  matchSource?: 'keyword' | 'semantic' | 'hybrid';
 }
 
 interface SearchResultCardProps {

@@ -13,8 +13,11 @@ type EmbeddingsStatus = {
   qdrantCollection: string;
   modelCacheDir: string;
   modelLoaded: boolean;
-  modelError: string | null;
+  textModelLoaded: boolean;
+  tokenizerLoaded: boolean;
+  modelErrors: { image: string | null; text: string | null; tokenizer: string | null };
   usingModelScope: boolean;
+  actualDtype: string;
   summary: Summary | { gallery: Summary; wiki: Summary; post: Summary };
 };
 
@@ -111,8 +114,15 @@ const AdminEmbeddings = () => {
   const handleSyncBatch = async () => {
     if (!window.confirm('确定要批量同步向量吗？这可能需要一些时间。')) return;
     setActionLoading('sync');
-    try { await apiPost('/api/embeddings/sync-batch', { limit: 100 }); show('批量同步已启动'); fetchStatus(); }
-    catch { show('批量同步失败', { variant: 'error' }); }
+    try {
+      const response = await apiPost<{ gallery?: { ready: number; failed: number }; wiki?: { ready: number; failed: number }; post?: { ready: number; failed: number } }>('/api/embeddings/sync-batch', { limit: 100 });
+      const parts: string[] = []
+      if (response.gallery) parts.push(`图库 ${response.gallery.ready}/${response.gallery.ready + response.gallery.failed}`)
+      if (response.wiki) parts.push(`百科 ${response.wiki.ready}/${response.wiki.ready + response.wiki.failed}`)
+      if (response.post) parts.push(`帖子 ${response.post.ready}/${response.post.ready + response.post.failed}`)
+      show(parts.length > 0 ? `批量同步完成: ${parts.join(', ')}` : '批量同步已启动');
+      fetchStatus();
+    } catch { show('批量同步失败', { variant: 'error' }); }
     finally { setActionLoading(null); }
   };
 
@@ -120,8 +130,9 @@ const AdminEmbeddings = () => {
     if (!window.confirm('确定要重试所有失败的向量任务吗？')) return;
     setActionLoading('retry');
     try {
-      const response = await apiPost<{ resetCount: number }>('/api/embeddings/retry-failed');
-      show(`已重置 ${response.resetCount} 个失败任务`);
+      const response = await apiPost<{ gallery?: { resetCount: number }; wiki?: { resetCount: number }; post?: { resetCount: number } }>('/api/embeddings/retry-failed');
+      const totalReset = (response.gallery?.resetCount ?? 0) + (response.wiki?.resetCount ?? 0) + (response.post?.resetCount ?? 0);
+      show(`已重置 ${totalReset} 个失败任务并开始重新同步`);
       fetchStatus();
       if (showErrors) fetchErrors();
     } catch { show('重试失败', { variant: 'error' }); }
@@ -132,8 +143,12 @@ const AdminEmbeddings = () => {
     if (!window.confirm('确定要重建所有向量吗？这将删除现有向量并重新生成，耗时较长。')) return;
     if (!window.confirm('此操作不可逆，确定要继续吗？')) return;
     setActionLoading('rebuild');
-    try { await apiPost('/api/embeddings/rebuild-all'); show('重建任务已启动'); fetchStatus(); }
-    catch { show('重建失败', { variant: 'error' }); }
+    try {
+      const response = await apiPost<{ gallery?: { resetCount: number }; wiki?: { resetCount: number }; post?: { resetCount: number } }>('/api/embeddings/rebuild-all');
+      const totalReset = (response.gallery?.resetCount ?? 0) + (response.wiki?.resetCount ?? 0) + (response.post?.resetCount ?? 0);
+      show(`已重置 ${totalReset} 条记录并开始重建`);
+      fetchStatus();
+    } catch { show('重建失败', { variant: 'error' }); }
     finally { setActionLoading(null); }
   };
 
@@ -183,23 +198,45 @@ const AdminEmbeddings = () => {
             </div>
             <div className="mt-4 pt-4 border-t border-[#f0ece3]">
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-sm text-[#9e968e]">模型状态：</span>
+                <span className="text-sm text-[#9e968e]">图像模型：</span>
                 {status.modelLoaded ? (
                   <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-700">已加载</span>
-                ) : status.modelError ? (
+                ) : status.modelErrors.image ? (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-600">加载失败</span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-[#f0ece3] text-[#6b6560]">未加载</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm text-[#9e968e]">文本模型：</span>
+                {status.textModelLoaded ? (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-700">已加载</span>
+                ) : status.modelErrors.text ? (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-600">加载失败</span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-[#f0ece3] text-[#6b6560]">未加载</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm text-[#9e968e]">分词器：</span>
+                {status.tokenizerLoaded ? (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-700">已加载</span>
+                ) : status.modelErrors.tokenizer ? (
                   <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-600">加载失败</span>
                 ) : (
                   <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-[#f0ece3] text-[#6b6560]">未加载</span>
                 )}
                 <span className="text-[10px] text-[#9e968e]">({status.usingModelScope ? 'ModelScope 镜像' : 'Hugging Face'})</span>
               </div>
-              {status.modelError && (
+              {(status.modelErrors.image || status.modelErrors.text || status.modelErrors.tokenizer) && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded mt-2">
                   <p className="text-xs text-red-600 font-medium mb-1">模型加载错误：</p>
-                  <p className="text-xs text-red-500">{status.modelError}</p>
+                  {status.modelErrors.image && <p className="text-xs text-red-500">图像模型: {status.modelErrors.image}</p>}
+                  {status.modelErrors.text && <p className="text-xs text-red-500">文本模型: {status.modelErrors.text}</p>}
+                  {status.modelErrors.tokenizer && <p className="text-xs text-red-500">分词器: {status.modelErrors.tokenizer}</p>}
                 </div>
               )}
-              <div className="mt-2 text-xs text-[#9e968e]">缓存目录：{status.modelCacheDir}</div>
+              <div className="mt-2 text-xs text-[#9e968e]">缓存目录：{status.modelCacheDir} | 量化精度：{status.actualDtype}</div>
             </div>
           </div>
 

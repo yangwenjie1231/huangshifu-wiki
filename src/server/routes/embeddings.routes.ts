@@ -2,15 +2,25 @@ import { Router } from 'express';
 import { requireAdmin, type AuthenticatedRequest } from '../middleware/auth';
 import { parseInteger, parseBoolean } from '../utils';
 import { prisma } from '../prisma';
-import { getEmbeddingModelName, getEmbeddingVectorSize, getModelCacheDir, isModelLoaded, getModelLoadError, isModelScopeActive } from '../vector/clipEmbedding';
-import { getQdrantCollectionName } from '../vector/qdrantService';
+import { getEmbeddingModelName, getEmbeddingVectorSize, getModelCacheDir, isImageModelLoaded, isTextModelLoaded, isTokenizerLoaded, getModelLoadError, isModelScopeActive, getActualDtype } from '../vector/clipEmbedding';
+import { getQdrantCollectionName, getTextCollectionName } from '../vector/qdrantService';
 import { enqueueMissingImageEmbeddings, syncImageEmbeddingBatch } from '../vector/embeddingSync';
 import {
   enqueueMissingWikiImageEmbeddings,
   enqueueMissingPostImageEmbeddings,
   enqueueWikiImageEmbeddings,
   enqueuePostImageEmbeddings,
+  syncWikiImageEmbeddingBatch,
+  syncPostImageEmbeddingBatch,
 } from '../vector/wikiPostEmbedding';
+import {
+  enqueueMissingTextEmbeddings,
+  enqueueWikiTextEmbeddings,
+  enqueuePostTextEmbeddings,
+  enqueueMusicTextEmbeddings,
+  enqueueAlbumTextEmbeddings,
+  syncTextEmbeddingBatch,
+} from '../vector/textEmbeddingSync';
 
 const router = Router();
 
@@ -76,9 +86,12 @@ router.get('/status', requireAdmin, async (_req: AuthenticatedRequest, res) => {
     };
 
     // 获取模型加载状态
-    const modelLoaded = isModelLoaded();
-    const modelError = getModelLoadError();
+    const modelLoaded = isImageModelLoaded();
+    const textModelLoaded = isTextModelLoaded();
+    const tokenizerLoaded = isTokenizerLoaded();
+    const modelErrors = getModelLoadError();
     const usingModelScope = isModelScopeActive();
+    const actualDtype = getActualDtype();
 
     res.json({
       modelName: getEmbeddingModelName(),
@@ -86,8 +99,15 @@ router.get('/status', requireAdmin, async (_req: AuthenticatedRequest, res) => {
       qdrantCollection: getQdrantCollectionName(),
       modelCacheDir: getModelCacheDir(),
       modelLoaded,
-      modelError: modelError ? modelError.message : null,
+      textModelLoaded,
+      tokenizerLoaded,
+      modelErrors: {
+        image: modelErrors.image ? modelErrors.image.message : null,
+        text: modelErrors.text ? modelErrors.text.message : null,
+        tokenizer: modelErrors.tokenizer ? modelErrors.tokenizer.message : null,
+      },
       usingModelScope,
+      actualDtype,
       summary,
     });
   } catch (error) {
@@ -136,42 +156,73 @@ router.post('/enqueue-missing', requireAdmin, async (req: AuthenticatedRequest, 
 
 router.post('/sync-batch', requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
+    const type = parseType(req.body?.type)
     const galleryImageIdsRaw = Array.isArray(req.body?.galleryImageIds)
       ? req.body.galleryImageIds
-      : [];
+      : []
     const galleryImageIds = galleryImageIdsRaw
       .filter((item: unknown): item is string => typeof item === 'string')
       .map((item: string) => item.trim())
-      .filter(Boolean);
+      .filter(Boolean)
 
     const limit = parseInteger(req.body?.limit, IMAGE_EMBEDDING_BATCH_SIZE, {
       min: 1,
       max: 500,
-    });
-    const includeFailed = parseBoolean(req.body?.includeFailed, false);
-    const forceRebuild = parseBoolean(req.body?.forceRebuild, false);
+    })
+    const includeFailed = parseBoolean(req.body?.includeFailed, false)
+    const forceRebuild = parseBoolean(req.body?.forceRebuild, false)
 
-    const result = await syncImageEmbeddingBatch(prisma, process.env.UPLOADS_PATH || 'uploads', {
+    const uploadsDir = process.env.UPLOADS_PATH || 'uploads'
+    const result: {
+      gallery?: Awaited<ReturnType<typeof syncImageEmbeddingBatch>>
+      wiki?: Awaited<ReturnType<typeof syncWikiImageEmbeddingBatch>>
+      post?: Awaited<ReturnType<typeof syncPostImageEmbeddingBatch>>
+      limit: number
+      includeFailed: boolean
+      forceRebuild: boolean
+      type: EmbeddingType
+      modelName: string
+      vectorSize: number
+      qdrantCollection: string
+    } = {
       limit,
       includeFailed,
       forceRebuild,
-      galleryImageIds,
-    });
-
-    res.json({
-      ...result,
-      limit,
-      includeFailed,
-      forceRebuild,
+      type,
       modelName: getEmbeddingModelName(),
       vectorSize: getEmbeddingVectorSize(),
       qdrantCollection: getQdrantCollectionName(),
-    });
+    }
+
+    if (type === 'all' || type === 'gallery') {
+      result.gallery = await syncImageEmbeddingBatch(prisma, uploadsDir, {
+        limit,
+        includeFailed,
+        forceRebuild,
+        galleryImageIds,
+      })
+    }
+
+    if (type === 'all' || type === 'wiki') {
+      result.wiki = await syncWikiImageEmbeddingBatch(prisma, uploadsDir, {
+        limit,
+        includeFailed,
+      })
+    }
+
+    if (type === 'all' || type === 'post') {
+      result.post = await syncPostImageEmbeddingBatch(prisma, uploadsDir, {
+        limit,
+        includeFailed,
+      })
+    }
+
+    res.json(result)
   } catch (error) {
-    console.error('Sync embeddings batch error:', error);
-    res.status(500).json({ error: '批量生成向量失败' });
+    console.error('Sync embeddings batch error:', error)
+    res.status(500).json({ error: '批量生成向量失败' })
   }
-});
+})
 
 router.get('/errors', requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
@@ -343,24 +394,24 @@ router.get('/errors', requireAdmin, async (req: AuthenticatedRequest, res) => {
 
 router.post('/retry-failed', requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
-    const type = parseType(req.body?.type);
+    const type = parseType(req.body?.type)
     const limit = parseInteger(req.body?.limit, IMAGE_EMBEDDING_BATCH_SIZE, {
       min: 1,
       max: 500,
-    });
+    })
 
+    const uploadsDir = process.env.UPLOADS_PATH || 'uploads'
     const result: {
-      gallery?: { resetCount: number };
-      wiki?: { resetCount: number };
-      post?: { resetCount: number };
-      limit: number;
-      type: EmbeddingType;
+      gallery?: { resetCount: number } & Awaited<ReturnType<typeof syncImageEmbeddingBatch>>
+      wiki?: { resetCount: number } & Awaited<ReturnType<typeof syncWikiImageEmbeddingBatch>>
+      post?: { resetCount: number } & Awaited<ReturnType<typeof syncPostImageEmbeddingBatch>>
+      limit: number
+      type: EmbeddingType
     } = {
       limit,
       type,
-    };
+    }
 
-    // Gallery retry
     if (type === 'all' || type === 'gallery') {
       const galleryUpdated = await prisma.imageEmbedding.updateMany({
         where: {
@@ -370,21 +421,20 @@ router.post('/retry-failed', requireAdmin, async (req: AuthenticatedRequest, res
           status: 'pending',
           lastError: null,
         },
-      });
+      })
 
-      const gallerySyncResult = await syncImageEmbeddingBatch(prisma, process.env.UPLOADS_PATH || 'uploads', {
+      const gallerySyncResult = await syncImageEmbeddingBatch(prisma, uploadsDir, {
         limit,
         includeFailed: true,
         forceRebuild: false,
-      });
+      })
 
       result.gallery = {
         resetCount: galleryUpdated.count,
         ...gallerySyncResult,
-      };
+      }
     }
 
-    // Wiki retry
     if (type === 'all' || type === 'wiki') {
       const wikiUpdated = await prisma.wikiImageEmbedding.updateMany({
         where: {
@@ -394,14 +444,19 @@ router.post('/retry-failed', requireAdmin, async (req: AuthenticatedRequest, res
           status: 'pending',
           lastError: null,
         },
-      });
+      })
+
+      const wikiSyncResult = await syncWikiImageEmbeddingBatch(prisma, uploadsDir, {
+        limit,
+        includeFailed: true,
+      })
 
       result.wiki = {
         resetCount: wikiUpdated.count,
-      };
+        ...wikiSyncResult,
+      }
     }
 
-    // Post retry
     if (type === 'all' || type === 'post') {
       const postUpdated = await prisma.postImageEmbedding.updateMany({
         where: {
@@ -411,50 +466,110 @@ router.post('/retry-failed', requireAdmin, async (req: AuthenticatedRequest, res
           status: 'pending',
           lastError: null,
         },
-      });
+      })
+
+      const postSyncResult = await syncPostImageEmbeddingBatch(prisma, uploadsDir, {
+        limit,
+        includeFailed: true,
+      })
 
       result.post = {
         resetCount: postUpdated.count,
-      };
+        ...postSyncResult,
+      }
     }
 
-    res.json(result);
+    res.json(result)
   } catch (error) {
-    console.error('Retry failed embeddings error:', error);
-    res.status(500).json({ error: '重试失败向量任务失败' });
+    console.error('Retry failed embeddings error:', error)
+    res.status(500).json({ error: '重试失败向量任务失败' })
   }
-});
+})
 
 router.post('/rebuild-all', requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
+    const type = parseType(req.body?.type)
     const limit = parseInteger(req.body?.limit, IMAGE_EMBEDDING_BATCH_SIZE, {
       min: 1,
       max: 500,
-    });
+    })
 
-    const updated = await prisma.imageEmbedding.updateMany({
-      data: {
-        status: 'pending',
-        lastError: null,
-      },
-    });
-
-    const result = await syncImageEmbeddingBatch(prisma, process.env.UPLOADS_PATH || 'uploads', {
+    const uploadsDir = process.env.UPLOADS_PATH || 'uploads'
+    const result: {
+      gallery?: { resetCount: number } & Awaited<ReturnType<typeof syncImageEmbeddingBatch>>
+      wiki?: { resetCount: number } & Awaited<ReturnType<typeof syncWikiImageEmbeddingBatch>>
+      post?: { resetCount: number } & Awaited<ReturnType<typeof syncPostImageEmbeddingBatch>>
+      limit: number
+      type: EmbeddingType
+    } = {
       limit,
-      includeFailed: true,
-      forceRebuild: true,
-    });
+      type,
+    }
 
-    res.json({
-      resetCount: updated.count,
-      ...result,
-      limit,
-    });
+    if (type === 'all' || type === 'gallery') {
+      const galleryUpdated = await prisma.imageEmbedding.updateMany({
+        data: {
+          status: 'pending',
+          lastError: null,
+        },
+      })
+
+      const gallerySyncResult = await syncImageEmbeddingBatch(prisma, uploadsDir, {
+        limit,
+        includeFailed: true,
+        forceRebuild: true,
+      })
+
+      result.gallery = {
+        resetCount: galleryUpdated.count,
+        ...gallerySyncResult,
+      }
+    }
+
+    if (type === 'all' || type === 'wiki') {
+      const wikiUpdated = await prisma.wikiImageEmbedding.updateMany({
+        data: {
+          status: 'pending',
+          lastError: null,
+        },
+      })
+
+      const wikiSyncResult = await syncWikiImageEmbeddingBatch(prisma, uploadsDir, {
+        limit,
+        includeFailed: true,
+      })
+
+      result.wiki = {
+        resetCount: wikiUpdated.count,
+        ...wikiSyncResult,
+      }
+    }
+
+    if (type === 'all' || type === 'post') {
+      const postUpdated = await prisma.postImageEmbedding.updateMany({
+        data: {
+          status: 'pending',
+          lastError: null,
+        },
+      })
+
+      const postSyncResult = await syncPostImageEmbeddingBatch(prisma, uploadsDir, {
+        limit,
+        includeFailed: true,
+      })
+
+      result.post = {
+        resetCount: postUpdated.count,
+        ...postSyncResult,
+      }
+    }
+
+    res.json(result)
   } catch (error) {
-    console.error('Rebuild all embeddings error:', error);
-    res.status(500).json({ error: '重建所有向量失败' });
+    console.error('Rebuild all embeddings error:', error)
+    res.status(500).json({ error: '重建所有向量失败' })
   }
-});
+})
 
 // 同步指定 Wiki 页面的图片向量
 router.post('/sync-wiki', requireAdmin, async (req: AuthenticatedRequest, res) => {
@@ -515,6 +630,138 @@ router.post('/sync-post', requireAdmin, async (req: AuthenticatedRequest, res) =
     res.status(500).json({ error: '同步 Post 向量失败' });
   }
 });
+
+type TextSourceType = 'wiki' | 'post' | 'music' | 'album' | 'all'
+
+function parseTextSourceType(type: unknown): TextSourceType {
+  if (type === 'wiki' || type === 'post' || type === 'music' || type === 'album' || type === 'all') {
+    return type
+  }
+  return 'all'
+}
+
+router.get('/text/status', requireAdmin, async (_req: AuthenticatedRequest, res) => {
+  try {
+    const sourceTypes = ['wiki', 'post', 'music', 'album'] as const
+
+    const counts = await Promise.all(
+      sourceTypes.flatMap((sourceType) =>
+        (['pending', 'processing', 'ready', 'failed'] as const).map(
+          (status) =>
+            prisma.textEmbeddingChunk.count({
+              where: { sourceType, status },
+            }) as Promise<number> & { _sourceType: typeof sourceType; _status: typeof status },
+        ),
+      ),
+    )
+
+    const summary: Record<string, { pending: number; processing: number; ready: number; failed: number; total: number }> = {}
+    let idx = 0
+    for (const sourceType of sourceTypes) {
+      const pending = counts[idx++]
+      const processing = counts[idx++]
+      const ready = counts[idx++]
+      const failed = counts[idx++]
+      summary[sourceType] = {
+        pending,
+        processing,
+        ready,
+        failed,
+        total: pending + processing + ready + failed,
+      }
+    }
+
+    res.json({
+      summary,
+      modelName: getEmbeddingModelName(),
+      vectorSize: getEmbeddingVectorSize(),
+      textCollection: getTextCollectionName(),
+    })
+  } catch (error) {
+    console.error('Fetch text embeddings status error:', error)
+    res.status(500).json({ error: '获取文本向量状态失败' })
+  }
+})
+
+router.post('/text/enqueue', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const sourceType = parseTextSourceType(req.body?.sourceType)
+    const limit = parseInteger(req.body?.limit, IMAGE_EMBEDDING_BATCH_SIZE, {
+      min: 1,
+      max: 2000,
+    })
+
+    const slugsRaw = Array.isArray(req.body?.slugs)
+      ? req.body.slugs
+      : []
+    const slugs = slugsRaw
+      .filter((item: unknown): item is string => typeof item === 'string')
+      .map((item: string) => item.trim())
+      .filter(Boolean)
+
+    const idsRaw = Array.isArray(req.body?.ids)
+      ? req.body.ids
+      : []
+    const ids = idsRaw
+      .filter((item: unknown): item is string => typeof item === 'string')
+      .map((item: string) => item.trim())
+      .filter(Boolean)
+
+    if (slugs.length > 0) {
+      const result = await enqueueWikiTextEmbeddings(prisma, slugs)
+      res.json({ ...result, slugs, sourceType: 'wiki' })
+      return
+    }
+
+    if (ids.length > 0) {
+      if (sourceType === 'post') {
+        const result = await enqueuePostTextEmbeddings(prisma, ids)
+        res.json({ ...result, ids, sourceType: 'post' })
+        return
+      }
+      if (sourceType === 'music') {
+        const result = await enqueueMusicTextEmbeddings(prisma, ids)
+        res.json({ ...result, ids, sourceType: 'music' })
+        return
+      }
+      if (sourceType === 'album') {
+        const result = await enqueueAlbumTextEmbeddings(prisma, ids)
+        res.json({ ...result, ids, sourceType: 'album' })
+        return
+      }
+      res.status(400).json({ error: '提供 ids 时必须指定 sourceType 为 post/music/album' })
+      return
+    }
+
+    const enqueueType = sourceType === 'all' ? undefined : sourceType
+    const result = await enqueueMissingTextEmbeddings(prisma, enqueueType, limit)
+    res.json({ ...result, sourceType, limit })
+  } catch (error) {
+    console.error('Enqueue text embeddings error:', error)
+    res.status(500).json({ error: '补齐文本向量队列失败' })
+  }
+})
+
+router.post('/text/sync', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const limit = parseInteger(req.body?.limit, IMAGE_EMBEDDING_BATCH_SIZE, {
+      min: 1,
+      max: 500,
+    })
+    const includeFailed = parseBoolean(req.body?.includeFailed, false)
+
+    const result = await syncTextEmbeddingBatch(prisma, { limit, includeFailed })
+
+    res.json({
+      ...result,
+      limit,
+      includeFailed,
+    })
+  } catch (error) {
+    console.error('Sync text embeddings batch error:', error)
+    res.status(500).json({ error: '批量生成文本向量失败' })
+  }
+})
 
 export function registerEmbeddingsRoutes(app: Router) {
   app.use('/api/embeddings', router);

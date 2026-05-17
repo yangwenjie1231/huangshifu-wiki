@@ -2,13 +2,14 @@ import React, { useRef } from "react";
 import { Link } from "react-router-dom";
 import { clsx } from "clsx";
 import { motion, AnimatePresence } from "motion/react";
-import { Book, MessageSquare, Image as ImageIcon, Music, Sparkles, Search as SearchIcon, Tag, Clock } from "lucide-react";
+import { Book, MessageSquare, Image as ImageIcon, Music, Sparkles, Search as SearchIcon, Tag, Clock, FileText } from "lucide-react";
 import { VIEW_MODE_CONFIG } from "../../lib/viewModes";
 import type { ViewMode } from "../../types/userPreferences";
 import { toDateValue } from "../../lib/dateUtils";
 import { format } from "date-fns";
 import type { SearchState } from "../../hooks/useSearchPage";
 import type { WikiItem, PostItem, GalleryItem, SongItem, AlbumItem } from "../../types/entities";
+import type { TextSearchResult } from "../../types/api";
 import { MixedSearchResultCard } from "../MixedSearchResultCard";
 import { SearchResultCard } from "./SearchResultCard";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -67,13 +68,48 @@ function albumToConfig(album: AlbumItem): import("./SearchResultCard").SearchRes
   };
 }
 
+const TEXT_SEMANTIC_SOURCE_LABELS: Record<string, string> = {
+  wiki: '百科',
+  post: '帖子',
+  music: '音乐',
+  album: '专辑',
+}
+
+const TEXT_SEMANTIC_SOURCE_ICONS: Record<string, React.ReactNode> = {
+  wiki: <Book size={12} className="text-[#c8951e]" />,
+  post: <MessageSquare size={12} className="text-[#c8951e]" />,
+  music: <Music size={12} className="text-[#c8951e]" />,
+  album: <Music size={12} className="text-[#c8951e]" />,
+}
+
+function getTextSemanticLink(result: TextSearchResult): string {
+  const entity = result.entity as Record<string, unknown>
+  switch (result.sourceType) {
+    case 'wiki':
+      return `/wiki/${entity.slug || result.sourceId}`
+    case 'post':
+      return `/forum/${result.sourceId}`
+    case 'music':
+      return `/music/${result.sourceId}`
+    case 'album':
+      return `/album/${result.sourceId}`
+    default:
+      return '#'
+  }
+}
+
+function getTextSemanticTitle(result: TextSearchResult): string {
+  const entity = result.entity as Record<string, unknown>
+  return (entity.title || entity.name || result.sourceId) as string
+}
+
 export const SearchResults: React.FC<SearchResultsProps> = ({
   state,
   viewMode,
   tabItems,
   onTabChange,
 }) => {
-  const { loading, hasSearched, activeTab, isMixedSearch, mixedResults, results, filters } = state;
+  const { loading, hasSearched, activeTab, isMixedSearch, mixedResults, results, filters, textSemanticResults } = state;
 
   const hasFilters = filters.selectedTags.length > 0 || filters.dateRange.start || filters.dateRange.end;
   const mixedParentRef = useRef<HTMLDivElement>(null);
@@ -223,6 +259,62 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
 
           {!isMixedSearch && (
             <>
+              {/* Text Semantic Results */}
+              {(activeTab === "all" || activeTab === "textSemantic") && textSemanticResults.length > 0 && (
+                <motion.section
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -12 }}
+                  className="space-y-4"
+                >
+                  <h2 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-4 flex items-center gap-2">
+                    <FileText size={14} className="text-[#c8951e]" /> 语义匹配
+                  </h2>
+                  <div className="space-y-3">
+                    {Object.entries(
+                      textSemanticResults.reduce<Record<string, TextSearchResult[]>>((acc, r) => {
+                        const group = r.sourceType
+                        if (!acc[group]) acc[group] = []
+                        acc[group].push(r)
+                        return acc
+                      }, {})
+                    ).map(([sourceType, items]) => (
+                      <div key={sourceType} className="space-y-2">
+                        <div className="flex items-center gap-1.5 text-xs text-[#9e968e] font-medium">
+                          {TEXT_SEMANTIC_SOURCE_ICONS[sourceType]}
+                          {TEXT_SEMANTIC_SOURCE_LABELS[sourceType] || sourceType}
+                          <span className="text-[#9e968e]/60">({items.length})</span>
+                        </div>
+                        {items.map((result) => (
+                          <Link
+                            key={`${result.sourceType}-${result.sourceId}`}
+                            to={getTextSemanticLink(result)}
+                            className="block bg-white border border-[#e0dcd3] rounded p-4 hover:border-[#c8951e] transition-all group"
+                          >
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <span className="px-2 py-0.5 bg-[#f7f5f0] text-[#c8951e] text-[10px] font-medium rounded">
+                                {TEXT_SEMANTIC_SOURCE_LABELS[result.sourceType] || result.sourceType}
+                              </span>
+                              <span className="text-[10px] text-[#9e968e]">
+                                相似度 {(result.score * 100).toFixed(1)}%
+                              </span>
+                            </div>
+                            <h3 className="text-sm font-semibold text-[#2c2c2c] group-hover:text-[#c8951e] transition-colors">
+                              {getTextSemanticTitle(result)}
+                            </h3>
+                            {result.chunkPreview && (
+                              <p className="text-xs text-[#9e968e] mt-1.5 line-clamp-2 leading-relaxed">
+                                {result.chunkPreview}
+                              </p>
+                            )}
+                          </Link>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </motion.section>
+              )}
+
               {/* Wiki Results */}
               {(activeTab === "all" || activeTab === "wiki") && results.wiki.length > 0 && (
                 <motion.section

@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { apiGet, apiUpload } from "../lib/apiClient";
 import type { GalleryItem, WikiItem, PostItem } from "../types/entities";
+import type { TextSearchResult, TextSearchResponse } from "../types/api";
 
 /**
  * 图片来源类型
@@ -66,12 +67,23 @@ export interface SearchSuggestion {
 /**
  * 传统搜索结果
  */
+export interface SearchMeta {
+  mode: string
+  query: string
+  degraded: boolean
+  degradationReason?: string
+  keywordResultCount: number
+  vectorResultCount: number
+  textVectorResultCount: number
+}
+
 export interface TraditionalSearchResults {
-  wiki: WikiItem[];
-  posts: PostItem[];
-  galleries: GalleryItem[];
-  music: unknown[];
-  albums: unknown[];
+  wiki: WikiItem[]
+  posts: PostItem[]
+  galleries: GalleryItem[]
+  music: unknown[]
+  albums: unknown[]
+  searchMeta?: SearchMeta
 }
 
 /**
@@ -211,15 +223,16 @@ export function useTraditionalSearch() {
    */
   const search = useCallback(async (
     query: string,
-    filters?: Partial<SearchFilters>
+    filters?: Partial<SearchFilters>,
+    options?: { mode?: 'keyword' | 'vector' | 'hybrid' }
   ): Promise<TraditionalSearchResults> => {
     if (!query.trim()) {
-      setResults({ wiki: [], posts: [], galleries: [], music: [], albums: [] });
-      return { wiki: [], posts: [], galleries: [], music: [], albums: [] };
+      setResults({ wiki: [], posts: [], galleries: [], music: [], albums: [] })
+      return { wiki: [], posts: [], galleries: [], music: [], albums: [] }
     }
 
-    setLoading(true);
-    setError(null);
+    setLoading(true)
+    setError(null)
 
     try {
       const typeMap: Record<string, string> = {
@@ -228,22 +241,25 @@ export function useTraditionalSearch() {
         galleries: "galleries",
         music: "music",
         albums: "albums",
-      };
+      }
       const apiType =
         filters?.contentType === "all" || !filters?.contentType
           ? "all"
-          : typeMap[filters.contentType] || "all";
+          : typeMap[filters.contentType] || "all"
+
+      const mode = options?.mode || 'keyword'
 
       const data = await apiGet<TraditionalSearchResults>("/api/search", {
         q: query.trim(),
         type: apiType,
+        mode,
         ...(filters?.dateRange?.start
           ? { startDate: filters.dateRange.start }
           : {}),
         ...(filters?.dateRange?.end
           ? { endDate: filters.dateRange.end }
           : {}),
-      });
+      })
 
       const normalizedResults = {
         wiki: data.wiki || [],
@@ -251,19 +267,20 @@ export function useTraditionalSearch() {
         galleries: data.galleries || [],
         music: data.music || [],
         albums: data.albums || [],
-      };
+        searchMeta: data.searchMeta,
+      }
 
-      setResults(normalizedResults);
-      return normalizedResults;
+      setResults(normalizedResults)
+      return normalizedResults
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "搜索失败";
-      setError(errorMsg);
-      console.error("Traditional search error:", err);
-      return { wiki: [], posts: [], galleries: [], music: [], albums: [] };
+      const errorMsg = err instanceof Error ? err.message : "搜索失败"
+      setError(errorMsg)
+      console.error("Traditional search error:", err)
+      return { wiki: [], posts: [], galleries: [], music: [], albums: [] }
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, []);
+  }, [])
 
   /**
    * 获取搜索建议
@@ -319,4 +336,64 @@ export function useTraditionalSearch() {
     getHotKeywords,
     clearResults,
   };
+}
+
+export function useTextSemanticSearch() {
+  const [results, setResults] = useState<TextSearchResult[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+
+  const search = useCallback(async (
+    query: string,
+    options?: { limit?: number; minScore?: number }
+  ): Promise<TextSearchResult[]> => {
+    if (!query.trim()) {
+      setResults([])
+      return []
+    }
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    abortControllerRef.current = new AbortController()
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const data = await apiGet<TextSearchResponse>(
+        '/api/search/text-semantic',
+        {
+          q: query.trim(),
+          limit: options?.limit || 24,
+          ...(options?.minScore !== undefined ? { minScore: options.minScore } : {}),
+        }
+      )
+
+      setResults(data.results || [])
+      return data.results || []
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return []
+      const errorMsg = err instanceof Error ? err.message : '文本语义搜索失败'
+      setError(errorMsg)
+      console.error('Text semantic search error:', err)
+      return []
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const clearResults = useCallback(() => {
+    setResults([])
+    setError(null)
+  }, [])
+
+  return {
+    results,
+    loading,
+    error,
+    search,
+    clearResults,
+  }
 }
