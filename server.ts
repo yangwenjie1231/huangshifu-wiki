@@ -311,8 +311,8 @@ async function startServer() {
     const directives: string[] = [
       "default-src 'self'",
       isProduction
-        ? `script-src 'self' 'nonce-${nonce}' 'unsafe-inline' https://*.amap.com`
-        : `script-src 'self' 'unsafe-inline' https://*.amap.com`,
+        ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' 'unsafe-inline' https://*.amap.com`
+        : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.amap.com`,
       isProduction
         ? `style-src 'self' 'nonce-${nonce}' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com`
         : `style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com`,

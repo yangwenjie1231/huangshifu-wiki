@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Network, DataSet } from 'vis-network/standalone';
 import type { WikiRelationType } from './types';
 import { RELATION_TYPE_LABELS } from './types';
@@ -23,6 +23,7 @@ type RelationGraphProps = {
 const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const networkRef = useRef<Network | null>(null);
+  const [cursor, setCursor] = useState<string>('grab');
 
   const handleClick = useCallback((slug: string) => {
     if (isRelationGraphNodeClickable(slug, currentSlug) && onNodeClick) {
@@ -166,28 +167,22 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
     });
 
     if (containerRef.current) {
-      containerRef.current.style.cursor = 'grab';
+      setCursor('grab');
     }
     network.on('hoverNode', (params) => {
       if (containerRef.current) {
         const nodeId = String(params.node);
-        containerRef.current.style.cursor = isRelationGraphNodeClickable(nodeId, currentSlug) ? 'pointer' : 'grab';
+        setCursor(isRelationGraphNodeClickable(nodeId, currentSlug) ? 'pointer' : 'grab');
       }
     });
     network.on('blurNode', () => {
-      if (containerRef.current) {
-        containerRef.current.style.cursor = 'grab';
-      }
+      setCursor('grab');
     });
     network.on('dragStart', () => {
-      if (containerRef.current) {
-        containerRef.current.style.cursor = 'grabbing';
-      }
+      setCursor('grabbing');
     });
     network.on('dragEnd', () => {
-      if (containerRef.current) {
-        containerRef.current.style.cursor = 'grab';
-      }
+      setCursor('grab');
     });
 
     return () => {
@@ -196,9 +191,7 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
       network.off('blurNode');
       network.off('dragStart');
       network.off('dragEnd');
-      if (containerRef.current) {
-        containerRef.current.style.cursor = '';
-      }
+      setCursor('grab');
       network.destroy();
       networkRef.current = null;
     };
@@ -212,7 +205,7 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
     <div className="rounded border border-[#c8951e]/20 bg-gradient-to-br from-[#f7f5f0] to-white p-6 sm:p-8">
       <div
         ref={containerRef}
-        className="w-full h-[400px] sm:h-[500px]"
+        className={`w-full h-[400px] sm:h-[500px] cursor-${cursor}`}
         role="img"
         aria-label="Wiki 关系图谱"
       />
@@ -220,7 +213,7 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
       <div className="mt-6 flex flex-wrap gap-4 text-sm">
         {(Object.entries(RELATION_TYPE_LABELS) as [WikiRelationType, string][]).map(([type, label]) => (
           <div key={type} className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#f7f5f0] rounded">
-            <span className="inline-block h-3 w-3 rounded" ref={(el) => { if (el) el.style.backgroundColor = RELATION_GRAPH_TYPE_COLORS[type] }} />
+            <span className={`inline-block h-3 w-3 rounded`} style={{ backgroundColor: RELATION_GRAPH_TYPE_COLORS[type] }} />
             <span className="text-[#6b6560] font-medium">{label}</span>
           </div>
         ))}

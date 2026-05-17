@@ -268,7 +268,7 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 								fill={edgeColor}
 								fontSize="10"
 								fontWeight={600}
-								style={{ textShadow: "0 1px 2px rgba(255,255,255,0.8)" }}
+								className="[text-shadow:0_1px_2px_rgba(255,255,255,0.8)]"
 							>
 								{edgeLabel}
 							</text>
@@ -332,9 +332,9 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 							className="flex items-center gap-1.5 px-2 py-1 bg-white/90 rounded text-[10px]"
 						>
 							<div
-								className="w-2 h-2 rounded-full"
-								ref={(el) => { if (el) el.style.backgroundColor = color }}
-							/>
+							className="w-2 h-2 rounded-full"
+							style={{ backgroundColor: color }}
+						/>
 							<span className="text-[#6b6560]">{label}</span>
 						</div>
 					);
