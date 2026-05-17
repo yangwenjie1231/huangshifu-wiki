@@ -333,7 +333,7 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 						>
 							<div
 								className="w-2 h-2 rounded-full"
-								style={{ backgroundColor: color }}
+								ref={(el) => { if (el) el.style.backgroundColor = color }}
 							/>
 							<span className="text-[#6b6560]">{label}</span>
 						</div>

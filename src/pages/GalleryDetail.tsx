@@ -489,8 +489,7 @@ const GalleryDetail = () => {
   if (loading) {
     return (
       <div
-        className="min-h-[calc(100vh-60px)]"
-        style={{ backgroundColor: 'var(--color-bg-antique)', fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif" }}
+        className="min-h-[calc(100vh-60px)] antique-page"
       >
         <div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
           <div className="h-48 bg-[#f0ece3] rounded animate-pulse" />
@@ -502,8 +501,7 @@ const GalleryDetail = () => {
   if (!gallery) {
     return (
       <div
-        className="min-h-[calc(100vh-60px)]"
-        style={{ backgroundColor: 'var(--color-bg-antique)', fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif" }}
+        className="min-h-[calc(100vh-60px)] antique-page"
       >
         <div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
           <Link to="/gallery" className="inline-flex items-center gap-2 text-sm text-[var(--color-text-antique-muted)] hover:text-[var(--color-accent-antique)] transition-colors">

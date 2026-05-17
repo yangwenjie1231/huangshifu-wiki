@@ -86,13 +86,13 @@ const WikiPageView = () => {
 
 	if (loading)
 		return (
-			<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32 text-center italic text-[var(--color-text-antique-muted)]" style={{ backgroundColor: 'var(--color-bg-antique)', fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif" }}>
+			<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32 text-center italic text-[var(--color-text-antique-muted)] antique-page">
 				加载中...
 			</div>
 		);
 	if (!page)
 		return (
-			<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32 text-center italic text-[var(--color-text-antique-muted)]" style={{ backgroundColor: 'var(--color-bg-antique)', fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif" }}>
+			<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32 text-center italic text-[var(--color-text-antique-muted)] antique-page">
 				页面未找到
 			</div>
 		);
@@ -283,12 +283,7 @@ const WikiPageView = () => {
 
 	return (
 		<div
-			className="min-h-[calc(100vh-60px)]"
-			style={{
-				backgroundColor: '#f7f5f0',
-				fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif",
-				lineHeight: 1.8,
-			}}
+			className="min-h-[calc(100vh-60px)] antique-detail"
 		>
 			<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32 wiki-detail-page">
 				{/* Breadcrumb */}

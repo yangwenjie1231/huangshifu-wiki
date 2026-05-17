@@ -220,7 +220,7 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
       <div className="mt-6 flex flex-wrap gap-4 text-sm">
         {(Object.entries(RELATION_TYPE_LABELS) as [WikiRelationType, string][]).map(([type, label]) => (
           <div key={type} className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#f7f5f0] rounded">
-            <span className="inline-block h-3 w-3 rounded" style={{ backgroundColor: RELATION_GRAPH_TYPE_COLORS[type] }} />
+            <span className="inline-block h-3 w-3 rounded" ref={(el) => { if (el) el.style.backgroundColor = RELATION_GRAPH_TYPE_COLORS[type] }} />
             <span className="text-[#6b6560] font-medium">{label}</span>
           </div>
         ))}

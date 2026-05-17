@@ -132,8 +132,7 @@ const AlbumDetail = () => {
   if (loading) {
     return (
       <div
-        className="min-h-screen"
-        style={{ backgroundColor: 'var(--color-bg-antique)', fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif" }}
+        className="min-h-screen antique-page"
       >
         <div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
           <div className="h-40 bg-[#f0ece3] rounded animate-pulse" />
@@ -145,8 +144,7 @@ const AlbumDetail = () => {
   if (!album) {
     return (
       <div
-        className="min-h-screen"
-        style={{ backgroundColor: 'var(--color-bg-antique)', fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif" }}
+        className="min-h-screen antique-page"
       >
         <div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
           <Link to="/music" className="inline-flex items-center gap-2 text-sm text-[var(--color-text-antique-muted)] hover:text-[var(--color-accent-antique)] transition-colors">
@@ -162,8 +160,7 @@ const AlbumDetail = () => {
 
   return (
     <div
-      className="min-h-screen"
-      style={{ backgroundColor: 'var(--color-bg-antique)', color: 'var(--color-text-antique)', fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif", lineHeight: 1.8 }}
+      className="min-h-screen antique-detail text-[var(--color-text-antique)]"
     >
       <div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
         <Link to="/music" className="inline-flex items-center gap-2 text-sm text-[var(--color-text-antique-muted)] hover:text-[var(--color-accent-antique)] transition-colors mb-5">

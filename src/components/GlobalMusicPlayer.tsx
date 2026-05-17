@@ -258,16 +258,15 @@ export const GlobalMusicPlayer = () => {
           value={contextCurrentTime}
           onChange={handleProgressChange}
           disabled={!contextDuration || resolvingPlayUrl}
-          className="absolute top-0 left-0 w-full h-[2px] appearance-none cursor-pointer bg-transparent"
-          style={{ accentColor: 'var(--color-accent-antique)' }}
+          className="absolute top-0 left-0 w-full h-[2px] appearance-none cursor-pointer bg-transparent accent-antique"
         />
         <div
-          className="h-full bg-[var(--color-accent-antique)] pointer-events-none"
-          style={{ width: `${contextDuration > 0 ? (contextCurrentTime / contextDuration) * 100 : 0}%`, transition: 'width 0.3s linear' }}
+          ref={(el) => { if (el) el.style.width = `${contextDuration > 0 ? (contextCurrentTime / contextDuration) * 100 : 0}%` }}
+          className="h-full bg-[var(--color-accent-antique)] pointer-events-none progress-bar-fill"
         />
       </div>
 
-      <div className="max-w-[1100px] mx-auto px-6 flex items-center gap-4" style={{ padding: '10px 24px' }}>
+      <div className="max-w-[1100px] mx-auto px-6 flex items-center gap-4 py-[10px] px-[24px]">
         {/* Cover */}
         <img
           src={currentSong.cover}
@@ -341,8 +340,7 @@ export const GlobalMusicPlayer = () => {
                   step="0.01"
                   value={contextIsMuted ? 0 : contextVolume}
                   onChange={(e) => contextSetVolume(parseFloat(e.target.value))}
-                  className="w-20 h-1 bg-[#ebe8e0] rounded-full appearance-none cursor-pointer"
-                  style={{ accentColor: 'var(--color-accent-antique)' }}
+                  className="w-20 h-1 bg-[#ebe8e0] rounded-full appearance-none cursor-pointer accent-antique"
                 />
                 <span className="text-xs text-[var(--color-text-antique-muted)] w-6 text-right">
                   {Math.round((contextIsMuted ? 0 : contextVolume) * 100)}

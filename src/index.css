@@ -946,3 +946,50 @@ html {
     padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem) !important;
   }
 }
+
+/* ========================================
+   CSP Compliance: Antique Page Utilities
+   Replaces inline style={{ backgroundColor,
+   fontFamily }} with CSS classes.
+   ======================================== */
+.antique-page {
+  background-color: var(--color-bg-antique);
+  font-family: "Noto Serif SC", "Source Han Serif SC", "SimSun", "STSong", "FangSong", serif;
+}
+
+.antique-detail {
+  background-color: var(--color-bg-antique);
+  font-family: "Noto Serif SC", "Source Han Serif SC", "SimSun", "STSong", "FangSong", serif;
+  line-height: 1.8;
+}
+
+.accent-antique {
+  accent-color: var(--color-accent-antique);
+}
+
+.progress-bar-fill {
+  transition: width 0.3s linear;
+}
+
+.static-fallback-footer {
+  display: none;
+  background: #faf9f7;
+  border-top: 1px solid #eee;
+  padding: 12px;
+  text-align: center;
+  font-size: 12px;
+  color: #999;
+}
+
+.static-fallback-link {
+  color: #999;
+  text-decoration: none;
+}
+
+.static-fallback-link--ml {
+  margin-right: 16px;
+}
+
+.svg-defs-container {
+  position: absolute;
+}

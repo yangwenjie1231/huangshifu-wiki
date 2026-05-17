@@ -105,8 +105,7 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
         value={currentTime}
         onChange={(e) => seekTo(parseFloat(e.target.value))}
         disabled={!duration}
-        className="w-full h-1 bg-[#e0dcd3] rounded-full appearance-none cursor-pointer mb-3"
-        style={{ accentColor: 'var(--color-accent-antique)' }}
+        className="w-full h-1 bg-[#e0dcd3] rounded-full appearance-none cursor-pointer mb-3 accent-antique"
       />
 
       <div className="flex items-center justify-between">

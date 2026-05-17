@@ -122,7 +122,7 @@ const WikiList = () => {
 	};
 
 	return (
-		<div className="min-h-[calc(100vh-60px)]" style={{ backgroundColor: 'var(--color-bg-antique)', fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif" }}>
+		<div className="min-h-[calc(100vh-60px)] antique-page">
 			<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
 				<div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
 					<div>
@@ -211,23 +211,16 @@ const WikiList = () => {
 			) : pages.length > 0 ? (
 				<>
 					{/* 虚拟滚动容器 */}
-					<div ref={scrollContainerRef} style={{ maxHeight: 'calc(100vh - 280px)', overflowY: 'auto' }}>
-						<div style={{ height: totalHeight, position: 'relative' }}>
+					<div ref={scrollContainerRef} className="overflow-y-auto max-h-[calc(100vh-280px)]">
+						<div className="relative" ref={(el) => { if (el) el.style.height = `${totalHeight}px` }}>
 							{virtualRows.map((virtualRow) => {
 								const { start: dataStart, end: dataEnd } = getRowDataRange(virtualRow.index);
 								const rowPages = pages.slice(dataStart, dataEnd);
 								return (
 									<div
 										key={virtualRow.key}
-										style={{
-											position: 'absolute',
-											top: 0,
-											left: 0,
-											width: '100%',
-											height: virtualRow.size,
-											transform: `translateY(${virtualRow.start}px)`,
-										}}
-										className={clsx("grid", VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}
+										ref={(el) => { if (el) { el.style.height = `${virtualRow.size}px`; el.style.transform = `translateY(${virtualRow.start}px)` } }}
+										className={clsx("absolute top-0 left-0 w-full grid", VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}
 									>
 										{rowPages.map((page) => (
 											<WikiCard
