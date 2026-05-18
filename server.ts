@@ -314,7 +314,7 @@ async function startServer() {
         ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' 'unsafe-inline' https://*.amap.com`
         : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.amap.com`,
       isProduction
-        ? `style-src 'self' 'nonce-${nonce}' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com`
+        ? `style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com`
         : `style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com`,
       "font-src 'self' data:",
       "img-src 'self' data: blob: https://*.amap.com https://*.gaode.com http://*.music.126.net https://*.music.126.net http://music.163.com https://music.163.com http://*.music.163.com https://*.music.163.com https://picsum.photos https://*.picsum.photos https://fastly.picsum.photos https://*.googleusercontent.com",
