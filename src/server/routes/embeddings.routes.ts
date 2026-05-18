@@ -20,6 +20,8 @@ import {
   enqueueMusicTextEmbeddings,
   enqueueAlbumTextEmbeddings,
   syncTextEmbeddingBatch,
+  retryFailedTextEmbeddings,
+  rebuildAllTextEmbeddings,
 } from '../vector/textEmbeddingSync';
 
 const router = Router();
@@ -60,6 +62,35 @@ router.get('/status', requireAdmin, async (_req: AuthenticatedRequest, res) => {
       prisma.postImageEmbedding.count({ where: { status: 'ready' } }),
       prisma.postImageEmbedding.count({ where: { status: 'failed' } }),
     ]);
+
+    const textSourceTypes = ['wiki', 'post', 'music', 'album'] as const
+
+    const textCounts = await Promise.all(
+      textSourceTypes.flatMap((sourceType) =>
+        (['pending', 'processing', 'ready', 'failed'] as const).map(
+          (status) =>
+            prisma.textEmbeddingChunk.count({
+              where: { sourceType, status },
+            }) as Promise<number>,
+        ),
+      ),
+    )
+
+    const textSummary: Record<string, { pending: number; processing: number; ready: number; failed: number; total: number }> = {}
+    let textIdx = 0
+    for (const sourceType of textSourceTypes) {
+      const pending = textCounts[textIdx++]
+      const processing = textCounts[textIdx++]
+      const ready = textCounts[textIdx++]
+      const failed = textCounts[textIdx++]
+      textSummary[sourceType] = {
+        pending,
+        processing,
+        ready,
+        failed,
+        total: pending + processing + ready + failed,
+      }
+    }
 
     const summary = {
       gallery: {
@@ -109,6 +140,7 @@ router.get('/status', requireAdmin, async (_req: AuthenticatedRequest, res) => {
       usingModelScope,
       actualDtype,
       summary,
+      textSummary,
     });
   } catch (error) {
     console.error('Fetch embeddings status error:', error);
@@ -298,7 +330,7 @@ router.get('/errors', requireAdmin, async (req: AuthenticatedRequest, res) => {
         vectorSize: item.vectorSize,
         status: item.status,
         errorMessage: item.lastError,
-        retryCount: 0,
+        retryCount: item.status === 'failed' ? 1 : 0,
         embeddedAt: item.embeddedAt ? item.embeddedAt.toISOString() : null,
         createdAt: item.createdAt.toISOString(),
         updatedAt: item.updatedAt.toISOString(),
@@ -335,7 +367,7 @@ router.get('/errors', requireAdmin, async (req: AuthenticatedRequest, res) => {
         vectorSize: item.vectorSize,
         status: item.status,
         errorMessage: item.lastError,
-        retryCount: 0,
+        retryCount: item.status === 'failed' ? 1 : 0,
         embeddedAt: item.embeddedAt ? item.embeddedAt.toISOString() : null,
         createdAt: item.createdAt.toISOString(),
         updatedAt: item.updatedAt.toISOString(),
@@ -369,7 +401,7 @@ router.get('/errors', requireAdmin, async (req: AuthenticatedRequest, res) => {
         vectorSize: item.vectorSize,
         status: item.status,
         errorMessage: item.lastError,
-        retryCount: 0,
+        retryCount: item.status === 'failed' ? 1 : 0,
         embeddedAt: item.embeddedAt ? item.embeddedAt.toISOString() : null,
         createdAt: item.createdAt.toISOString(),
         updatedAt: item.updatedAt.toISOString(),
@@ -676,6 +708,8 @@ router.get('/text/status', requireAdmin, async (_req: AuthenticatedRequest, res)
       modelName: getEmbeddingModelName(),
       vectorSize: getEmbeddingVectorSize(),
       textCollection: getTextCollectionName(),
+      textModelLoaded: isTextModelLoaded(),
+      tokenizerLoaded: isTokenizerLoaded(),
     })
   } catch (error) {
     console.error('Fetch text embeddings status error:', error)
@@ -760,6 +794,56 @@ router.post('/text/sync', requireAdmin, async (req: AuthenticatedRequest, res) =
   } catch (error) {
     console.error('Sync text embeddings batch error:', error)
     res.status(500).json({ error: '批量生成文本向量失败' })
+  }
+})
+
+router.post('/text/retry-failed', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const sourceType = parseTextSourceType(req.body?.sourceType)
+    const limit = parseInteger(req.body?.limit, IMAGE_EMBEDDING_BATCH_SIZE, {
+      min: 1,
+      max: 500,
+    })
+
+    const sourceTypeFilter = sourceType === 'all' ? undefined : sourceType
+    const result = await retryFailedTextEmbeddings(prisma, {
+      limit,
+      sourceType: sourceTypeFilter,
+    })
+
+    res.json({
+      ...result,
+      limit,
+      sourceType,
+    })
+  } catch (error) {
+    console.error('Retry failed text embeddings error:', error)
+    res.status(500).json({ error: '重试失败文本向量任务失败' })
+  }
+})
+
+router.post('/text/rebuild-all', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const sourceType = parseTextSourceType(req.body?.sourceType)
+    const limit = parseInteger(req.body?.limit, IMAGE_EMBEDDING_BATCH_SIZE, {
+      min: 1,
+      max: 500,
+    })
+
+    const sourceTypeFilter = sourceType === 'all' ? undefined : sourceType
+    const result = await rebuildAllTextEmbeddings(prisma, {
+      limit,
+      sourceType: sourceTypeFilter,
+    })
+
+    res.json({
+      ...result,
+      limit,
+      sourceType,
+    })
+  } catch (error) {
+    console.error('Rebuild all text embeddings error:', error)
+    res.status(500).json({ error: '重建所有文本向量失败' })
   }
 })
 

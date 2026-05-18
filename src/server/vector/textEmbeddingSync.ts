@@ -503,3 +503,47 @@ export async function deleteTextEmbeddingsForSource(
     where: { sourceType, sourceId },
   })
 }
+
+export async function retryFailedTextEmbeddings(
+  prisma: PrismaClient,
+  options: { limit?: number; sourceType?: 'wiki' | 'post' | 'music' | 'album' } = {},
+): Promise<{ resetCount: number } & Awaited<ReturnType<typeof syncTextEmbeddingBatch>>> {
+  const where: { status: EmbeddingStatus; sourceType?: string } = { status: EmbeddingStatus.failed }
+  if (options.sourceType) {
+    where.sourceType = options.sourceType
+  }
+
+  const updated = await prisma.textEmbeddingChunk.updateMany({
+    where,
+    data: { status: EmbeddingStatus.pending, lastError: null },
+  })
+
+  const syncResult = await syncTextEmbeddingBatch(prisma, {
+    limit: options.limit ?? 100,
+    includeFailed: true,
+  })
+
+  return { resetCount: updated.count, ...syncResult }
+}
+
+export async function rebuildAllTextEmbeddings(
+  prisma: PrismaClient,
+  options: { limit?: number; sourceType?: 'wiki' | 'post' | 'music' | 'album' } = {},
+): Promise<{ resetCount: number } & Awaited<ReturnType<typeof syncTextEmbeddingBatch>>> {
+  const where: { sourceType?: string } = {}
+  if (options.sourceType) {
+    where.sourceType = options.sourceType
+  }
+
+  const updated = await prisma.textEmbeddingChunk.updateMany({
+    where,
+    data: { status: EmbeddingStatus.pending, lastError: null },
+  })
+
+  const syncResult = await syncTextEmbeddingBatch(prisma, {
+    limit: options.limit ?? 100,
+    includeFailed: true,
+  })
+
+  return { resetCount: updated.count, ...syncResult }
+}
