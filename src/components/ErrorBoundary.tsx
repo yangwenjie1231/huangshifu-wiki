@@ -70,6 +70,11 @@ class ErrorBoundaryInner extends Component<ErrorBoundaryProps, ErrorBoundaryStat
             <p className="text-sm text-[#9e968e] mb-6">
               抱歉，页面遇到了一些问题。请尝试刷新页面或返回首页。
             </p>
+            {this.state.error && (
+              <pre className="text-xs text-left text-red-600 bg-red-50 p-3 rounded mb-4 overflow-auto max-h-32 whitespace-pre-wrap break-all">
+                {this.state.error.message || String(this.state.error)}
+              </pre>
+            )}
             <div className="flex gap-3 justify-center">
               <button
                 onClick={this.handleReset}

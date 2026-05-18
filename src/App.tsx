@@ -85,17 +85,10 @@ const MainLayout = () => {
 			<GlobalMusicPlayer />
 			<BottomNav />
 			<footer
-				className="text-center"
+				className="text-center bg-[#f0ece3] py-10 px-6 text-[#9e968e] text-[0.8125rem] tracking-[0.08em]"
 				role="contentinfo"
 				aria-label="页面底部"
-				style={{
-					background: '#f0ece3',
-					padding: '40px 24px',
-					color: '#9e968e',
-					fontSize: '0.8125rem',
-					letterSpacing: '0.08em',
-					marginBottom: currentSong ? '80px' : '0',
-				}}
+				style={{ marginBottom: currentSong ? '80px' : '0' }}
 			>
 				<p>黄诗扶 Wiki</p>
 			</footer>
