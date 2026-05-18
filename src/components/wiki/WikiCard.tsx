@@ -73,7 +73,7 @@ const WikiCard = React.memo(({ page, viewMode, cardHeight, onCopyLink }: WikiCar
 								{page.title}
 							</h3>
 							<p className={CARD.wikiDesc}>
-								{page.content.replace(/[#*`]/g, "").substring(0, 80)}
+								{(page.content || '').replace(/[#*`]/g, "").substring(0, 80)}
 							</p>
 							<div className={clsx(CARD.meta, "gap-3 mt-2")}>
 								<span className="flex items-center gap-1">
