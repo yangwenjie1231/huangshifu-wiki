@@ -70,6 +70,20 @@ export class ServerError extends AppError {
   }
 }
 
+export class ConflictError extends AppError {
+  constructor(message: string = '资源冲突') {
+    super(message, 'CONFLICT_ERROR', 409, true);
+    this.name = 'ConflictError';
+  }
+}
+
+export class RateLimitError extends AppError {
+  constructor(message: string = '请求过于频繁，请稍后再试') {
+    super(message, 'RATE_LIMIT_ERROR', 429, true);
+    this.name = 'RateLimitError';
+  }
+}
+
 export class VectorSearchError extends AppError {
   constructor(message: string = '向量搜索服务不可用', public readonly details?: string) {
     super(message, 'VECTOR_SEARCH_ERROR', 503, true);
@@ -196,16 +210,40 @@ export function classifyError(status: number, data: unknown): AppError {
     return new NotFoundError(errorMessage || '资源未找到');
   }
 
+  if (status === 408) {
+    return new NetworkError(errorMessage || '请求超时，请检查网络连接');
+  }
+
+  if (status === 409) {
+    return new ConflictError(errorMessage || '资源冲突，请刷新后重试');
+  }
+
   if (status === 413) {
     return new BusinessError(errorMessage || '上传内容过大，请减小文件大小后重试');
   }
 
+  if (status === 422) {
+    return new ValidationError(errorMessage || '提交的数据格式不正确');
+  }
+
   if (status === 429) {
-    return new BusinessError(errorMessage || '请求过于频繁，请稍后再试');
+    return new RateLimitError(errorMessage || '请求过于频繁，请稍后再试');
   }
 
   if (status >= 400 && status < 500) {
     return new BusinessError(errorMessage || '请求失败');
+  }
+
+  if (status === 502) {
+    return new ServerError(errorMessage || '网关错误，服务暂时不可用');
+  }
+
+  if (status === 503) {
+    return new ServerError(errorMessage || '服务暂时不可用，请稍后再试');
+  }
+
+  if (status === 504) {
+    return new NetworkError(errorMessage || '网关超时，请检查网络连接');
   }
 
   if (status >= 500) {
@@ -269,8 +307,36 @@ export function getUserFriendlyMessage(error: unknown): string {
     return '登录已过期，请重新登录';
   }
 
+  if (error instanceof PermissionError) {
+    return '权限不足，无法执行此操作';
+  }
+
+  if (error instanceof NotFoundError) {
+    return '请求的资源不存在';
+  }
+
+  if (error instanceof ConflictError) {
+    return '资源冲突，请刷新页面后重试';
+  }
+
+  if (error instanceof ValidationError) {
+    return error.message || '输入数据有误，请检查后重试';
+  }
+
+  if (error instanceof RateLimitError) {
+    return '操作过于频繁，请稍后再试';
+  }
+
   if (error instanceof BusinessError) {
     return error.message;
+  }
+
+  if (error instanceof VectorSearchError) {
+    return '搜索服务暂时不可用，请稍后再试';
+  }
+
+  if (error instanceof EmbeddingGenerationError) {
+    return '内容处理失败，请稍后再试';
   }
 
   if (error instanceof ServerError) {

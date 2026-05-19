@@ -557,7 +557,7 @@ const GalleryDetail = () => {
                   <button
                     onClick={handleCancelEdit}
                     disabled={saving || uploading}
-                    className="px-4 py-2 text-[0.9375rem] rounded border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all disabled:opacity-50"
+                    className="px-4 py-2 text-[0.9375rem] rounded border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     取消编辑
                   </button>
@@ -574,7 +574,7 @@ const GalleryDetail = () => {
                 onClick={handleTogglePublish}
                 disabled={!editing || saving || uploading}
                 className={clsx(
-                  'px-3 py-2 rounded text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-1.5',
+                  'px-3 py-2 rounded text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5',
                   (editing ? draft?.published : gallery.published)
                     ? 'bg-green-50 text-green-700 border border-green-200'
                     : 'bg-amber-50 text-amber-700 border border-amber-200',
@@ -778,7 +778,7 @@ const GalleryDetail = () => {
                 type="button"
                 onClick={() => addImagesInputRef.current?.click()}
                 disabled={uploading || saving}
-                className="flex aspect-square items-center justify-center rounded border border-dashed border-[#c8951e]/40 bg-[#f7f5f0] text-[#c8951e] transition-colors hover:border-[#c8951e] hover:bg-[#f7f5f0] disabled:opacity-50"
+                className="flex aspect-square items-center justify-center rounded border border-dashed border-[#c8951e]/40 bg-[#f7f5f0] text-[#c8951e] transition-colors hover:border-[#c8951e] hover:bg-[#f7f5f0] disabled:opacity-50 disabled:cursor-not-allowed"
                 title={uploading ? '上传中' : '加入图片'}
               >
                 <Plus size={24} />
@@ -831,7 +831,7 @@ const GalleryDetail = () => {
                       <button
                         type="submit"
                         disabled={!newComment.trim() || submittingComment}
-                        className="px-5 py-2 bg-[#c8951e] text-white text-sm rounded hover:bg-[#dca828] transition-all disabled:opacity-50"
+                        className="px-5 py-2 bg-[#c8951e] text-white text-sm rounded hover:bg-[#dca828] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {submittingComment ? '发送中...' : '发送'}
                       </button>

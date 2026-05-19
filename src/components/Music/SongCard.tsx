@@ -58,12 +58,14 @@ const SongCard = React.memo(function SongCard({
 	return (
 		<div
 			onClick={handleRowClick}
+			onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRowClick(); } }}
 			className={clsx(
 				"gufeng-song-item group flex items-center gap-4 py-4 px-1 border-b border-[#e0dcd3] transition-all cursor-pointer",
 				isCurrentSong && !isBatchMode && "bg-[#fdf5d8]/40",
 				isBatchMode && isSelected && "bg-[#fdf5d8]/60"
 			)}
-			role="article"
+			role="button"
+			tabIndex={0}
 			aria-label={`${song.title} - ${song.artist || '未知歌手'}`}
 		>
 			{/* Cover */}

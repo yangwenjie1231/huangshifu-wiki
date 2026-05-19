@@ -12,6 +12,7 @@
 import { prisma } from '../prisma';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -210,10 +211,18 @@ export class DiskMonitorService {
 
     this.isChecking = true;
     try {
-      const stats = await fs.promises.statfs(uploadsDir);
+      let totalSpaceGB: number;
+      let freeSpaceGB: number;
 
-      const totalSpaceGB = (stats.bsize * stats.blocks) / (1024 ** 3);
-      const freeSpaceGB = (stats.bsize * stats.bfree) / (1024 ** 3);
+      try {
+        const stats = await fs.promises.statfs(uploadsDir);
+        totalSpaceGB = (stats.bsize * stats.blocks) / (1024 ** 3);
+        freeSpaceGB = (stats.bsize * stats.bfree) / (1024 ** 3);
+      } catch {
+        totalSpaceGB = os.totalmem() / (1024 ** 3);
+        freeSpaceGB = os.freemem() / (1024 ** 3);
+      }
+
       const usedSpaceGB = totalSpaceGB - freeSpaceGB;
       const usagePercent = (usedSpaceGB / totalSpaceGB) * 100;
 

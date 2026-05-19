@@ -1,9 +1,12 @@
 export type ViewMode = 'large' | 'medium' | 'small' | 'list';
+export type ThemeMode = 'default' | 'dark' | 'system';
 
 export interface UserPreferences {
   viewMode: ViewMode;
+  theme: ThemeMode;
 }
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
   viewMode: 'medium',
+  theme: 'system',
 };

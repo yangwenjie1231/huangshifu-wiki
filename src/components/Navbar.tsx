@@ -22,6 +22,7 @@ import { AuthModal } from "./Navbar/AuthModal";
 import type { AuthMode } from "./Navbar/AuthModal";
 import { NotificationPanel } from "./Navbar/NotificationPanel";
 import { MobileMenu } from "./Navbar/MobileMenu";
+import { ThemeToggle } from "./ThemeToggle";
 import styles from "./Navbar.module.css";
 
 export const Navbar = () => {
@@ -80,6 +81,7 @@ export const Navbar = () => {
 
 				<div className="flex items-center" style={{ gap: '16px' }}>
 					<div className="hidden md:flex items-center" style={{ gap: '16px' }}>
+						<ThemeToggle />
 						{user ? (
 							<div className="flex items-center" style={{ gap: '16px' }}>
 								{isBanned && (

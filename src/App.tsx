@@ -8,6 +8,7 @@ import {
 } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { MusicProvider, useMusic } from "./context/MusicContext";
+import { useNetworkStatus } from "./hooks/useNetworkStatus";
 
 import { Navbar } from "./components/Navbar";
 import { BottomNav } from "./components/BottomNav";
@@ -38,6 +39,7 @@ const AdminRoutes = lazy(() => import("./pages/Admin/AdminRoutes").then(m => ({ 
 
 const MainLayout = () => {
 	const { currentSong } = useMusic();
+	const { isOnline } = useNetworkStatus();
 	const location = useLocation();
 	const path = location.pathname;
 
@@ -47,6 +49,14 @@ const MainLayout = () => {
 
 	return (
 		<div className="min-h-screen flex flex-col">
+			{!isOnline && (
+				<div
+					className="bg-amber-500 text-white text-center py-1.5 px-4 text-sm font-medium fixed top-0 left-0 right-0 z-[300]"
+					role="alert"
+				>
+					网络连接已断开，部分功能可能不可用
+				</div>
+			)}
 			<AnnouncementBar />
 			{/* 无障碍跳转导航 - 键盘用户可快速跳转到主内容区 */}
 			<a

@@ -353,6 +353,10 @@ export {
   PermissionError,
   NotFoundError,
   ValidationError,
+  ConflictError,
+  RateLimitError,
+  VectorSearchError,
+  EmbeddingGenerationError,
   type AppError,
 } from './errorHandler';
 

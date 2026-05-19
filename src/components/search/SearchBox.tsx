@@ -31,10 +31,17 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 建议列表键盘导航状态
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [isComposing, setIsComposing] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!suggestions.length) return;
@@ -142,7 +149,11 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
         <input
           type="text"
           value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (debounceRef.current) clearTimeout(debounceRef.current);
+            debounceRef.current = setTimeout(() => onQueryChange(val), 300);
+          }}
           onFocus={() => query.length >= 2 && onQueryChange(query)}
           placeholder="搜索百科、帖子、图集、音乐或专辑..."
           aria-label="搜索百科、帖子、图集、音乐或专辑"

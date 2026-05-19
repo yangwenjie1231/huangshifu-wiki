@@ -993,3 +993,44 @@ html {
 .svg-defs-container {
   position: absolute;
 }
+
+[data-theme="dark"] ::selection {
+  background-color: rgba(200, 149, 30, 0.3);
+  color: #e8d4a8;
+}
+
+[data-theme="dark"] .liquidGlass-wrapper {
+  background: var(--glass-bg);
+  border-color: var(--glass-border);
+}
+
+[data-theme="dark"] .glass {
+  background: rgba(30, 28, 26, 0.6);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .gufeng-btn:hover {
+  background-color: #2e2a26;
+  color: #d4a843;
+}
+
+[data-theme="dark"] .menu-item:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  box-shadow: inset -2px -2px 2px rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .static-fallback-footer {
+  background: #1e1c1a;
+  border-top-color: #3d3832;
+  color: #7a7268;
+}
+
+[data-theme="dark"] input[type="range"]::-webkit-slider-thumb {
+  background: #d4a843;
+  border-color: #d4a843;
+}
+
+[data-theme="dark"] input[type="range"]::-moz-range-thumb {
+  background: #d4a843;
+  border-color: #d4a843;
+}

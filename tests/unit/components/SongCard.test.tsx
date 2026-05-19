@@ -94,11 +94,11 @@ describe('SongCard', () => {
     expect(html).toContain('测试专辑');
   });
 
-  it('has article role with correct aria-label', () => {
+  it('has button role with correct aria-label', () => {
     const { container } = renderWithRouter(<SongCard {...defaultProps} />);
-    const article = container.querySelector('[role="article"]');
-    expect(article).toBeInTheDocument();
-    expect(article).toHaveAttribute('aria-label', '测试歌曲名 - 测试歌手');
+    const button = container.querySelector('[role="button"]');
+    expect(button).toBeInTheDocument();
+    expect(button).toHaveAttribute('aria-label', '测试歌曲名 - 测试歌手');
   });
 
   it('shows play button with correct aria-label (desktop)', () => {

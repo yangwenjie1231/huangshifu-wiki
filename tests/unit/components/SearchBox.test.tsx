@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SearchBox } from '../../../src/components/search/SearchBox';
@@ -57,7 +57,7 @@ describe('SearchBox', () => {
     expect(container.innerHTML).toContain('搜索百科');
   });
 
-  it('calls onQueryChange when input value changes', async () => {
+  it('calls onQueryChange when input value changes (debounced)', async () => {
     const user = userEvent.setup();
     const onQueryChange = vi.fn();
     const { container } = renderWithRouter(<SearchBox {...defaultProps} onQueryChange={onQueryChange} />);
@@ -65,7 +65,9 @@ describe('SearchBox', () => {
     const input = container.querySelector('input[type="text"], input[role="searchbox"]') as HTMLInputElement;
     if (input) {
       await user.type(input, 'test');
-      expect(onQueryChange).toHaveBeenCalled();
+      await waitFor(() => {
+        expect(onQueryChange).toHaveBeenCalled();
+      }, { timeout: 1000 });
     }
   });
 

@@ -34,6 +34,15 @@ export const GlobalMusicPlayer = () => {
   const timeUpdateRef = useRef<number>(0);
 
   useEffect(() => {
+    return () => {
+      if (volumeHideTimeoutRef.current) {
+        clearTimeout(volumeHideTimeoutRef.current)
+        volumeHideTimeoutRef.current = null
+      }
+    }
+  }, [])
+
+  useEffect(() => {
     const resolvePlayUrl = async () => {
       if (!currentSong) {
         setResolvedPlayUrl('');
@@ -250,7 +259,13 @@ export const GlobalMusicPlayer = () => {
       style={{ bottom: 0, backdropFilter: 'blur(16px)' }}
     >
       {/* Progress bar */}
-      <div className="absolute top-[-1px] left-0 right-0 h-[2px] bg-[#ebe8e0] cursor-pointer">
+      <div
+        className="absolute top-[-1px] left-0 right-0 h-[2px] bg-[#ebe8e0] cursor-pointer"
+        aria-label="播放进度"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={contextDuration > 0 ? Math.round((contextCurrentTime / contextDuration) * 100) : 0}
+      >
         <input
           type="range"
           min="0"
@@ -294,6 +309,7 @@ export const GlobalMusicPlayer = () => {
           </button>
           <button
             onClick={togglePlay}
+            aria-label={isPlaying ? '暂停' : '播放'}
             className="w-9 h-9 bg-[#c8951e] text-white rounded-full flex items-center justify-center hover:bg-[#dca828] transition-all"
           >
             {isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
@@ -321,6 +337,7 @@ export const GlobalMusicPlayer = () => {
         >
           <button
             onClick={contextToggleMute}
+            aria-label={contextIsMuted ? '静音' : '音量'}
             className="p-1.5 text-[#6b6560] hover:text-[#c8951e] hover:bg-[#f0ece3] rounded-full transition-all"
           >
             <Volume2 size={18} />

@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../lib/i18n";
 import { DEFAULT_AVATAR, handleAvatarError } from "../../lib/defaultAvatar";
+import { ThemeToggle } from "../ThemeToggle";
 import type { AuthMode } from "./AuthModal";
 
 interface MobileMenuProps {
@@ -74,6 +75,10 @@ export const MobileMenu = ({
 								<Music size={24} />
 								<span className="text-xs font-bold">{t('nav.music')}</span>
 							</NavLink>
+						</div>
+
+						<div className="flex items-center justify-center pt-2">
+							<ThemeToggle />
 						</div>
 
 						<div className="pt-4 border-t border-[#e0dcd3]">

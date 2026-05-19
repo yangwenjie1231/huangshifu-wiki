@@ -305,7 +305,7 @@ const WikiBranchWorkspace = () => {
 						<button
 							onClick={handleCreateBranch}
 							disabled={creatingBranch || isBanned}
-							className="px-6 py-2 bg-[#c8951e] text-white text-sm rounded hover:bg-[#dca828] transition-all disabled:opacity-50"
+							className="px-6 py-2 bg-[#c8951e] text-white text-sm rounded hover:bg-[#dca828] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
 						>
 							{creatingBranch ? "创建中..." : "创建我的分支"}
 						</button>
@@ -388,7 +388,7 @@ const WikiBranchWorkspace = () => {
 							<button
 								onClick={handleSaveRevision}
 								disabled={savingRevision || isBanned}
-								className="px-6 py-2 rounded bg-[#c8951e] text-white text-sm font-medium disabled:opacity-50 hover:bg-[#dca828] transition-all"
+								className="px-6 py-2 rounded bg-[#c8951e] text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#dca828] transition-all"
 							>
 								{savingRevision ? "保存中..." : "保存分支版本"}
 							</button>
@@ -396,7 +396,7 @@ const WikiBranchWorkspace = () => {
 								<button
 									onClick={handleResolveConflict}
 									disabled={resolvingConflict || isBanned}
-									className="px-6 py-2 rounded bg-red-100 text-red-700 text-sm font-bold disabled:opacity-50"
+									className="px-6 py-2 rounded bg-red-100 text-red-700 text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
 								>
 									{resolvingConflict ? "处理中..." : "解决冲突并重开 PR"}
 								</button>
@@ -449,7 +449,7 @@ const WikiBranchWorkspace = () => {
 									<button
 										onClick={handleCreatePr}
 										disabled={creatingPr || isBanned}
-										className="px-6 py-2 rounded bg-[#c8951e] text-white text-sm font-bold disabled:opacity-50"
+										className="px-6 py-2 rounded bg-[#c8951e] text-white text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
 									>
 										{creatingPr ? "提交中..." : "创建 PR"}
 									</button>

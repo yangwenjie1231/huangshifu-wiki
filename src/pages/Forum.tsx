@@ -699,7 +699,7 @@ const PostDetail = () => {
 							<button
 								onClick={handleSubmitReview}
 								disabled={submittingReview}
-								className="px-3 py-1 text-[0.8125rem] rounded bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 active:scale-[0.98] disabled:opacity-50 transition-all self-center mb-1"
+								className="px-3 py-1 text-[0.8125rem] rounded bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all self-center mb-1"
 							>
 								{submittingReview ? "提交中..." : "提交审核"}
 							</button>
@@ -765,7 +765,7 @@ const PostDetail = () => {
 										<button
 											type="submit"
 											disabled={!canComment || isBanned}
-											className="absolute bottom-3 right-3 px-3 py-1.5 bg-[#c8951e] text-white text-sm rounded hover:bg-[#dca828] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center gap-1"
+											className="absolute bottom-3 right-3 px-3 py-1.5 bg-[#c8951e] text-white text-sm rounded hover:bg-[#dca828] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
 										>
 											<Send size={14} />
 										</button>
@@ -1299,7 +1299,7 @@ const PostEditor = () => {
 							type="button"
 							onClick={() => handleSubmit("draft")}
 							disabled={Boolean(savingMode)}
-							className="px-6 py-2.5 bg-[#f7f5f0] text-[#6b6560] border border-[#e0dcd3] rounded text-sm font-medium hover:border-[#c8951e] hover:text-[#c8951e] transition-all flex items-center gap-2 disabled:opacity-50"
+							className="px-6 py-2.5 bg-[#f7f5f0] text-[#6b6560] border border-[#e0dcd3] rounded text-sm font-medium hover:border-[#c8951e] hover:text-[#c8951e] transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
 						>
 							<Save size={16} />{" "}
 							{savingMode === "draft" ? "保存中..." : "保存草稿"}
@@ -1307,7 +1307,7 @@ const PostEditor = () => {
 						<button
 							type="submit"
 							disabled={Boolean(savingMode)}
-							className="px-8 py-2.5 bg-[#c8951e] text-white rounded text-sm font-medium hover:bg-[#dca828] active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50"
+							className="px-8 py-2.5 bg-[#c8951e] text-white rounded text-sm font-medium hover:bg-[#dca828] active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
 						>
 							<Send size={16} />{" "}
 							{savingMode === "pending" ? "提交中..." : "提交审核"}
