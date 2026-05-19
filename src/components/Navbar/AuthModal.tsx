@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { login, register, loginWithWeChat } from "../../lib/auth";
 import { useToast } from "../Toast";
+import { useI18n } from '../../lib/i18n';
 
 export type AuthMode = "login" | "register" | "wechat";
 
@@ -23,6 +24,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 	const [wechatPhotoURL, setWechatPhotoURL] = useState("");
 	const [authLoading, setAuthLoading] = useState(false);
 	const { show } = useToast();
+	const { t } = useI18n();
 
 	const modalRef = useRef<HTMLDivElement>(null)
 	const previousFocusRef = useRef<HTMLElement | null>(null)
@@ -70,7 +72,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 				await register(
 					email,
 					password,
-					displayName || email.split("@")[0] || "匿名用户",
+					displayName || email.split("@")[0] || t('auth.anonymousUser'),
 				);
 			} else {
 				await loginWithWeChat(wechatCode, {
@@ -87,7 +89,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 			onAuthSuccess();
 		} catch (error) {
 			console.error("Auth failed:", error);
-			show(error instanceof Error ? error.message : "登录失败", {
+			show(error instanceof Error ? error.message : t('auth.loginFailed'), {
 				variant: "error",
 			});
 		} finally {
@@ -107,7 +109,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 					className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/40"
 					role="dialog"
 					aria-modal="true"
-					aria-label="登录或注册"
+					aria-label={t('auth.dialogLabel')}
 				>
 					<motion.div
 						initial={{ opacity: 0, scale: 0.95, y: 8 }}
@@ -120,10 +122,10 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 						<div className="flex items-center justify-between mb-5">
 							<h3 className="text-lg font-bold text-[#2c2c2c]">
 								{authMode === "wechat"
-									? "微信登录"
+									? t('auth.wechatLogin')
 									: authMode === "login"
-										? "账号登录"
-										: "账号注册"}
+										? t('auth.accountLogin')
+										: t('auth.accountRegister')}
 							</h3>
 							<button
 								type="button"
@@ -137,7 +139,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 						<form onSubmit={handleAuthSubmit} className="space-y-3">
 							{(authMode === "register" || authMode === "wechat") && (
 								<div>
-									<label htmlFor="auth-display-name" className="sr-only">昵称</label>
+									<label htmlFor="auth-display-name" className="sr-only">{t('auth.labelDisplayName')}</label>
 									<input
 										id="auth-display-name"
 										type="text"
@@ -145,8 +147,8 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 										onChange={(e) => setDisplayName(e.target.value)}
 										placeholder={
 											authMode === "wechat"
-												? "微信昵称（可选）"
-												: "昵称（可选）"
+												? t('auth.placeholderWechatDisplayName')
+												: t('auth.placeholderDisplayName')
 										}
 										className="w-full px-4 py-2.5 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-[#2c2c2c]"
 									/>
@@ -155,37 +157,36 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 							{authMode === "wechat" ? (
 								<>
 									<div>
-										<label htmlFor="auth-wechat-code" className="sr-only">微信 Code</label>
+										<label htmlFor="auth-wechat-code" className="sr-only">{t('auth.labelWechatCode')}</label>
 										<input
 											id="auth-wechat-code"
 											type="text"
 											required
 											value={wechatCode}
 											onChange={(e) => setWechatCode(e.target.value)}
-											placeholder="小程序 wx.login code"
+											placeholder={t('auth.placeholderWechatCode')}
 											className="w-full px-4 py-2.5 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-[#2c2c2c]"
 										/>
 									</div>
 									<div>
-										<label htmlFor="auth-wechat-photo" className="sr-only">头像 URL</label>
+										<label htmlFor="auth-wechat-photo" className="sr-only">{t('auth.labelPhotoURL')}</label>
 										<input
 											id="auth-wechat-photo"
 											type="url"
 											value={wechatPhotoURL}
 											onChange={(e) => setWechatPhotoURL(e.target.value)}
-											placeholder="头像 URL（可选）"
+											placeholder={t('auth.placeholderPhotoURL')}
 											className="w-full px-4 py-2.5 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-[#2c2c2c]"
 										/>
 									</div>
 									<p className="text-xs text-[#9e968e] leading-relaxed">
-										开发环境可使用 mock code：`mock:openId` 或
-										`mock:openId:unionId`。
+										{t('auth.mockCodeHint')}
 									</p>
 								</>
 							) : (
 								<>
 									<div>
-										<label htmlFor="auth-email" className="sr-only">邮箱</label>
+										<label htmlFor="auth-email" className="sr-only">{t('auth.labelEmail')}</label>
 										<input
 											id="auth-email"
 											type="email"
@@ -193,12 +194,12 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 											autoComplete="email"
 											value={email}
 											onChange={(e) => setEmail(e.target.value)}
-											placeholder="邮箱"
+											placeholder={t('auth.placeholderEmail')}
 											className="w-full px-4 py-2.5 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-[#2c2c2c]"
 										/>
 									</div>
 									<div>
-										<label htmlFor="auth-password" className="sr-only">密码</label>
+										<label htmlFor="auth-password" className="sr-only">{t('auth.labelPassword')}</label>
 										<input
 											id="auth-password"
 											type="password"
@@ -207,7 +208,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 											autoComplete="current-password"
 											value={password}
 											onChange={(e) => setPassword(e.target.value)}
-											placeholder="密码（至少 6 位）"
+											placeholder={t('auth.placeholderPassword')}
 											className="w-full px-4 py-2.5 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-[#2c2c2c]"
 										/>
 									</div>
@@ -221,15 +222,15 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 							>
 								{authLoading
 									? authMode === "login"
-										? "登录中..."
+										? t('auth.loggingIn')
 										: authMode === "register"
-											? "注册中..."
-											: "登录中..."
+											? t('auth.registering')
+											: t('auth.loggingIn')
 									: authMode === "login"
-										? "登录"
+										? t('auth.login')
 										: authMode === "register"
-											? "注册"
-											: "微信登录"}
+											? t('auth.register')
+											: t('auth.wechatLogin')}
 							</button>
 						</form>
 
@@ -242,8 +243,8 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 								className="font-medium text-[#c8951e] hover:underline"
 							>
 								{authMode === "login"
-									? "没有账号？去注册"
-									: "已有账号？去登录"}
+									? t('auth.noAccountGoRegister')
+									: t('auth.hasAccountGoLogin')}
 							</button>
 							<button
 								type="button"
@@ -252,7 +253,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 								}
 								className="font-medium text-[#c8951e] hover:underline"
 							>
-								{authMode === "wechat" ? "改用账号密码" : "改用微信登录"}
+								{authMode === "wechat" ? t('auth.switchToAccount') : t('auth.switchToWechat')}
 							</button>
 						</div>
 					</motion.div>

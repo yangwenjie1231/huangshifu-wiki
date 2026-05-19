@@ -43,6 +43,7 @@ import { LocationTagInput } from "../components/LocationTagInput";
 import Pagination from "../components/Pagination";
 import { usePagination } from "../hooks/usePagination";
 import { PageSkeleton } from "../components/PageSkeleton";
+import { useI18n } from "../lib/i18n";
 
 type PostItem = {
 	id: string;
@@ -97,7 +98,9 @@ interface PostCardProps {
 	onCopyLink: (event: React.MouseEvent<HTMLButtonElement>, postId: string) => void;
 }
 
-const PostCard = React.memo(({ post, sectionName, onCopyLink }: PostCardProps) => (
+const PostCard = React.memo(({ post, sectionName, onCopyLink }: PostCardProps) => {
+	const { t } = useI18n();
+	return (
 	<div
 		className={clsx(
 			"p-4 bg-white border border-[#e0dcd3] rounded hover:border-[#c8951e] transition-all group relative",
@@ -111,7 +114,7 @@ const PostCard = React.memo(({ post, sectionName, onCopyLink }: PostCardProps) =
 			<div className="flex items-center gap-2 mb-2 flex-wrap">
 				{post.isPinned && (
 					<span className="flex items-center gap-1 px-2 py-0.5 bg-[#fdf5d8] text-[#c8951e] text-[10px] font-bold uppercase tracking-wider rounded">
-						<Pin size={10} /> 已置顶
+						<Pin size={10} /> {t('forum.pinned')}
 					</span>
 				)}
 				<span className="px-2 py-0.5 bg-[#fdf5d8] text-[#c8951e] text-[10px] font-bold uppercase tracking-wider rounded">
@@ -165,15 +168,17 @@ const PostCard = React.memo(({ post, sectionName, onCopyLink }: PostCardProps) =
 		<button
 			onClick={(event) => onCopyLink(event, post.id)}
 			className="absolute top-4 right-4 p-2 rounded border bg-white/90 text-[#9e968e] hover:text-[#c8951e] hover:border-[#c8951e] transition-all"
-			title="复制内链"
-			aria-label="复制帖子内链"
+			title={t('forum.copyInternalLink')}
+			aria-label={t('forum.copyPostInternalLink')}
 		>
 			<Link2 size={14} />
 		</button>
 	</div>
-));
+	);
+});
 
 const PostList = () => {
+	const { t } = useI18n();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const section = searchParams.get("section") || "all";
 	const sort = searchParams.get("sort") || "latest";
@@ -251,10 +256,10 @@ const PostList = () => {
 			toAbsoluteInternalUrl(`/forum/${postId}`),
 		);
 		if (copied) {
-			show("帖子内链已复制");
+			show(t('forum.postLinkCopied'));
 			return;
 		}
-		show("复制链接失败，请稍后重试", { variant: "error" });
+		show(t('forum.copyLinkFailed'), { variant: "error" });
 	};
 
 	return (
@@ -271,7 +276,7 @@ const PostList = () => {
 				<div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
 					<div>
 						<h1 className="text-[1.75rem] font-bold text-[#2c2c2c] tracking-[0.12em]">
-							社区论坛
+							{t('forum.title')}
 						</h1>
 					</div>
 					<div className="flex items-center gap-3">
@@ -280,7 +285,7 @@ const PostList = () => {
 								to="/forum/new"
 								className="px-5 py-2 bg-[#c8951e] text-white text-sm rounded hover:bg-[#dca828] active:scale-[0.98] transition-all flex items-center gap-2"
 							>
-								<Plus size={15} /> 发布帖子
+								<Plus size={15} /> {t('forum.newPost')}
 							</Link>
 						)}
 					</div>
@@ -297,7 +302,7 @@ const PostList = () => {
 								: "text-[#9e968e] hover:text-[#c8951e]",
 						)}
 					>
-						全部板块
+						{t('forum.allSections')}
 					</Link>
 						{sections.map((sec) => (
 							<Link
@@ -330,7 +335,7 @@ const PostList = () => {
 										: "hover:text-[#c8951e]",
 								)}
 							>
-								{s === "latest" ? "最新" : s === "hot" ? "热门" : "推荐"}
+								{s === "latest" ? t('forum.sortLatest') : s === "hot" ? t('forum.sortHot') : t('forum.sortRecommended')}
 							</button>
 						))}
 					</div>
@@ -364,7 +369,7 @@ const PostList = () => {
 					<div className="bg-white p-20 rounded border border-[#e0dcd3] text-center">
 						<MessageSquare size={48} className="mx-auto text-[#e0dcd3] mb-6" />
 						<p className="text-[#9e968e] italic">
-							暂无帖子，快来发布第一个讨论吧！
+							{t('forum.emptyPosts')}
 						</p>
 					</div>
 				)}
@@ -374,6 +379,7 @@ const PostList = () => {
 };
 
 const PostDetail = () => {
+	const { t } = useI18n();
 	const { postId } = useParams();
 	const [post, setPost] = useState<PostItem | null>(null);
 	const [sections, setSections] = useState<SectionItem[]>([]);
@@ -428,11 +434,11 @@ const PostDetail = () => {
 		e.preventDefault();
 		if (!postId || !user || !newComment.trim()) return;
 		if (isBanned) {
-			show("账号已被封禁，无法评论", { variant: "error" });
+			show(t('forum.bannedCannotComment'), { variant: "error" });
 			return;
 		}
 		if (!canComment) {
-			show("仅已发布内容可评论", { variant: "error" });
+			show(t('forum.onlyPublishedCanComment'), { variant: "error" });
 			return;
 		}
 
@@ -458,7 +464,7 @@ const PostDetail = () => {
 			setReplyTo(null);
 		} catch (error) {
 			console.error("Error adding comment:", error);
-			show("发表评论失败，请稍后重试", { variant: "error" });
+			show(t('forum.commentFailed'), { variant: "error" });
 		}
 	};
 
@@ -475,7 +481,7 @@ const PostDetail = () => {
 					lineHeight: 1.8,
 				}}
 			>
-				帖子未找到
+				{t('forum.postNotFound')}
 			</div>
 		);
 
@@ -496,37 +502,36 @@ const PostDetail = () => {
 	const handleToggleLike = async () => {
 		if (!post || !postId || !user || liking) return;
 		setLiking(true);
+		const prevPost = post;
+		if (post.likedByMe) {
+			setPost((prev) =>
+				prev ? { ...prev, likedByMe: false, likesCount: Math.max(0, (prev.likesCount || 0) - 1) } : prev,
+			);
+		} else {
+			setPost((prev) =>
+				prev
+					? {
+							...prev,
+							likedByMe: true,
+							likesCount: (prev.likesCount || 0) + 1,
+							dislikedByMe: false,
+							dislikesCount: post.dislikedByMe ? Math.max(0, (prev.dislikesCount || 0) - 1) : prev.dislikesCount,
+						}
+					: prev,
+			);
+		}
 		try {
-			if (post.likedByMe) {
-				const data = await apiDelete<{ liked: boolean; likesCount: number }>(
-					`/api/posts/${postId}/like`,
-				);
-				setPost((prev) =>
-					prev
-						? { ...prev, likedByMe: data.liked, likesCount: data.likesCount }
-						: prev,
-				);
+			if (prevPost.likedByMe) {
+				const data = await apiDelete<{ liked: boolean; likesCount: number }>(`/api/posts/${postId}/like`);
+				setPost((prev) => (prev ? { ...prev, likesCount: data.likesCount } : prev));
 			} else {
-				const data = await apiPost<{
-					liked: boolean;
-					likesCount: number;
-					dislikesCount: number;
-				}>(`/api/posts/${postId}/like`);
-				setPost((prev) =>
-					prev
-						? {
-								...prev,
-								likedByMe: data.liked,
-								likesCount: data.likesCount,
-								dislikesCount: data.dislikesCount,
-								dislikedByMe: false,
-							}
-						: prev,
-				);
+				const data = await apiPost<{ liked: boolean; likesCount: number; dislikesCount: number }>(`/api/posts/${postId}/like`);
+				setPost((prev) => (prev ? { ...prev, likesCount: data.likesCount, dislikesCount: data.dislikesCount } : prev));
 			}
 		} catch (error) {
+			setPost(prevPost);
 			console.error("Error toggling like:", error);
-			show("操作失败，请稍后重试", { variant: "error" });
+			show(t('forum.operationFailed'), { variant: "error" });
 		} finally {
 			setLiking(false);
 		}
@@ -535,42 +540,36 @@ const PostDetail = () => {
 	const handleToggleDislike = async () => {
 		if (!post || !postId || !user || disliking) return;
 		setDisliking(true);
+		const prevPost = post;
+		if (post.dislikedByMe) {
+			setPost((prev) =>
+				prev ? { ...prev, dislikedByMe: false, dislikesCount: Math.max(0, (prev.dislikesCount || 0) - 1) } : prev,
+			);
+		} else {
+			setPost((prev) =>
+				prev
+					? {
+							...prev,
+							dislikedByMe: true,
+							dislikesCount: (prev.dislikesCount || 0) + 1,
+							likedByMe: false,
+							likesCount: post.likedByMe ? Math.max(0, (prev.likesCount || 0) - 1) : prev.likesCount,
+						}
+					: prev,
+			);
+		}
 		try {
-			if (post.dislikedByMe) {
-				const data = await apiDelete<{
-					disliked: boolean;
-					dislikesCount: number;
-				}>(`/api/posts/${postId}/dislike`);
-				setPost((prev) =>
-					prev
-						? {
-								...prev,
-								dislikedByMe: data.disliked,
-								dislikesCount: data.dislikesCount,
-							}
-						: prev,
-				);
+			if (prevPost.dislikedByMe) {
+				const data = await apiDelete<{ disliked: boolean; dislikesCount: number }>(`/api/posts/${postId}/dislike`);
+				setPost((prev) => (prev ? { ...prev, dislikesCount: data.dislikesCount } : prev));
 			} else {
-				const data = await apiPost<{
-					disliked: boolean;
-					dislikesCount: number;
-					likesCount: number;
-				}>(`/api/posts/${postId}/dislike`);
-				setPost((prev) =>
-					prev
-						? {
-								...prev,
-								dislikedByMe: data.disliked,
-								dislikesCount: data.dislikesCount,
-								likesCount: data.likesCount,
-								likedByMe: false,
-							}
-						: prev,
-				);
+				const data = await apiPost<{ disliked: boolean; dislikesCount: number; likesCount: number }>(`/api/posts/${postId}/dislike`);
+				setPost((prev) => (prev ? { ...prev, dislikesCount: data.dislikesCount, likesCount: data.likesCount } : prev));
 			}
 		} catch (error) {
+			setPost(prevPost);
 			console.error("Error toggling dislike:", error);
-			show("操作失败，请稍后重试", { variant: "error" });
+			show(t('forum.operationFailed'), { variant: "error" });
 		} finally {
 			setDisliking(false);
 		}
@@ -579,20 +578,18 @@ const PostDetail = () => {
 	const handleToggleFavorite = async () => {
 		if (!post || !postId || !user || favoriting) return;
 		setFavoriting(true);
+		const prevPost = post;
+		setPost((prev) => (prev ? { ...prev, favoritedByMe: !prev.favoritedByMe } : prev));
 		try {
-			if (post.favoritedByMe) {
+			if (prevPost.favoritedByMe) {
 				await apiDelete(`/api/favorites/post/${postId}`);
-				setPost((prev) => (prev ? { ...prev, favoritedByMe: false } : prev));
 			} else {
-				await apiPost("/api/favorites", {
-					targetType: "post",
-					targetId: postId,
-				});
-				setPost((prev) => (prev ? { ...prev, favoritedByMe: true } : prev));
+				await apiPost("/api/favorites", { targetType: "post", targetId: postId });
 			}
 		} catch (error) {
+			setPost(prevPost);
 			console.error("Error toggling favorite:", error);
-			show("收藏操作失败，请稍后重试", { variant: "error" });
+			show(t('forum.favoriteFailed'), { variant: "error" });
 		} finally {
 			setFavoriting(false);
 		}
@@ -606,10 +603,10 @@ const PostDetail = () => {
 				`/api/posts/${postId}/submit`,
 			);
 			setPost((prev) => (prev ? { ...prev, ...data.post } : prev));
-			show("已提交审核，请等待管理员处理");
+			show(t('forum.reviewSubmitted'));
 		} catch (error) {
 			console.error("Error submitting review:", error);
-			show("提交审核失败，请稍后重试", { variant: "error" });
+			show(t('forum.submitReviewFailed'), { variant: "error" });
 		} finally {
 			setSubmittingReview(false);
 		}
@@ -628,7 +625,7 @@ const PostDetail = () => {
 			}
 		} catch (error) {
 			console.error("Error toggling pin:", error);
-			show("操作失败，请稍后重试", { variant: "error" });
+			show(t('forum.operationFailed'), { variant: "error" });
 		} finally {
 			setPinning(false);
 		}
@@ -640,10 +637,10 @@ const PostDetail = () => {
 			toAbsoluteInternalUrl(`/forum/${postId}`),
 		);
 		if (copied) {
-			show("链接已复制，可直接分享给好友");
+			show(t('forum.linkCopiedShare'));
 			return;
 		}
-		show("复制链接失败，请手动复制地址栏链接", { variant: "error" });
+		show(t('forum.copyLinkFailedManual'), { variant: "error" });
 	};
 
 	return (
@@ -661,7 +658,7 @@ const PostDetail = () => {
 					to="/forum"
 					className="inline-flex items-center gap-2 text-sm text-[#9e968e] hover:text-[#c8951e] transition-colors mb-5"
 				>
-					<ArrowLeft size={18} /> 返回论坛列表
+					<ArrowLeft size={18} /> {t('forum.backToList')}
 				</Link>
 
 				{/* Header */}
@@ -675,14 +672,14 @@ const PostDetail = () => {
 								onClick={handleShare}
 								className="px-4 py-2 text-[0.9375rem] rounded border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all flex items-center gap-2"
 							>
-								<Link2 size={16} /> 复制
+								<Link2 size={16} /> {t('forum.copy')}
 							</button>
 							{canEditPost && (
 								<Link
 									to={`/forum/${post.id}/edit`}
 									className="px-4 py-2 text-[0.9375rem] rounded bg-[#c8951e] text-white hover:bg-[#dca828] active:scale-[0.98] transition-all flex items-center gap-2"
 								>
-									<Edit3 size={16} /> 编辑
+									<Edit3 size={16} /> {t('forum.edit')}
 								</Link>
 							)}
 						</div>
@@ -701,12 +698,12 @@ const PostDetail = () => {
 								disabled={submittingReview}
 								className="px-3 py-1 text-[0.8125rem] rounded bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all self-center mb-1"
 							>
-								{submittingReview ? "提交中..." : "提交审核"}
+								{submittingReview ? t('forum.submitting') : t('forum.submitReview')}
 							</button>
 						)}
 						{post.status === "rejected" && post.reviewNote ? (
 							<span className="text-[0.8125rem] text-red-500 self-center mb-1">
-								驳回：{post.reviewNote}
+								{t('forum.rejectedPrefix')}{post.reviewNote}
 							</span>
 						) : null}
 					</div>
@@ -730,7 +727,7 @@ const PostDetail = () => {
 
 						<section className="mt-12 pt-8 border-t border-[#e0dcd3]">
 							<h3 className="text-[1.25rem] font-bold text-[#2c2c2c] tracking-[0.12em] mb-6">
-								评论 ({comments.length})
+								{t('forum.comments')} ({comments.length})
 							</h3>
 
 							{user ? (
@@ -738,7 +735,7 @@ const PostDetail = () => {
 									{replyTo && (
 										<div className="mb-3 px-3 py-2 bg-[#fdf5d8] border border-[#e0dcd3] rounded flex items-center justify-between">
 											<span className="text-xs text-[#c8951e]">
-												回复 @{replyTo.authorName}
+												{t('forum.reply')} @{replyTo.authorName}
 											</span>
 											<button
 												type="button"
@@ -755,8 +752,8 @@ const PostDetail = () => {
 											onChange={(e) => setNewComment(e.target.value)}
 											placeholder={
 												replyTo
-													? `回复 @${replyTo.authorName}...`
-													: "发表你的看法..."
+													? t('forum.replyToPlaceholder', { name: replyTo.authorName })
+													: t('forum.commentPlaceholder')
 											}
 											rows={3}
 											disabled={!canComment || isBanned}
@@ -772,17 +769,17 @@ const PostDetail = () => {
 									</div>
 									{isBanned ? (
 										<p className="mt-2 text-xs text-red-500">
-											账号已被封禁，无法评论
+											{t('forum.bannedCannotComment')}
 										</p>
 									) : !canComment ? (
 										<p className="mt-2 text-xs text-amber-600">
-											仅已发布内容可评论
+											{t('forum.onlyPublishedCanComment')}
 										</p>
 									) : null}
 								</form>
 							) : (
 								<div className="p-6 bg-[#f7f5f0] border border-[#e0dcd3] rounded text-center mb-8">
-									<p className="text-[#9e968e] text-sm">请先登录后发表评论</p>
+									<p className="text-[#9e968e] text-sm">{t('forum.loginToComment')}</p>
 								</div>
 							)}
 
@@ -809,7 +806,7 @@ const PostDetail = () => {
 												<div className="flex-grow min-w-0">
 													<div className="flex items-center justify-between mb-1">
 														<span className="text-sm font-medium text-[#2c2c2c]">
-															{comment.authorName || "匿名用户"}
+															{comment.authorName || t('forum.anonymousUser')}
 														</span>
 														<span className="text-[11px] text-[#9e968e]">
 															{formatDate(comment.createdAt, "MM-dd HH:mm")}
@@ -832,7 +829,7 @@ const PostDetail = () => {
 														}}
 														className="text-[11px] font-medium text-[#c8951e] hover:underline"
 													>
-														回复
+														{t('forum.reply')}
 													</button>
 												</div>
 											</div>
@@ -856,7 +853,7 @@ const PostDetail = () => {
 															<div className="flex-grow min-w-0">
 																<div className="flex items-center justify-between mb-1">
 																	<span className="text-xs font-medium text-[#2c2c2c]">
-																		{reply.authorName || "匿名用户"}
+																		{reply.authorName || t('forum.anonymousUser')}
 																	</span>
 																	<span className="text-[10px] text-[#9e968e]">
 																		{formatDate(reply.createdAt, "MM-dd HH:mm")}
@@ -874,7 +871,7 @@ const PostDetail = () => {
 									))
 								) : (
 									<p className="text-center text-[#9e968e] italic py-8">
-										暂无评论，快来抢沙发吧！
+										{t('forum.emptyComments')}
 									</p>
 								)}
 							</div>
@@ -885,7 +882,7 @@ const PostDetail = () => {
 						{/* Interactions */}
 						<div className="py-5 border-b border-[#e0dcd3]">
 							<h3 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-3.5">
-								互动
+								{t('forum.interactions')}
 							</h3>
 							<div className="flex flex-wrap gap-2">
 								<button
@@ -898,7 +895,7 @@ const PostDetail = () => {
 											: "bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-red-400 hover:text-red-500",
 										(!user || liking) && "opacity-50 cursor-not-allowed",
 									)}
-									title={post.likedByMe ? "取消点赞" : "点赞"}
+									title={post.likedByMe ? t('forum.unlike') : t('forum.like')}
 								>
 									<Heart size={15} /> {post.likesCount || 0}
 								</button>
@@ -912,7 +909,7 @@ const PostDetail = () => {
 											: "bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-orange-400 hover:text-orange-500",
 										(!user || disliking) && "opacity-50 cursor-not-allowed",
 									)}
-									title={post.dislikedByMe ? "取消踩" : "踩"}
+									title={post.dislikedByMe ? t('forum.unDislike') : t('forum.dislike')}
 								>
 									<ThumbsDown size={15} /> {post.dislikesCount || 0}
 								</button>
@@ -928,16 +925,16 @@ const PostDetail = () => {
 											: "bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e]",
 										(!user || favoriting) && "opacity-50 cursor-not-allowed",
 									)}
-									title={post.favoritedByMe ? "取消收藏" : "收藏"}
+									title={post.favoritedByMe ? t('forum.unfavorite') : t('forum.favorite')}
 								>
-									<Save size={15} /> {post.favoritedByMe ? "已收藏" : "收藏"}
+									<Save size={15} /> {post.favoritedByMe ? t('forum.favorited') : t('forum.favorite')}
 								</button>
 								<button
 									onClick={handleShare}
 									className="flex-1 px-3 py-2 rounded text-sm font-medium bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e] transition-all flex items-center justify-center gap-1.5"
-									title="分享"
+									title={t('forum.share')}
 								>
-									<Share2 size={15} /> 分享
+									<Share2 size={15} /> {t('forum.share')}
 								</button>
 							</div>
 							{isAdmin && (
@@ -952,7 +949,7 @@ const PostDetail = () => {
 										pinning && "opacity-50 cursor-not-allowed",
 									)}
 								>
-									<Pin size={15} /> {post.isPinned ? "已置顶" : "置顶"}
+									<Pin size={15} /> {post.isPinned ? t('forum.pinned') : t('forum.pin')}
 								</button>
 							)}
 						</div>
@@ -960,11 +957,11 @@ const PostDetail = () => {
 						{/* Status */}
 						<div className="py-5 border-b border-[#e0dcd3]">
 							<h3 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-3.5">
-								状态
+								{t('forum.status')}
 							</h3>
 							<div className="flex flex-col gap-2.5">
 								<div className="flex items-center justify-between text-sm">
-									<span className="text-[#9e968e]">审核</span>
+									<span className="text-[#9e968e]">{t('forum.review')}</span>
 									<span
 										className={clsx(
 											"px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider",
@@ -981,15 +978,15 @@ const PostDetail = () => {
 									</span>
 								</div>
 								<div className="flex items-center justify-between text-sm">
-									<span className="text-[#9e968e]">作者</span>
-									<span className="text-[#2c2c2c] font-medium">{post.authorName || post.authorUid?.substring(0, 8) || "匿名"}</span>
+									<span className="text-[#9e968e]">{t('forum.author')}</span>
+									<span className="text-[#2c2c2c] font-medium">{post.authorName || post.authorUid?.substring(0, 8) || t('forum.anonymous')}</span>
 								</div>
 								<div className="flex items-center justify-between text-sm">
-									<span className="text-[#9e968e]">创建</span>
+									<span className="text-[#9e968e]">{t('forum.createdAt')}</span>
 									<span className="text-[#2c2c2c] font-medium">{formatDate(post.createdAt, "yyyy-MM-dd")}</span>
 								</div>
 								<div className="flex items-center justify-between text-sm">
-									<span className="text-[#9e968e]">更新</span>
+									<span className="text-[#9e968e]">{t('forum.updatedAt')}</span>
 									<span className="text-[#2c2c2c] font-medium">{formatDate(post.updatedAt, "yyyy-MM-dd HH:mm")}</span>
 								</div>
 							</div>
@@ -999,7 +996,7 @@ const PostDetail = () => {
 						{post.tags && post.tags.length > 0 && (
 							<div className="py-5 border-b border-[#e0dcd3]">
 								<h3 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-3.5">
-									标签
+									{t('forum.tags')}
 								</h3>
 								<div className="flex flex-wrap gap-2">
 									{post.tags.map((tag: string) => (
@@ -1018,7 +1015,7 @@ const PostDetail = () => {
 						{(post.locationDetail || post.locationName) && (
 							<div className="py-5">
 								<h3 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-3.5">
-									地点
+									{t('forum.location')}
 								</h3>
 								<div className="flex items-center gap-2 text-sm text-[#6b6560]">
 									<MapPin size={14} className="text-[#c8951e]" />
@@ -1034,6 +1031,7 @@ const PostDetail = () => {
 };
 
 const PostEditor = () => {
+	const { t } = useI18n();
 	const { postId } = useParams();
 	const isEditing = Boolean(postId);
 	const navigate = useNavigate();
@@ -1068,7 +1066,7 @@ const PostEditor = () => {
 
 				if (musicDocIdParam && musicTitleParam) {
 					defaultSection = "music";
-					defaultContent = `\n\n---\n*本文为《${decodeURIComponent(musicTitleParam)}》的乐评*\n`;
+					defaultContent = `\n\n---\n${t('forum.musicReviewTemplate', { title: decodeURIComponent(musicTitleParam) })}\n`;
 				}
 
 				setFormData((prev) => ({
@@ -1094,12 +1092,12 @@ const PostEditor = () => {
 				setLoadingPost(true);
 				const data = await apiGet<{ post: PostItem }>(`/api/posts/${postId}`);
 				if (!data.post) {
-					show("帖子不存在或无权编辑", { variant: "error" });
+					show(t('forum.postNotExistOrNoPermission'), { variant: "error" });
 					return;
 				}
 
 				if (!user || data.post.authorUid !== user.uid) {
-					show("你无权编辑此帖子", { variant: "error" });
+					show(t('forum.noEditPermission'), { variant: "error" });
 					return;
 				}
 
@@ -1113,7 +1111,7 @@ const PostEditor = () => {
 				});
 			} catch (error) {
 				console.error("Error loading editable post:", error);
-				show("加载帖子失败，请稍后重试", { variant: "error" });
+				show(t('forum.loadPostFailed'), { variant: "error" });
 			} finally {
 				setLoadingPost(false);
 			}
@@ -1125,7 +1123,7 @@ const PostEditor = () => {
 	const handleSubmit = async (status: "draft" | "pending") => {
 		if (!user) return;
 		if (isBanned) {
-			show("账号已被封禁，无法发帖", { variant: "error" });
+			show(t('forum.bannedCannotPost'), { variant: "error" });
 			return;
 		}
 		setSavingMode(status);
@@ -1157,8 +1155,8 @@ const PostEditor = () => {
 			console.error("Error creating post:", error);
 			show(
 				status === "draft"
-					? "保存失败，请稍后重试"
-					: "提交审核失败，请稍后重试",
+					? t('forum.saveDraftFailed')
+					: t('forum.submitReviewFailed'),
 				{ variant: "error" },
 			);
 		} finally {
@@ -1183,7 +1181,7 @@ const PostEditor = () => {
 			<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
 				<div className="flex justify-between items-center mb-8">
 					<h1 className="text-[1.75rem] font-bold text-[#2c2c2c] tracking-[0.12em]">
-						{isEditing ? "编辑帖子" : "发布新帖子"}
+						{isEditing ? t('forum.editPost') : t('forum.createPost')}
 					</h1>
 					<button
 						onClick={() => navigate(-1)}
@@ -1202,7 +1200,7 @@ const PostEditor = () => {
 				>
 					<div className="space-y-2">
 						<label className="text-xs font-bold uppercase tracking-widest text-[#9e968e]">
-							标题 <span className="text-red-500">*</span>
+							{t('forum.titleLabel')} <span className="text-red-500">*</span>
 						</label>
 						<input
 							type="text"
@@ -1211,14 +1209,14 @@ const PostEditor = () => {
 							onChange={(e) =>
 								setFormData({ ...formData, title: e.target.value })
 							}
-							placeholder="输入一个吸引人的标题..."
+							placeholder={t('forum.titlePlaceholder')}
 							className="w-full px-4 py-3 bg-[#f7f5f0] border border-[#e0dcd3] rounded focus:outline-none focus:border-[#c8951e] text-base"
 						/>
 					</div>
 
 					<div className="space-y-2">
 						<label className="text-xs font-bold uppercase tracking-widest text-[#9e968e]">
-							板块 <span className="text-red-500">*</span>
+							{t('forum.sectionLabel')} <span className="text-red-500">*</span>
 						</label>
 						<select
 							value={formData.section}
@@ -1237,7 +1235,7 @@ const PostEditor = () => {
 
 					<div className="space-y-2">
 						<label className="text-xs font-bold uppercase tracking-widest text-[#9e968e]">
-							标签 (逗号分隔)
+							{t('forum.tagsLabel')}
 						</label>
 						<input
 							type="text"
@@ -1245,14 +1243,14 @@ const PostEditor = () => {
 							onChange={(e) =>
 								setFormData({ ...formData, tags: e.target.value })
 							}
-							placeholder="例如：Live, 绝色, 2024"
+							placeholder={t('forum.tagsPlaceholder')}
 							className="w-full px-4 py-3 bg-[#f7f5f0] border border-[#e0dcd3] rounded focus:outline-none focus:border-[#c8951e] text-base"
 						/>
 					</div>
 
 					<div className="space-y-2">
 						<label className="text-xs font-bold uppercase tracking-widest text-[#9e968e]">
-							地点
+							{t('forum.locationLabel')}
 						</label>
 						<LocationTagInput
 							value={formData.locationName}
@@ -1276,7 +1274,7 @@ const PostEditor = () => {
 
 					<div className="space-y-2">
 						<label className="text-xs font-bold uppercase tracking-widest text-[#9e968e]">
-							内容 (Markdown) <span className="text-red-500">*</span>
+							{t('forum.contentLabel')} <span className="text-red-500">*</span>
 						</label>
 						<div
 							className="border border-[#e0dcd3] rounded overflow-hidden bg-white"
@@ -1289,7 +1287,7 @@ const PostEditor = () => {
 									)
 								}
 								height="400px"
-								placeholder="分享你的想法..."
+								placeholder={t('forum.contentPlaceholder')}
 							/>
 						</div>
 					</div>
@@ -1302,7 +1300,7 @@ const PostEditor = () => {
 							className="px-6 py-2.5 bg-[#f7f5f0] text-[#6b6560] border border-[#e0dcd3] rounded text-sm font-medium hover:border-[#c8951e] hover:text-[#c8951e] transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
 						>
 							<Save size={16} />{" "}
-							{savingMode === "draft" ? "保存中..." : "保存草稿"}
+							{savingMode === "draft" ? t('forum.saving') : t('forum.saveDraft')}
 						</button>
 						<button
 							type="submit"
@@ -1310,7 +1308,7 @@ const PostEditor = () => {
 							className="px-8 py-2.5 bg-[#c8951e] text-white rounded text-sm font-medium hover:bg-[#dca828] active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
 						>
 							<Send size={16} />{" "}
-							{savingMode === "pending" ? "提交中..." : "提交审核"}
+							{savingMode === "pending" ? t('forum.submitting') : t('forum.submitReview')}
 						</button>
 					</div>
 				</form>

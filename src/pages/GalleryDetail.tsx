@@ -19,6 +19,7 @@ import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { apiDelete, apiGet, apiPatch, apiPost, apiUpload } from '../lib/apiClient';
 import { splitTagsInput } from '../lib/contentUtils';
+import { useI18n } from '../lib/i18n';
 import { formatDateTime, toDateValue } from '../lib/dateUtils';
 import { DEFAULT_AVATAR, handleAvatarError } from '../lib/defaultAvatar';
 import { getImagePreference } from '../services/imageService';
@@ -127,6 +128,7 @@ const GalleryDetail = () => {
   const navigate = useNavigate();
   const { user, profile, isBanned } = useAuth();
   const { show } = useToast();
+  const { t } = useI18n();
 
   const [gallery, setGallery] = useState<GalleryItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -221,10 +223,10 @@ const GalleryDetail = () => {
     if (!gallery?.id) return;
     const copied = await copyToClipboard(toAbsoluteInternalUrl(`/gallery/${gallery.id}`));
     if (copied) {
-      show('图集内链已复制');
+      show(t('gallery.linkCopied'));
       return;
     }
-    show('复制链接失败，请稍后重试', { variant: 'error' });
+    show(t('gallery.linkCopyFailed'), { variant: 'error' });
   };
 
   const handleEnterEditMode = () => {
@@ -254,7 +256,7 @@ const GalleryDetail = () => {
     const currentDraft = draftRef.current;
     if (!gallery || !currentDraft || !canManage || saving || uploading) return;
     if (currentDraft.images.length === 0) {
-      show('图集至少需要保留一张图片', { variant: 'error' });
+      show(t('gallery.atLeastOneImage'), { variant: 'error' });
       return;
     }
     try {
@@ -293,10 +295,10 @@ const GalleryDetail = () => {
       setGallery(result.gallery);
       applyDraft(null);
       setEditing(false);
-      show('图集修改已保存');
+      show(t('gallery.changesSaved'));
     } catch (error) {
       console.error('Save gallery meta error:', error);
-      show('保存失败，请稍后重试', { variant: 'error' });
+      show(t('gallery.saveFailed'), { variant: 'error' });
     } finally {
       setUploading(false);
       setSaving(false);
@@ -318,11 +320,11 @@ const GalleryDetail = () => {
     e.preventDefault();
     if (!galleryId || !user || !newComment.trim()) return;
     if (isBanned) {
-      show('账号已被封禁，无法评论', { variant: 'error' });
+      show(t('gallery.bannedCannotComment'), { variant: 'error' });
       return;
     }
     if (!gallery?.published) {
-      show('仅已发布内容可评论', { variant: 'error' });
+      show(t('gallery.onlyPublishedCanComment'), { variant: 'error' });
       return;
     }
 
@@ -341,7 +343,7 @@ const GalleryDetail = () => {
       setReplyTo(null);
     } catch (error) {
       console.error('Error adding comment:', error);
-      show('发表评论失败，请稍后重试', { variant: 'error' });
+      show(t('gallery.commentFailed'), { variant: 'error' });
     } finally {
       setSubmittingComment(false);
     }
@@ -373,18 +375,18 @@ const GalleryDetail = () => {
 
     files.forEach((file) => {
       if (!allowedTypes.includes(file.type)) {
-        invalidFiles.push(`${file.name} (不支持的文件类型)`);
+        invalidFiles.push(`${file.name} (${t('gallery.unsupportedFileType')})`);
         return;
       }
       if (file.size > maxSize) {
-        invalidFiles.push(`${file.name} (文件过大，最大 10MB)`);
+        invalidFiles.push(`${file.name} (${t('gallery.fileTooLarge')})`);
         return;
       }
       validImages.push(createPendingImage(file));
     });
 
     if (invalidFiles.length) {
-      show(`以下文件无法加入：${invalidFiles.slice(0, 3).join(', ')}${invalidFiles.length > 3 ? '...' : ''}`, { variant: 'error' });
+      show(`${t('gallery.filesCannotAdd')}${invalidFiles.slice(0, 3).join(', ')}${invalidFiles.length > 3 ? '...' : ''}`, { variant: 'error' });
     }
     if (!validImages.length) return;
 
@@ -395,7 +397,7 @@ const GalleryDetail = () => {
         images: [...prev.images, ...validImages],
       };
     });
-    show(`已加入 ${validImages.length} 张待上传图片`);
+    show(t('gallery.imagesAdded', { count: validImages.length }));
   };
 
   const handleAddImages = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -411,7 +413,7 @@ const GalleryDetail = () => {
     if (!editing || !currentDraft || !canManage) return;
     const image = currentDraft.images[index];
     if (!image?.clientId) {
-      show('无法删除该图片', { variant: 'error' });
+      show(t('gallery.cannotDeleteImage'), { variant: 'error' });
       return;
     }
 
@@ -427,7 +429,7 @@ const GalleryDetail = () => {
         images: nextImages,
       };
     });
-    show(image.isPending ? '已移除待上传图片' : '已加入待删除列表');
+    show(image.isPending ? t('gallery.pendingImageRemoved') : t('gallery.markedForDeletion'));
   };
 
   const handleReorder = async (fromIndex: number, toIndex: number) => {
@@ -505,10 +507,10 @@ const GalleryDetail = () => {
       >
         <div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
           <Link to="/gallery" className="inline-flex items-center gap-2 text-sm text-[var(--color-text-antique-muted)] hover:text-[var(--color-accent-antique)] transition-colors">
-            <ArrowLeft size={16} /> 返回图集列表
+            <ArrowLeft size={16} /> {t('gallery.backToList')}
           </Link>
           <div className="mt-6 bg-white rounded border border-[#e0dcd3] p-10 text-center text-[var(--color-text-antique-muted)] italic tracking-[0.1em]">
-            图集不存在或已被删除
+            {t('gallery.notFound')}
           </div>
         </div>
       </div>
@@ -531,8 +533,8 @@ const GalleryDetail = () => {
       {editing && canManage && pageDragDepth > 0 ? (
         <div className="pointer-events-none fixed inset-0 z-20 flex items-center justify-center bg-[#f7f5f0]/80 px-4">
           <div className="w-full max-w-3xl rounded border-2 border-dashed border-[#c8951e] bg-white/95 px-8 py-12 text-center">
-            <p className="text-lg font-bold text-[#2c2c2c]">松开鼠标即可加入待上传列表</p>
-            <p className="mt-2 text-sm text-[#9e968e]">整个图集页面都可以拖入图片，保存时统一上传并生效</p>
+            <p className="text-lg font-bold text-[#2c2c2c]">{t('gallery.dropToUpload')}</p>
+            <p className="mt-2 text-sm text-[#9e968e]">{t('gallery.dropHint')}</p>
           </div>
         </div>
       ) : null}
@@ -541,7 +543,7 @@ const GalleryDetail = () => {
         {/* Breadcrumb + Actions */}
         <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
           <Link to="/gallery" className="inline-flex items-center gap-2 text-sm text-[#9e968e] hover:text-[#c8951e] transition-colors">
-            <ArrowLeft size={16} /> 返回图集列表
+            <ArrowLeft size={16} /> {t('gallery.backToList')}
           </Link>
           {canManage && (
             <div className="flex flex-wrap items-center gap-2">
@@ -552,14 +554,14 @@ const GalleryDetail = () => {
                     disabled={saving || uploading}
                     className="px-4 py-2 text-[0.9375rem] rounded bg-[#c8951e] text-white hover:bg-[#dca828] transition-all flex items-center gap-2 disabled:opacity-50"
                   >
-                    <Save size={16} /> {saving || uploading ? '保存中...' : '保存修改'}
+                    <Save size={16} /> {saving || uploading ? t('gallery.saving') : t('gallery.saveChanges')}
                   </button>
                   <button
                     onClick={handleCancelEdit}
                     disabled={saving || uploading}
                     className="px-4 py-2 text-[0.9375rem] rounded border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    取消编辑
+                    {t('gallery.cancelEdit')}
                   </button>
                 </>
               ) : (
@@ -567,7 +569,7 @@ const GalleryDetail = () => {
                   onClick={handleEnterEditMode}
                   className="px-4 py-2 text-[0.9375rem] rounded border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all flex items-center gap-2"
                 >
-                  <Save size={16} /> 打开编辑模式
+                  <Save size={16} /> {t('gallery.enterEditMode')}
                 </button>
               )}
               <button
@@ -581,14 +583,14 @@ const GalleryDetail = () => {
                 )}
               >
                 {(editing ? draft?.published : gallery.published) ? <Eye size={14} /> : <EyeOff size={14} />}
-                {editing ? ((draft?.published ? '设为草稿' : '设为发布') as string) : (gallery.published ? '已发布' : '草稿中')}
+                {editing ? (draft?.published ? t('gallery.setDraft') : t('gallery.setPublish')) : (gallery.published ? t('gallery.published') : t('gallery.draft'))}
               </button>
               <button
                 onClick={handleCopyLink}
                 className="px-4 py-2 text-[0.9375rem] rounded border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all flex items-center gap-2"
-                title="复制内链"
+                title={t('gallery.copyInternalLink')}
               >
-                <Link2 size={16} /> 复制内链
+                <Link2 size={16} /> {t('gallery.copyInternalLink')}
               </button>
               <input ref={addImagesInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handleAddImages} />
             </div>
@@ -601,7 +603,7 @@ const GalleryDetail = () => {
             <div className="space-y-4 max-w-2xl">
               <div className="space-y-1.5">
                 <label htmlFor="gallery-title" className="block text-sm font-medium text-[#6b6560]">
-                  图集标题
+                  {t('gallery.titleLabel')}
                 </label>
                 <input
                   id="gallery-title"
@@ -609,12 +611,12 @@ const GalleryDetail = () => {
                   value={draft.title}
                   onChange={(event) => applyDraft((prev) => prev ? { ...prev, title: event.target.value } : prev)}
                   className="w-full px-4 py-2.5 rounded border border-[#e0dcd3] bg-white focus:outline-none focus:border-[#c8951e] text-base"
-                  placeholder="图集标题"
+                  placeholder={t('gallery.titlePlaceholder')}
                 />
               </div>
               <div className="space-y-1.5">
                 <label htmlFor="gallery-description" className="block text-sm font-medium text-[#6b6560]">
-                  图集描述
+                  {t('gallery.descriptionLabel')}
                 </label>
                 <textarea
                   id="gallery-description"
@@ -622,13 +624,13 @@ const GalleryDetail = () => {
                   onChange={(event) => applyDraft((prev) => prev ? { ...prev, description: event.target.value } : prev)}
                   className="w-full px-4 py-2.5 rounded border border-[#e0dcd3] bg-white focus:outline-none focus:border-[#c8951e] resize-none text-base"
                   rows={3}
-                  placeholder="图集描述"
+                  placeholder={t('gallery.descriptionPlaceholder')}
                 />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label htmlFor="gallery-tags" className="block text-sm font-medium text-[#6b6560]">
-                    标签
+                    {t('gallery.tagsLabel')}
                   </label>
                   <input
                     id="gallery-tags"
@@ -636,12 +638,12 @@ const GalleryDetail = () => {
                     value={draft.tagsText}
                     onChange={(event) => applyDraft((prev) => prev ? { ...prev, tagsText: event.target.value } : prev)}
                     className="w-full px-4 py-2.5 rounded border border-[#e0dcd3] bg-white focus:outline-none focus:border-[#c8951e] text-base"
-                    placeholder="标签，逗号分隔"
+                    placeholder={t('gallery.tagsPlaceholder')}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <label htmlFor="gallery-copyright" className="block text-sm font-medium text-[#6b6560]">
-                    版权标识
+                    {t('gallery.copyrightLabel')}
                   </label>
                   <input
                     id="gallery-copyright"
@@ -649,7 +651,7 @@ const GalleryDetail = () => {
                     value={draft.copyrightText}
                     onChange={(event) => applyDraft((prev) => prev ? { ...prev, copyrightText: event.target.value } : prev)}
                     className="w-full px-4 py-2.5 rounded border border-[#e0dcd3] bg-white focus:outline-none focus:border-[#c8951e] text-base"
-                    placeholder="版权信息，如：© 2024 作者名"
+                    placeholder={t('gallery.copyrightPlaceholder')}
                   />
                 </div>
               </div>
@@ -660,7 +662,7 @@ const GalleryDetail = () => {
                 {gallery.title}
               </h1>
               <p className="text-[#6b6560] leading-relaxed">
-                {gallery.description || '暂无描述'}
+                {gallery.description || t('gallery.noDescription')}
               </p>
               {gallery.copyright && (
                 <p className="text-xs text-[#9e968e] mt-1">{gallery.copyright}</p>
@@ -673,7 +675,7 @@ const GalleryDetail = () => {
         <div className="flex items-end justify-between border-b border-[#e0dcd3] mb-6 pb-2">
           <div className="flex items-center gap-4 flex-wrap">
             <span className="text-[1.125rem] pb-2 relative tracking-[0.05em] text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]">
-              {images.length} 张图片
+              {t('gallery.imageCount', { count: images.length })}
             </span>
             {!editing && gallery.tags?.map((tag) => (
               <span key={tag} className="text-[11px] text-[#c8951e] bg-[#f7f5f0] border border-[#e0dcd3] px-2 py-0.5 rounded">
@@ -687,19 +689,19 @@ const GalleryDetail = () => {
                   gallery.published ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-amber-50 text-amber-700 border border-amber-200',
                 )}
               >
-                {gallery.published ? '已发布' : '草稿'}
+                {gallery.published ? t('gallery.published') : t('gallery.draftBadge')}
               </span>
             )}
             {editing ? (
               <span className="text-[11px] px-2 py-0.5 rounded font-medium bg-[#f0ece3] text-[#6b6560] border border-[#e0dcd3]">
-                编辑模式
+                {t('gallery.editMode')}
               </span>
             ) : null}
           </div>
           <div className="flex items-center gap-3 pb-2 text-[0.8125rem] text-[#9e968e]">
             <span className="flex items-center gap-1"><Clock size={14} /> {formatDateTime(gallery.createdAt)}</span>
             <span className="flex items-center gap-1"><UserIcon size={14} /> {gallery.authorName || gallery.authorUid?.slice(0, 8)}</span>
-            {gallery.publishedAt ? <span>发布于 {formatDateTime(gallery.publishedAt)}</span> : null}
+            {gallery.publishedAt ? <span>{t('gallery.publishedAt')} {formatDateTime(gallery.publishedAt)}</span> : null}
           </div>
         </div>
 
@@ -707,7 +709,7 @@ const GalleryDetail = () => {
         <section className="mb-10">
           {editing ? (
             <p className="mb-3 text-xs text-[#9e968e]">
-              直接拖拽图片可调整顺序，点击图片左上角的删除按钮可移除。也可以把图片拖到整个页面中加入待上传列表。
+              {t('gallery.editImageHint')}
             </p>
           ) : null}
 
@@ -749,7 +751,7 @@ const GalleryDetail = () => {
                 {!editing && (
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 pointer-events-none">
                     <div className="absolute bottom-3 right-3 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 bg-black/40 text-white text-xs px-2 py-1 rounded">
-                      查看大图
+                      {t('gallery.viewFullSize')}
                     </div>
                   </div>
                 )}
@@ -759,13 +761,13 @@ const GalleryDetail = () => {
                     <button
                       onClick={() => handleDeleteImage(index)}
                       className="absolute top-1.5 left-1.5 z-10 p-1 rounded bg-black/50 text-white hover:bg-red-500/80 transition-colors"
-                      title="删除图片"
+                      title={t('gallery.deleteImage')}
                     >
                       <Trash2 size={11} />
                     </button>
                     {image.isPending ? (
                       <span className="absolute top-1.5 right-1.5 z-10 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-[#c8951e] text-white">
-                        待上传
+                        {t('gallery.pendingUpload')}
                       </span>
                     ) : null}
                   </>
@@ -779,7 +781,7 @@ const GalleryDetail = () => {
                 onClick={() => addImagesInputRef.current?.click()}
                 disabled={uploading || saving}
                 className="flex aspect-square items-center justify-center rounded border border-dashed border-[#c8951e]/40 bg-[#f7f5f0] text-[#c8951e] transition-colors hover:border-[#c8951e] hover:bg-[#f7f5f0] disabled:opacity-50 disabled:cursor-not-allowed"
-                title={uploading ? '上传中' : '加入图片'}
+                title={uploading ? t('gallery.uploading') : t('gallery.addImages')}
               >
                 <Plus size={24} />
               </button>
@@ -792,20 +794,20 @@ const GalleryDetail = () => {
           <section className="border-t border-[#e0dcd3] pt-8">
             <h2 className="text-base font-semibold text-[#2c2c2c] tracking-[0.12em] mb-6 pb-2.5 border-b border-[#e0dcd3] flex items-center gap-2">
               <span className="w-[3px] h-4 bg-[#c8951e] rounded-[1px] opacity-60 inline-block" />
-              评论
+              {t('gallery.comments')}
             </h2>
 
             {user && !isBanned && (
               <form onSubmit={handleAddComment} className="mb-8">
                 {replyTo && (
                   <div className="flex items-center gap-2 mb-2 text-xs text-[#9e968e]">
-                    <span>回复给 {replyTo.authorName}</span>
+                    <span>{t('gallery.replyTo', { name: replyTo.authorName })}</span>
                     <button
                       type="button"
                       onClick={() => setReplyTo(null)}
                       className="text-[#c8951e] hover:underline"
                     >
-                      取消
+                      {t('gallery.cancel')}
                     </button>
                   </div>
                 )}
@@ -823,7 +825,7 @@ const GalleryDetail = () => {
                     <textarea
                       value={newComment}
                       onChange={(e) => setNewComment(e.target.value)}
-                      placeholder="写下你的评论..."
+                      placeholder={t('gallery.commentPlaceholder')}
                       className="w-full px-4 py-3 rounded border border-[#e0dcd3] bg-white focus:outline-none focus:border-[#c8951e] resize-none text-base"
                       rows={3}
                     />
@@ -833,7 +835,7 @@ const GalleryDetail = () => {
                         disabled={!newComment.trim() || submittingComment}
                         className="px-5 py-2 bg-[#c8951e] text-white text-sm rounded hover:bg-[#dca828] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {submittingComment ? '发送中...' : '发送'}
+                        {submittingComment ? t('gallery.sending') : t('gallery.send')}
                       </button>
                     </div>
                   </div>
@@ -842,11 +844,11 @@ const GalleryDetail = () => {
             )}
 
             {user && isBanned && (
-              <p className="text-center text-[#9e968e] italic mb-8">账号已被封禁，无法评论</p>
+              <p className="text-center text-[#9e968e] italic mb-8">{t('gallery.bannedCannotComment')}</p>
             )}
 
             {!user && (
-              <p className="text-center text-[#9e968e] italic mb-8">登录后可参与评论</p>
+              <p className="text-center text-[#9e968e] italic mb-8">{t('gallery.loginToComment')}</p>
             )}
 
             <div className="space-y-6">
@@ -864,7 +866,7 @@ const GalleryDetail = () => {
                     </div>
                     <div className="flex-grow">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-semibold text-[#2c2c2c]">{comment.authorName || '匿名用户'}</span>
+                        <span className="text-sm font-semibold text-[#2c2c2c]">{comment.authorName || t('gallery.anonymousUser')}</span>
                         <span className="text-[10px] text-[#9e968e]">{formatDateTime(comment.createdAt)}</span>
                       </div>
                       <p className="text-[#6b6560] text-sm leading-relaxed mb-2">{comment.content}</p>
@@ -876,7 +878,7 @@ const GalleryDetail = () => {
                           }}
                           className="text-[10px] font-medium text-[#c8951e] hover:underline"
                         >
-                          回复
+                          {t('gallery.reply')}
                         </button>
                       )}
                     </div>
@@ -897,7 +899,7 @@ const GalleryDetail = () => {
                           </div>
                           <div className="flex-grow">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-semibold text-[#2c2c2c]">{reply.authorName || '匿名用户'}</span>
+                              <span className="text-xs font-semibold text-[#2c2c2c]">{reply.authorName || t('gallery.anonymousUser')}</span>
                               <span className="text-[10px] text-[#9e968e]">{formatDateTime(reply.createdAt)}</span>
                             </div>
                             <p className="text-[#6b6560] text-xs leading-relaxed">{reply.content}</p>
@@ -908,7 +910,7 @@ const GalleryDetail = () => {
                   )}
                 </div>
               )) : (
-                <p className="text-center text-[#9e968e] italic py-8">暂无评论，快来抢沙发吧！</p>
+                <p className="text-center text-[#9e968e] italic py-8">{t('gallery.noComments')}</p>
               )}
             </div>
           </section>
@@ -917,7 +919,7 @@ const GalleryDetail = () => {
         {/* Back to list */}
         <div className="mt-10 pt-6 border-t border-[#e0dcd3] text-right">
           <button onClick={() => navigate('/gallery')} className="text-xs text-[#9e968e] hover:text-[#c8951e] transition-colors">
-            返回图集列表
+            {t('gallery.backToList')}
           </button>
         </div>
       </div>

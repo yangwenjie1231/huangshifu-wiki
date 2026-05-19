@@ -157,18 +157,19 @@ const MusicDetail = () => {
     if (favoriting) return;
 
     setFavoriting(true);
+    const prevSong = song;
+    setSong((prev) => (prev ? { ...prev, favoritedByMe: !prev.favoritedByMe } : prev));
     try {
-      if (song.favoritedByMe) {
+      if (prevSong.favoritedByMe) {
         await apiDelete(`/api/favorites/music/${song.docId}`);
-        setSong((prev) => (prev ? { ...prev, favoritedByMe: false } : prev));
       } else {
         await apiPost('/api/favorites', {
           targetType: 'music',
           targetId: song.docId,
         });
-        setSong((prev) => (prev ? { ...prev, favoritedByMe: true } : prev));
       }
     } catch (error) {
+      setSong(prevSong);
       console.error('Toggle song favorite failed:', error);
       show('收藏操作失败，请稍后重试', { variant: 'error' });
     } finally {
