@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import MarkdownEditor from "../components/MarkdownEditor";
-import { apiDelete, apiGet, apiPost, apiPut } from "../lib/apiClient";
+import { apiGet, apiPost, apiPut } from "../lib/apiClient";
 import { useToast } from "../components/Toast";
 import { copyToClipboard, toAbsoluteInternalUrl } from "../lib/copyLink";
 import { ContentStatus, getStatusText } from "../lib/contentUtils";
@@ -44,6 +44,7 @@ import Pagination from "../components/Pagination";
 import { usePagination } from "../hooks/usePagination";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { useI18n } from "../lib/i18n";
+import { useToggleInteraction } from "../hooks/useToggleInteraction";
 
 type PostItem = {
 	id: string;
@@ -388,14 +389,22 @@ const PostDetail = () => {
 	const [replyTo, setReplyTo] = useState<CommentItem | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [submittingReview, setSubmittingReview] = useState(false);
-	const [favoriting, setFavoriting] = useState(false);
-	const [liking, setLiking] = useState(false);
-	const [disliking, setDisliking] = useState(false);
-	const [pinning, setPinning] = useState(false);
 	const { user, profile, isBanned } = useAuth();
 	const isAdmin = profile?.role === "admin" || profile?.role === "super_admin";
 	const { show } = useToast();
 	const navigate = useNavigate();
+
+	const { toggleLike, toggleDislike, toggleFavorite, togglePin, liking, disliking, favoriting, pinning } = useToggleInteraction({
+		entity: post,
+		setEntity: setPost,
+		user,
+		isBanned,
+		isAdmin,
+		apiBase: '/api/posts',
+		entityId: postId,
+		toast: { show },
+		t,
+	});
 
 	useEffect(() => {
 		const fetchSections = async () => {
@@ -499,102 +508,6 @@ const PostDetail = () => {
 	const canEditPost = Boolean(!isBanned && isOwner);
 	const canComment = post.status === "published";
 
-	const handleToggleLike = async () => {
-		if (!post || !postId || !user || liking) return;
-		setLiking(true);
-		const prevPost = post;
-		if (post.likedByMe) {
-			setPost((prev) =>
-				prev ? { ...prev, likedByMe: false, likesCount: Math.max(0, (prev.likesCount || 0) - 1) } : prev,
-			);
-		} else {
-			setPost((prev) =>
-				prev
-					? {
-							...prev,
-							likedByMe: true,
-							likesCount: (prev.likesCount || 0) + 1,
-							dislikedByMe: false,
-							dislikesCount: post.dislikedByMe ? Math.max(0, (prev.dislikesCount || 0) - 1) : prev.dislikesCount,
-						}
-					: prev,
-			);
-		}
-		try {
-			if (prevPost.likedByMe) {
-				const data = await apiDelete<{ liked: boolean; likesCount: number }>(`/api/posts/${postId}/like`);
-				setPost((prev) => (prev ? { ...prev, likesCount: data.likesCount } : prev));
-			} else {
-				const data = await apiPost<{ liked: boolean; likesCount: number; dislikesCount: number }>(`/api/posts/${postId}/like`);
-				setPost((prev) => (prev ? { ...prev, likesCount: data.likesCount, dislikesCount: data.dislikesCount } : prev));
-			}
-		} catch (error) {
-			setPost(prevPost);
-			console.error("Error toggling like:", error);
-			show(t('forum.operationFailed'), { variant: "error" });
-		} finally {
-			setLiking(false);
-		}
-	};
-
-	const handleToggleDislike = async () => {
-		if (!post || !postId || !user || disliking) return;
-		setDisliking(true);
-		const prevPost = post;
-		if (post.dislikedByMe) {
-			setPost((prev) =>
-				prev ? { ...prev, dislikedByMe: false, dislikesCount: Math.max(0, (prev.dislikesCount || 0) - 1) } : prev,
-			);
-		} else {
-			setPost((prev) =>
-				prev
-					? {
-							...prev,
-							dislikedByMe: true,
-							dislikesCount: (prev.dislikesCount || 0) + 1,
-							likedByMe: false,
-							likesCount: post.likedByMe ? Math.max(0, (prev.likesCount || 0) - 1) : prev.likesCount,
-						}
-					: prev,
-			);
-		}
-		try {
-			if (prevPost.dislikedByMe) {
-				const data = await apiDelete<{ disliked: boolean; dislikesCount: number }>(`/api/posts/${postId}/dislike`);
-				setPost((prev) => (prev ? { ...prev, dislikesCount: data.dislikesCount } : prev));
-			} else {
-				const data = await apiPost<{ disliked: boolean; dislikesCount: number; likesCount: number }>(`/api/posts/${postId}/dislike`);
-				setPost((prev) => (prev ? { ...prev, dislikesCount: data.dislikesCount, likesCount: data.likesCount } : prev));
-			}
-		} catch (error) {
-			setPost(prevPost);
-			console.error("Error toggling dislike:", error);
-			show(t('forum.operationFailed'), { variant: "error" });
-		} finally {
-			setDisliking(false);
-		}
-	};
-
-	const handleToggleFavorite = async () => {
-		if (!post || !postId || !user || favoriting) return;
-		setFavoriting(true);
-		const prevPost = post;
-		setPost((prev) => (prev ? { ...prev, favoritedByMe: !prev.favoritedByMe } : prev));
-		try {
-			if (prevPost.favoritedByMe) {
-				await apiDelete(`/api/favorites/post/${postId}`);
-			} else {
-				await apiPost("/api/favorites", { targetType: "post", targetId: postId });
-			}
-		} catch (error) {
-			setPost(prevPost);
-			console.error("Error toggling favorite:", error);
-			show(t('forum.favoriteFailed'), { variant: "error" });
-		} finally {
-			setFavoriting(false);
-		}
-	};
-
 	const handleSubmitReview = async () => {
 		if (!post || !postId || !canSubmitReview || submittingReview) return;
 		setSubmittingReview(true);
@@ -609,25 +522,6 @@ const PostDetail = () => {
 			show(t('forum.submitReviewFailed'), { variant: "error" });
 		} finally {
 			setSubmittingReview(false);
-		}
-	};
-
-	const handleTogglePin = async () => {
-		if (!post || !postId || !isAdmin || pinning) return;
-		setPinning(true);
-		try {
-			if (post.isPinned) {
-				await apiDelete<{ isPinned: boolean }>(`/api/posts/${postId}/pin`);
-				setPost((prev) => (prev ? { ...prev, isPinned: false } : prev));
-			} else {
-				await apiPost<{ isPinned: boolean }>(`/api/posts/${postId}/pin`);
-				setPost((prev) => (prev ? { ...prev, isPinned: true } : prev));
-			}
-		} catch (error) {
-			console.error("Error toggling pin:", error);
-			show(t('forum.operationFailed'), { variant: "error" });
-		} finally {
-			setPinning(false);
 		}
 	};
 
@@ -886,7 +780,7 @@ const PostDetail = () => {
 							</h3>
 							<div className="flex flex-wrap gap-2">
 								<button
-									onClick={handleToggleLike}
+									onClick={toggleLike}
 									disabled={!user || liking}
 									className={clsx(
 										"flex-1 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
@@ -900,7 +794,7 @@ const PostDetail = () => {
 									<Heart size={15} /> {post.likesCount || 0}
 								</button>
 								<button
-									onClick={handleToggleDislike}
+									onClick={toggleDislike}
 									disabled={!user || disliking}
 									className={clsx(
 										"flex-1 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
@@ -916,7 +810,7 @@ const PostDetail = () => {
 							</div>
 							<div className="flex flex-wrap gap-2 mt-2">
 								<button
-									onClick={handleToggleFavorite}
+									onClick={toggleFavorite}
 									disabled={!user || favoriting}
 									className={clsx(
 										"flex-1 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
@@ -939,7 +833,7 @@ const PostDetail = () => {
 							</div>
 							{isAdmin && (
 								<button
-									onClick={handleTogglePin}
+									onClick={togglePin}
 									disabled={pinning}
 									className={clsx(
 										"w-full mt-2 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",

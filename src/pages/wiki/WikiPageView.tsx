@@ -11,24 +11,24 @@ import {
 	X,
 	Sparkles,
 	History,
-	Calendar,
 	Link2,
 	GitBranch,
 	Network,
 	MapPin,
 	ThumbsDown,
-	ThumbsUp,
 	Pin,
 	Edit3,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../lib/i18n";
 import { clsx } from "clsx";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import { summarizeWikiContent } from "../../services/aiService";
 import { useToast } from "../../components/Toast";
+import { useAiSummary } from "../../hooks/useAiSummary";
+import { useToggleInteraction } from "../../hooks/useToggleInteraction";
 import { copyToClipboard, toAbsoluteInternalUrl } from "../../lib/copyLink";
-import { apiDelete, apiGet, apiPost } from "../../lib/apiClient";
+import { apiGet, apiPost } from "../../lib/apiClient";
 import { getStatusText } from "../../lib/contentUtils";
 import { formatDate } from "../../lib/dateUtils";
 import { getWikiRelationDisplayTitle } from "../../lib/wikiRelationDisplay";
@@ -50,14 +50,24 @@ const WikiPageView = () => {
 	const { user, isAdmin, isBanned } = useAuth();
 	const { t } = useI18n();
 	const { show } = useToast();
-	const [summary, setSummary] = useState<string | null>(null);
-	const [summarizing, setSummarizing] = useState(false);
+	const { summary, summarizing, generateSummary, clearSummary } = useAiSummary({
+		content: page?.content,
+		summarizeFn: summarizeWikiContent,
+		toast: { show },
+	});
 	const [backlinks, setBacklinks] = useState<WikiItem[]>([]);
 	const [submittingReview, setSubmittingReview] = useState(false);
-	const [favoriting, setFavoriting] = useState(false);
-	const [liking, setLiking] = useState(false);
-	const [disliking, setDisliking] = useState(false);
-	const [pinning, setPinning] = useState(false);
+	const { toggleLike, toggleDislike, toggleFavorite, togglePin, liking, disliking, favoriting, pinning } = useToggleInteraction({
+		entity: page,
+		setEntity: setPage,
+		user,
+		isBanned,
+		isAdmin,
+		apiBase: '/api/wiki',
+		entityId: slug,
+		toast: { show },
+		t,
+	});
 	const [relationGraph, setRelationGraph] = useState<RelationGraphData | null>(
 		null,
 	);
@@ -128,177 +138,6 @@ const WikiPageView = () => {
 			return;
 		}
 		show(t('wiki.linkCopyFailed'), { variant: "error" });
-	};
-
-	const handleToggleLike = async () => {
-		if (!slug || !user || liking) return;
-		setLiking(true);
-		const prevPage = page;
-		if (page.likedByMe) {
-			setPage((prev) =>
-				prev
-					? {
-							...prev,
-							likedByMe: false,
-							likesCount: Math.max(0, Number(prev.likesCount || 0) - 1),
-						}
-					: prev,
-			);
-		} else {
-			setPage((prev) =>
-				prev
-					? {
-							...prev,
-							likedByMe: true,
-							likesCount: Number(prev.likesCount || 0) + 1,
-							dislikedByMe: false,
-							dislikesCount: page.dislikedByMe
-								? Math.max(0, Number(prev.dislikesCount || 0) - 1)
-								: prev.dislikesCount,
-						}
-					: prev,
-			);
-		}
-		try {
-			if (prevPage.likedByMe) {
-				await apiDelete<{ liked: boolean; likesCount: number }>(
-					`/api/wiki/${slug}/like`,
-				);
-			} else {
-				const data = await apiPost<{
-					liked: boolean;
-					likesCount: number;
-					dislikesCount: number;
-				}>(`/api/wiki/${slug}/like`);
-				setPage((prev) =>
-					prev
-						? { ...prev, likesCount: data.likesCount, dislikesCount: data.dislikesCount }
-						: prev,
-				);
-			}
-		} catch (error) {
-			setPage(prevPage);
-			console.error("Toggle wiki like failed:", error);
-			show(t('wiki.likeFailed'), { variant: "error" });
-		} finally {
-			setLiking(false);
-		}
-	};
-
-	const handleToggleDislike = async () => {
-		if (!slug || !user || disliking) return;
-		setDisliking(true);
-		const prevPage = page;
-		if (page.dislikedByMe) {
-			setPage((prev) =>
-				prev
-					? {
-							...prev,
-							dislikedByMe: false,
-							dislikesCount: Math.max(0, Number(prev.dislikesCount || 0) - 1),
-						}
-					: prev,
-			);
-		} else {
-			setPage((prev) =>
-				prev
-					? {
-							...prev,
-							dislikedByMe: true,
-							dislikesCount: Number(prev.dislikesCount || 0) + 1,
-							likedByMe: false,
-							likesCount: page.likedByMe
-								? Math.max(0, Number(prev.likesCount || 0) - 1)
-								: prev.likesCount,
-						}
-					: prev,
-			);
-		}
-		try {
-			if (prevPage.dislikedByMe) {
-				await apiDelete<{ disliked: boolean; dislikesCount: number }>(
-					`/api/wiki/${slug}/dislike`,
-				);
-			} else {
-				const data = await apiPost<{
-					disliked: boolean;
-					dislikesCount: number;
-					likesCount: number;
-				}>(`/api/wiki/${slug}/dislike`);
-				setPage((prev) =>
-					prev
-						? { ...prev, dislikesCount: data.dislikesCount, likesCount: data.likesCount }
-						: prev,
-				);
-			}
-		} catch (error) {
-			setPage(prevPage);
-			console.error("Toggle wiki dislike failed:", error);
-			show(t('wiki.dislikeFailed'), { variant: "error" });
-		} finally {
-			setDisliking(false);
-		}
-	};
-
-	const handleTogglePin = async () => {
-		if (!slug || !isAdmin || pinning) return;
-		setPinning(true);
-		try {
-			if (page.isPinned) {
-				await apiDelete<{ isPinned: boolean }>(`/api/wiki/${slug}/pin`);
-				setPage((prev) => (prev ? { ...prev, isPinned: false } : prev));
-			} else {
-				const data = await apiPost<{ isPinned: boolean }>(
-					`/api/wiki/${slug}/pin`,
-				);
-				setPage((prev) => (prev ? { ...prev, isPinned: data.isPinned } : prev));
-			}
-		} catch (error) {
-			console.error("Toggle wiki pin failed:", error);
-			show(t('wiki.pinFailed'), { variant: "error" });
-		} finally {
-			setPinning(false);
-		}
-	};
-
-	const handleToggleFavorite = async () => {
-		if (!slug || !user || favoriting) return;
-		setFavoriting(true);
-		const prevPage = page;
-		if (page.favoritedByMe) {
-			setPage((prev) =>
-				prev
-					? {
-							...prev,
-							favoritedByMe: false,
-							favoritesCount: Math.max(0, Number(prev.favoritesCount || 0) - 1),
-						}
-					: prev,
-			);
-		} else {
-			setPage((prev) =>
-				prev
-					? {
-							...prev,
-							favoritedByMe: true,
-							favoritesCount: Number(prev.favoritesCount || 0) + 1,
-						}
-					: prev,
-			);
-		}
-		try {
-			if (prevPage.favoritedByMe) {
-				await apiDelete(`/api/favorites/wiki/${slug}`);
-			} else {
-				await apiPost("/api/favorites", { targetType: "wiki", targetId: slug });
-			}
-		} catch (error) {
-			setPage(prevPage);
-			console.error("Toggle wiki favorite failed:", error);
-			show(t('wiki.favoriteFailed'), { variant: "error" });
-		} finally {
-			setFavoriting(false);
-		}
 	};
 
 	const handleSubmitReview = async () => {
@@ -429,7 +268,7 @@ const WikiPageView = () => {
 													<Sparkles size={14} /> {t('wiki.aiSummary')}
 												</h4>
 												<button
-													onClick={() => setSummary(null)}
+													onClick={clearSummary}
 													className="p-1.5 hover:bg-[#f0ece3] rounded transition-colors"
 												>
 													<X size={16} className="text-[#9e968e]" />
@@ -531,7 +370,7 @@ const WikiPageView = () => {
 							</h3>
 							<div className="flex flex-wrap gap-2">
 								<button
-									onClick={handleToggleLike}
+									onClick={toggleLike}
 									disabled={!user || liking}
 									className={clsx(
 										"flex-1 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
@@ -545,7 +384,7 @@ const WikiPageView = () => {
 									<Heart size={15} /> {page.likesCount || 0}
 								</button>
 								<button
-									onClick={handleToggleDislike}
+									onClick={toggleDislike}
 									disabled={!user || disliking}
 									className={clsx(
 										"flex-1 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
@@ -561,7 +400,7 @@ const WikiPageView = () => {
 							</div>
 							<div className="flex flex-wrap gap-2 mt-2">
 								<button
-									onClick={handleToggleFavorite}
+									onClick={toggleFavorite}
 									disabled={!user || favoriting}
 									className={clsx(
 										"flex-1 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
@@ -584,7 +423,7 @@ const WikiPageView = () => {
 							</div>
 							{isAdmin && (
 								<button
-									onClick={handleTogglePin}
+									onClick={togglePin}
 									disabled={pinning}
 									className={clsx(
 										"w-full mt-2 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
@@ -598,12 +437,7 @@ const WikiPageView = () => {
 								</button>
 							)}
 							<button
-								onClick={async () => {
-									setSummarizing(true);
-									const s = await summarizeWikiContent(page.content);
-									setSummary(s);
-									setSummarizing(false);
-								}}
+								onClick={generateSummary}
 								disabled={summarizing}
 								className="w-full mt-2 px-3 py-2 rounded text-sm font-medium bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e] transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
 							>

@@ -4,10 +4,12 @@ import { ArrowLeft, Clock, ExternalLink, Heart, Link2, MessageSquare, Play, Chev
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 
-import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
+import { apiGet } from '../lib/apiClient';
 import { useAuth } from '../context/AuthContext';
 import { useMusic } from '../context/MusicContext';
 import { useToast } from '../components/Toast';
+import { useToggleInteraction } from '../hooks/useToggleInteraction';
+import { useI18n } from '../lib/i18n';
 import { CoverManager } from '../components/CoverManager';
 import { SmartImage } from '../components/SmartImage';
 import { SongEditModal } from '../components/SongEditModal';
@@ -76,7 +78,6 @@ const MusicDetail = () => {
   const [song, setSong] = useState<SongItem | null>(null);
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [favoriting, setFavoriting] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [customPlatforms, setCustomPlatforms] = useState<CustomPlatformConfig[]>([]);
   const [descExpanded, setDescExpanded] = useState(false);
@@ -85,6 +86,17 @@ const MusicDetail = () => {
   const { user, isAdmin } = useAuth();
   const { setCurrentSong, setIsPlaying, setPlaylist } = useMusic();
   const { show } = useToast();
+  const { t } = useI18n();
+
+  const { toggleFavorite, favoriting } = useToggleInteraction({
+    entity: song,
+    setEntity: setSong as (entity: SongItem | ((prev: SongItem) => SongItem)) => void,
+    user,
+    apiBase: '/api/music',
+    entityId: song?.docId,
+    toast: { show },
+    t,
+  });
 
   useEffect(() => {
     apiGet<{ platforms: CustomPlatformConfig[] }>('/api/music-platforms')
@@ -145,35 +157,6 @@ const MusicDetail = () => {
       setTimeout(() => setLyricsCopied(false), 2000);
     } catch {
       show('复制失败，请手动复制', { variant: 'error' });
-    }
-  };
-
-  const handleToggleFavorite = async () => {
-    if (!song || !song.docId) return;
-    if (!user) {
-      show('请先登录后收藏', { variant: 'error' });
-      return;
-    }
-    if (favoriting) return;
-
-    setFavoriting(true);
-    const prevSong = song;
-    setSong((prev) => (prev ? { ...prev, favoritedByMe: !prev.favoritedByMe } : prev));
-    try {
-      if (prevSong.favoritedByMe) {
-        await apiDelete(`/api/favorites/music/${song.docId}`);
-      } else {
-        await apiPost('/api/favorites', {
-          targetType: 'music',
-          targetId: song.docId,
-        });
-      }
-    } catch (error) {
-      setSong(prevSong);
-      console.error('Toggle song favorite failed:', error);
-      show('收藏操作失败，请稍后重试', { variant: 'error' });
-    } finally {
-      setFavoriting(false);
     }
   };
 
@@ -240,7 +223,7 @@ const MusicDetail = () => {
                     <Play size={16} /> 播放
                   </button>
                   <button
-                    onClick={handleToggleFavorite}
+                    onClick={toggleFavorite}
                     disabled={favoriting}
                     className={clsx(
                       'inline-flex items-center gap-2 px-5 py-2.5 border text-[0.9375rem] rounded transition-all',
@@ -475,7 +458,7 @@ const MusicDetail = () => {
                   <Play size={14} /> 播放歌曲
                 </button>
                 <button
-                  onClick={handleToggleFavorite}
+                  onClick={toggleFavorite}
                   className="flex items-center gap-2 text-sm text-[#6b6560] hover:text-[#c8951e] hover:pl-1 transition-all"
                 >
                   <Heart size={14} /> {song.favoritedByMe ? '取消收藏' : '收藏歌曲'}

@@ -382,6 +382,10 @@
     "users": "用户管理",
     "content": "内容管理"
   },
+  "common": {
+    "loginRequired": "请先登录后操作",
+    "bannedUser": "账号已被封禁，无法操作"
+  },
   "footer": {
     "copyright": "© 2026 诗扶小筑 - 黄诗扶粉丝Wiki与社区",
     "powered_by": "本站由免费云加速（FreeCDN）提供网站加速和攻击防御服务"
