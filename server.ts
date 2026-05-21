@@ -25,7 +25,7 @@ import { logger } from './src/server/utils/logger';
 import { authMiddleware } from './src/server/middleware/auth';
 import { csrfMiddleware } from './src/server/middleware/csrf';
 import { requestLoggerMiddleware } from './src/server/middleware/requestLogger';
-import { globalLimiter } from './src/server/middleware/rateLimiter';
+import { globalLimiter, isRateLimitDisabledInDevelopment } from './src/server/middleware/rateLimiter';
 import { registerRegionRoutes } from './src/server/location/routes';
 import { registerExifRoutes } from './src/server/location/exifRoutes';
 import { registerBirthdayRoutes } from './src/server/birthday/routes';
@@ -210,6 +210,10 @@ if (CORS_ORIGIN) {
 }
 
 app.use(globalLimiter);
+
+if (isRateLimitDisabledInDevelopment()) {
+  logger.warn('DEV_DISABLE_RATE_LIMIT=true, request rate limiting is disabled in development');
+}
 
 app.use(helmet({
   contentSecurityPolicy: false,

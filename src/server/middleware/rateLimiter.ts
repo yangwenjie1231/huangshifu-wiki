@@ -1,7 +1,14 @@
-import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import rateLimit, {
+  ipKeyGenerator,
+  type Options as RateLimitLibraryOptions,
+  type ValueDeterminingMiddleware,
+} from 'express-rate-limit';
 import type { AuthenticatedRequest } from './auth';
 
-function extractUidOrIp(req: Parameters<Parameters<typeof rateLimit>[0]['keyGenerator']>[0]): string {
+type RateLimitOptions = Partial<RateLimitLibraryOptions>
+type RateLimitRequest = Parameters<ValueDeterminingMiddleware<string>>[0]
+
+function extractUidOrIp(req: RateLimitRequest): string {
   const authReq = req as AuthenticatedRequest;
   if (authReq.authUser?.uid) {
     return authReq.authUser.uid;
@@ -10,7 +17,24 @@ function extractUidOrIp(req: Parameters<Parameters<typeof rateLimit>[0]['keyGene
   return ipKeyGenerator(req.ip ?? 'unknown');
 }
 
-export const authRateLimiter = rateLimit({
+export function isRateLimitDisabledInDevelopment(): boolean {
+  return process.env.NODE_ENV !== 'production' && process.env.DEV_DISABLE_RATE_LIMIT === 'true';
+}
+
+function createRateLimiter(options: RateLimitOptions) {
+  return rateLimit({
+    ...options,
+    skip: (req, res) => {
+      if (isRateLimitDisabledInDevelopment()) {
+        return true;
+      }
+
+      return options.skip?.(req, res) ?? false;
+    },
+  });
+}
+
+export const authRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
   max: 10,
   message: { error: '请求过于频繁，请15分钟后再试' },
@@ -19,7 +43,7 @@ export const authRateLimiter = rateLimit({
   keyGenerator: extractUidOrIp,
 });
 
-export const globalLimiter = rateLimit({
+export const globalLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   max: 200,
   standardHeaders: true,
@@ -30,7 +54,7 @@ export const globalLimiter = rateLimit({
   },
 });
 
-export const searchLimiter = rateLimit({
+export const searchLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   max: 30,
   standardHeaders: true,
@@ -40,7 +64,7 @@ export const searchLimiter = rateLimit({
   },
 });
 
-export const uploadLimiter = rateLimit({
+export const uploadLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   max: 10,
   standardHeaders: true,
@@ -51,7 +75,7 @@ export const uploadLimiter = rateLimit({
   },
 });
 
-export const wikiWriteLimiter = rateLimit({
+export const wikiWriteLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   max: 20,
   standardHeaders: true,
@@ -62,7 +86,7 @@ export const wikiWriteLimiter = rateLimit({
   },
 });
 
-export const postWriteLimiter = rateLimit({
+export const postWriteLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   max: 10,
   standardHeaders: true,
@@ -73,7 +97,7 @@ export const postWriteLimiter = rateLimit({
   },
 });
 
-export const galleryWriteLimiter = rateLimit({
+export const galleryWriteLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   max: 10,
   standardHeaders: true,
@@ -84,7 +108,7 @@ export const galleryWriteLimiter = rateLimit({
   },
 });
 
-export const profileLimiter = rateLimit({
+export const profileLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   max: 5,
   standardHeaders: true,
