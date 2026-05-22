@@ -73,7 +73,7 @@ export const S3_CONFIG_EXAMPLE: S3Config = {
       'image/svg+xml',
       'image/bmp',
     ],
-    enableMd5Verification: true,
+    enableMd5Verification: false,
   },
   defaultAcl: 'public-read',
   expiresIn: 3600,
@@ -164,9 +164,9 @@ S3_MAX_FILE_SIZE="10485760"
 # 允许的文件类型（逗号分隔），默认图片类型
 S3_ALLOWED_CONTENT_TYPES="image/jpeg,image/png,image/gif,image/webp,image/bmp"
 
-# 是否启用 MD5 校验（推荐启用）
-# 启用后，上传时必须提供 Content-MD5 头
-S3_ENABLE_MD5_VERIFICATION="true"
+# 是否启用 MD5 校验
+# 启用后，服务端生成上传预签名 URL 必须收到 contentMd5，并会签入 Content-MD5
+S3_ENABLE_MD5_VERIFICATION="false"
 
 # 默认访问控制（public-read, private 等）
 S3_DEFAULT_ACL="public-read"

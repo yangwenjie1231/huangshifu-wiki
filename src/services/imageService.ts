@@ -1,5 +1,5 @@
 import { apiGet, apiPost, apiUpload } from '../lib/apiClient';
-import SparkMD5 from 'spark-md5';
+import { calculateFileMd5Hex, md5HexToBase64 } from '../utils/fileMd5';
 import type { UploadSessionResponse, UploadFileResponse } from '../types/api';
 
 export interface ImageMap {
@@ -268,30 +268,13 @@ export const getImageUrlWithMeta = async (
   return null;
 };
 
-const calculateMD5 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const binary = e.target?.result;
-      if (binary) {
-        const hash = SparkMD5.ArrayBuffer.hash(binary as ArrayBuffer);
-        resolve(hash);
-      } else {
-        reject(new Error("Failed to read file for MD5 calculation"));
-      }
-    };
-    reader.onerror = () => reject(new Error("FileReader error"));
-    reader.readAsArrayBuffer(file);
-  });
-};
-
 /**
  * 通过会话模式上传图片到 CDN
  * 使用上传会话流程：创建会话 -> 上传文件 -> 完成会话
  */
 /** @deprecated 请使用 uploadImageWithStrategy 替代 */
 export const uploadImageToCDNs = async (file: File): Promise<string> => {
-  const md5 = await calculateMD5(file);
+  const md5 = await calculateFileMd5Hex(file);
 
   // 检查是否已存在相同 MD5 的图片
   const listResponse = await apiGet<{ items: ImageMap[] }>('/api/image-maps', { md5 });
@@ -322,7 +305,7 @@ export const uploadImageToCDNs = async (file: File): Promise<string> => {
 };
 
 export const uploadToS3 = async (file: File): Promise<{ id: string; s3Url: string; key: string }> => {
-  const md5 = await calculateMD5(file);
+  const md5 = await calculateFileMd5Hex(file);
 
   const listResponse = await apiGet<{ items: ImageMap[] }>('/api/image-maps', { md5 });
   const existingItems = listResponse.items || [];
@@ -339,7 +322,8 @@ export const uploadToS3 = async (file: File): Promise<{ id: string; s3Url: strin
   }
 
   const filename = `${md5}_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-  
+  const contentMd5 = md5HexToBase64(md5);
+
   const presignResponse = await apiGet<{
     uploadUrl: string;
     key: string;
@@ -347,18 +331,27 @@ export const uploadToS3 = async (file: File): Promise<{ id: string; s3Url: strin
   }>('/api/s3/presign-upload', {
     filename,
     contentType: file.type,
+    contentMd5,
     bucket: 'private',
   });
 
   // 注意：此处保留 fetch，因为是直接上传到外部 S3 的 presigned URL，不是 API 调用
   // presigned URL 是 AWS S3 的签名 URL，需要使用 PUT 方法直接上传文件到 S3
-  await fetch(presignResponse.uploadUrl, {
+  const uploadResponse = await fetch(presignResponse.uploadUrl, {
     method: 'PUT',
     body: file,
     headers: {
       'Content-Type': file.type,
+      'Content-MD5': contentMd5,
     },
   });
+
+  if (!uploadResponse.ok) {
+    const errorText = await uploadResponse.text().catch(() => '');
+    throw new Error(
+      `S3 upload failed with status ${uploadResponse.status}${errorText ? `: ${errorText}` : ''}`,
+    );
+  }
 
   const configResponse = await apiGet<{
     enabled: boolean;

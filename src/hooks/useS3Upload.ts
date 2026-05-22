@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { apiGet } from '../lib/apiClient';
-import SparkMD5 from 'spark-md5';
+import { calculateFileMd5Hex, md5HexToBase64 } from '../utils/fileMd5';
 
 export interface UploadOptions {
   key?: string;
@@ -21,27 +21,15 @@ interface PresignResponse {
   uploadUrl: string;
   key: string;
   expiresIn: number;
-  md5Required?: boolean;
+  md5Required: boolean;
 }
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 
-async function calculateFileMD5(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const binary = e.target?.result;
-      if (binary) {
-        const hash = SparkMD5.ArrayBuffer.hash(binary as ArrayBuffer);
-        resolve(hash);
-      } else {
-        reject(new Error('Failed to read file for MD5 calculation'));
-      }
-    };
-    reader.onerror = () => reject(new Error('FileReader error'));
-    reader.readAsArrayBuffer(file);
-  });
+async function isServerMd5Required(): Promise<boolean> {
+  const config = await apiGet<{ md5Required?: boolean }>('/api/s3/config');
+  return config.md5Required === true;
 }
 
 async function fetchPresignedUrl(
@@ -172,12 +160,17 @@ export function useS3Upload(): UseS3UploadReturn {
 
       try {
         const contentType = options.contentType ?? file.type;
+        let md5Hex: string | undefined;
         let contentMd5: string | undefined;
 
-        if (options.enableMd5Verification !== false) {
+        const shouldCalculateMd5 = options.enableMd5Verification !== false
+          || await isServerMd5Required();
+
+        if (shouldCalculateMd5) {
           console.log('[S3 Upload] Calculating file MD5...');
-          contentMd5 = await calculateFileMD5(file);
-          console.log('[S3 Upload] File MD5 calculated:', contentMd5);
+          md5Hex = await calculateFileMd5Hex(file);
+          contentMd5 = md5HexToBase64(md5Hex);
+          console.log('[S3 Upload] File MD5 calculated:', md5Hex);
         }
 
         console.log('[S3 Upload] Fetching presigned URL...');
@@ -203,7 +196,7 @@ export function useS3Upload(): UseS3UploadReturn {
 
         return {
           key: presignResponse.key,
-          md5: contentMd5 || '',
+          md5: md5Hex || '',
         };
       } catch (e) {
         const err = e instanceof Error ? e : new Error(String(e));

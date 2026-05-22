@@ -16,6 +16,7 @@ export interface S3PublicConfig {
   publicDomain?: string;
   maxFileSize?: number;
   allowedContentTypes?: string[];
+  md5Required: boolean;
   s3BaseUrl: string;
 }
 
@@ -115,6 +116,10 @@ function getMaxFileSize(): number {
 
 function getAllowedContentTypes(): string[] {
   return getEnvArray(S3_ENV_VAR_NAMES.S3_ALLOWED_CONTENT_TYPES, DEFAULT_ALLOWED_CONTENT_TYPES);
+}
+
+export function isMd5VerificationEnabled(): boolean {
+  return getEnvBoolean(S3_ENV_VAR_NAMES.S3_ENABLE_MD5_VERIFICATION, false);
 }
 
 export function getS3ClientWrite(): S3Client {
@@ -231,6 +236,24 @@ export function validateFileSize(fileSize: number | undefined): { valid: boolean
   return { valid: true };
 }
 
+export function validateContentMd5(contentMd5: string | undefined): { valid: boolean; error?: string } {
+  if (!contentMd5) {
+    return { valid: true };
+  }
+
+  const normalizedMd5 = contentMd5.trim();
+  const base64Md5Pattern = /^[A-Za-z0-9+/]{22}==$/;
+
+  if (!base64Md5Pattern.test(normalizedMd5)) {
+    return {
+      valid: false,
+      error: 'Content-MD5 必须是 base64 编码的 16 字节 MD5 摘要',
+    };
+  }
+
+  return { valid: true };
+}
+
 export async function getPresignedUploadUrl(
   key: string,
   expiresIn?: number,
@@ -239,7 +262,7 @@ export async function getPresignedUploadUrl(
     contentMd5?: string;
     fileSize?: number;
   },
-): Promise<{ url: string; key: string; expiresIn: number; md5Required?: boolean }> {
+): Promise<{ uploadUrl: string; url: string; key: string; expiresIn: number; md5Required: boolean }> {
   const keyValidation = validateObjectKey(key);
   if (!keyValidation.valid) {
     throw new Error(`对象键验证失败: ${keyValidation.error}`);
@@ -257,6 +280,20 @@ export async function getPresignedUploadUrl(
     if (!sizeValidation.valid) {
       throw new Error(`文件大小验证失败: ${sizeValidation.error}`);
     }
+  }
+
+  const md5Required = isMd5VerificationEnabled();
+  const contentMd5 = options?.contentMd5?.trim();
+
+  if (contentMd5) {
+    const md5Validation = validateContentMd5(contentMd5);
+    if (!md5Validation.valid) {
+      throw new Error(`MD5 校验失败: ${md5Validation.error}`);
+    }
+  }
+
+  if (md5Required && !contentMd5) {
+    throw new Error('S3 已启用 MD5 校验，请提供 contentMd5 参数');
   }
 
   const client = getS3ClientWrite();
@@ -279,10 +316,10 @@ export async function getPresignedUploadUrl(
     commandParams.ContentType = options.contentType;
   }
 
-  if (options?.contentMd5) {
-    commandParams.ContentMD5 = options.contentMd5;
+  if (contentMd5) {
+    commandParams.ContentMD5 = contentMd5;
     commandParams.Metadata = {
-      'original-md5': options.contentMd5,
+      'original-md5': contentMd5,
     };
   }
 
@@ -296,10 +333,11 @@ export async function getPresignedUploadUrl(
     console.log(`[S3] 生成上传预签名 URL: ${fullKey}, 过期时间: ${expiry}秒, Content-Type: ${options?.contentType || '未指定'}`);
 
     return {
+      uploadUrl: url,
       url,
       key: fullKey,
       expiresIn: expiry,
-      md5Required: !options?.contentMd5,
+      md5Required,
     };
   } catch (error) {
     console.error(`[S3] 生成上传预签名 URL 失败:`, error);
@@ -384,6 +422,7 @@ export function getPublicConfig(): S3PublicConfig {
     publicDomain: publicDomain || undefined,
     maxFileSize: enabled ? getMaxFileSize() : undefined,
     allowedContentTypes: enabled ? getAllowedContentTypes() : undefined,
+    md5Required: enabled ? isMd5VerificationEnabled() : false,
     s3BaseUrl: enabled ? getS3BaseUrl() : '',
   };
 }
