@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Book, Calendar, Plus } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
@@ -13,7 +13,6 @@ import WikiCard from "../../components/wiki/WikiCard";
 import Pagination from "../../components/Pagination";
 import type { WikiItem } from "./types";
 import { DEFAULT_PAGE_SIZE } from "./types";
-import { useVirtualList } from "../../hooks/useVirtualList";
 import { usePagination } from "../../hooks/usePagination";
 
 const WikiList = () => {
@@ -28,54 +27,10 @@ const WikiList = () => {
 	const { preferences, setViewMode } = useUserPreferences();
 	const viewMode = preferences.viewMode;
 
-	// 虚拟滚动容器引用
-	const scrollContainerRef = useRef<HTMLDivElement>(null);
-
-	// 从 VIEW_MODE_CONFIG 的 gridCols 字符串中解析实际列数（取响应式断点中最大的值）
-	const parseColumnCount = (gridCols: string): number => {
-		// 匹配 md:grid-cols-X 或 lg:grid-cols-X 等模式，取最大值
-		const matches = gridCols.match(/(?:md:|lg:)grid-cols-(\d+)/g);
-		if (matches && matches.length > 0) {
-			const numbers = matches.map((m) => parseInt(m.split('-').pop() || '1', 10));
-			return Math.max(...numbers);
-		}
-		// 回退到基础 gridCols-X
-		const baseMatch = gridCols.match(/grid-cols-(\d+)/);
-		return baseMatch ? parseInt(baseMatch[1], 10) : 4;
-	};
-
-	// 解析当前视图模式的列数
-	const columnCount = useMemo(() => parseColumnCount(VIEW_MODE_CONFIG[viewMode].gridCols), [viewMode]);
-
-	// 计算预估行高：list 模式 100px，其他模式根据 cardHeight 推断或固定值
-	const estimateSizeValue = useMemo(() => {
-		if (viewMode === 'list') return 100;
-		// 从 cardHeight 提取数值（如 h-[280px] -> 280）
-		const heightMatch = VIEW_MODE_CONFIG[viewMode].cardHeight.match(/h-\[(\d+)px\]/);
-		return heightMatch ? parseInt(heightMatch[1], 10) : 280;
-	}, [viewMode]);
-
-	// 初始化虚拟列表（网格行模式）
-	const { virtualizer, virtualItems: virtualRows, totalSize: totalHeight, getRowDataRange } = useVirtualList({
-		data: pages,
-		gridMode: true,
-		columns: columnCount,
-		rowCountMode: true,
-		estimateSize: estimateSizeValue,
-		overscan: 5,
-		scrollRef: scrollContainerRef,
-	});
-
 	const pagination = usePagination({
 		totalCount: total,
 		defaultPageSize: DEFAULT_PAGE_SIZE,
 	});
-
-	// 自定义页面更改处理，包含滚动到顶部
-	const handleWikiPageChange = React.useCallback((newPage: number) => {
-		pagination.setPage(newPage);
-		virtualizer.scrollToIndex(0, { behavior: 'instant' });
-	}, [pagination, virtualizer]);
 
 	useEffect(() => {
 		pagination.setPage(1);
@@ -210,41 +165,28 @@ const WikiList = () => {
 				</div>
 			) : pages.length > 0 ? (
 				<>
-					{/* 虚拟滚动容器 */}
-					<div ref={scrollContainerRef} className="overflow-y-auto max-h-[calc(100vh-280px)]">
-						<div className="relative" ref={(el) => { if (el) el.style.height = `${totalHeight}px` }}>
-							{virtualRows.map((virtualRow) => {
-								const { start: dataStart, end: dataEnd } = getRowDataRange(virtualRow.index);
-								const rowPages = pages.slice(dataStart, dataEnd);
-								return (
-									<div
-										key={virtualRow.key}
-										ref={(el) => { if (el) { el.style.height = `${virtualRow.size}px`; el.style.transform = `translateY(${virtualRow.start}px)` } }}
-										className={clsx("absolute top-0 left-0 w-full grid", VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}
-									>
-										{rowPages.map((page) => (
-											<WikiCard
-												key={page.id}
-												page={page}
-												viewMode={viewMode}
-												cardHeight={VIEW_MODE_CONFIG[viewMode].cardHeight}
-												onCopyLink={handleCopyWikiLink}
-											/>
-										))}
-										{/* 填充空单元格以保持网格对齐 */}
-										{Array.from({ length: columnCount - rowPages.length }).map((_, i) => (
-											<div key={`empty-${i}`} />
-										))}
-									</div>
-								);
-							})}
-						</div>
+					<div
+						className={clsx(
+							"grid",
+							VIEW_MODE_CONFIG[viewMode].gridCols,
+							VIEW_MODE_CONFIG[viewMode].gap,
+						)}
+					>
+						{pages.map((page) => (
+							<WikiCard
+								key={page.id}
+								page={page}
+								viewMode={viewMode}
+								cardHeight={VIEW_MODE_CONFIG[viewMode].cardHeight}
+								onCopyLink={handleCopyWikiLink}
+							/>
+						))}
 					</div>
 					{(import.meta.env.DEV || pagination.totalPages > 1) && (
 						<Pagination
 							page={pagination.page}
 							totalPages={pagination.totalPages}
-							onPageChange={handleWikiPageChange}
+							onPageChange={pagination.handlePageChange}
 							pageSize={pagination.pageSize}
 							onPageSizeChange={pagination.handlePageSizeChange}
 							showPageSizeSelector
