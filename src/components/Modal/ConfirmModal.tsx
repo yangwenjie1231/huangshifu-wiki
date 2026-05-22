@@ -28,9 +28,9 @@ const variantStyles = {
 		buttonBg: "bg-amber-600 hover:bg-amber-700",
 	},
 	info: {
-		iconBg: "bg-[#fdf5d8]",
-		iconText: "text-[#c8951e]",
-		buttonBg: "bg-[#c8951e] hover:bg-[#dca828]",
+		iconBg: "bg-brand-gold/10",
+		iconText: "text-brand-gold",
+		buttonBg: "bg-[var(--color-theme-accent)] hover:bg-[var(--color-brand-gold-dark)]",
 	},
 };
 
@@ -110,7 +110,7 @@ export const ConfirmModal = ({
 						initial={{ opacity: 0, scale: 0.95, y: 8 }}
 						animate={{ opacity: 1, scale: 1, y: 0 }}
 						exit={{ opacity: 0, scale: 0.95, y: 8 }}
-						className="w-full max-w-md bg-white rounded border border-[#e0dcd3] p-6"
+						className="w-full max-w-md bg-surface rounded border border-border p-6"
 						onClick={(e) => e.stopPropagation()}
 						role="dialog"
 						aria-labelledby="confirm-modal-title"
@@ -119,12 +119,12 @@ export const ConfirmModal = ({
 							<div className={clsx("p-2 rounded", styles.iconBg)}>
 								<AlertTriangle className={clsx("w-5 h-5", styles.iconText)} />
 							</div>
-							<h3 id="confirm-modal-title" className="text-lg font-bold text-[#2c2c2c]">
+							<h3 id="confirm-modal-title" className="text-lg font-bold text-text-primary">
 								{title}
 							</h3>
 						</div>
 
-						<p id="confirm-modal-message" className="text-sm text-[#6b6560] leading-relaxed mb-6">
+						<p id="confirm-modal-message" className="text-sm text-text-secondary leading-relaxed mb-6">
 							{message}
 						</p>
 
@@ -134,7 +134,7 @@ export const ConfirmModal = ({
 								type="button"
 								onClick={onClose}
 								disabled={loading}
-								className="px-4 py-2 rounded border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e] transition-all disabled:opacity-50 text-sm"
+								className="px-4 py-2 rounded theme-button-secondary transition-all disabled:opacity-50 text-sm"
 								aria-label="取消"
 							>
 								{cancelText}

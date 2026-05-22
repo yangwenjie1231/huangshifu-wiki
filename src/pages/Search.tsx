@@ -26,9 +26,8 @@ const Search: React.FC = () => {
 
   return (
     <div
-      className="min-h-[calc(100vh-60px)]"
+      className="min-h-[calc(100vh-60px)] bg-bg-primary"
       style={{
-        backgroundColor: "#f7f5f0",
         fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif",
         lineHeight: 1.8,
       }}
@@ -37,7 +36,7 @@ const Search: React.FC = () => {
         {/* Header */}
         <header className="mb-7">
           <div className="flex items-end justify-between flex-wrap gap-3">
-            <h1 className="text-[1.75rem] font-bold text-[#2c2c2c] tracking-[0.12em]">搜索</h1>
+            <h1 className="text-[1.75rem] font-bold text-text-primary tracking-[0.12em]">搜索</h1>
             <div className="flex items-center gap-3">
               <ViewModeSelector value={viewMode} onChange={setViewMode} size="sm" />
             </div>

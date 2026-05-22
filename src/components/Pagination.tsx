@@ -70,13 +70,13 @@ export const Pagination: React.FC<PaginationProps> = ({
 
   return (
     <footer
-      className="px-4 md:px-6 py-3 border-t border-[#e0dcd3] flex items-center justify-between flex-wrap gap-3"
+      className="px-4 md:px-6 py-3 border-t border-border flex items-center justify-between flex-wrap gap-3"
       role="navigation"
       aria-label="分页导航"
     >
       <div className="flex items-center gap-3">
         <p
-          className="text-xs text-[#9e968e]"
+          className="text-xs text-text-muted"
           aria-live="polite"
           aria-atomic="true"
         >
@@ -84,12 +84,12 @@ export const Pagination: React.FC<PaginationProps> = ({
         </p>
         {showPageSizeSelector && pageSize && onPageSizeChange && (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-[#9e968e]">每页</span>
+            <span className="text-xs text-text-muted">每页</span>
             <select
               value={pageSize}
               onChange={(e) => onPageSizeChange(Number(e.target.value))}
               aria-label="每页显示条数"
-              className="text-xs border border-[#e0dcd3] rounded px-2 py-1 text-[#6b6560] bg-white hover:border-[#c8951e] cursor-pointer focus:outline-none"
+              className="theme-input text-xs rounded px-2 py-1 cursor-pointer"
             >
               {pageSizeOptions.map((size) => (
                 <option key={size} value={size}>
@@ -108,7 +108,7 @@ export const Pagination: React.FC<PaginationProps> = ({
           aria-disabled={page <= 1}
           className={clsx(
             'inline-flex items-center justify-center px-2.5 py-1 text-xs rounded min-h-[44px] min-w-[44px]',
-            'border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e]',
+            'border border-border text-text-secondary hover:border-brand-gold hover:text-brand-gold',
             'disabled:opacity-50 disabled:cursor-not-allowed transition-all'
           )}
         >
@@ -121,7 +121,7 @@ export const Pagination: React.FC<PaginationProps> = ({
           aria-disabled={page <= 1}
           className={clsx(
             'inline-flex items-center justify-center gap-1 px-2.5 py-1 text-xs rounded min-h-[44px] min-w-[44px]',
-            'border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e]',
+            'border border-border text-text-secondary hover:border-brand-gold hover:text-brand-gold',
             'disabled:opacity-50 disabled:cursor-not-allowed transition-all'
           )}
         >
@@ -132,7 +132,7 @@ export const Pagination: React.FC<PaginationProps> = ({
           item === 'ellipsis' ? (
             <span
               key={`ellipsis-${index}`}
-              className="text-[#9e968e] px-1 cursor-default text-xs"
+              className="text-text-muted px-1 cursor-default text-xs"
               aria-hidden="true"
             >
               ...
@@ -146,8 +146,8 @@ export const Pagination: React.FC<PaginationProps> = ({
               className={clsx(
                 'inline-flex items-center justify-center px-2.5 py-1 text-xs rounded border transition-all min-h-[44px] min-w-[44px]',
                 item === page
-                  ? 'bg-[#c8951e] text-white border-[#c8951e]'
-                  : 'border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e]'
+                  ? 'bg-[var(--color-theme-accent)] text-white border-[var(--color-theme-accent)]'
+                  : 'border-border text-text-secondary hover:border-brand-gold hover:text-brand-gold'
               )}
             >
               {item}
@@ -162,7 +162,7 @@ export const Pagination: React.FC<PaginationProps> = ({
           aria-disabled={page >= totalPages}
           className={clsx(
             'inline-flex items-center justify-center gap-1 px-2.5 py-1 text-xs rounded min-h-[44px] min-w-[44px]',
-            'border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e]',
+            'border border-border text-text-secondary hover:border-brand-gold hover:text-brand-gold',
             'disabled:opacity-50 disabled:cursor-not-allowed transition-all'
           )}
         >
@@ -175,7 +175,7 @@ export const Pagination: React.FC<PaginationProps> = ({
           aria-disabled={page >= totalPages}
           className={clsx(
             'inline-flex items-center justify-center px-2.5 py-1 text-xs rounded min-h-[44px] min-w-[44px]',
-            'border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e]',
+            'border border-border text-text-secondary hover:border-brand-gold hover:text-brand-gold',
             'disabled:opacity-50 disabled:cursor-not-allowed transition-all'
           )}
         >

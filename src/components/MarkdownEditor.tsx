@@ -5,6 +5,7 @@ import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import { customSchema } from "../lib/htmlSanitizer";
 import { handleMarkdownTextPasteCapture } from "../lib/markdownEditorPaste";
+import { useUserPreferences } from "../context/UserPreferencesContext";
 
 interface MarkdownEditorProps {
 	value: string;
@@ -21,6 +22,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 	placeholder = "输入内容...",
 	enableWikiLinks = false,
 }) => {
+	const { resolvedTheme } = useUserPreferences();
 	const processPreviewText = (text: string): string => {
 		if (!enableWikiLinks) return text;
 
@@ -38,9 +40,9 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 
 	return (
 		<div
-			className="border border-[#e0dcd3] rounded overflow-hidden"
+			className="border border-border rounded overflow-hidden bg-surface"
 			onPasteCapture={handleMarkdownTextPasteCapture}
-			data-color-mode="light"
+			data-color-mode={resolvedTheme === 'dark' ? 'dark' : 'light'}
 		>
 			<MDEditor
 				value={processedValue}

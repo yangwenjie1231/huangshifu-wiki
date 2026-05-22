@@ -81,7 +81,7 @@ const WikiList = () => {
 			<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
 				<div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
 					<div>
-					<h1 className="text-[1.75rem] font-bold text-[#2c2c2c] tracking-[0.12em]">
+					<h1 className="text-[1.75rem] font-bold text-text-primary tracking-[0.12em]">
 						百科全书
 					</h1>
 					</div>
@@ -89,7 +89,7 @@ const WikiList = () => {
 						{user && !isBanned && (
 							<Link
 								to={"/wiki/new"}
-								className="px-5 py-2 bg-[#c8951e] text-white text-sm rounded hover:bg-[#dca828] transition-all flex items-center gap-2"
+								className="px-5 py-2 theme-button-primary text-sm rounded transition-all flex items-center gap-2"
 							>
 								<Plus size={15} /> 创建页面
 							</Link>
@@ -97,7 +97,7 @@ const WikiList = () => {
 					</div>
 				</div>
 
-				<div className="flex items-end justify-between border-b border-[#e0dcd3] mb-5">
+				<div className="flex items-end justify-between border-b border-border mb-5">
 					<div className="flex gap-5">
 						{["all", "biography", "music", "album", "timeline", "event"].map(
 							(cat) => (
@@ -107,8 +107,8 @@ const WikiList = () => {
 									className={clsx(
 										"text-[1.125rem] pb-2 relative tracking-[0.05em] transition-all cursor-pointer",
 										category === cat
-											? "text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]"
-											: "text-[#9e968e] hover:text-[#c8951e]"
+											? "text-brand-gold font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[var(--color-theme-accent)] after:rounded-[1px]"
+											: "text-text-muted hover:text-brand-gold"
 									)}
 								>
 									{cat === "all"
@@ -129,15 +129,15 @@ const WikiList = () => {
 						)}
 						<Link
 							to={"/wiki/timeline"}
-							className="text-[0.8125rem] text-[#c8951e] font-medium hover:text-[#dca828] transition-colors flex items-center gap-1 self-center mb-1 cursor-pointer"
+							className="text-[0.8125rem] text-brand-gold font-medium hover:text-brand-gold/80 transition-colors flex items-center gap-1 self-center mb-1 cursor-pointer"
 						>
 							<Calendar size={14} /> 时间轴
 						</Link>
 					</div>
 
-					<div className="flex items-center gap-3 pb-2 text-[0.8125rem] text-[#9e968e]">
+					<div className="flex items-center gap-3 pb-2 text-[0.8125rem] text-text-muted">
 						<ViewModeSelector value={viewMode} onChange={setViewMode} size="sm" />
-						<span className="text-[#9e968e]">{pages.length} 个页面</span>
+						<span className="text-text-muted">{pages.length} 个页面</span>
 					</div>
 				</div>
 
@@ -158,7 +158,7 @@ const WikiList = () => {
 								viewMode === "list"
 									? "h-24"
 									: VIEW_MODE_CONFIG[viewMode].cardHeight,
-								"bg-white rounded animate-pulse border border-[#e0dcd3]",
+								"bg-surface rounded animate-pulse border border-border",
 							)}
 						></div>
 					))}
@@ -194,9 +194,9 @@ const WikiList = () => {
 					)}
 				</>
 			) : (
-				<div className="bg-white p-20 rounded border border-gray-100 text-center">
+				<div className="bg-surface p-20 rounded border border-border text-center">
 					<Book size={48} className="mx-auto text-gray-200 mb-6" />
-					<p className="text-[#9e968e] italic">暂无相关百科页面</p>
+					<p className="text-text-muted italic">暂无相关百科页面</p>
 				</div>
 			)}
 			</div>

@@ -122,25 +122,25 @@ const WikiPullRequestDetail = () => {
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<Link
 					to={`/wiki/${pullRequest.pageSlug}/prs`}
-					className="inline-flex items-center gap-2 text-sm text-[#9e968e] hover:text-[#c8951e] transition-colors"
+					className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-brand-gold transition-colors"
 				>
 					<ArrowLeft size={18} /> 返回 PR 列表
 				</Link>
 				<Link
 					to={`/wiki/${pullRequest.pageSlug}`}
-					className="text-xs text-[#c8951e] hover:underline"
+					className="text-xs text-brand-gold hover:underline"
 				>
 					查看页面：{pullRequest.page?.title || pullRequest.pageSlug}
 				</Link>
 			</div>
 
-			<div className="bg-white rounded border border-[#e0dcd3] p-6 sm:p-8">
+			<div className="bg-surface rounded border border-border p-6 sm:p-8">
 				<div className="flex flex-wrap items-start justify-between gap-3 mb-4">
 					<div>
-						<h1 className="text-[1.5rem] font-bold text-[#2c2c2c] tracking-[0.12em]">
+						<h1 className="text-[1.5rem] font-bold text-text-primary tracking-[0.12em]">
 							{pullRequest.title}
 						</h1>
-						<p className="text-xs text-[#9e968e] mt-1">
+						<p className="text-xs text-text-muted mt-1">
 							发起人：{pullRequest.createdByName} ·{" "}
 							{formatDate(pullRequest.createdAt, "yyyy-MM-dd HH:mm:ss")}
 						</p>
@@ -149,10 +149,10 @@ const WikiPullRequestDetail = () => {
 						className={clsx(
 							"px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider",
 							pullRequest.status === "open"
-								? "bg-amber-50 text-amber-700 border border-amber-200"
+								? "theme-status-warning"
 								: pullRequest.status === "merged"
-									? "bg-green-50 text-green-700 border border-green-200"
-									: "bg-red-50 text-red-700 border border-red-200",
+									? "theme-status-success"
+									: "theme-status-error",
 						)}
 					>
 						{getPrStatusText(pullRequest.status)}
@@ -160,7 +160,7 @@ const WikiPullRequestDetail = () => {
 				</div>
 
 				{pullRequest.description ? (
-					<p className="text-sm text-[#6b6560] mb-5">
+					<p className="text-sm text-text-secondary mb-5">
 						{pullRequest.description}
 					</p>
 				) : null}
@@ -170,14 +170,14 @@ const WikiPullRequestDetail = () => {
 						<button
 							onClick={() => handleAdminAction("reject")}
 							disabled={saving}
-							className="px-4 py-2 rounded bg-red-50 text-red-700 text-xs font-bold disabled:opacity-50"
+							className="px-4 py-2 rounded theme-status-error text-xs font-bold disabled:opacity-50"
 						>
 							驳回
 						</button>
 						<button
 							onClick={() => handleAdminAction("merge")}
 							disabled={saving}
-							className="px-4 py-2 rounded bg-green-50 text-green-700 text-xs font-bold disabled:opacity-50"
+							className="px-4 py-2 rounded theme-status-success text-xs font-bold disabled:opacity-50"
 						>
 							合并
 						</button>
@@ -185,69 +185,69 @@ const WikiPullRequestDetail = () => {
 				)}
 
 				<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-					<div className="border border-gray-100 rounded p-4 bg-[#f7f5f0]/50">
-						<h3 className="text-sm font-bold text-[#2c2c2c] mb-3">
+					<div className="border border-border rounded p-4 bg-surface-alt/60">
+						<h3 className="text-sm font-bold text-text-primary mb-3">
 							Base（主分支）
 						</h3>
 						{diff ? (
 							<>
-								<p className="text-sm font-bold text-[#2c2c2c] mb-2">
+								<p className="text-sm font-bold text-text-primary mb-2">
 									{diff.base.title}
 								</p>
-								<pre className="whitespace-pre-wrap text-xs text-[#6b6560] leading-relaxed max-h-[420px] overflow-auto">
+								<pre className="whitespace-pre-wrap text-xs text-text-secondary leading-relaxed max-h-[420px] overflow-auto">
 									{diff.base.content}
 								</pre>
 							</>
 						) : (
-							<p className="text-xs text-[#9e968e]">暂无 diff 数据</p>
+							<p className="text-xs text-text-muted">暂无 diff 数据</p>
 						)}
 					</div>
-					<div className="border border-gray-100 rounded p-4 bg-[#f7f5f0]/20">
-						<h3 className="text-sm font-bold text-[#2c2c2c] mb-3">
+					<div className="border border-border rounded p-4 bg-surface-alt/30">
+						<h3 className="text-sm font-bold text-text-primary mb-3">
 							Head（分支版本）
 						</h3>
 						{diff ? (
 							<>
-								<p className="text-sm font-bold text-[#2c2c2c] mb-2">
+								<p className="text-sm font-bold text-text-primary mb-2">
 									{diff.head.title}
 								</p>
-								<pre className="whitespace-pre-wrap text-xs text-[#6b6560] leading-relaxed max-h-[420px] overflow-auto">
+								<pre className="whitespace-pre-wrap text-xs text-text-secondary leading-relaxed max-h-[420px] overflow-auto">
 									{diff.head.content}
 								</pre>
 							</>
 						) : (
-							<p className="text-xs text-[#9e968e]">暂无 diff 数据</p>
+							<p className="text-xs text-text-muted">暂无 diff 数据</p>
 						)}
 					</div>
 				</div>
 			</div>
 
-			<div className="bg-white rounded border border-[#e0dcd3] p-6 sm:p-8 space-y-4">
-				<h2 className="text-base font-semibold text-[#2c2c2c] tracking-[0.12em] flex items-center gap-2">讨论</h2>
+			<div className="bg-surface rounded border border-border p-6 sm:p-8 space-y-4">
+				<h2 className="text-base font-semibold text-text-primary tracking-[0.12em] flex items-center gap-2">讨论</h2>
 
 				{pullRequest.comments?.length ? (
 					<div className="space-y-3">
 						{pullRequest.comments.map((item) => (
 							<div
 								key={item.id}
-								className="p-4 rounded border border-gray-100 bg-[#f7f5f0]/50"
+								className="p-4 rounded border border-border bg-surface-alt/60"
 							>
 								<div className="flex items-center justify-between gap-2 mb-1">
-									<p className="text-sm font-bold text-[#2c2c2c]">
+									<p className="text-sm font-bold text-text-primary">
 										{item.authorName}
 									</p>
-									<span className="text-[11px] text-[#9e968e]">
+									<span className="text-[11px] text-text-muted">
 										{formatDate(item.createdAt, "yyyy-MM-dd HH:mm:ss")}
 									</span>
 								</div>
-								<p className="text-sm text-[#6b6560] whitespace-pre-wrap">
+								<p className="text-sm text-text-secondary whitespace-pre-wrap">
 									{item.content}
 								</p>
 							</div>
 						))}
 					</div>
 				) : (
-					<p className="text-[#9e968e] italic text-sm">暂无评论</p>
+					<p className="text-text-muted italic text-sm">暂无评论</p>
 				)}
 
 				{pullRequest.status === "open" && (
@@ -256,14 +256,14 @@ const WikiPullRequestDetail = () => {
 							value={comment}
 							onChange={(event) => setComment(event.target.value)}
 							rows={3}
-							className="w-full mt-1 px-4 py-3 rounded bg-[#f7f5f0] border border-[#e0dcd3] focus:outline-none focus:border-[#c8951e] text-sm"
+							className="theme-input w-full mt-1 px-4 py-3 rounded text-sm"
 							placeholder="写下你的评审意见..."
 						/>
 						<div className="flex justify-end">
 							<button
 								onClick={handleComment}
 								disabled={saving || !comment.trim()}
-								className="px-5 py-2 rounded bg-[#c8951e] text-white text-xs font-medium disabled:opacity-50 hover:bg-[#dca828] transition-all"
+								className="px-5 py-2 rounded theme-button-primary text-xs font-medium disabled:opacity-50 transition-all"
 							>
 								发表评论
 							</button>

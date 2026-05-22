@@ -124,12 +124,12 @@ function getNotificationTypeLabel(type: NotificationType) {
 
 function NotificationTypeIcon({ type }: { type: NotificationType }) {
 	if (type === "reply") {
-		return <MessageCircle size={14} className="text-[#c8951e]" />;
+		return <MessageCircle size={14} className="text-brand-gold" />;
 	}
 	if (type === "like") {
-		return <ThumbsUp size={14} className="text-[#c8951e]" />;
+		return <ThumbsUp size={14} className="text-brand-gold" />;
 	}
-	return <ShieldCheck size={14} className="text-[#c8951e]" />;
+	return <ShieldCheck size={14} className="text-brand-gold" />;
 }
 
 const Notifications = () => {
@@ -234,9 +234,8 @@ const Notifications = () => {
 
 	return (
 		<div
-			className="min-h-[calc(100vh-60px)]"
+			className="min-h-[calc(100vh-60px)] bg-bg-primary"
 			style={{
-				backgroundColor: '#f7f5f0',
 				fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif",
 				lineHeight: 1.8,
 			}}
@@ -244,7 +243,7 @@ const Notifications = () => {
 			<div className="max-w-[900px] mx-auto px-6 py-12">
 				<Link
 					to="/"
-					className="inline-flex items-center gap-2 text-sm text-[#9e968e] hover:text-[#c8951e] transition-colors mb-6"
+					className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-brand-gold transition-colors mb-6"
 				>
 					<ChevronLeft size={16} />
 					返回首页
@@ -253,18 +252,18 @@ const Notifications = () => {
 				{/* Header */}
 				<div className="flex flex-wrap items-center justify-between gap-4 mb-6">
 					<div>
-						<h1 className="text-2xl font-bold text-[#2c2c2c] flex items-center gap-2 tracking-[0.05em]">
-							<Bell size={22} className="text-[#c8951e]" />
+						<h1 className="text-2xl font-bold text-text-primary flex items-center gap-2 tracking-[0.05em]">
+							<Bell size={22} className="text-brand-gold" />
 							通知中心
 						</h1>
-						<p className="text-sm text-[#9e968e] mt-1">
+						<p className="text-sm text-text-muted mt-1">
 							未读 {data.unreadCount} 条，共 {data.total} 条
 						</p>
 					</div>
 					<button
 						onClick={markAllNotificationsRead}
 						disabled={markingAllRead || data.unreadCount === 0}
-						className="inline-flex items-center gap-2 px-4 py-2 bg-[#c8951e] text-white text-sm rounded hover:bg-[#dca828] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+						className="inline-flex items-center gap-2 px-4 py-2 theme-button-primary text-sm rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
 					>
 						<CheckCheck size={16} />
 						{markingAllRead ? "处理中..." : "全部标记已读"}
@@ -272,7 +271,7 @@ const Notifications = () => {
 				</div>
 
 				{/* Filter Tabs */}
-				<div className="flex items-center gap-1 border-b border-[#e0dcd3] mb-6 overflow-x-auto">
+				<div className="flex items-center gap-1 border-b border-border mb-6 overflow-x-auto">
 					{FILTER_OPTIONS.map((option) => (
 						<button
 							key={option.id}
@@ -280,26 +279,26 @@ const Notifications = () => {
 							className={clsx(
 								"px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap relative",
 								filter === option.id
-									? "text-[#c8951e]"
-									: "text-[#6b6560] hover:text-[#c8951e]",
+									? "text-brand-gold"
+									: "text-text-secondary hover:text-brand-gold",
 							)}
 						>
 							{option.label}
 							{filter === option.id && (
-								<span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#c8951e] rounded-[1px]" />
+								<span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[var(--color-theme-accent)] rounded-[1px]" />
 							)}
 						</button>
 					))}
 				</div>
 
 				{/* List */}
-				<div className="bg-white border border-[#e0dcd3] rounded overflow-hidden min-h-[360px]">
+				<div className="bg-surface border border-border rounded overflow-hidden min-h-[360px]">
 					{loading ? (
 						<div className="flex items-center justify-center py-20">
-							<Loader2 size={24} className="animate-spin text-[#c8951e]" />
+							<Loader2 size={24} className="animate-spin text-brand-gold" />
 						</div>
 					) : data.notifications.length === 0 ? (
-						<div className="flex flex-col items-center justify-center py-20 text-[#9e968e]">
+						<div className="flex flex-col items-center justify-center py-20 text-text-muted">
 							<Bell size={36} className="mb-3 opacity-50" />
 							<p>当前筛选下暂无通知</p>
 						</div>
@@ -311,8 +310,8 @@ const Notifications = () => {
 									<li
 										key={notif.id}
 										className={clsx(
-											"px-6 py-4 border-b border-[#e0dcd3] last:border-b-0 transition-colors",
-											!notif.isRead && "bg-[#fdf5d8]/30",
+											"px-6 py-4 border-b border-border last:border-b-0 transition-colors",
+											!notif.isRead && "bg-brand-gold/10",
 										)
 										}
 									>
@@ -330,11 +329,11 @@ const Notifications = () => {
 											>
 												<div className="flex items-center gap-2 mb-1">
 													<NotificationTypeIcon type={notif.type} />
-													<span className="text-[11px] px-2 py-0.5 rounded bg-[#f7f5f0] text-[#6b6560]">
+													<span className="text-[11px] px-2 py-0.5 rounded bg-surface-alt text-text-secondary">
 														{getNotificationTypeLabel(notif.type)}
 													</span>
 													{!notif.isRead && (
-														<span className="text-[11px] text-[#c8951e] font-medium">
+														<span className="text-[11px] text-brand-gold font-medium">
 															未读
 														</span>
 													)}
@@ -343,13 +342,13 @@ const Notifications = () => {
 													className={clsx(
 														"text-sm",
 														!notif.isRead
-															? "font-medium text-[#2c2c2c]"
-															: "text-[#6b6560]",
+															? "font-medium text-text-primary"
+															: "text-text-secondary",
 													)}
 												>
 													{getNotificationText(notif)}
 												</p>
-												<p className="text-xs text-[#9e968e] mt-1">
+												<p className="text-xs text-text-muted mt-1">
 													{new Date(notif.createdAt).toLocaleString("zh-CN")}
 												</p>
 											</button>
@@ -357,7 +356,7 @@ const Notifications = () => {
 											{!notif.isRead ? (
 												<button
 													onClick={() => markNotificationRead(notif.id)}
-													className="text-xs text-[#c8951e] hover:underline shrink-0"
+													className="text-xs text-brand-gold hover:underline shrink-0"
 												>
 													标记已读
 												</button>

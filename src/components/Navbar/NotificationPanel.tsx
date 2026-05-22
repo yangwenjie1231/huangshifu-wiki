@@ -67,19 +67,19 @@ const NotificationItem = React.memo(({
 			type="button"
 			onClick={onClick}
 			className={clsx(
-				"w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors",
-				!isItemRead && "bg-blue-50/50",
+				"w-full text-left px-4 py-3 border-b border-border hover:bg-surface-alt transition-colors",
+				!isItemRead && "bg-brand-gold/5",
 			)}
 		>
 			<p className={clsx(
 				"text-sm",
 				!isItemRead
-					? "font-medium text-[#2c2c2c]"
-					: "text-[#6b6560]",
+					? "font-medium text-text-primary"
+					: "text-text-secondary",
 			)}>
 				{text}
 			</p>
-			<p className="text-xs text-[#9e968e] mt-0.5">
+			<p className="text-xs text-text-muted mt-0.5">
 				{new Date(notif.createdAt).toLocaleString("zh-CN")}
 			</p>
 		</button>
@@ -154,7 +154,7 @@ export const NotificationPanel = React.memo(({ onNavigate }: NotificationPanelPr
 			<button
 				type="button"
 				onClick={() => setNotifPanelOpen(!notifPanelOpen)}
-				className="relative text-[#9e968e] hover:text-[#c8951e] transition-colors"
+				className="relative text-text-muted hover:text-brand-gold transition-colors"
 				aria-label={`通知${unreadCount > 0 ? `，有${unreadCount}条未读` : ""}`}
 				aria-expanded={notifPanelOpen}
 			>
@@ -179,17 +179,17 @@ export const NotificationPanel = React.memo(({ onNavigate }: NotificationPanelPr
 							animate={{ opacity: 1, y: 0, scale: 1 }}
 							exit={{ opacity: 0, y: -8, scale: 0.95 }}
 							transition={{ duration: 0.15 }}
-							className="absolute right-0 top-full mt-2 w-80 bg-white rounded border border-[#e0dcd3] z-50 overflow-hidden"
+							className="absolute right-0 top-full mt-2 w-80 bg-surface rounded border border-border z-50 overflow-hidden"
 						>
-							<div className="flex items-center justify-between px-4 py-3 border-b border-[#e0dcd3]">
-								<span className="font-bold text-[#2c2c2c]">
+							<div className="flex items-center justify-between px-4 py-3 border-b border-border">
+								<span className="font-bold text-text-primary">
 									通知
 								</span>
 								{unreadCount > 0 && (
 									<button
 										type="button"
 										onClick={markAllNotificationsRead}
-										className="text-xs text-[#c8951e] hover:underline"
+										className="text-xs text-brand-gold hover:underline"
 									>
 										全部已读
 									</button>
@@ -197,11 +197,11 @@ export const NotificationPanel = React.memo(({ onNavigate }: NotificationPanelPr
 							</div>
 							<div className="max-h-80 overflow-y-auto">
 								{notifLoading ? (
-									<div className="py-8 text-center text-sm text-[#9e968e]">
+									<div className="py-8 text-center text-sm text-text-muted">
 										加载中...
 									</div>
 								) : notifications.length === 0 ? (
-									<div className="py-8 text-center text-sm text-[#9e968e]">
+									<div className="py-8 text-center text-sm text-text-muted">
 										暂无通知
 									</div>
 								) : (

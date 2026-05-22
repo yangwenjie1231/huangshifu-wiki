@@ -104,8 +104,8 @@ const PostCard = React.memo(({ post, sectionName, onCopyLink }: PostCardProps) =
 	return (
 	<div
 		className={clsx(
-			"p-4 bg-white border border-[#e0dcd3] rounded hover:border-[#c8951e] transition-all group relative",
-			post.isPinned && "border-l-[3px] border-l-[#c8951e]",
+			"p-4 bg-surface border border-border rounded hover:border-brand-gold transition-all group relative",
+			post.isPinned && "border-l-[3px] border-l-[var(--color-theme-accent)]",
 		)}
 	>
 		<Link
@@ -114,15 +114,15 @@ const PostCard = React.memo(({ post, sectionName, onCopyLink }: PostCardProps) =
 		>
 			<div className="flex items-center gap-2 mb-2 flex-wrap">
 				{post.isPinned && (
-					<span className="flex items-center gap-1 px-2 py-0.5 bg-[#fdf5d8] text-[#c8951e] text-[10px] font-bold uppercase tracking-wider rounded">
+					<span className="flex items-center gap-1 px-2 py-0.5 theme-tag text-[10px] font-bold uppercase tracking-wider rounded">
 						<Pin size={10} /> {t('forum.pinned')}
 					</span>
 				)}
-				<span className="px-2 py-0.5 bg-[#fdf5d8] text-[#c8951e] text-[10px] font-bold uppercase tracking-wider rounded">
+				<span className="px-2 py-0.5 theme-tag text-[10px] font-bold uppercase tracking-wider rounded">
 					{sectionName}
 				</span>
-				<span className="text-[#e0dcd3]">|</span>
-				<span className="text-[#9e968e] text-xs flex items-center gap-1">
+				<span className="text-border">|</span>
+				<span className="text-text-muted text-xs flex items-center gap-1">
 					<Clock size={10} />{" "}
 					{formatDate(post.updatedAt, "yyyy-MM-dd")}
 				</span>
@@ -131,21 +131,21 @@ const PostCard = React.memo(({ post, sectionName, onCopyLink }: PostCardProps) =
 						className={clsx(
 							"px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border",
 							post.status === "pending"
-								? "bg-amber-50 text-amber-700 border-amber-200"
+								? "theme-status-warning"
 								: post.status === "rejected"
-									? "bg-red-50 text-red-700 border-red-200"
-									: "bg-[#f0ece3] text-[#6b6560]",
+									? "theme-status-error"
+									: "bg-surface-alt text-text-secondary",
 						)}
 					>
 						{getStatusText(post.status)}
 					</span>
 				)}
 			</div>
-			<h3 className="text-base font-bold text-[#2c2c2c] group-hover:text-[#c8951e] transition-colors mb-2">
+			<h3 className="text-base font-bold text-text-primary group-hover:text-brand-gold transition-colors mb-2">
 				{post.title}
 			</h3>
 			<div className="flex items-center justify-between">
-				<div className="flex items-center gap-4 text-[#9e968e] text-xs">
+				<div className="flex items-center gap-4 text-text-muted text-xs">
 					<span className="flex items-center gap-1">
 						<Heart size={10} /> {post.likesCount || 0}
 					</span>
@@ -157,10 +157,10 @@ const PostCard = React.memo(({ post, sectionName, onCopyLink }: PostCardProps) =
 					</span>
 				</div>
 				<div className="flex items-center gap-2">
-					<div className="w-5 h-5 rounded bg-[#f0ece3] overflow-hidden flex items-center justify-center">
-						<UserIcon size={10} className="text-[#9e968e]" />
+					<div className="w-5 h-5 rounded bg-surface-alt overflow-hidden flex items-center justify-center">
+						<UserIcon size={10} className="text-text-muted" />
 					</div>
-					<span className="text-xs text-[#9e968e]">
+					<span className="text-xs text-text-muted">
 						{post.authorName || post.authorUid?.substring(0, 6)}
 					</span>
 				</div>
@@ -168,7 +168,7 @@ const PostCard = React.memo(({ post, sectionName, onCopyLink }: PostCardProps) =
 		</Link>
 		<button
 			onClick={(event) => onCopyLink(event, post.id)}
-			className="absolute top-4 right-4 p-2 rounded border bg-white/90 text-[#9e968e] hover:text-[#c8951e] hover:border-[#c8951e] transition-all"
+			className="absolute top-4 right-4 p-2 rounded border border-border bg-surface/90 text-text-muted hover:text-brand-gold hover:border-brand-gold transition-all"
 			title={t('forum.copyInternalLink')}
 			aria-label={t('forum.copyPostInternalLink')}
 		>
@@ -265,9 +265,8 @@ const PostList = () => {
 
 	return (
 		<div
-			className="min-h-[calc(100vh-60px)]"
+			className="min-h-[calc(100vh-60px)] bg-bg-primary"
 			style={{
-				backgroundColor: "#f7f5f0",
 				fontFamily:
 					"'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif",
 				lineHeight: 1.8,
@@ -276,7 +275,7 @@ const PostList = () => {
 			<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
 				<div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
 					<div>
-						<h1 className="text-[1.75rem] font-bold text-[#2c2c2c] tracking-[0.12em]">
+						<h1 className="text-[1.75rem] font-bold text-text-primary tracking-[0.12em]">
 							{t('forum.title')}
 						</h1>
 					</div>
@@ -284,7 +283,7 @@ const PostList = () => {
 						{user && !isBanned && (
 							<Link
 								to="/forum/new"
-								className="px-5 py-2 bg-[#c8951e] text-white text-sm rounded hover:bg-[#dca828] active:scale-[0.98] transition-all flex items-center gap-2"
+								className="px-5 py-2 theme-button-primary text-sm rounded active:scale-[0.98] transition-all flex items-center gap-2"
 							>
 								<Plus size={15} /> {t('forum.newPost')}
 							</Link>
@@ -292,15 +291,15 @@ const PostList = () => {
 					</div>
 				</div>
 
-				<div className="flex items-end justify-between border-b border-[#e0dcd3] mb-5">
+				<div className="flex items-end justify-between border-b border-border mb-5">
 					<div className="flex gap-5 flex-wrap">
 					<Link
 						to="/forum?section=all"
 						className={clsx(
 							"text-[1.125rem] pb-2 relative tracking-[0.05em] transition-all cursor-pointer",
 							section === "all"
-								? "text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]"
-								: "text-[#9e968e] hover:text-[#c8951e]",
+								? "text-brand-gold font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[var(--color-theme-accent)] after:rounded-[1px]"
+								: "text-text-muted hover:text-brand-gold",
 						)}
 					>
 						{t('forum.allSections')}
@@ -312,8 +311,8 @@ const PostList = () => {
 								className={clsx(
 									"text-[1.125rem] pb-2 relative tracking-[0.05em] transition-all cursor-pointer",
 									section === sec.id
-										? "text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]"
-										: "text-[#9e968e] hover:text-[#c8951e]",
+										? "text-brand-gold font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[var(--color-theme-accent)] after:rounded-[1px]"
+										: "text-text-muted hover:text-brand-gold",
 								)}
 							>
 								{sec.name}
@@ -321,7 +320,7 @@ const PostList = () => {
 						))}
 					</div>
 
-					<div className="flex items-center gap-3 pb-2 text-[0.8125rem] text-[#9e968e]">
+					<div className="flex items-center gap-3 pb-2 text-[0.8125rem] text-text-muted">
 						{(["latest", "hot", "recommended"] as const).map((s) => (
 							<button
 								key={s}
@@ -332,8 +331,8 @@ const PostList = () => {
 								className={clsx(
 									"transition-colors",
 									sort === s
-										? "text-[#c8951e] font-medium"
-										: "hover:text-[#c8951e]",
+										? "text-brand-gold font-medium"
+										: "hover:text-brand-gold",
 								)}
 							>
 								{s === "latest" ? t('forum.sortLatest') : s === "hot" ? t('forum.sortHot') : t('forum.sortRecommended')}
@@ -367,9 +366,9 @@ const PostList = () => {
 						)}
 					</>
 				) : (
-					<div className="bg-white p-20 rounded border border-[#e0dcd3] text-center">
-						<MessageSquare size={48} className="mx-auto text-[#e0dcd3] mb-6" />
-						<p className="text-[#9e968e] italic">
+					<div className="bg-surface p-20 rounded border border-border text-center">
+						<MessageSquare size={48} className="mx-auto text-border mb-6" />
+						<p className="text-text-muted italic">
 							{t('forum.emptyPosts')}
 						</p>
 					</div>
@@ -482,9 +481,8 @@ const PostDetail = () => {
 	if (!post)
 		return (
 			<div
-				className="min-h-[calc(100vh-60px)] flex items-center justify-center text-[#9e968e] italic"
+				className="min-h-[calc(100vh-60px)] flex items-center justify-center text-text-muted italic bg-bg-primary"
 				style={{
-					backgroundColor: "#f7f5f0",
 					fontFamily:
 						"'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif",
 					lineHeight: 1.8,
@@ -539,9 +537,8 @@ const PostDetail = () => {
 
 	return (
 		<div
-			className="min-h-[calc(100vh-60px)]"
+			className="min-h-[calc(100vh-60px)] bg-bg-primary"
 			style={{
-				backgroundColor: "#f7f5f0",
 				fontFamily:
 					"'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif",
 				lineHeight: 1.8,
@@ -550,7 +547,7 @@ const PostDetail = () => {
 			<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32 wiki-detail-page">
 				<Link
 					to="/forum"
-					className="inline-flex items-center gap-2 text-sm text-[#9e968e] hover:text-[#c8951e] transition-colors mb-5"
+					className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-brand-gold transition-colors mb-5"
 				>
 					<ArrowLeft size={18} /> {t('forum.backToList')}
 				</Link>
@@ -558,20 +555,20 @@ const PostDetail = () => {
 				{/* Header */}
 				<header className="mb-7">
 					<div className="flex items-end justify-between flex-wrap gap-3">
-						<h1 className="text-[1.75rem] font-semibold tracking-[0.12em] text-[#2c2c2c]">
+						<h1 className="text-[1.75rem] font-semibold tracking-[0.12em] text-text-primary">
 							{post.title}
 						</h1>
 						<div className="flex flex-wrap gap-2">
 							<button
 								onClick={handleShare}
-								className="px-4 py-2 text-[0.9375rem] rounded border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all flex items-center gap-2"
+								className="px-4 py-2 text-[0.9375rem] rounded theme-button-secondary transition-all flex items-center gap-2"
 							>
 								<Link2 size={16} /> {t('forum.copy')}
 							</button>
 							{canEditPost && (
 								<Link
 									to={`/forum/${post.id}/edit`}
-									className="px-4 py-2 text-[0.9375rem] rounded bg-[#c8951e] text-white hover:bg-[#dca828] active:scale-[0.98] transition-all flex items-center gap-2"
+									className="px-4 py-2 text-[0.9375rem] rounded theme-button-primary active:scale-[0.98] transition-all flex items-center gap-2"
 								>
 									<Edit3 size={16} /> {t('forum.edit')}
 								</Link>
@@ -581,16 +578,16 @@ const PostDetail = () => {
 				</header>
 
 				{/* Info bar */}
-				<div className="flex items-end justify-between border-b border-[#e0dcd3] mb-5">
+				<div className="flex items-end justify-between border-b border-border mb-5">
 					<div className="flex gap-5 items-center">
-						<span className="text-[1.125rem] pb-2 relative tracking-[0.05em] text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]">
+						<span className="text-[1.125rem] pb-2 relative tracking-[0.05em] text-brand-gold font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[var(--color-theme-accent)] after:rounded-[1px]">
 							{sections.find((s) => s.id === post.section)?.name || post.section}
 						</span>
 						{canSubmitReview && (
 							<button
 								onClick={handleSubmitReview}
 								disabled={submittingReview}
-								className="px-3 py-1 text-[0.8125rem] rounded bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all self-center mb-1"
+								className="px-3 py-1 text-[0.8125rem] rounded theme-status-warning hover:opacity-90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all self-center mb-1"
 							>
 								{submittingReview ? t('forum.submitting') : t('forum.submitReview')}
 							</button>
@@ -601,7 +598,7 @@ const PostDetail = () => {
 							</span>
 						) : null}
 					</div>
-					<div className="flex items-center gap-3 pb-2 text-[0.8125rem] text-[#9e968e]">
+					<div className="flex items-center gap-3 pb-2 text-[0.8125rem] text-text-muted">
 						<span className="flex items-center gap-1">
 							<Clock size={14} />
 							{formatDate(post.updatedAt, "yyyy-MM-dd HH:mm")}
@@ -612,29 +609,29 @@ const PostDetail = () => {
 				{/* Two column layout */}
 				<div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8 items-start">
 					<div>
-						<div className="prose prose-lg prose-stone max-w-none font-body leading-relaxed text-[#2c2c2c]">
+						<div className="prose prose-lg max-w-none font-body leading-relaxed text-text-primary">
 							<ReactMarkdown
 							remarkPlugins={[remarkGfm]}
 							rehypePlugins={[rehypeRaw, [rehypeSanitize, customSchema]]}
 						>{post.content}</ReactMarkdown>
 						</div>
 
-						<section className="mt-12 pt-8 border-t border-[#e0dcd3]">
-							<h3 className="text-[1.25rem] font-bold text-[#2c2c2c] tracking-[0.12em] mb-6">
+						<section className="mt-12 pt-8 border-t border-border">
+							<h3 className="text-[1.25rem] font-bold text-text-primary tracking-[0.12em] mb-6">
 								{t('forum.comments')} ({comments.length})
 							</h3>
 
 							{user ? (
 								<form onSubmit={handleAddComment} className="mb-8">
 									{replyTo && (
-										<div className="mb-3 px-3 py-2 bg-[#fdf5d8] border border-[#e0dcd3] rounded flex items-center justify-between">
-											<span className="text-xs text-[#c8951e]">
+										<div className="mb-3 px-3 py-2 bg-surface-alt border border-border rounded flex items-center justify-between">
+											<span className="text-xs text-brand-gold">
 												{t('forum.reply')} @{replyTo.authorName}
 											</span>
 											<button
 												type="button"
 												onClick={() => setReplyTo(null)}
-												className="text-[#9e968e] hover:text-red-500 transition-colors"
+												className="text-text-muted hover:text-red-500 transition-colors"
 											>
 												<X size={14} />
 											</button>
@@ -651,12 +648,12 @@ const PostDetail = () => {
 											}
 											rows={3}
 											disabled={!canComment || isBanned}
-											className="w-full px-4 py-3 bg-[#f7f5f0] border border-[#e0dcd3] rounded focus:outline-none focus:border-[#c8951e] resize-none"
+											className="theme-input w-full px-4 py-3 rounded resize-none"
 										/>
 										<button
 											type="submit"
 											disabled={!canComment || isBanned}
-											className="absolute bottom-3 right-3 px-3 py-1.5 bg-[#c8951e] text-white text-sm rounded hover:bg-[#dca828] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+											className="absolute bottom-3 right-3 px-3 py-1.5 theme-button-primary text-sm rounded active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
 										>
 											<Send size={14} />
 										</button>
@@ -672,8 +669,8 @@ const PostDetail = () => {
 									) : null}
 								</form>
 							) : (
-								<div className="p-6 bg-[#f7f5f0] border border-[#e0dcd3] rounded text-center mb-8">
-									<p className="text-[#9e968e] text-sm">{t('forum.loginToComment')}</p>
+								<div className="p-6 bg-surface-alt border border-border rounded text-center mb-8">
+									<p className="text-text-muted text-sm">{t('forum.loginToComment')}</p>
 								</div>
 							)}
 
@@ -682,10 +679,10 @@ const PostDetail = () => {
 									rootComments.map((comment) => (
 										<div
 											key={comment.id}
-											className="border-b border-[#e0dcd3] py-5"
+											className="border-b border-border py-5"
 										>
 											<div className="flex gap-3">
-												<div className="w-9 h-9 rounded bg-[#f0ece3] flex-shrink-0 overflow-hidden flex items-center justify-center">
+												<div className="w-9 h-9 rounded bg-surface-alt flex-shrink-0 overflow-hidden flex items-center justify-center">
 													<img
 														src={
 															comment.authorPhoto ||
@@ -699,14 +696,14 @@ const PostDetail = () => {
 												</div>
 												<div className="flex-grow min-w-0">
 													<div className="flex items-center justify-between mb-1">
-														<span className="text-sm font-medium text-[#2c2c2c]">
+														<span className="text-sm font-medium text-text-primary">
 															{comment.authorName || t('forum.anonymousUser')}
 														</span>
-														<span className="text-[11px] text-[#9e968e]">
+														<span className="text-[11px] text-text-muted">
 															{formatDate(comment.createdAt, "MM-dd HH:mm")}
 														</span>
 													</div>
-													<p className="text-[#6b6560] text-sm leading-relaxed mb-2">
+													<p className="text-text-secondary text-sm leading-relaxed mb-2">
 														{comment.content}
 													</p>
 													<button
@@ -721,7 +718,7 @@ const PostDetail = () => {
 																: 0;
 															window.scrollTo({ top, behavior: "smooth" });
 														}}
-														className="text-[11px] font-medium text-[#c8951e] hover:underline"
+														className="text-[11px] font-medium text-brand-gold hover:underline"
 													>
 														{t('forum.reply')}
 													</button>
@@ -729,10 +726,10 @@ const PostDetail = () => {
 											</div>
 
 											{getReplies(comment.id).length > 0 && (
-												<div className="ml-12 mt-3 space-y-3 border-l-2 border-[#e0dcd3] pl-4">
+												<div className="ml-12 mt-3 space-y-3 border-l-2 border-border pl-4">
 													{getReplies(comment.id).map((reply) => (
 														<div key={reply.id} className="flex gap-3">
-															<div className="w-7 h-7 rounded bg-[#f0ece3] flex-shrink-0 overflow-hidden flex items-center justify-center">
+															<div className="w-7 h-7 rounded bg-surface-alt flex-shrink-0 overflow-hidden flex items-center justify-center">
 																<img
 																	src={
 																		reply.authorPhoto ||
@@ -746,14 +743,14 @@ const PostDetail = () => {
 															</div>
 															<div className="flex-grow min-w-0">
 																<div className="flex items-center justify-between mb-1">
-																	<span className="text-xs font-medium text-[#2c2c2c]">
+																	<span className="text-xs font-medium text-text-primary">
 																		{reply.authorName || t('forum.anonymousUser')}
 																	</span>
-																	<span className="text-[10px] text-[#9e968e]">
+																	<span className="text-[10px] text-text-muted">
 																		{formatDate(reply.createdAt, "MM-dd HH:mm")}
 																	</span>
 																</div>
-																<p className="text-[#6b6560] text-xs leading-relaxed">
+																<p className="text-text-secondary text-xs leading-relaxed">
 																	{reply.content}
 																</p>
 															</div>
@@ -764,7 +761,7 @@ const PostDetail = () => {
 										</div>
 									))
 								) : (
-									<p className="text-center text-[#9e968e] italic py-8">
+									<p className="text-center text-text-muted italic py-8">
 										{t('forum.emptyComments')}
 									</p>
 								)}
@@ -774,8 +771,8 @@ const PostDetail = () => {
 
 					<aside className="lg:sticky lg:top-20">
 						{/* Interactions */}
-						<div className="py-5 border-b border-[#e0dcd3]">
-							<h3 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-3.5">
+						<div className="py-5 border-b border-border">
+							<h3 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-3.5">
 								{t('forum.interactions')}
 							</h3>
 							<div className="flex flex-wrap gap-2">
@@ -786,7 +783,7 @@ const PostDetail = () => {
 										"flex-1 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
 										post.likedByMe
 											? "bg-red-500 text-white border border-transparent"
-											: "bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-red-400 hover:text-red-500",
+											: "bg-surface border border-border text-text-secondary hover:border-red-400 hover:text-red-500",
 										(!user || liking) && "opacity-50 cursor-not-allowed",
 									)}
 									title={post.likedByMe ? t('forum.unlike') : t('forum.like')}
@@ -800,7 +797,7 @@ const PostDetail = () => {
 										"flex-1 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
 										post.dislikedByMe
 											? "bg-orange-500 text-white border border-transparent"
-											: "bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-orange-400 hover:text-orange-500",
+											: "bg-surface border border-border text-text-secondary hover:border-orange-400 hover:text-orange-500",
 										(!user || disliking) && "opacity-50 cursor-not-allowed",
 									)}
 									title={post.dislikedByMe ? t('forum.unDislike') : t('forum.dislike')}
@@ -815,8 +812,8 @@ const PostDetail = () => {
 									className={clsx(
 										"flex-1 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
 										post.favoritedByMe
-											? "bg-[#c8951e] text-white border border-transparent"
-											: "bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e]",
+											? "bg-[var(--color-theme-accent)] text-white border border-transparent"
+											: "bg-surface border border-border text-text-secondary hover:border-brand-gold hover:text-brand-gold",
 										(!user || favoriting) && "opacity-50 cursor-not-allowed",
 									)}
 									title={post.favoritedByMe ? t('forum.unfavorite') : t('forum.favorite')}
@@ -825,7 +822,7 @@ const PostDetail = () => {
 								</button>
 								<button
 									onClick={handleShare}
-									className="flex-1 px-3 py-2 rounded text-sm font-medium bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e] transition-all flex items-center justify-center gap-1.5"
+									className="flex-1 px-3 py-2 rounded text-sm font-medium bg-surface border border-border text-text-secondary hover:border-brand-gold hover:text-brand-gold transition-all flex items-center justify-center gap-1.5"
 									title={t('forum.share')}
 								>
 									<Share2 size={15} /> {t('forum.share')}
@@ -838,8 +835,8 @@ const PostDetail = () => {
 									className={clsx(
 										"w-full mt-2 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
 										post.isPinned
-											? "bg-[#c8951e] text-white border border-transparent"
-											: "bg-white border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e]",
+											? "bg-[var(--color-theme-accent)] text-white border border-transparent"
+											: "bg-surface border border-border text-text-secondary hover:border-brand-gold hover:text-brand-gold",
 										pinning && "opacity-50 cursor-not-allowed",
 									)}
 								>
@@ -849,54 +846,54 @@ const PostDetail = () => {
 						</div>
 
 						{/* Status */}
-						<div className="py-5 border-b border-[#e0dcd3]">
-							<h3 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-3.5">
+						<div className="py-5 border-b border-border">
+							<h3 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-3.5">
 								{t('forum.status')}
 							</h3>
 							<div className="flex flex-col gap-2.5">
 								<div className="flex items-center justify-between text-sm">
-									<span className="text-[#9e968e]">{t('forum.review')}</span>
+									<span className="text-text-muted">{t('forum.review')}</span>
 									<span
 										className={clsx(
 											"px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider",
 											post.status === "published"
-												? "bg-green-50 text-green-700 border border-green-200"
+												? "theme-status-success"
 												: post.status === "pending"
-													? "bg-amber-50 text-amber-700 border border-amber-200"
+													? "theme-status-warning"
 													: post.status === "rejected"
-														? "bg-red-50 text-red-700 border border-red-200"
-														: "bg-[#f0ece3] text-[#6b6560]",
+														? "theme-status-error"
+														: "bg-surface-alt text-text-secondary",
 										)}
 									>
 										{getStatusText(post.status)}
 									</span>
 								</div>
 								<div className="flex items-center justify-between text-sm">
-									<span className="text-[#9e968e]">{t('forum.author')}</span>
-									<span className="text-[#2c2c2c] font-medium">{post.authorName || post.authorUid?.substring(0, 8) || t('forum.anonymous')}</span>
+									<span className="text-text-muted">{t('forum.author')}</span>
+									<span className="text-text-primary font-medium">{post.authorName || post.authorUid?.substring(0, 8) || t('forum.anonymous')}</span>
 								</div>
 								<div className="flex items-center justify-between text-sm">
-									<span className="text-[#9e968e]">{t('forum.createdAt')}</span>
-									<span className="text-[#2c2c2c] font-medium">{formatDate(post.createdAt, "yyyy-MM-dd")}</span>
+									<span className="text-text-muted">{t('forum.createdAt')}</span>
+									<span className="text-text-primary font-medium">{formatDate(post.createdAt, "yyyy-MM-dd")}</span>
 								</div>
 								<div className="flex items-center justify-between text-sm">
-									<span className="text-[#9e968e]">{t('forum.updatedAt')}</span>
-									<span className="text-[#2c2c2c] font-medium">{formatDate(post.updatedAt, "yyyy-MM-dd HH:mm")}</span>
+									<span className="text-text-muted">{t('forum.updatedAt')}</span>
+									<span className="text-text-primary font-medium">{formatDate(post.updatedAt, "yyyy-MM-dd HH:mm")}</span>
 								</div>
 							</div>
 						</div>
 
 						{/* Tags */}
 						{post.tags && post.tags.length > 0 && (
-							<div className="py-5 border-b border-[#e0dcd3]">
-								<h3 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-3.5">
+							<div className="py-5 border-b border-border">
+								<h3 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-3.5">
 									{t('forum.tags')}
 								</h3>
 								<div className="flex flex-wrap gap-2">
 									{post.tags.map((tag: string) => (
 										<span
 											key={tag}
-											className="px-2 py-1 bg-white border border-[#e0dcd3] text-[#6b6560] text-xs rounded hover:text-[#c8951e] hover:border-[#c8951e] transition-all"
+											className="px-2 py-1 bg-surface border border-border text-text-secondary text-xs rounded hover:text-brand-gold hover:border-brand-gold transition-all"
 										>
 											{tag}
 										</span>
@@ -908,11 +905,11 @@ const PostDetail = () => {
 						{/* Location */}
 						{(post.locationDetail || post.locationName) && (
 							<div className="py-5">
-								<h3 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-3.5">
+								<h3 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-3.5">
 									{t('forum.location')}
 								</h3>
-								<div className="flex items-center gap-2 text-sm text-[#6b6560]">
-									<MapPin size={14} className="text-[#c8951e]" />
+								<div className="flex items-center gap-2 text-sm text-text-secondary">
+									<MapPin size={14} className="text-brand-gold" />
 									<span>{post.locationDetail || post.locationName}</span>
 								</div>
 							</div>
@@ -1064,9 +1061,8 @@ const PostEditor = () => {
 
 	return (
 		<div
-			className="min-h-[calc(100vh-60px)]"
+			className="min-h-[calc(100vh-60px)] bg-bg-primary"
 			style={{
-				backgroundColor: "#f7f5f0",
 				fontFamily:
 					"'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif",
 				lineHeight: 1.8,
@@ -1074,12 +1070,12 @@ const PostEditor = () => {
 		>
 			<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
 				<div className="flex justify-between items-center mb-8">
-					<h1 className="text-[1.75rem] font-bold text-[#2c2c2c] tracking-[0.12em]">
+					<h1 className="text-[1.75rem] font-bold text-text-primary tracking-[0.12em]">
 						{isEditing ? t('forum.editPost') : t('forum.createPost')}
 					</h1>
 					<button
 						onClick={() => navigate(-1)}
-						className="p-2 text-[#9e968e] hover:text-red-500 transition-colors"
+						className="p-2 text-text-muted hover:text-red-500 transition-colors"
 					>
 						<X size={24} />
 					</button>
@@ -1093,7 +1089,7 @@ const PostEditor = () => {
 					className="space-y-6"
 				>
 					<div className="space-y-2">
-						<label className="text-xs font-bold uppercase tracking-widest text-[#9e968e]">
+						<label className="text-xs font-bold uppercase tracking-widest text-text-muted">
 							{t('forum.titleLabel')} <span className="text-red-500">*</span>
 						</label>
 						<input
@@ -1104,12 +1100,12 @@ const PostEditor = () => {
 								setFormData({ ...formData, title: e.target.value })
 							}
 							placeholder={t('forum.titlePlaceholder')}
-							className="w-full px-4 py-3 bg-[#f7f5f0] border border-[#e0dcd3] rounded focus:outline-none focus:border-[#c8951e] text-base"
+							className="theme-input w-full px-4 py-3 rounded text-base"
 						/>
 					</div>
 
 					<div className="space-y-2">
-						<label className="text-xs font-bold uppercase tracking-widest text-[#9e968e]">
+						<label className="text-xs font-bold uppercase tracking-widest text-text-muted">
 							{t('forum.sectionLabel')} <span className="text-red-500">*</span>
 						</label>
 						<select
@@ -1117,7 +1113,7 @@ const PostEditor = () => {
 							onChange={(e) =>
 								setFormData({ ...formData, section: e.target.value })
 							}
-							className="w-full px-4 py-3 bg-[#f7f5f0] border border-[#e0dcd3] rounded focus:outline-none focus:border-[#c8951e] text-base appearance-none"
+							className="theme-input w-full px-4 py-3 rounded text-base appearance-none"
 						>
 							{sections.map((sec) => (
 								<option key={sec.id} value={sec.id}>
@@ -1128,7 +1124,7 @@ const PostEditor = () => {
 					</div>
 
 					<div className="space-y-2">
-						<label className="text-xs font-bold uppercase tracking-widest text-[#9e968e]">
+						<label className="text-xs font-bold uppercase tracking-widest text-text-muted">
 							{t('forum.tagsLabel')}
 						</label>
 						<input
@@ -1138,12 +1134,12 @@ const PostEditor = () => {
 								setFormData({ ...formData, tags: e.target.value })
 							}
 							placeholder={t('forum.tagsPlaceholder')}
-							className="w-full px-4 py-3 bg-[#f7f5f0] border border-[#e0dcd3] rounded focus:outline-none focus:border-[#c8951e] text-base"
+							className="theme-input w-full px-4 py-3 rounded text-base"
 						/>
 					</div>
 
 					<div className="space-y-2">
-						<label className="text-xs font-bold uppercase tracking-widest text-[#9e968e]">
+						<label className="text-xs font-bold uppercase tracking-widest text-text-muted">
 							{t('forum.locationLabel')}
 						</label>
 						<LocationTagInput
@@ -1167,11 +1163,11 @@ const PostEditor = () => {
 					</div>
 
 					<div className="space-y-2">
-						<label className="text-xs font-bold uppercase tracking-widest text-[#9e968e]">
+						<label className="text-xs font-bold uppercase tracking-widest text-text-muted">
 							{t('forum.contentLabel')} <span className="text-red-500">*</span>
 						</label>
 						<div
-							className="border border-[#e0dcd3] rounded overflow-hidden bg-white"
+							className="border border-border rounded overflow-hidden bg-surface"
 						>
 							<MarkdownEditor
 								value={formData.content}
@@ -1191,7 +1187,7 @@ const PostEditor = () => {
 							type="button"
 							onClick={() => handleSubmit("draft")}
 							disabled={Boolean(savingMode)}
-							className="px-6 py-2.5 bg-[#f7f5f0] text-[#6b6560] border border-[#e0dcd3] rounded text-sm font-medium hover:border-[#c8951e] hover:text-[#c8951e] transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+							className="px-6 py-2.5 bg-surface-alt text-text-secondary border border-border rounded text-sm font-medium hover:border-brand-gold hover:text-brand-gold transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
 						>
 							<Save size={16} />{" "}
 							{savingMode === "draft" ? t('forum.saving') : t('forum.saveDraft')}
@@ -1199,7 +1195,7 @@ const PostEditor = () => {
 						<button
 							type="submit"
 							disabled={Boolean(savingMode)}
-							className="px-8 py-2.5 bg-[#c8951e] text-white rounded text-sm font-medium hover:bg-[#dca828] active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+							className="px-8 py-2.5 theme-button-primary rounded text-sm font-medium active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
 						>
 							<Send size={16} />{" "}
 							{savingMode === "pending" ? t('forum.submitting') : t('forum.submitReview')}

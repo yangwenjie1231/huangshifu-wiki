@@ -255,12 +255,12 @@ export const GlobalMusicPlayer = () => {
 
   return (
     <div
-      className="fixed left-0 right-0 z-[200] bg-white/96 border-t border-[#e0dcd3]"
+      className="fixed left-0 right-0 z-[200] border-t border-border bg-surface/96"
       style={{ bottom: 0, backdropFilter: 'blur(16px)' }}
     >
       {/* Progress bar */}
       <div
-        className="absolute top-[-1px] left-0 right-0 h-[2px] bg-[#ebe8e0] cursor-pointer"
+        className="absolute top-[-1px] left-0 right-0 h-[2px] bg-border cursor-pointer"
         aria-label="播放进度"
         aria-valuemin={0}
         aria-valuemax={100}
@@ -286,14 +286,14 @@ export const GlobalMusicPlayer = () => {
         <img
           src={currentSong.cover}
           alt={currentSong?.title + ' 封面' || ''}
-          className="w-11 h-11 rounded object-cover flex-shrink-0 bg-[#f0ece3]"
+          className="w-11 h-11 rounded object-cover flex-shrink-0 bg-surface-alt"
           referrerPolicy="no-referrer"
         />
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <p className="text-[0.875rem] font-semibold text-[#2c2c2c] truncate tracking-wide">{currentSong.title}</p>
-          <p className="text-xs text-[#9e968e] truncate mt-0.5">{currentSong.artist}</p>
+          <p className="text-[0.875rem] font-semibold text-text-primary truncate tracking-wide">{currentSong.title}</p>
+          <p className="text-xs text-text-muted truncate mt-0.5">{currentSong.artist}</p>
           {audioStats.isStalling && (
             <p className="text-[0.7rem] text-amber-600 animate-pulse">缓冲中...</p>
           )}
@@ -303,27 +303,27 @@ export const GlobalMusicPlayer = () => {
         <div className="flex items-center gap-3 flex-shrink-0">
           <button
             onClick={handlePlayPrevious}
-            className="p-1.5 text-[#6b6560] hover:text-[#c8951e] hover:bg-[#f0ece3] rounded-full transition-all"
+            className="p-1.5 text-text-secondary hover:text-brand-gold hover:bg-surface-alt rounded-full transition-all"
           >
             <SkipBack size={18} />
           </button>
           <button
             onClick={togglePlay}
             aria-label={isPlaying ? '暂停' : '播放'}
-            className="w-9 h-9 bg-[#c8951e] text-white rounded-full flex items-center justify-center hover:bg-[#dca828] transition-all"
+            className="w-9 h-9 theme-button-primary rounded-full flex items-center justify-center transition-all"
           >
             {isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
           </button>
           <button
             onClick={handlePlayNext}
-            className="p-1.5 text-[#6b6560] hover:text-[#c8951e] hover:bg-[#f0ece3] rounded-full transition-all"
+            className="p-1.5 text-text-secondary hover:text-brand-gold hover:bg-surface-alt rounded-full transition-all"
           >
             <SkipForward size={18} />
           </button>
         </div>
 
         {/* Time */}
-        <div className="hidden md:flex items-center gap-1 text-xs text-[#9e968e] w-20 justify-end flex-shrink-0">
+        <div className="hidden md:flex items-center gap-1 text-xs text-text-muted w-20 justify-end flex-shrink-0">
           <span>{formatTime(contextCurrentTime)}</span>
           <span>/</span>
           <span>{formatTime(contextDuration)}</span>
@@ -338,7 +338,7 @@ export const GlobalMusicPlayer = () => {
           <button
             onClick={contextToggleMute}
             aria-label={contextIsMuted ? '静音' : '音量'}
-            className="p-1.5 text-[#6b6560] hover:text-[#c8951e] hover:bg-[#f0ece3] rounded-full transition-all"
+            className="p-1.5 text-text-secondary hover:text-brand-gold hover:bg-surface-alt rounded-full transition-all"
           >
             <Volume2 size={18} />
           </button>
@@ -348,7 +348,7 @@ export const GlobalMusicPlayer = () => {
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 6 }}
-                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-white rounded border border-[#e0dcd3] flex items-center gap-2"
+                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-surface rounded border border-border flex items-center gap-2"
               >
                 <input
                   type="range"
@@ -357,7 +357,7 @@ export const GlobalMusicPlayer = () => {
                   step="0.01"
                   value={contextIsMuted ? 0 : contextVolume}
                   onChange={(e) => contextSetVolume(parseFloat(e.target.value))}
-                  className="w-20 h-1 bg-[#ebe8e0] rounded-full appearance-none cursor-pointer accent-antique"
+                  className="w-20 h-1 bg-border rounded-full appearance-none cursor-pointer accent-antique"
                 />
                 <span className="text-xs text-[var(--color-text-antique-muted)] w-6 text-right">
                   {Math.round((contextIsMuted ? 0 : contextVolume) * 100)}
@@ -369,7 +369,7 @@ export const GlobalMusicPlayer = () => {
 
         <button
           onClick={() => setCurrentSong(null)}
-          className="p-1.5 text-[#9e968e] hover:text-red-500 hover:bg-[#f0ece3] rounded-full transition-all flex-shrink-0"
+          className="p-1.5 text-text-muted hover:text-red-500 hover:bg-surface-alt rounded-full transition-all flex-shrink-0"
         >
           <X size={18} />
         </button>

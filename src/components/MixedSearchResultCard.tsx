@@ -83,12 +83,12 @@ export const MixedSearchResultCard = React.memo(
             <h3 className={CARD.title}>
               {(data as GalleryItem | WikiItem | PostItem).title}
             </h3>
-            <p className={clsx("text-xs text-[#9e968e] line-clamp-1 mt-0.5")}>
+            <p className={clsx("text-xs text-text-muted line-clamp-1 mt-0.5")}>
               {sourceType === "gallery" && (data as GalleryItem).description}
               {sourceType === "wiki" && (data as WikiItem).category}
               {sourceType === "post" && (data as PostItem).section}
             </p>
-            <p className="text-[10px] text-[#9e968e] mt-1 flex items-center gap-1">
+            <p className="text-[10px] text-text-muted mt-1 flex items-center gap-1">
               <Clock size={10} />
               {toDateValue((data as GalleryItem | WikiItem | PostItem).updatedAt)
                 ? format(toDateValue((data as GalleryItem | WikiItem | PostItem).updatedAt)!, "yyyy-MM-dd")
@@ -110,16 +110,16 @@ export const MixedSearchResultCard = React.memo(
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <span className="px-1.5 py-0.5 bg-[#f7f5f0] text-[#c8951e] text-[9px] font-medium rounded">
+              <span className="px-1.5 py-0.5 theme-tag text-[9px] font-medium rounded">
                 {getSourceTypeLabel(sourceType)}
               </span>
               {showSimilarity && (
-                <span className="text-[9px] text-[#c8951e] font-medium">
+                <span className="text-[9px] text-brand-gold font-medium">
                   {formatSimilarity(similarity)}
                 </span>
               )}
             </div>
-            <h3 className="text-sm font-medium text-[#2c2c2c] truncate mt-0.5 group-hover:text-[#c8951e] transition-colors">
+            <h3 className="text-sm font-medium text-text-primary truncate mt-0.5 group-hover:text-brand-gold transition-colors">
               {(data as GalleryItem | WikiItem | PostItem).title}
             </h3>
           </div>
@@ -140,14 +140,14 @@ export const MixedSearchResultCard = React.memo(
             className={clsx(CARD.imageFill, CARD.imageHoverZoom)}
           />
           <div className="absolute top-2 left-2">
-            <span className="px-2 py-0.5 bg-white/90 text-[#c8951e] text-[10px] font-medium rounded">
+            <span className="px-2 py-0.5 bg-surface/90 text-brand-gold text-[10px] font-medium rounded">
               <SourceIcon size={10} className="inline mr-0.5" />
               {getSourceTypeLabel(sourceType)}
             </span>
           </div>
           {showSimilarity && (
             <div className="absolute top-2 right-2">
-              <span className="px-2 py-0.5 bg-white/90 text-[#c8951e] text-[10px] font-medium rounded">
+              <span className="px-2 py-0.5 bg-surface/90 text-brand-gold text-[10px] font-medium rounded">
                 {formatSimilarity(similarity)}
               </span>
             </div>
@@ -157,12 +157,12 @@ export const MixedSearchResultCard = React.memo(
           <h3 className={clsx(CARD.title, "mb-1")}>
             {(data as GalleryItem | WikiItem | PostItem).title}
           </h3>
-          <p className="text-xs text-[#9e968e] line-clamp-1 flex-1 mt-1">
+          <p className="text-xs text-text-muted line-clamp-1 flex-1 mt-1">
             {sourceType === "gallery" && ((data as GalleryItem).description || "暂无描述")}
             {sourceType === "wiki" && (data as WikiItem).category}
             {sourceType === "post" && (data as PostItem).section}
           </p>
-          <div className="flex items-center mt-auto pt-2 text-[10px] text-[#9e968e]">
+          <div className="flex items-center mt-auto pt-2 text-[10px] text-text-muted">
             <Clock size={10} className="mr-1" />
             {toDateValue((data as GalleryItem | WikiItem | PostItem).updatedAt)
               ? format(toDateValue((data as GalleryItem | WikiItem | PostItem).updatedAt)!, "yyyy-MM-dd")

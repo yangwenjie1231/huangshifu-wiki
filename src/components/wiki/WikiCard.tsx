@@ -48,15 +48,15 @@ const WikiCard = React.memo(({ page, viewMode, cardHeight, onCopyLink }: WikiCar
 				to={`/wiki/${page.slug}`}
 				className={clsx(
 					viewMode === "list"
-						? clsx(CARD.wikiListLayout, "bg-white rounded border border-[#e0dcd3] hover:border-[#c8951e] transition-all")
-						: clsx(CARD.gridLayout, "bg-white p-6 rounded border border-[#e0dcd3] hover:border-[#c8951e] transition-all", cardHeight),
-					page.isPinned ? "border-l-[3px] border-l-[#c8951e]" : "",
+						? clsx(CARD.wikiListLayout, "bg-surface rounded border border-border hover:border-brand-gold transition-all")
+						: clsx(CARD.gridLayout, "bg-surface p-6 rounded border border-border hover:border-brand-gold transition-all", cardHeight),
+					page.isPinned ? "border-l-[3px] border-l-brand-gold" : "",
 				)}
 			>
 				{viewMode === "list" ? (
 					<>
-						<div className="w-16 h-16 bg-[#f0ece3] rounded flex items-center justify-center flex-shrink-0">
-							<Book size={24} className="text-[#c8951e]/60" />
+						<div className="w-16 h-16 bg-surface-alt rounded flex items-center justify-center flex-shrink-0">
+							<Book size={24} className="text-brand-gold/60" />
 						</div>
 						<div className="flex-1 min-w-0">
 							<div className="flex items-center gap-2 mb-1">
@@ -116,7 +116,7 @@ const WikiCard = React.memo(({ page, viewMode, cardHeight, onCopyLink }: WikiCar
 			<button
 				onClick={(event) => onCopyLink(event, page.slug)}
 				className={clsx(
-					"p-2 rounded border bg-white/90 text-[#9e968e] hover:text-[#c8951e] hover:border-[#c8951e] transition-all",
+					"p-2 rounded border bg-surface/90 text-text-muted hover:text-brand-gold hover:border-brand-gold transition-all",
 					viewMode === "list"
 						? "absolute top-4 right-4"
 						: "absolute bottom-4 right-4 opacity-0 group-hover:opacity-100",

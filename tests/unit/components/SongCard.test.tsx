@@ -128,12 +128,12 @@ describe('SongCard', () => {
     expect(screen.getByText('已选')).toBeInTheDocument();
   });
 
-  it('highlights current song with highlight background class', () => {
+  it('highlights current song with themed background class', () => {
     const { container } = renderWithRouter(
       <SongCard {...defaultProps} isCurrentSong={true} />
     );
     const row = container.firstElementChild;
-    expect(row?.className).toContain('bg-[#fdf5d8]');
+    expect(row?.className).toContain('bg-brand-gold/10');
   });
 
   it('shows delete button when isAdmin is true', () => {

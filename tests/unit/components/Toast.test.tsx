@@ -77,7 +77,7 @@ describe('Toast', () => {
 
     fireEvent.click(within(container).getByTestId('toast-trigger'));
     const toastBox = within(container).getByRole('status');
-    expect(toastBox.className).toContain('border-[#c8951e]');
+    expect(toastBox.className).toContain('border-brand-gold/40');
     expect(toastBox.className).not.toContain('red');
     unmount();
   });
@@ -103,8 +103,7 @@ describe('Toast', () => {
 
     fireEvent.click(within(container).getByTestId('error-trigger'));
     const toastBox = within(container).getByRole('status');
-    expect(toastBox.className).toContain('text-red-600');
-    expect(toastBox.className).toContain('border-red-200');
+    expect(toastBox.className).toContain('theme-status-error');
     unmount();
   });
 

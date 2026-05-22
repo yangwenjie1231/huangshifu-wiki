@@ -1,8 +1,7 @@
 import { Sun, Moon, Monitor } from 'lucide-react';
+import { clsx } from 'clsx';
 import { useUserPreferences } from '../context/UserPreferencesContext';
 import type { ThemeMode } from '../types/userPreferences';
-
-const THEME_CYCLE: ThemeMode[] = ['default', 'dark', 'system'];
 
 const THEME_LABELS: Record<ThemeMode, string> = {
   default: '浅色模式',
@@ -16,26 +15,52 @@ const THEME_ICONS: Record<ThemeMode, typeof Sun> = {
   system: Monitor,
 };
 
-export function ThemeToggle() {
-  const { preferences, setTheme } = useUserPreferences();
-  const currentTheme = preferences.theme ?? 'system';
-  const Icon = THEME_ICONS[currentTheme];
+const THEME_OPTIONS: ThemeMode[] = ['default', 'dark', 'system'];
 
-  const handleToggle = () => {
-    const currentIndex = THEME_CYCLE.indexOf(currentTheme);
-    const nextTheme = THEME_CYCLE[(currentIndex + 1) % THEME_CYCLE.length];
-    setTheme(nextTheme);
-  };
+interface ThemeToggleProps {
+  fullWidth?: boolean
+}
+
+export function ThemeToggle({ fullWidth = false }: ThemeToggleProps) {
+  const { preferences, setTheme, resolvedTheme } = useUserPreferences();
+  const currentTheme = preferences.theme ?? 'system';
 
   return (
-    <button
-      type="button"
-      onClick={handleToggle}
-      className="p-2 text-text-muted hover:text-brand-gold transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2 rounded"
-      aria-label={THEME_LABELS[currentTheme]}
-      title={THEME_LABELS[currentTheme]}
+    <div
+      className={clsx(
+        'inline-flex items-center rounded-lg border border-border bg-surface-alt p-1',
+        fullWidth && 'flex w-full'
+      )}
+      role="group"
+      aria-label="颜色模式"
     >
-      <Icon size={18} />
-    </button>
+      {THEME_OPTIONS.map((mode) => {
+        const Icon = THEME_ICONS[mode]
+        const isActive = currentTheme === mode
+        const resolvedLabel =
+          mode === 'system' ? `${THEME_LABELS[mode]}（当前${resolvedTheme === 'dark' ? '深色' : '浅色'}）` : THEME_LABELS[mode]
+
+        return (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => void setTheme(mode)}
+            className={clsx(
+              'inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md px-3 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2 cursor-pointer',
+              fullWidth && 'flex-1',
+              isActive
+                ? 'bg-surface text-text-primary shadow-sm'
+                : 'text-text-muted hover:text-brand-gold'
+            )}
+            aria-pressed={isActive}
+            aria-label={resolvedLabel}
+            title={resolvedLabel}
+          >
+            <Icon size={16} />
+            <span>{mode === 'default' ? '浅色' : mode === 'dark' ? '深色' : '系统'}</span>
+          </button>
+        )
+      })}
+    </div>
   );
 }

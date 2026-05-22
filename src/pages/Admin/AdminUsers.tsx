@@ -70,60 +70,60 @@ export const AdminUsers = () => {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-[#2c2c2c] tracking-[0.12em]">用户管理</h1>
-        <button onClick={fetchData} className="px-4 py-2 border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] rounded text-sm transition-all">
+        <h1 className="text-2xl font-bold text-text-primary tracking-[0.12em]">用户管理</h1>
+        <button onClick={fetchData} className="px-4 py-2 border border-border text-text-secondary hover:text-brand-gold hover:border-brand-gold rounded text-sm transition-all">
           <RefreshCw size={14} className="inline mr-1" /> 刷新
         </button>
       </div>
 
-      <div className="bg-white border border-[#e0dcd3] rounded overflow-hidden">
+      <div className="bg-surface border border-border rounded overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-[#f7f5f0] border-b border-[#e0dcd3]">
+              <tr className="bg-surface-alt border-b border-border">
                 {['用户', '角色', '状态', '操作'].map((col) => (
-                  <th key={col} className="px-5 py-3 text-[11px] font-semibold text-[#9e968e] uppercase tracking-wider">{col}</th>
+                  <th key={col} className="px-5 py-3 text-[11px] font-semibold text-text-muted uppercase tracking-wider">{col}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#f0ece3]">
+            <tbody className="divide-y divide-border">
               {loading ? (
                 [1, 2, 3].map((i) => (
                   <tr key={i} className="animate-pulse">
-                    <td colSpan={4} className="px-5 py-4"><div className="h-6 bg-[#f7f5f0] rounded" /></td>
+                    <td colSpan={4} className="px-5 py-4"><div className="h-6 bg-surface-alt rounded" /></td>
                   </tr>
                 ))
               ) : data.length > 0 ? (
                 data.map((item) => (
-                  <tr key={item.uid} className="hover:bg-[#f7f5f0] transition-colors group">
+                  <tr key={item.uid} className="hover:bg-surface-alt transition-colors group">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <SmartImage src={item.photoURL || DEFAULT_AVATAR} alt="" className="w-10 h-10 rounded-full object-cover bg-[#f7f5f0]" />
+                        <SmartImage src={item.photoURL || DEFAULT_AVATAR} alt="" className="w-10 h-10 rounded-full object-cover bg-surface-alt" />
                         <div>
-                          <p className="text-sm font-medium text-[#2c2c2c]">{item.displayName || item.uid}</p>
-                          <p className="text-xs text-[#9e968e]">{item.email}</p>
+                          <p className="text-sm font-medium text-text-primary">{item.displayName || item.uid}</p>
+                          <p className="text-xs text-text-muted">{item.email}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-5 py-4">
-                      <span className={clsx('px-2 py-0.5 rounded text-[10px] font-medium', item.role === 'super_admin' ? 'bg-purple-50 text-purple-600' : item.role === 'admin' ? 'bg-red-50 text-red-600' : 'bg-[#f7f5f0] text-[#c8951e]')}>
+                      <span className={clsx('px-2 py-0.5 rounded text-[10px] font-medium', item.role === 'super_admin' ? 'bg-brand-gold/15 text-brand-gold' : item.role === 'admin' ? 'theme-status-error' : 'bg-surface-alt text-brand-gold')}>
                         {item.role === 'super_admin' ? '超级管理员' : item.role || 'user'}
                       </span>
                     </td>
                     <td className="px-5 py-4">
-                      <span className={clsx('px-2 py-0.5 rounded text-[10px] font-medium', item.status === 'banned' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700')}>
+                      <span className={clsx('px-2 py-0.5 rounded text-[10px] font-medium', item.status === 'banned' ? 'theme-status-error' : 'theme-status-success')}>
                         {item.status === 'banned' ? '已封禁' : '正常'}
                       </span>
                     </td>
                     <td className="px-5 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         {isSuperAdmin && item.uid !== currentUser?.uid && (
-                          <button onClick={() => toggleRole(item)} className="p-1.5 text-[#c8951e] hover:bg-[#f7f5f0] rounded transition-all" title={item.role === 'admin' ? '取消管理员' : '设为管理员'}>
+                          <button onClick={() => toggleRole(item)} className="p-1.5 text-brand-gold hover:bg-surface-alt rounded transition-all" title={item.role === 'admin' ? '取消管理员' : '设为管理员'}>
                             {item.role === 'admin' ? <XCircle size={16} /> : <CheckCircle size={16} />}
                           </button>
                         )}
                         {item.uid !== currentUser?.uid && (
-                          <button onClick={() => toggleBan(item)} className={clsx('p-1.5 rounded transition-all', item.status === 'banned' ? 'text-green-600 hover:bg-green-50' : 'text-amber-600 hover:bg-amber-50')} title={item.status === 'banned' ? '解封' : '封禁'}>
+                          <button onClick={() => toggleBan(item)} className={clsx('p-1.5 rounded transition-all', item.status === 'banned' ? 'text-green-600 hover:bg-surface-alt' : 'text-amber-600 hover:bg-surface-alt')} title={item.status === 'banned' ? '解封' : '封禁'}>
                             {item.status === 'banned' ? <CheckCircle size={16} /> : <AlertTriangle size={16} />}
                           </button>
                         )}
@@ -134,7 +134,7 @@ export const AdminUsers = () => {
                               show('已删除', { variant: 'success' });
                             }).catch(() => show('删除失败', { variant: 'error' }));
                           }
-                        }} className="p-1.5 text-red-400 hover:bg-red-50 rounded transition-all" title="删除">
+                        }} className="p-1.5 text-red-400 hover:bg-surface-alt rounded transition-all" title="删除">
                           <Trash2 size={16} />
                         </button>
                       </div>
@@ -142,7 +142,7 @@ export const AdminUsers = () => {
                   </tr>
                 ))
               ) : (
-                <tr><td colSpan={4} className="px-5 py-16 text-center text-[#9e968e] italic">暂无数据</td></tr>
+                <tr><td colSpan={4} className="px-5 py-16 text-center text-text-muted italic">暂无数据</td></tr>
               )}
             </tbody>
           </table>

@@ -28,11 +28,11 @@ interface SearchResultCardProps {
 }
 
 const typeIconMap: Record<SearchResultType, React.ReactNode> = {
-  wiki: <Book size={24} className="text-[#c8951e]/40" />,
-  gallery: <ImageIcon size={24} className="text-[#c8951e]/40" />,
-  music: <Music size={24} className="text-[#c8951e]/40" />,
-  album: <Music size={24} className="text-[#c8951e]/40" />,
-  post: <MessageSquare size={24} className="text-[#c8951e]/40" />,
+  wiki: <Book size={24} className="text-brand-gold/40" />,
+  gallery: <ImageIcon size={24} className="text-brand-gold/40" />,
+  music: <Music size={24} className="text-brand-gold/40" />,
+  album: <Music size={24} className="text-brand-gold/40" />,
+  post: <MessageSquare size={24} className="text-brand-gold/40" />,
 };
 
 const MATCH_SOURCE_LABELS: Record<string, string> = {
@@ -42,9 +42,9 @@ const MATCH_SOURCE_LABELS: Record<string, string> = {
 }
 
 const MATCH_SOURCE_STYLES: Record<string, string> = {
-  keyword: 'bg-[#f0ece3] text-[#6b6560]',
+  keyword: 'bg-surface-alt text-text-secondary',
   semantic: 'bg-amber-50 text-amber-600',
-  hybrid: 'bg-[#f7f5f0] text-[#c8951e]',
+  hybrid: 'theme-tag',
 }
 
 export const SearchResultCard: React.FC<SearchResultCardProps> = React.memo(({ config, viewMode, cardHeight }) => {
@@ -97,7 +97,7 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = React.memo(({ c
               <p className={clsx(CARD.descMuted, "italic")}>{config.description}</p>
             )}
             {config.meta && (
-              <p className="text-[#9e968e]/70 text-[10px] mt-1 flex items-center gap-1">
+              <p className="text-text-muted/70 text-[10px] mt-1 flex items-center gap-1">
                 <Clock size={10} />
                 {config.meta}
               </p>
@@ -140,13 +140,13 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = React.memo(({ c
               </p>
             )}
             {config.subtitle && (
-              <p className="text-xs text-[#9e968e] truncate">{config.subtitle}</p>
+              <p className="text-xs text-text-muted truncate">{config.subtitle}</p>
             )}
             {config.description && !config.image && (
               <p className={clsx(CARD.descMuted, "mb-3 italic flex-1")}>{config.description}</p>
             )}
             {config.meta && (
-              <div className="flex items-center gap-1 text-[10px] text-[#9e968e] mt-auto">
+              <div className="flex items-center gap-1 text-[10px] text-text-muted mt-auto">
                 <Clock size={10} />
                 {config.meta}
               </div>

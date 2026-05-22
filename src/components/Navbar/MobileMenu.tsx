@@ -39,14 +39,14 @@ export const MobileMenu = ({
 					initial={{ opacity: 0, height: 0 }}
 					animate={{ opacity: 1, height: "auto" }}
 					exit={{ opacity: 0, height: 0 }}
-					className="md:hidden bg-white border-b border-[#e0dcd3] overflow-hidden"
+					className="md:hidden bg-surface border-b border-border overflow-hidden"
 				>
 					<div className="px-4 py-6 space-y-4">
 						<div className="grid grid-cols-2 gap-4">
 							<NavLink
 								to="/wiki"
 								onClick={onClose}
-								className="flex flex-col items-center gap-2 p-4 bg-[#f7f5f0] rounded text-[#c8951e]"
+								className="flex flex-col items-center gap-2 p-4 bg-surface-alt rounded text-brand-gold"
 							>
 								<Book size={24} />
 								<span className="text-xs font-bold">{t('nav.wiki')}</span>
@@ -54,7 +54,7 @@ export const MobileMenu = ({
 							<NavLink
 								to="/forum"
 								onClick={onClose}
-								className="flex flex-col items-center gap-2 p-4 bg-[#f7f5f0] rounded text-[#c8951e]"
+								className="flex flex-col items-center gap-2 p-4 bg-surface-alt rounded text-brand-gold"
 							>
 								<MessageSquare size={24} />
 								<span className="text-xs font-bold">{t('nav.forum')}</span>
@@ -62,7 +62,7 @@ export const MobileMenu = ({
 							<NavLink
 								to="/gallery"
 								onClick={onClose}
-								className="flex flex-col items-center gap-2 p-4 bg-[#f7f5f0] rounded text-[#c8951e]"
+								className="flex flex-col items-center gap-2 p-4 bg-surface-alt rounded text-brand-gold"
 							>
 								<ImageIcon size={24} />
 								<span className="text-xs font-bold">{t('nav.gallery')}</span>
@@ -70,18 +70,18 @@ export const MobileMenu = ({
 							<NavLink
 								to="/music"
 								onClick={onClose}
-								className="flex flex-col items-center gap-2 p-4 bg-[#f7f5f0] rounded text-[#c8951e]"
+								className="flex flex-col items-center gap-2 p-4 bg-surface-alt rounded text-brand-gold"
 							>
 								<Music size={24} />
 								<span className="text-xs font-bold">{t('nav.music')}</span>
 							</NavLink>
 						</div>
 
-						<div className="flex items-center justify-center pt-2">
-							<ThemeToggle />
+						<div className="pt-2">
+							<ThemeToggle fullWidth />
 						</div>
 
-						<div className="pt-4 border-t border-[#e0dcd3]">
+						<div className="pt-4 border-t border-border">
 							{user ? (
 								<div className="space-y-4">
 									{isBanned && (
@@ -98,22 +98,22 @@ export const MobileMenu = ({
 										<img
 											src={profile?.photoURL || user.photoURL || DEFAULT_AVATAR}
 											alt={user?.displayName + ' 头像' || ''}
-											className="w-10 h-10 rounded-full border border-[#e0dcd3]"
+											className="w-10 h-10 rounded-full border border-border"
 											referrerPolicy="no-referrer"
 											onError={handleAvatarError}
 										/>
 										<div>
-											<p className="font-bold text-[#2c2c2c]">
+											<p className="font-bold text-text-primary">
 												{profile?.displayName || user.displayName}
 											</p>
-											<p className="text-xs text-[#9e968e]">查看个人资料</p>
+											<p className="text-xs text-text-muted">查看个人资料</p>
 										</div>
 									</Link>
 									{isAdmin && (
 										<Link
 											to="/admin"
 											onClick={onClose}
-											className="flex items-center gap-3 p-3 bg-[#f7f5f0] rounded text-[#6b6560]"
+											className="flex items-center gap-3 p-3 bg-surface-alt rounded text-text-secondary"
 										>
 											<Shield size={20} />
 											<span className="text-sm font-medium">管理后台</span>
@@ -147,7 +147,7 @@ export const MobileMenu = ({
 										onClick={() => {
 											onOpenAuth("login");
 										}}
-										className="w-full flex items-center justify-center gap-2 py-4 bg-[#c8951e] text-white rounded font-bold"
+										className="w-full flex items-center justify-center gap-2 py-4 theme-button-primary rounded font-bold"
 									>
 										<LogIn size={20} />
 										账号登录

@@ -76,10 +76,10 @@ const TEXT_SEMANTIC_SOURCE_LABELS: Record<string, string> = {
 }
 
 const TEXT_SEMANTIC_SOURCE_ICONS: Record<string, React.ReactNode> = {
-  wiki: <Book size={12} className="text-[#c8951e]" />,
-  post: <MessageSquare size={12} className="text-[#c8951e]" />,
-  music: <Music size={12} className="text-[#c8951e]" />,
-  album: <Music size={12} className="text-[#c8951e]" />,
+  wiki: <Book size={12} className="text-brand-gold" />,
+  post: <MessageSquare size={12} className="text-brand-gold" />,
+  music: <Music size={12} className="text-brand-gold" />,
+  album: <Music size={12} className="text-brand-gold" />,
 }
 
 function getTextSemanticLink(result: TextSearchResult): string {
@@ -123,11 +123,12 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
   const hasFilters = filters.selectedTags.length > 0 || filters.dateRange.start || filters.dateRange.end;
   const mixedParentRef = useRef<HTMLDivElement>(null);
   const wikiParentRef = useRef<HTMLDivElement>(null);
+  const filteredMixedResults = isMixedSearch
+    ? mixedResults.filter((result) => activeTab === 'semantic' || result.sourceType === activeTab)
+    : [];
 
   const mixedVirtualizer = useVirtualizer({
-    count: isMixedSearch
-      ? mixedResults.filter((r) => activeTab === "semantic" || r.sourceType === activeTab).length
-      : 0,
+    count: filteredMixedResults.length,
     getScrollElement: () => mixedParentRef.current,
     overscan: 5,
     estimateSize: () => VIEW_MODE_CONFIG[viewMode].cardHeight === 'auto' ? 180 : parseInt(VIEW_MODE_CONFIG[viewMode].cardHeight as string, 10) || 200,
@@ -144,7 +145,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
     return (
       <div className="space-y-3 animate-pulse">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-24 bg-white border border-[#e0dcd3] rounded" />
+          <div key={i} className="h-24 theme-panel rounded" />
         ))}
       </div>
     );
@@ -152,9 +153,9 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
 
   if (!hasSearched && !hasFilters) {
     return (
-      <div className="bg-white border border-[#e0dcd3] rounded p-20 text-center">
-        <Tag size={48} className="mx-auto text-[#e0dcd3] mb-6" />
-        <p className="text-[#9e968e] italic">输入关键词、上传图片或使用高级筛选开始探索</p>
+      <div className="theme-panel rounded p-20 text-center">
+        <Tag size={48} className="mx-auto text-border mb-6" />
+        <p className="text-text-muted italic">输入关键词、上传图片或使用高级筛选开始探索</p>
       </div>
     );
   }
@@ -169,19 +170,19 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
 
   if (!isMixedSearch && totalResults === 0 && (textSemanticResults?.length ?? 0) === 0) {
     return (
-      <div className="bg-white border border-[#e0dcd3] rounded p-20 text-center">
-        <SearchIcon size={48} className="mx-auto text-[#e0dcd3] mb-6" />
-        <p className="text-[#9e968e] italic">未找到符合筛选条件的结果</p>
+      <div className="theme-panel rounded p-20 text-center">
+        <SearchIcon size={48} className="mx-auto text-border mb-6" />
+        <p className="text-text-muted italic">未找到符合筛选条件的结果</p>
       </div>
     );
   }
 
   if (isMixedSearch && mixedResults.length === 0) {
     return (
-      <div className="bg-white border border-[#e0dcd3] rounded p-20 text-center">
-        <Sparkles size={48} className="mx-auto text-[#e0dcd3] mb-6" />
-        <p className="text-[#9e968e] italic">未找到语义匹配的结果</p>
-        <p className="text-[#9e968e]/70 text-sm mt-2">尝试使用其他关键词或上传图片搜索</p>
+      <div className="theme-panel rounded p-20 text-center">
+        <Sparkles size={48} className="mx-auto text-border mb-6" />
+        <p className="text-text-muted italic">未找到语义匹配的结果</p>
+        <p className="text-text-muted/70 text-sm mt-2">尝试使用其他关键词或上传图片搜索</p>
       </div>
     );
   }
@@ -189,7 +190,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
   return (
     <div className="space-y-8">
       {/* Tab bar */}
-      <div className="flex items-end justify-between border-b border-[#e0dcd3] mb-5">
+      <div className="flex items-end justify-between border-b border-border mb-5">
         <div className="flex gap-5">
           {tabItems.map((tab) => (
             <button
@@ -198,22 +199,22 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
               className={clsx(
                 "text-[1.125rem] pb-2 relative tracking-[0.05em] transition-all cursor-pointer",
                 activeTab === tab.id
-                  ? "text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]"
-                  : "text-[#9e968e] hover:text-[#c8951e]"
+                  ? "text-brand-gold font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[var(--color-theme-accent)] after:rounded-[1px]"
+                  : "text-text-muted hover:text-brand-gold"
               )}
             >
               {tab.label}
-              <span className="text-[0.8125rem] text-[#9e968e] ml-1.5">{tab.count}</span>
+              <span className="text-[0.8125rem] text-text-muted ml-1.5">{tab.count}</span>
             </button>
           ))}
         </div>
-        <div className="pb-2 text-[0.8125rem] text-[#9e968e]">
+        <div className="pb-2 text-[0.8125rem] text-text-muted">
           {isMixedSearch ? `${mixedResults.length} 个结果` : `${totalResults} 个结果`}
         </div>
       </div>
 
       {state.searchMeta?.degraded && (
-        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-sm text-amber-700 dark:text-amber-300">
+        <div className="theme-status-warning-soft rounded-lg p-3 text-sm">
           语义搜索暂时不可用，已降级为关键词搜索
         </div>
       )}
@@ -239,10 +240,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                   }}
                 >
                   {mixedVirtualizer.getVirtualItems().map((virtualItem) => {
-                    const filtered = mixedResults.filter((r) =>
-                      activeTab === "semantic" ? true : r.sourceType === activeTab
-                    );
-                    const result = filtered[virtualItem.index];
+                    const result = filteredMixedResults[virtualItem.index];
                     if (!result) return null;
                     return (
                       <div
@@ -279,8 +277,8 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                   exit={{ opacity: 0, y: -12 }}
                   className="space-y-4"
                 >
-                  <h2 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-4 flex items-center gap-2">
-                    <FileText size={14} className="text-[#c8951e]" /> 语义匹配
+                  <h2 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-4 flex items-center gap-2">
+                    <FileText size={14} className="text-brand-gold" /> 语义匹配
                   </h2>
                   <div className="space-y-3">
                     {Object.entries(
@@ -292,30 +290,30 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                       }, {})
                     ).map(([sourceType, items]) => (
                       <div key={sourceType} className="space-y-2">
-                        <div className="flex items-center gap-1.5 text-xs text-[#9e968e] font-medium">
+                        <div className="flex items-center gap-1.5 text-xs text-text-muted font-medium">
                           {TEXT_SEMANTIC_SOURCE_ICONS[sourceType]}
                           {TEXT_SEMANTIC_SOURCE_LABELS[sourceType] || sourceType}
-                          <span className="text-[#9e968e]/60">({items.length})</span>
+                          <span className="text-text-muted/60">({items.length})</span>
                         </div>
                         {items.map((result) => (
                           <Link
                             key={`${result.sourceType}-${result.sourceId}`}
                             to={getTextSemanticLink(result)}
-                            className="block bg-white border border-[#e0dcd3] rounded p-4 hover:border-[#c8951e] transition-all group"
+                            className="block theme-panel rounded p-4 hover:border-brand-gold transition-all group"
                           >
                             <div className="flex items-center gap-2 mb-1.5">
-                              <span className="px-2 py-0.5 bg-[#f7f5f0] text-[#c8951e] text-[10px] font-medium rounded">
+                              <span className="px-2 py-0.5 theme-tag text-[10px] font-medium rounded">
                                 {TEXT_SEMANTIC_SOURCE_LABELS[result.sourceType] || result.sourceType}
                               </span>
-                              <span className="text-[10px] text-[#9e968e]">
+                              <span className="text-[10px] text-text-muted">
                                 相似度 {(result.score * 100).toFixed(1)}%
                               </span>
                             </div>
-                            <h3 className="text-sm font-semibold text-[#2c2c2c] group-hover:text-[#c8951e] transition-colors">
+                            <h3 className="text-sm font-semibold text-text-primary group-hover:text-brand-gold transition-colors">
                               {getTextSemanticTitle(result)}
                             </h3>
                             {result.chunkPreview && (
-                              <p className="text-xs text-[#9e968e] mt-1.5 line-clamp-2 leading-relaxed">
+                              <p className="text-xs text-text-muted mt-1.5 line-clamp-2 leading-relaxed">
                                 {result.chunkPreview}
                               </p>
                             )}
@@ -335,9 +333,9 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                   exit={{ opacity: 0, y: -12 }}
                   className="space-y-4"
                 >
-                  <h2 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-4 flex items-center gap-2">
-                    <Book size={14} className="text-[#c8951e]" /> 百科页面
-                    {results.wiki.length > 50 && <span className="text-xs text-[#9e968e] font-normal">（虚拟滚动已启用）</span>}
+                  <h2 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-4 flex items-center gap-2">
+                    <Book size={14} className="text-brand-gold" /> 百科页面
+                    {results.wiki.length > 50 && <span className="text-xs text-text-muted font-normal">（虚拟滚动已启用）</span>}
                   </h2>
                   {results.wiki.length > 30 ? (
                     <div
@@ -405,28 +403,28 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                   exit={{ opacity: 0, y: -12 }}
                   className="space-y-4"
                 >
-                  <h2 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-4 flex items-center gap-2">
-                    <MessageSquare size={14} className="text-[#c8951e]" /> 社区帖子
+                  <h2 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-4 flex items-center gap-2">
+                    <MessageSquare size={14} className="text-brand-gold" /> 社区帖子
                   </h2>
                   <div className="space-y-3">
                     {results.posts.map((post) => (
                       <Link
                         key={post.id}
                         to={`/forum/${post.id}`}
-                        className="block bg-white border border-[#e0dcd3] rounded p-4 hover:border-[#c8951e] transition-all group"
+                        className="block theme-panel rounded p-4 hover:border-brand-gold transition-all group"
                       >
                         <div className="flex items-center gap-2 mb-1.5">
-                          <span className="px-2 py-0.5 bg-[#f7f5f0] text-[#c8951e] text-[10px] font-medium rounded">
+                          <span className="px-2 py-0.5 theme-tag text-[10px] font-medium rounded">
                             {post.section}
                           </span>
-                          <span className="text-[10px] text-[#9e968e] flex items-center gap-1">
+                          <span className="text-[10px] text-text-muted flex items-center gap-1">
                             <Clock size={10} />
                             {toDateValue(post.updatedAt)
                               ? format(toDateValue(post.updatedAt)!, "yyyy-MM-dd")
                               : "刚刚"}
                           </span>
                         </div>
-                        <h3 className="text-sm font-semibold text-[#2c2c2c] group-hover:text-[#c8951e] transition-colors">
+                        <h3 className="text-sm font-semibold text-text-primary group-hover:text-brand-gold transition-colors">
                           {post.title}
                         </h3>
                       </Link>
@@ -443,8 +441,8 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                   exit={{ opacity: 0, y: -12 }}
                   className="space-y-4"
                 >
-                  <h2 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-4 flex items-center gap-2">
-                    <ImageIcon size={14} className="text-[#c8951e]" /> 图集馆
+                  <h2 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-4 flex items-center gap-2">
+                    <ImageIcon size={14} className="text-brand-gold" /> 图集馆
                   </h2>
                   <div
                     className={clsx(
@@ -473,8 +471,8 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                   exit={{ opacity: 0, y: -12 }}
                   className="space-y-4"
                 >
-                  <h2 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-4 flex items-center gap-2">
-                    <Music size={14} className="text-[#c8951e]" /> 音乐曲目
+                  <h2 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-4 flex items-center gap-2">
+                    <Music size={14} className="text-brand-gold" /> 音乐曲目
                   </h2>
                   <div
                     className={clsx(
@@ -503,8 +501,8 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
                   exit={{ opacity: 0, y: -12 }}
                   className="space-y-4"
                 >
-                  <h2 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-4 flex items-center gap-2">
-                    <Music size={14} className="text-[#c8951e]" /> 音乐专辑
+                  <h2 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-4 flex items-center gap-2">
+                    <Music size={14} className="text-brand-gold" /> 音乐专辑
                   </h2>
                   <div
                     className={clsx(

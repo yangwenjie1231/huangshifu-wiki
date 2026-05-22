@@ -55,7 +55,7 @@ const WikiMarkdown = ({ content }: { content: string }) => {
 								<Link
 									{...props}
 									to={href}
-									className="text-[#c8951e] font-bold hover:underline decoration-[#c8951e]/30 underline-offset-4"
+									className="text-brand-gold font-bold hover:underline decoration-brand-gold/30 underline-offset-4"
 								>
 									{children}
 								</Link>
@@ -68,7 +68,7 @@ const WikiMarkdown = ({ content }: { content: string }) => {
 							href={href}
 							target="_blank"
 							rel="noopener noreferrer"
-							className="text-[#c8951e] hover:underline"
+							className="text-brand-gold hover:underline"
 						>
 							{children}
 						</a>
@@ -76,26 +76,26 @@ const WikiMarkdown = ({ content }: { content: string }) => {
 				},
 				table: ({ children }) => (
 					<div className="overflow-x-auto my-8">
-						<table className="w-full border-collapse border border-gray-200 rounded overflow-hidden">
+						<table className="w-full border-collapse border border-border rounded overflow-hidden">
 							{children}
 						</table>
 					</div>
 				),
 				thead: ({ children }) => (
-					<thead className="bg-[#f7f5f0]/50 text-[#c8951e]">
+					<thead className="bg-surface-alt text-brand-gold">
 						{children}
 					</thead>
 				),
 				th: ({ children }) => (
-					<th className="border border-gray-200 px-4 py-3 text-left font-bold">
+					<th className="border border-border px-4 py-3 text-left font-bold">
 						{children}
 					</th>
 				),
 				td: ({ children }) => (
-					<td className="border border-gray-200 px-4 py-3">{children}</td>
+					<td className="border border-border px-4 py-3">{children}</td>
 				),
 				tr: ({ children }) => (
-					<tr className="hover:bg-[#f7f5f0] transition-colors">{children}</tr>
+					<tr className="hover:bg-surface-alt transition-colors">{children}</tr>
 				),
 			}}
 		>

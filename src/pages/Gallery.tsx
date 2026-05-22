@@ -68,13 +68,13 @@ const GalleryCard = React.memo(({ gallery, viewMode, isAdmin, deletingGalleryId,
       to={`/gallery/${gallery.id}`}
       className={clsx(
         viewMode === 'list'
-          ? 'flex gap-4 p-3 bg-white border border-[#e0dcd3] rounded overflow-hidden hover:border-[#c8951e] transition-all w-full'
-          : 'block bg-white border border-[#e0dcd3] rounded overflow-hidden hover:border-[#c8951e] transition-all'
+          ? 'flex gap-4 p-3 bg-surface border border-border rounded overflow-hidden hover:border-brand-gold transition-all w-full'
+          : 'block bg-surface border border-border rounded overflow-hidden hover:border-brand-gold transition-all'
       )}
     >
       {viewMode === 'list' ? (
         <>
-          <div className="w-20 h-20 bg-[#f7f5f0] rounded overflow-hidden flex-shrink-0">
+          <div className="w-20 h-20 bg-surface-alt rounded overflow-hidden flex-shrink-0">
             <SmartImage
               src={(Array.isArray(gallery.images) && gallery.images[0]?.url) || ''}
               alt={gallery.title}
@@ -83,15 +83,15 @@ const GalleryCard = React.memo(({ gallery, viewMode, isAdmin, deletingGalleryId,
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-sm font-medium text-[#2c2c2c] group-hover:text-[#c8951e] transition-colors truncate">{gallery.title}</h3>
-              <span className="px-1.5 py-0.5 bg-[#f7f5f0] text-[#9e968e] text-[10px] font-medium rounded flex-shrink-0">
+              <h3 className="text-sm font-medium text-text-primary group-hover:text-brand-gold transition-colors truncate">{gallery.title}</h3>
+              <span className="px-1.5 py-0.5 bg-surface-alt text-text-muted text-[10px] font-medium rounded flex-shrink-0">
                 {Array.isArray(gallery.images) ? gallery.images.length : 0} 张
               </span>
             </div>
-            <p className="text-[#9e968e] text-xs line-clamp-1">
+            <p className="text-text-muted text-xs line-clamp-1">
               {gallery.description || '暂无描述'}
             </p>
-            <div className="flex items-center gap-3 text-[#9e968e] text-[11px] mt-1">
+            <div className="flex items-center gap-3 text-text-muted text-[11px] mt-1">
               <span className="flex items-center gap-1"><Clock size={10} /> {toDateValue(gallery.createdAt) ? format(toDateValue(gallery.createdAt)!, 'yyyy-MM-dd') : '刚刚'}</span>
               <span className="flex items-center gap-1"><UserIcon size={10} /> {gallery.authorUid?.substring(0, 6)}</span>
             </div>
@@ -110,13 +110,13 @@ const GalleryCard = React.memo(({ gallery, viewMode, isAdmin, deletingGalleryId,
             </div>
           </div>
           <div className="p-3">
-            <h3 className="text-sm font-medium text-[#2c2c2c] mb-1 group-hover:text-[#c8951e] transition-colors truncate">{gallery.title}</h3>
+            <h3 className="text-sm font-medium text-text-primary mb-1 group-hover:text-brand-gold transition-colors truncate">{gallery.title}</h3>
             <div className="flex flex-wrap gap-1 mb-2">
               {gallery.tags?.slice(0, 3).map((tag: string) => (
-                <span key={tag} className="text-[10px] text-[#c8951e] bg-[#f7f5f0] px-1.5 py-0.5 rounded">{tag}</span>
+                <span key={tag} className="text-[10px] text-brand-gold bg-surface-alt px-1.5 py-0.5 rounded">{tag}</span>
               ))}
             </div>
-            <div className="flex items-center justify-between text-[#9e968e] text-[11px]">
+            <div className="flex items-center justify-between text-text-muted text-[11px]">
               <span className="flex items-center gap-1"><Clock size={10} /> {toDateValue(gallery.createdAt) ? format(toDateValue(gallery.createdAt)!, 'yyyy-MM-dd') : '刚刚'}</span>
               <span className="flex items-center gap-1"><UserIcon size={10} /> {gallery.authorUid?.substring(0, 6)}</span>
             </div>
@@ -128,7 +128,7 @@ const GalleryCard = React.memo(({ gallery, viewMode, isAdmin, deletingGalleryId,
       <button
         onClick={(event) => onRequestDelete(event, gallery)}
         disabled={deletingGalleryId === gallery.id}
-        className="absolute top-2 left-2 p-2.5 rounded bg-white/90 border border-[#e0dcd3] text-[#9e968e] hover:text-red-500 transition-all disabled:cursor-not-allowed disabled:opacity-60"
+        className="absolute top-2 left-2 p-2.5 rounded bg-surface/90 border border-border text-text-muted hover:text-red-500 transition-all disabled:cursor-not-allowed disabled:opacity-60"
         title="删除图集"
         aria-label="删除图集"
       >
@@ -138,7 +138,7 @@ const GalleryCard = React.memo(({ gallery, viewMode, isAdmin, deletingGalleryId,
     <button
       onClick={(event) => onCopyLink(event, gallery.id)}
       className={clsx(
-        'p-2.5 rounded bg-white/90 border border-[#e0dcd3] text-[#9e968e] hover:text-[#c8951e] transition-all',
+        'p-2.5 rounded bg-surface/90 border border-border text-text-muted hover:text-brand-gold transition-all',
         viewMode === 'list' ? 'absolute top-2 right-2' : 'absolute bottom-2 right-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100'
       )}
       title="复制内链"
@@ -262,9 +262,8 @@ const GalleryList = () => {
 
   return (
     <div
-      className="min-h-[calc(100vh-60px)]"
+      className="min-h-[calc(100vh-60px)] bg-bg-primary"
       style={{
-        backgroundColor: '#f7f5f0',
         fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif",
         lineHeight: 1.8,
       }}
@@ -273,13 +272,13 @@ const GalleryList = () => {
         {/* Header */}
         <header className="mb-7">
           <div className="flex items-end justify-between flex-wrap gap-3">
-            <h1 className="text-[1.75rem] font-bold text-[#2c2c2c] tracking-[0.12em]">图集馆</h1>
+            <h1 className="text-[1.75rem] font-bold text-text-primary tracking-[0.12em]">图集馆</h1>
             <div className="flex items-center gap-3">
               <ViewModeSelector value={viewMode} onChange={setViewMode} size="sm" />
               {user && !isBanned && (
                 <button
                   onClick={() => setIsUploadModalOpen(true)}
-                  className="px-5 py-2 bg-[#c8951e] text-white text-sm rounded hover:bg-[#dca828] active:scale-[0.98] transition-all flex items-center gap-2"
+                  className="px-5 py-2 theme-button-primary text-sm rounded active:scale-[0.98] transition-all flex items-center gap-2"
                 >
                   <Plus size={15} /> 上传图集
                 </button>
@@ -351,8 +350,8 @@ const GalleryList = () => {
             )}
           </>
         ) : (
-          <div className="py-20 text-center text-[#9e968e] italic tracking-[0.1em]">
-            <ImageIcon size={48} className="mx-auto text-[#e0dcd3] mb-6" />
+          <div className="py-20 text-center text-text-muted italic tracking-[0.1em]">
+            <ImageIcon size={48} className="mx-auto text-border mb-6" />
             暂无图集，快来上传吧！
           </div>
         )}
@@ -372,17 +371,17 @@ const GalleryList = () => {
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
-                className="bg-white rounded p-8 max-w-md w-full border border-[#e0dcd3]"
+                className="bg-surface rounded p-8 max-w-md w-full border border-border"
               >
-                <h3 className="text-xl font-semibold text-[#2c2c2c] mb-4 tracking-wide">确认删除</h3>
-                <p className="text-[#6b6560] mb-8 text-[0.9375rem]">
+                <h3 className="text-xl font-semibold text-text-primary mb-4 tracking-wide">确认删除</h3>
+                <p className="text-text-secondary mb-8 text-[0.9375rem]">
                   您确定要删除图集《{galleryToDelete.title}》吗？此操作无法撤销。
                 </p>
                 <div className="flex gap-4">
                   <button
                     onClick={() => setGalleryToDelete(null)}
                     disabled={Boolean(deletingGalleryId)}
-                    className="flex-1 px-6 py-3 bg-[#f0ece3] text-[#6b6560] rounded font-semibold hover:bg-[#e0dcd3] active:scale-[0.98] transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                    className="flex-1 px-6 py-3 bg-surface-alt text-text-secondary rounded font-semibold hover:bg-bg-tertiary active:scale-[0.98] transition-all disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     取消
                   </button>
@@ -633,40 +632,40 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
         initial={{ scale: 0.9, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.9, y: 20 }}
-        className="bg-white rounded w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col border border-[#e0dcd3]"
+        className="bg-surface rounded w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col border border-border"
       >
-        <div className="p-6 border-b border-[#e0dcd3] flex justify-between items-center">
-          <h2 className="text-[1.5rem] font-bold text-[#2c2c2c] tracking-[0.12em]">上传新图集</h2>
-          <button onClick={handleClose} className="p-2 text-[#9e968e] hover:text-red-500 transition-colors">
+        <div className="p-6 border-b border-border flex justify-between items-center">
+          <h2 className="text-[1.5rem] font-bold text-text-primary tracking-[0.12em]">上传新图集</h2>
+          <button onClick={handleClose} className="p-2 text-text-muted hover:text-red-500 transition-colors">
             <X size={24} />
           </button>
         </div>
 
         <div className="flex-grow overflow-y-auto p-6 space-y-6">
           <div className="space-y-2">
-            <label className="text-xs font-medium text-[#9e968e]">图集标题 <span className="text-red-500">*</span></label>
+            <label className="text-xs font-medium text-text-muted">图集标题 <span className="text-red-500">*</span></label>
             <input
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="例如：2024 Live 现场返图"
-              className="w-full px-4 py-3 bg-[#f7f5f0] border border-[#e0dcd3] rounded focus:outline-none focus:border-[#c8951e] text-base"
+              className="theme-input w-full px-4 py-3 rounded text-base"
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-xs font-medium text-[#9e968e]">标签 (逗号分隔)</label>
+              <label className="text-xs font-medium text-text-muted">标签 (逗号分隔)</label>
               <input
                 type="text"
                 value={tags}
                 onChange={e => setTags(e.target.value)}
                 placeholder="例如：Live, 绝色, 2024"
-                className="w-full px-4 py-3 bg-[#f7f5f0] border border-[#e0dcd3] rounded focus:outline-none focus:border-[#c8951e] text-base"
+                className="theme-input w-full px-4 py-3 rounded text-base"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-medium text-[#9e968e]">地点</label>
+              <label className="text-xs font-medium text-text-muted">地点</label>
               <LocationTagInput
                 value={locationName}
                 locationCode={locationCode}
@@ -683,13 +682,13 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-medium text-[#9e968e]">描述 (可选)</label>
+            <label className="text-xs font-medium text-text-muted">描述 (可选)</label>
             <textarea
               value={description}
               onChange={e => setDescription(e.target.value)}
               placeholder="简单介绍一下这个图集..."
               rows={3}
-              className="w-full px-4 py-3 bg-[#f7f5f0] border border-[#e0dcd3] rounded focus:outline-none focus:border-[#c8951e] resize-none text-base"
+              className="theme-input w-full px-4 py-3 rounded resize-none text-base"
             />
           </div>
 
@@ -697,10 +696,10 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
             <div className="flex flex-wrap gap-4">
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="flex-1 min-w-[160px] p-6 border-2 border-dashed border-[#e0dcd3] rounded hover:border-[#c8951e] hover:bg-[#f7f5f0] active:scale-[0.98] transition-all flex flex-col items-center justify-center gap-2 group"
+                className="flex-1 min-w-[160px] p-6 border-2 border-dashed border-border rounded hover:border-brand-gold hover:bg-surface-alt active:scale-[0.98] transition-all flex flex-col items-center justify-center gap-2 group"
               >
-                <Upload size={28} className="text-[#9e968e] group-hover:text-[#c8951e]" />
-                <span className="text-sm text-[#6b6560] group-hover:text-[#c8951e]">选择多张图片</span>
+                <Upload size={28} className="text-text-muted group-hover:text-brand-gold" />
+                <span className="text-sm text-text-secondary group-hover:text-brand-gold">选择多张图片</span>
                 <input
                   type="file"
                   multiple
@@ -713,10 +712,10 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
 
               <button
                 onClick={() => folderInputRef.current?.click()}
-                className="flex-1 min-w-[160px] p-6 border-2 border-dashed border-[#e0dcd3] rounded hover:border-[#c8951e] hover:bg-[#f7f5f0] active:scale-[0.98] transition-all flex flex-col items-center justify-center gap-2 group"
+                className="flex-1 min-w-[160px] p-6 border-2 border-dashed border-border rounded hover:border-brand-gold hover:bg-surface-alt active:scale-[0.98] transition-all flex flex-col items-center justify-center gap-2 group"
               >
-                <Folder size={28} className="text-[#9e968e] group-hover:text-[#c8951e]" />
-                <span className="text-sm text-[#6b6560] group-hover:text-[#c8951e]">上传整个文件夹</span>
+                <Folder size={28} className="text-text-muted group-hover:text-brand-gold" />
+                <span className="text-sm text-text-secondary group-hover:text-brand-gold">上传整个文件夹</span>
                 <input
                   type="file"
                   // @ts-ignore
@@ -731,7 +730,7 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
             </div>
 
             {files.length > 0 && (
-              <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 p-3 bg-[#f7f5f0] border border-[#e0dcd3] rounded">
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 p-3 bg-surface-alt border border-border rounded">
                 {files.map((item, i) => (
                   <div key={i} className="relative aspect-square rounded overflow-hidden group">
                     <img
@@ -752,12 +751,12 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
           </div>
         </div>
 
-        <div className="p-6 border-t border-[#e0dcd3] flex items-center justify-between">
+        <div className="p-6 border-t border-border flex items-center justify-between">
           <div className="flex-grow mr-6">
             {uploading && (
-              <div className="w-full h-2 bg-[#f0ece3] rounded overflow-hidden">
+              <div className="w-full h-2 bg-surface-alt rounded overflow-hidden">
                 <div
-                  className="h-full bg-[#c8951e] transition-all duration-300"
+                  className="h-full bg-[var(--color-theme-accent)] transition-all duration-300"
                   style={{ width: `${progress}%` }}
                 ></div>
               </div>
@@ -766,7 +765,7 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
           <button
             onClick={handleUpload}
             disabled={uploading || files.length === 0}
-            className="px-8 py-3 bg-[#c8951e] text-white rounded font-medium hover:bg-[#dca828] active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50"
+            className="px-8 py-3 theme-button-primary rounded font-medium active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50"
           >
             {uploading ? `上传中 ${progress}%` : '开始上传'}
           </button>

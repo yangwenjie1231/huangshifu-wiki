@@ -308,15 +308,15 @@ const WikiEditor = () => {
 
 	return (
 		<div className="max-w-5xl mx-auto px-4 py-12">
-			<div className="bg-white rounded p-8 sm:p-12 border border-[#e0dcd3]">
+			<div className="bg-surface rounded p-8 sm:p-12 border border-border">
 				<div className="flex justify-between items-center mb-12">
-					<h1 className="text-[1.75rem] font-bold text-[#2c2c2c] tracking-[0.12em]">
+					<h1 className="text-[1.75rem] font-bold text-text-primary tracking-[0.12em]">
 						{isNew ? "创建新百科" : "编辑百科"}
 					</h1>
 					<button
 						type="button"
 						onClick={() => navigate(-1)}
-						className="p-2 text-[#9e968e] hover:text-red-500"
+						className="p-2 text-text-muted hover:text-red-500"
 					>
 						<X size={24} />
 					</button>

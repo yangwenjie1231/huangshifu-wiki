@@ -49,7 +49,7 @@ const WikiPullRequestList = () => {
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<Link
 					to={slug ? `/wiki/${slug}/branches` : "/wiki"}
-					className="inline-flex items-center gap-2 text-sm text-[#9e968e] hover:text-[#c8951e] transition-colors"
+					className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-brand-gold transition-colors"
 				>
 					<ArrowLeft size={18} /> 返回
 				</Link>
@@ -61,8 +61,8 @@ const WikiPullRequestList = () => {
 							className={clsx(
 								"px-4 py-2 rounded text-xs font-bold",
 								status === item
-									? "bg-[#c8951e] text-white"
-									: "bg-[#f0ece3] text-[#9e968e] hover:bg-gray-200",
+									? "bg-[var(--color-theme-accent)] text-white"
+									: "bg-surface-alt text-text-muted hover:bg-bg-tertiary",
 							)}
 						>
 							{getPrStatusText(item)}
@@ -71,47 +71,47 @@ const WikiPullRequestList = () => {
 				</div>
 			</div>
 
-			<div className="bg-white rounded border border-[#e0dcd3] p-6 sm:p-8">
-				<h1 className="text-[1.5rem] font-bold text-[#2c2c2c] tracking-[0.12em] mb-4">
+			<div className="bg-surface rounded border border-border p-6 sm:p-8">
+				<h1 className="text-[1.5rem] font-bold text-text-primary tracking-[0.12em] mb-4">
 					PR 列表 {isAdmin ? "(管理员视角)" : "(我的 PR)"}
 				</h1>
 				{loading ? (
-					<p className="text-[#9e968e] italic">加载中...</p>
+					<p className="text-text-muted italic">加载中...</p>
 				) : items.length ? (
 					<div className="space-y-3">
 						{items.map((item) => (
 							<Link
 								key={item.id}
 								to={`/wiki/${item.pageSlug}/prs/${item.id}`}
-								className="block p-4 rounded border border-[#e0dcd3] hover:border-[#c8951e] hover:bg-[#f7f5f0]/20 transition-all"
+								className="block p-4 rounded border border-border hover:border-brand-gold hover:bg-surface-alt/20 transition-all"
 							>
 								<div className="flex flex-wrap items-center justify-between gap-3 mb-1">
-									<p className="font-bold text-[#2c2c2c]">{item.title}</p>
+									<p className="font-bold text-text-primary">{item.title}</p>
 									<span
 										className={clsx(
 											"px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider",
 											item.status === "open"
-												? "bg-amber-50 text-amber-700 border border-amber-200"
+												? "theme-status-warning"
 												: item.status === "merged"
-													? "bg-green-50 text-green-700 border border-green-200"
-													: "bg-red-50 text-red-700 border border-red-200",
+													? "theme-status-success"
+													: "theme-status-error",
 										)}
 									>
 										{getPrStatusText(item.status)}
 									</span>
 								</div>
-								<p className="text-xs text-[#9e968e]">
+								<p className="text-xs text-text-muted">
 									页面：{item.page?.title || item.pageSlug} · 发起人：
 									{item.createdByName}
 								</p>
-								<p className="text-xs text-[#9e968e] mt-1">
+								<p className="text-xs text-text-muted mt-1">
 									{formatDate(item.createdAt, "yyyy-MM-dd HH:mm:ss")}
 								</p>
 							</Link>
 						))}
 					</div>
 				) : (
-					<p className="text-[#9e968e] italic">当前筛选下暂无 PR</p>
+					<p className="text-text-muted italic">当前筛选下暂无 PR</p>
 				)}
 			</div>
 		</div>

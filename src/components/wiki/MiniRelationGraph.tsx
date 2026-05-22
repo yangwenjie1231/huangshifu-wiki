@@ -164,12 +164,12 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 	};
 
 	return (
-		<div className="relative rounded border border-[#e0dcd3] bg-[#faf9f6] overflow-hidden">
+		<div className="relative rounded border border-border bg-surface-alt overflow-hidden">
 			<div className="absolute top-3 right-3 z-10 flex gap-2">
 				<button
 					type="button"
 					onClick={handleZoomOut}
-					className="p-2 bg-white rounded transition-all text-[#6b6560] hover:text-[#c8951e]"
+					className="p-2 bg-surface rounded transition-all text-text-secondary hover:text-brand-gold"
 					title="缩小"
 				>
 					<ZoomOut size={16} />
@@ -177,7 +177,7 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 				<button
 					type="button"
 					onClick={handleZoomIn}
-					className="p-2 bg-white rounded transition-all text-[#6b6560] hover:text-[#c8951e]"
+					className="p-2 bg-surface rounded transition-all text-text-secondary hover:text-brand-gold"
 					title="放大"
 				>
 					<ZoomIn size={16} />
@@ -185,7 +185,7 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 				<button
 					type="button"
 					onClick={handleReset}
-					className="p-2 bg-white rounded transition-all text-[#6b6560] hover:text-[#c8951e]"
+					className="p-2 bg-surface rounded transition-all text-text-secondary hover:text-brand-gold"
 					title="重置"
 				>
 					<Maximize size={16} />
@@ -335,13 +335,13 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 							className="w-2 h-2 rounded-full"
 							style={{ backgroundColor: color }}
 						/>
-							<span className="text-[#6b6560]">{label}</span>
+							<span className="text-text-secondary">{label}</span>
 						</div>
 					);
 				})}
 			</div>
 
-			<div className="absolute bottom-3 right-3 z-10 px-3 py-2 bg-white/90 rounded text-[10px] text-[#6b6560]">
+			<div className="absolute bottom-3 right-3 z-10 px-3 py-2 bg-surface/90 rounded text-[10px] text-text-secondary">
 				<span className="font-bold">{nodes.length}</span> 个节点 ·{" "}
 				<span className="font-bold">{graph.edges.length}</span> 条关联
 			</div>

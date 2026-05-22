@@ -124,7 +124,7 @@ export const S3ImageUploader: React.FC<S3ImageUploaderProps> = ({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={`relative border-2 border-dashed rounded p-6 text-center cursor-pointer transition-all ${
-          isDragging ? 'border-[#c8951e] bg-[#fdf5d8]/20' : 'border-[#e0dcd3] hover:border-[#c8951e]'
+          isDragging ? 'border-brand-gold bg-brand-gold/10' : 'border-border hover:border-brand-gold'
         } ${uploading ? 'cursor-not-allowed opacity-60' : ''}`}
       >
         {previewUrl && !uploading && !error ? (
@@ -142,16 +142,16 @@ export const S3ImageUploader: React.FC<S3ImageUploaderProps> = ({
         ) : uploading ? (
           <div className="space-y-3">
             <div className="flex justify-center">
-              <div className="w-14 h-14 rounded bg-[#fdf5d8]/30 flex items-center justify-center">
-                <Upload size={28} className="text-[#c8951e] animate-pulse" />
+              <div className="w-14 h-14 rounded bg-brand-gold/10 flex items-center justify-center">
+                <Upload size={28} className="text-brand-gold animate-pulse" />
               </div>
             </div>
             <div>
-              <p className="text-sm text-[#6b6560]">上传中...</p>
-              <div className="w-full bg-[#e0dcd3] rounded h-1.5 mt-2">
-                <div className="bg-[#c8951e] h-1.5 rounded transition-all" style={{ width: `${progress}%` }} />
+              <p className="text-sm text-text-secondary">上传中...</p>
+              <div className="w-full bg-border rounded h-1.5 mt-2">
+                <div className="bg-[var(--color-theme-accent)] h-1.5 rounded transition-all" style={{ width: `${progress}%` }} />
               </div>
-              <p className="text-xs text-[#9e968e] mt-1">{progress}%</p>
+              <p className="text-xs text-text-muted mt-1">{progress}%</p>
             </div>
           </div>
         ) : error ? (
@@ -167,7 +167,7 @@ export const S3ImageUploader: React.FC<S3ImageUploaderProps> = ({
             </div>
             <button
               onClick={(e) => { e.stopPropagation(); handleRemove(); }}
-              className="text-sm text-[#c8951e] hover:underline"
+              className="text-sm text-brand-gold hover:underline"
             >
               <RefreshCw size={13} className="inline mr-1" />
               重新上传
@@ -176,15 +176,15 @@ export const S3ImageUploader: React.FC<S3ImageUploaderProps> = ({
         ) : (
           <div className="space-y-3">
             <div className="flex justify-center">
-              <div className="w-14 h-14 rounded bg-[#f7f5f0] flex items-center justify-center">
-                <ImageIcon size={28} className="text-[#9e968e]" />
+              <div className="w-14 h-14 rounded bg-surface-alt flex items-center justify-center">
+                <ImageIcon size={28} className="text-text-muted" />
               </div>
             </div>
             <div>
-              <p className="text-sm text-[#6b6560]">
-                拖拽图片到此处，或 <span className="text-[#c8951e] font-medium">点击选择</span>
+              <p className="text-sm text-text-secondary">
+                拖拽图片到此处，或 <span className="text-brand-gold font-medium">点击选择</span>
               </p>
-              <p className="text-xs text-[#9e968e] mt-1">
+              <p className="text-xs text-text-muted mt-1">
                 支持 {accept === 'image/*' ? '图片' : accept}，最大 {(maxSize / (1024 * 1024)).toFixed(0)}MB
               </p>
             </div>
@@ -205,9 +205,9 @@ export const S3ImageUploader: React.FC<S3ImageUploaderProps> = ({
             <span className="text-sm font-medium text-green-700">上传成功</span>
           </div>
           <div className="space-y-1">
-            <p className="text-xs text-[#9e968e] break-all">Key: {uploadedKey}</p>
+            <p className="text-xs text-text-muted break-all">Key: {uploadedKey}</p>
           </div>
-          <button onClick={handleRemove} className="mt-2 text-sm text-[#c8951e] hover:underline">
+          <button onClick={handleRemove} className="mt-2 text-sm text-brand-gold hover:underline">
             删除并重新上传
           </button>
         </div>

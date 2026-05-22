@@ -60,9 +60,9 @@ const SongCard = React.memo(function SongCard({
 			onClick={handleRowClick}
 			onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRowClick(); } }}
 			className={clsx(
-				"gufeng-song-item group flex items-center gap-4 py-4 px-1 border-b border-[#e0dcd3] transition-all cursor-pointer",
-				isCurrentSong && !isBatchMode && "bg-[#fdf5d8]/40",
-				isBatchMode && isSelected && "bg-[#fdf5d8]/60"
+				"gufeng-song-item group flex items-center gap-4 py-4 px-1 border-b border-border transition-all cursor-pointer",
+				isCurrentSong && !isBatchMode && "bg-brand-gold/10",
+				isBatchMode && isSelected && "bg-brand-gold/15"
 			)}
 			role="button"
 			tabIndex={0}
@@ -82,13 +82,13 @@ const SongCard = React.memo(function SongCard({
 			<div className="flex-1 min-w-0 pointer-events-none">
 				<p className={clsx(
 					"block text-[1.0625rem] font-semibold truncate tracking-[0.03em] transition-colors",
-					isCurrentSong ? "text-[#c8951e]" : "text-[#2c2c2c] group-hover:text-[#c8951e]"
+					isCurrentSong ? "text-brand-gold" : "text-text-primary group-hover:text-brand-gold"
 				)}>
 					{song.title}
 				</p>
-				<p className="text-[0.8125rem] text-[#9e968e] truncate mt-0.5 flex items-center gap-2 flex-wrap">
+				<p className="text-[0.8125rem] text-text-muted truncate mt-0.5 flex items-center gap-2 flex-wrap">
 					{song.artist}
-					<span className="w-[3px] h-[3px] bg-[#e0dcd3] rounded-full inline-block" />
+					<span className="w-[3px] h-[3px] bg-border rounded-full inline-block" />
 					{song.album}
 				</p>
 			</div>
@@ -101,8 +101,8 @@ const SongCard = React.memo(function SongCard({
 						className={clsx(
 							"px-3 py-1.5 rounded text-xs font-semibold transition-all",
 							isSelected
-								? "bg-[#c8951e] text-white"
-								: "bg-[#f0ece3] text-[#6b6560] hover:text-[#c8951e]"
+								? "bg-[var(--color-theme-accent)] text-white"
+								: "bg-surface-alt text-text-secondary hover:text-brand-gold"
 						)}
 					>
 						{isSelected ? t('music.selected') : t('music.select')}
@@ -113,7 +113,7 @@ const SongCard = React.memo(function SongCard({
 						<div className="hidden md:flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
 							<button
 							onClick={(e) => { e.stopPropagation(); onPlay(song); }}
-							className="p-2 rounded text-[#9e968e] hover:text-[#c8951e] transition-colors"
+							className="p-2 rounded text-text-muted hover:text-brand-gold transition-colors"
 							title={t('music.play')}
 							aria-label={`播放 ${song.title}`}
 						>
@@ -124,7 +124,7 @@ const SongCard = React.memo(function SongCard({
 								disabled={isFavoriting}
 								className={clsx(
 									"p-2 rounded transition-colors",
-									song.favoritedByMe ? "text-red-500" : "text-[#9e968e] hover:text-red-500"
+									song.favoritedByMe ? "text-red-500" : "text-text-muted hover:text-red-500"
 								)}
 								title={t('music.favorite')}
 							>
@@ -135,14 +135,14 @@ const SongCard = React.memo(function SongCard({
 								target="_blank"
 								rel="noopener noreferrer"
 								onClick={(e) => e.stopPropagation()}
-								className="p-2 text-[#9e968e] hover:text-[#c8951e] transition-colors"
+								className="p-2 text-text-muted hover:text-brand-gold transition-colors"
 								title={t('music.openOriginalLink')}
 							>
 								<ExternalLink size={15} />
 							</a>
 							<button
 								onClick={(event) => { event.stopPropagation(); onCopyLink(event, song); }}
-								className="p-2 text-[#9e968e] hover:text-[#c8951e] transition-colors"
+								className="p-2 text-text-muted hover:text-brand-gold transition-colors"
 								title={t('music.copyInternalLink')}
 							>
 								<Link2 size={15} />
@@ -151,7 +151,7 @@ const SongCard = React.memo(function SongCard({
 								onClick={(e) => { e.stopPropagation(); onShowPosts(song); }}
 								className={clsx(
 									"p-2 transition-colors",
-									isPostsSelected ? "text-[#c8951e]" : "text-[#9e968e] hover:text-[#c8951e]"
+									isPostsSelected ? "text-brand-gold" : "text-text-muted hover:text-brand-gold"
 								)}
 								title={t('music.viewPosts')}
 							>
@@ -160,7 +160,7 @@ const SongCard = React.memo(function SongCard({
 							{isAdmin && (
 								<button
 								onClick={(e) => { e.stopPropagation(); onDelete(song.docId); }}
-								className="p-2 text-[#9e968e] hover:text-red-500 transition-colors"
+								className="p-2 text-text-muted hover:text-red-500 transition-colors"
 								title={t('music.deleteSong')}
 								aria-label={`删除 ${song.title}`}
 							>
@@ -176,7 +176,7 @@ const SongCard = React.memo(function SongCard({
 								disabled={isFavoriting}
 								className={clsx(
 									"p-2 rounded transition-colors",
-									song.favoritedByMe ? "text-red-500" : "text-[#9e968e]"
+									song.favoritedByMe ? "text-red-500" : "text-text-muted"
 								)}
 							>
 								<Heart size={15} />

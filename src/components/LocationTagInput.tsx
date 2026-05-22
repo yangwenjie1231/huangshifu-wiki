@@ -153,16 +153,16 @@ export const LocationTagInput = ({
   if (value && !inputValue) {
     return (
       <div className="flex items-center gap-1.5">
-        <span className="px-2 py-0.5 bg-[#fdf5d8] text-[#c8951e] rounded text-[10px] font-medium flex items-center gap-1">
+        <span className="px-2 py-0.5 theme-tag rounded text-[10px] font-medium flex items-center gap-1">
           <MapPin size={11} />
           {value}
         </span>
         <button
           onClick={handleClear}
-          className="p-0.5 rounded hover:bg-[#f7f5f0] transition-colors"
+          className="p-0.5 rounded hover:bg-surface-alt transition-colors"
           type="button"
         >
-          <X size={11} className="text-[#9e968e]" />
+          <X size={11} className="text-text-muted" />
         </button>
       </div>
     );
@@ -172,7 +172,7 @@ export const LocationTagInput = ({
     <div className="relative">
       <div className="flex items-center gap-1">
         <div className="relative flex-1">
-          <MapPin size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#9e968e] pointer-events-none" />
+          <MapPin size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
           <input
             ref={inputRef}
             type="text"
@@ -182,53 +182,53 @@ export const LocationTagInput = ({
             onFocus={handleFocus}
             onBlur={handleBlur}
             placeholder="输入或选择地点..."
-            className="w-full pl-8 pr-8 py-1.5 text-sm rounded border border-[#e0dcd3] bg-[#f7f5f0] focus:border-[#c8951e] focus:outline-none text-[#2c2c2c]"
+            className="theme-input w-full pl-8 pr-8 py-1.5 text-sm rounded"
           />
           {loading && (
-            <Loader2 size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#9e968e] animate-spin" />
+            <Loader2 size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted animate-spin" />
           )}
           {!loading && inputValue && (
             <button
               onClick={handleClear}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-[#f7f5f0]"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-surface-alt"
               type="button"
             >
-              <X size={13} className="text-[#9e968e]" />
+              <X size={13} className="text-text-muted" />
             </button>
           )}
         </div>
         <button
           onClick={() => setMapPickerOpen(true)}
-          className="p-1.5 border border-[#e0dcd3] rounded hover:border-[#c8951e] hover:text-[#c8951e] transition-all"
+          className="p-1.5 border border-border rounded hover:border-brand-gold hover:text-brand-gold transition-all"
           type="button"
           title="在地图上选择"
         >
-          <MapPin size={15} className="text-[#9e968e]" />
+          <MapPin size={15} className="text-text-muted" />
         </button>
       </div>
 
       {showDropdown && suggestions.length > 0 && (
         <div
           ref={dropdownRef}
-          className="absolute top-full left-0 right-0 mt-1 bg-white rounded border border-[#e0dcd3] z-20 max-h-60 overflow-y-auto"
+          className="absolute top-full left-0 right-0 mt-1 bg-surface rounded border border-border z-20 max-h-60 overflow-y-auto"
         >
           {suggestions.map((region, index) => (
             <button
               key={region.code}
               type="button"
               onClick={() => handleSelect(region)}
-              className={`w-full px-3 py-2 text-left border-b border-[#e0dcd3] last:border-b-0 transition-colors ${
-                index === selectedIndex ? 'bg-[#f7f5f0]' : 'hover:bg-[#f7f5f0]'
+              className={`w-full px-3 py-2 text-left border-b border-border last:border-b-0 transition-colors ${
+                index === selectedIndex ? 'bg-surface-alt' : 'hover:bg-surface-alt'
               }`}
             >
               <div className="flex items-center gap-1.5">
-                <MapPin size={11} className="text-[#c8951e] flex-shrink-0" />
-                <span className="text-sm font-medium text-[#2c2c2c]">{region.name}</span>
-                <span className="text-[10px] text-[#9e968e] bg-[#f7f5f0] px-1 rounded">
+                <MapPin size={11} className="text-brand-gold flex-shrink-0" />
+                <span className="text-sm font-medium text-text-primary">{region.name}</span>
+                <span className="text-[10px] text-text-muted bg-surface-alt px-1 rounded">
                   {region.levelName}
                 </span>
               </div>
-              <div className="text-xs text-[#9e968e] mt-0.5 pl-[1.125rem]">
+              <div className="text-xs text-text-muted mt-0.5 pl-[1.125rem]">
                 {region.fullName}
               </div>
             </button>

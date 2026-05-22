@@ -142,7 +142,7 @@ export const CoverManager = ({
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="px-4 py-2 rounded border border-[#e0dcd3] text-sm text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all"
+        className="px-4 py-2 rounded theme-button-secondary text-sm transition-all"
       >
         封面管理
       </button>
@@ -151,25 +151,25 @@ export const CoverManager = ({
 
   return (
     <div className="fixed inset-0 z-[120] bg-black/40 p-4 flex items-center justify-center">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-hidden bg-white rounded border border-[#e0dcd3] flex flex-col">
-        <header className="px-5 py-4 border-b border-[#e0dcd3] flex items-center justify-between">
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-hidden bg-surface rounded border border-border flex flex-col">
+        <header className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div>
-            <h3 className="text-base font-bold text-[#2c2c2c]">{config.title}</h3>
-            <p className="text-xs text-[#9e968e] mt-0.5">{config.subtitle}</p>
+            <h3 className="text-base font-bold text-text-primary">{config.title}</h3>
+            <p className="text-xs text-text-muted mt-0.5">{config.subtitle}</p>
           </div>
           <button
             onClick={() => setIsOpen(false)}
-            className="p-1.5 rounded text-[#9e968e] hover:text-[#2c2c2c] hover:bg-[#f7f5f0] transition-colors"
+            className="p-1.5 rounded text-text-muted hover:text-text-primary hover:bg-surface-alt transition-colors"
           >
             <X size={18} />
           </button>
         </header>
 
         <div className="px-5 py-4 space-y-4 overflow-y-auto flex-1">
-          <div className="rounded border border-[#e0dcd3] bg-[#f7f5f0]/50 p-4">
+          <div className="rounded border border-border bg-surface-alt/60 p-4">
             <div className="flex items-center justify-between mb-4">
-              <span className="text-sm font-medium text-[#2c2c2c]">当前封面</span>
-              <div className="w-14 h-14 rounded overflow-hidden bg-[#f7f5f0] border border-[#e0dcd3]">
+              <span className="text-sm font-medium text-text-primary">当前封面</span>
+              <div className="w-14 h-14 rounded overflow-hidden bg-surface-alt border border-border">
                 <img src={currentCover} alt="封面" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               </div>
             </div>
@@ -180,14 +180,14 @@ export const CoverManager = ({
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
-                  className="flex-1 px-4 py-2.5 rounded bg-[#c8951e] text-white font-medium hover:bg-[#dca828] disabled:opacity-50 inline-flex items-center justify-center gap-2 text-sm transition-all"
+                  className="flex-1 px-4 py-2.5 rounded theme-button-primary font-medium disabled:opacity-50 inline-flex items-center justify-center gap-2 text-sm transition-all"
                 >
                   {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                   {uploading ? '上传中...' : '上传新封面'}
                 </button>
                 <button
                   onClick={handleSyncToSongsInternal}
-                  className="px-4 py-2.5 rounded border border-[#e0dcd3] text-[#6b6560] text-sm hover:border-[#c8951e] hover:text-[#c8951e] transition-all"
+                  className="px-4 py-2.5 rounded theme-button-secondary text-sm transition-all"
                 >
                   同步到歌曲
                 </button>
@@ -196,7 +196,7 @@ export const CoverManager = ({
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
-                className="w-full px-4 py-2.5 rounded bg-[#c8951e] text-white font-medium hover:bg-[#dca828] disabled:opacity-50 inline-flex items-center justify-center gap-2 text-sm transition-all"
+                className="w-full px-4 py-2.5 rounded theme-button-primary font-medium disabled:opacity-50 inline-flex items-center justify-center gap-2 text-sm transition-all"
               >
                 {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                 {uploading ? '上传中...' : '上传新封面'}
@@ -206,25 +206,25 @@ export const CoverManager = ({
 
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 size={22} className="animate-spin text-[#c8951e]" />
+              <Loader2 size={22} className="animate-spin text-brand-gold" />
             </div>
           ) : covers.length > 0 ? (
             <div className="space-y-3">
-              <span className="text-sm font-medium text-[#2c2c2c]">已上传的封面 ({covers.length})</span>
+              <span className="text-sm font-medium text-text-primary">已上传的封面 ({covers.length})</span>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {covers.map((cover) => (
                   <div
                     key={cover.id}
                     className={clsx(
                       'relative rounded overflow-hidden border transition-all',
-                      cover.isDefault ? 'border-[#c8951e] ring-1 ring-[#c8951e]/20' : 'border-[#e0dcd3]',
+                      cover.isDefault ? 'border-brand-gold ring-1 ring-brand-gold/20' : 'border-border',
                     )}
                   >
                     <div className="aspect-square">
                       <img src={cover.url} alt="封面" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     </div>
                     {cover.isDefault && (
-                      <div className="absolute top-2 left-2 px-1.5 py-0.5 bg-[#c8951e] text-white text-[10px] font-medium rounded flex items-center gap-1">
+                      <div className="absolute top-2 left-2 px-1.5 py-0.5 bg-[var(--color-theme-accent)] text-white text-[10px] font-medium rounded flex items-center gap-1">
                         <Star size={10} /> 默认
                       </div>
                     )}
@@ -233,7 +233,7 @@ export const CoverManager = ({
                         <button
                           onClick={() => handleSetDefault(cover.id)}
                           disabled={settingDefault === cover.id}
-                          className="p-1.5 bg-white rounded text-[#6b6560] hover:text-[#c8951e] transition-colors disabled:opacity-50"
+                          className="p-1.5 bg-surface rounded text-text-secondary hover:text-brand-gold transition-colors disabled:opacity-50"
                           title="设为默认"
                         >
                           {settingDefault === cover.id ? (
@@ -261,14 +261,14 @@ export const CoverManager = ({
               </div>
             </div>
           ) : (
-            <div className="text-center py-8 text-[#9e968e] text-sm">暂无额外封面</div>
+            <div className="text-center py-8 text-text-muted text-sm">暂无额外封面</div>
           )}
         </div>
 
-        <footer className="px-5 py-3 border-t border-[#e0dcd3] bg-[#f7f5f0]/50 flex justify-end">
+        <footer className="px-5 py-3 border-t border-border bg-surface-alt/60 flex justify-end">
           <button
             onClick={() => setIsOpen(false)}
-            className="px-4 py-2 rounded border border-[#e0dcd3] text-[#6b6560] text-sm hover:border-[#c8951e] hover:text-[#c8951e] transition-all"
+            className="px-4 py-2 rounded theme-button-secondary text-sm transition-all"
           >
             关闭
           </button>

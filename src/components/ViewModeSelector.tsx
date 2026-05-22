@@ -22,7 +22,7 @@ export const ViewModeSelector: React.FC<ViewModeSelectorProps> = ({ value, onCha
 
   return (
     <div className={clsx(
-      'inline-flex border border-[#e0dcd3] bg-white rounded p-0.5',
+      'inline-flex border border-border bg-surface rounded p-0.5',
       size === 'sm' ? 'gap-0.5' : 'gap-1'
     )}>
       {modes.map((mode) => {
@@ -36,8 +36,8 @@ export const ViewModeSelector: React.FC<ViewModeSelectorProps> = ({ value, onCha
               'rounded transition-all inline-flex items-center gap-1.5 font-medium',
               size === 'sm' ? 'px-2.5 py-1.5 text-xs' : 'px-3 py-1.5 text-sm',
               value === mode
-                ? 'bg-[#c8951e] text-white'
-                : 'text-[#9e968e] hover:text-[#6b6560]'
+                ? 'bg-[var(--color-theme-accent)] text-white'
+                : 'text-text-muted hover:text-text-secondary'
             )}
             title={config.label}
           >

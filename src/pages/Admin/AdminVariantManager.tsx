@@ -154,13 +154,13 @@ export const AdminVariantManager: React.FC = () => {
     return (
       <div className="space-y-5">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-[#2c2c2c] tracking-[0.12em]">变体管理</h1>
+          <h1 className="text-2xl font-bold text-text-primary tracking-[0.12em]">变体管理</h1>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white border border-[#e0dcd3] rounded p-5 animate-pulse">
-              <div className="h-4 bg-[#f0ece3] rounded w-16 mb-3" />
-              <div className="h-8 bg-[#f0ece3] rounded w-20" />
+            <div key={i} className="bg-surface border border-border rounded p-5 animate-pulse">
+              <div className="h-4 bg-bg-tertiary rounded w-16 mb-3" />
+              <div className="h-8 bg-bg-tertiary rounded w-20" />
             </div>
           ))}
         </div>
@@ -172,20 +172,20 @@ export const AdminVariantManager: React.FC = () => {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Image size={24} className="text-[#c8951e]" />
-          <h1 className="text-2xl font-bold text-[#2c2c2c] tracking-[0.12em]">变体管理</h1>
+          <Image size={24} className="text-brand-gold" />
+          <h1 className="text-2xl font-bold text-text-primary tracking-[0.12em]">变体管理</h1>
         </div>
         <button
           onClick={fetchStats}
           disabled={loading}
-          className="inline-flex items-center gap-2 px-4 py-2 border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] rounded transition-all disabled:opacity-50"
+          className="inline-flex items-center gap-2 px-4 py-2 border border-border text-text-secondary hover:text-brand-gold hover:border-brand-gold rounded transition-all disabled:opacity-50"
         >
           <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> 刷新
         </button>
       </div>
 
       {error && (
-        <div className="flex items-start gap-3 p-3 rounded bg-red-50 border border-red-200">
+        <div className="flex items-start gap-3 p-3 rounded theme-status-error">
           <XCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
           <p className="text-sm text-red-600 flex-1">{error}</p>
           <button onClick={() => setError(null)} className="p-1 text-red-400 hover:text-red-600">
@@ -195,27 +195,27 @@ export const AdminVariantManager: React.FC = () => {
       )}
 
       {variantStats && (
-        <div className="bg-white border border-[#e0dcd3] rounded p-5">
+        <div className="bg-surface border border-border rounded p-5">
           <div className="flex items-center gap-2 mb-4">
-            <BarChart3 size={16} className="text-[#9e968e]" />
-            <h3 className="text-sm font-semibold text-[#6b6560]">生成队列</h3>
-            <span className="px-2 py-0.5 bg-green-50 text-green-700 text-[10px] font-medium rounded border border-green-200">运行中</span>
+            <BarChart3 size={16} className="text-text-muted" />
+            <h3 className="text-sm font-semibold text-text-secondary">生成队列</h3>
+            <span className="px-2 py-0.5 theme-status-success text-[10px] font-medium rounded border border-border">运行中</span>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
-              { label: '等待处理', value: variantStats.queueLength, icon: Clock, color: 'text-[#2c2c2c]' },
-              { label: '正在处理', value: variantStats.processingCount, icon: Loader2, color: 'text-[#c8951e]' },
+              { label: '等待处理', value: variantStats.queueLength, icon: Clock, color: 'text-text-primary' },
+              { label: '正在处理', value: variantStats.processingCount, icon: Loader2, color: 'text-brand-gold' },
               { label: '今日完成', value: variantStats.completedToday, icon: CheckCircle, color: 'text-green-600' },
               { label: '今日失败', value: variantStats.failedToday, icon: XCircle, color: 'text-red-500' },
               { label: '超时次数', value: variantStats.timeoutCount, icon: AlertTriangle, color: 'text-amber-500' },
-              { label: '平均耗时', value: `${variantStats.averageProcessingTime}ms`, icon: Clock, color: 'text-[#6b6560]' },
+              { label: '平均耗时', value: `${variantStats.averageProcessingTime}ms`, icon: Clock, color: 'text-text-secondary' },
             ].map((item) => {
               const Icon = item.icon;
               return (
-                <div key={item.label} className="bg-[#f7f5f0] rounded p-3">
+                <div key={item.label} className="bg-surface-alt rounded p-3">
                   <div className="flex items-center gap-1.5 mb-1">
-                    <Icon size={12} className="text-[#9e968e]" />
-                    <span className="text-[11px] text-[#9e968e]">{item.label}</span>
+                    <Icon size={12} className="text-text-muted" />
+                    <span className="text-[11px] text-text-muted">{item.label}</span>
                   </div>
                   <p className={`text-lg font-bold ${item.color}`}>{item.value}</p>
                 </div>
@@ -226,34 +226,34 @@ export const AdminVariantManager: React.FC = () => {
       )}
 
       {cleanupStats && (
-        <div className="bg-white border border-[#e0dcd3] rounded p-5">
+        <div className="bg-surface border border-border rounded p-5">
           <div className="flex items-center gap-2 mb-4">
-            <Image size={16} className="text-[#9e968e]" />
-            <h3 className="text-sm font-semibold text-[#6b6560]">变体统计</h3>
+            <Image size={16} className="text-text-muted" />
+            <h3 className="text-sm font-semibold text-text-secondary">变体统计</h3>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {[
               { label: '总图片数', value: cleanupStats.totalImages },
-              { label: '已完成', value: cleanupStats.completedVariants, badge: 'bg-green-50 text-green-700' },
-              { label: '失败数', value: cleanupStats.failedVariants, badge: 'bg-red-50 text-red-600' },
-              { label: '待处理', value: cleanupStats.pendingOrProcessing, badge: 'bg-amber-50 text-amber-700' },
-              { label: '孤儿目录', value: cleanupStats.estimatedOrphanedDirectories, badge: 'bg-[#fdf5d8] text-[#c8951e]' },
+              { label: '已完成', value: cleanupStats.completedVariants, badge: 'theme-status-success' },
+              { label: '失败数', value: cleanupStats.failedVariants, badge: 'theme-status-error' },
+              { label: '待处理', value: cleanupStats.pendingOrProcessing, badge: 'theme-status-warning' },
+              { label: '孤儿目录', value: cleanupStats.estimatedOrphanedDirectories, badge: 'bg-brand-gold/10 text-brand-gold' },
             ].map((item) => (
-              <div key={item.label} className="bg-[#f7f5f0] rounded p-3">
-                <span className="text-[11px] text-[#9e968e]">{item.label}</span>
-                <p className={`text-lg font-bold ${item.badge ?? 'text-[#2c2c2c]'}`}>{item.value}</p>
+              <div key={item.label} className="bg-surface-alt rounded p-3">
+                <span className="text-[11px] text-text-muted">{item.label}</span>
+                <p className={`text-lg font-bold ${item.badge ?? 'text-text-primary'}`}>{item.value}</p>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      <div className="bg-white border border-[#e0dcd3] rounded p-5">
+      <div className="bg-surface border border-border rounded p-5">
         <div className="flex items-center gap-2 mb-4">
-          <Zap size={16} className="text-[#c8951e]" />
-          <h3 className="text-sm font-semibold text-[#6b6560]">批量变体重建</h3>
+          <Zap size={16} className="text-brand-gold" />
+          <h3 className="text-sm font-semibold text-text-secondary">批量变体重建</h3>
         </div>
-        <p className="text-xs text-[#9e968e] mb-4">为历史图片补全或重新生成 WebP 变体</p>
+        <p className="text-xs text-text-muted mb-4">为历史图片补全或重新生成 WebP 变体</p>
 
         <div className="flex flex-wrap gap-2 mb-4">
           {scopeOptions.map((opt) => (
@@ -263,8 +263,8 @@ export const AdminVariantManager: React.FC = () => {
               className={clsx(
                 'px-3 py-1.5 rounded text-xs font-medium transition-all',
                 rebuildScope === opt.value
-                  ? 'bg-[#c8951e] text-white'
-                  : 'bg-[#f7f5f0] text-[#6b6560] hover:bg-[#f0ece3] hover:text-[#c8951e]'
+                  ? 'bg-brand-gold-dark text-white'
+                  : 'bg-surface-alt text-text-secondary hover:bg-bg-tertiary hover:text-brand-gold'
               )}
             >
               {opt.label}
@@ -272,84 +272,84 @@ export const AdminVariantManager: React.FC = () => {
           ))}
         </div>
 
-        <p className="text-xs text-[#9e968e] mb-4">
+        <p className="text-xs text-text-muted mb-4">
           {scopeOptions.find((o) => o.value === rebuildScope)?.desc}
         </p>
 
         <button
           onClick={() => handleRebuildVariants(rebuildScope)}
           disabled={rebuilding}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-[#c8951e] text-white rounded text-sm font-medium hover:bg-[#dca828] transition-all disabled:opacity-50"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-brand-gold-dark text-white rounded text-sm font-medium hover:bg-brand-gold transition-all disabled:opacity-50"
         >
           {rebuilding ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
           {rebuilding ? '正在处理...' : `开始重建`}
         </button>
 
         {rebuildResult && (
-          <div className="mt-4 p-3 rounded bg-green-50 border border-green-200">
+          <div className="mt-4 p-3 rounded theme-status-success">
             <div className="flex items-center gap-2 mb-2">
               <CheckCircle size={16} className="text-green-500" />
               <p className="text-sm font-medium text-green-600">重建任务已提交</p>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-              <div><span className="text-[#9e968e]">扫描总数</span><p className="font-medium text-[#2c2c2c]">{rebuildResult.summary?.totalScanned ?? 0}</p></div>
-              <div><span className="text-[#9e968e]">入队数量</span><p className="font-medium text-[#2c2c2c]">{rebuildResult.summary?.queuedForRebuild ?? 0}</p></div>
-              <div><span className="text-[#9e968e]">跳过数量</span><p className="font-medium text-[#2c2c2c]">{rebuildResult.summary?.skipped ?? 0}</p></div>
-              <div><span className="text-[#9e968e]">错误数量</span><p className={`font-medium ${(rebuildResult.summary?.errors ?? 0) > 0 ? 'text-red-600' : 'text-[#2c2c2c]'}`}>{rebuildResult.summary?.errors ?? 0}</p></div>
+              <div><span className="text-text-muted">扫描总数</span><p className="font-medium text-text-primary">{rebuildResult.summary?.totalScanned ?? 0}</p></div>
+              <div><span className="text-text-muted">入队数量</span><p className="font-medium text-text-primary">{rebuildResult.summary?.queuedForRebuild ?? 0}</p></div>
+              <div><span className="text-text-muted">跳过数量</span><p className="font-medium text-text-primary">{rebuildResult.summary?.skipped ?? 0}</p></div>
+              <div><span className="text-text-muted">错误数量</span><p className={`font-medium ${(rebuildResult.summary?.errors ?? 0) > 0 ? 'text-red-600' : 'text-text-primary'}`}>{rebuildResult.summary?.errors ?? 0}</p></div>
             </div>
           </div>
         )}
       </div>
 
-      <div className="bg-white border border-[#e0dcd3] rounded p-5">
+      <div className="bg-surface border border-border rounded p-5">
         <div className="flex items-center gap-2 mb-4">
-          <Trash2 size={16} className="text-[#9e968e]" />
-          <h3 className="text-sm font-semibold text-[#6b6560]">变体清理</h3>
+          <Trash2 size={16} className="text-text-muted" />
+          <h3 className="text-sm font-semibold text-text-secondary">变体清理</h3>
         </div>
-        <p className="text-xs text-[#9e968e] mb-4">清理无效或多余的变体文件以释放磁盘空间</p>
+        <p className="text-xs text-text-muted mb-4">清理无效或多余的变体文件以释放磁盘空间</p>
 
         <div className="flex flex-wrap gap-3">
           <button
             onClick={handleCleanupOrphaned}
             disabled={cleaning}
-            className="inline-flex items-center gap-2 px-4 py-2 border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] rounded text-sm transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-4 py-2 border border-border text-text-secondary hover:text-brand-gold hover:border-brand-gold rounded text-sm transition-all disabled:opacity-50"
           >
             <Trash2 size={14} /> 清理孤儿文件
           </button>
           <button
             onClick={handleCleanupFailed}
             disabled={cleaning}
-            className="inline-flex items-center gap-2 px-4 py-2 border border-red-200 bg-red-50 text-red-600 text-sm font-medium hover:bg-red-100 transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-4 py-2 border border-border theme-status-error text-sm font-medium hover:opacity-90 transition-all disabled:opacity-50"
           >
             <XCircle size={14} /> 清理失败残留
           </button>
           <button
             onClick={handleCleanupAll}
             disabled={cleaning}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#c8951e] text-white rounded text-sm font-medium hover:bg-[#dca828] transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-brand-gold-dark text-white rounded text-sm font-medium hover:bg-brand-gold transition-all disabled:opacity-50"
           >
             <RotateCcw size={14} /> 全量清理
           </button>
         </div>
 
         {cleaning && (
-          <div className="mt-4 flex items-center gap-2 text-sm text-[#9e968e]">
+          <div className="mt-4 flex items-center gap-2 text-sm text-text-muted">
             <Loader2 size={14} className="animate-spin" />
             <span>正在清理，请稍候...</span>
           </div>
         )}
 
         {cleanupResult && (
-          <div className="mt-4 p-3 rounded bg-[#fdf5d8] border border-[#e0dcd3]">
+          <div className="mt-4 p-3 rounded bg-brand-gold/10 border border-border">
             <div className="flex items-center gap-2 mb-2">
-              <CheckCircle size={16} className="text-[#c8951e]" />
-              <p className="text-sm font-medium text-[#2c2c2c]">清理完成</p>
-              <span className="px-2 py-0.5 bg-[#f7f5f0] text-[#c8951e] text-[10px] font-medium rounded">{cleanupResult.type}</span>
+              <CheckCircle size={16} className="text-brand-gold" />
+              <p className="text-sm font-medium text-text-primary">清理完成</p>
+              <span className="px-2 py-0.5 bg-surface-alt text-brand-gold text-[10px] font-medium rounded">{cleanupResult.type}</span>
             </div>
             <div className="grid grid-cols-3 gap-3 text-sm">
-              <div><span className="text-[#9e968e]">释放空间</span><p className="font-medium text-green-600">{formatBytes(cleanupResult.freedSpace)}</p></div>
-              <div><span className="text-[#9e968e]">删除文件</span><p className="font-medium text-[#2c2c2c]">{cleanupResult.deletedCount}</p></div>
-              <div><span className="text-[#9e968e]">错误数量</span><p className={`font-medium ${cleanupResult.errorsCount > 0 ? 'text-red-600' : 'text-[#2c2c2c]'}`}>{cleanupResult.errorsCount}</p></div>
+              <div><span className="text-text-muted">释放空间</span><p className="font-medium text-green-600">{formatBytes(cleanupResult.freedSpace)}</p></div>
+              <div><span className="text-text-muted">删除文件</span><p className="font-medium text-text-primary">{cleanupResult.deletedCount}</p></div>
+              <div><span className="text-text-muted">错误数量</span><p className={`font-medium ${cleanupResult.errorsCount > 0 ? 'text-red-600' : 'text-text-primary'}`}>{cleanupResult.errorsCount}</p></div>
             </div>
           </div>
         )}

@@ -45,7 +45,7 @@ const WikiEditorForm = React.memo(({
 		<>
 			<div className="grid grid-cols-1 md:grid-cols-3 gap-8">
 				<div className="space-y-2">
-					<label htmlFor="wiki-title" className="text-xs font-medium text-[#9e968e]">
+					<label htmlFor="wiki-title" className="text-xs font-medium text-text-muted">
 						标题
 					</label>
 					<input
@@ -57,11 +57,11 @@ const WikiEditorForm = React.memo(({
 							onFormDataChange({ title: e.target.value })
 						}
 						placeholder="例如：黄诗扶"
-						className="w-full px-4 py-3 bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:outline-none focus:border-[#c8951e] font-serif text-base"
+						className="theme-input w-full px-4 py-3 rounded font-serif text-base"
 					/>
 				</div>
 				<div className="space-y-2">
-					<label htmlFor="wiki-category" className="text-xs font-medium text-[#9e968e]">
+					<label htmlFor="wiki-category" className="text-xs font-medium text-text-muted">
 						分类
 					</label>
 					<select
@@ -70,7 +70,7 @@ const WikiEditorForm = React.memo(({
 						onChange={(e) =>
 							onFormDataChange({ category: e.target.value })
 						}
-						className="w-full px-4 py-3 bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:outline-none focus:border-[#c8951e] font-serif text-base appearance-none"
+						className="theme-input w-full px-4 py-3 rounded font-serif text-base appearance-none"
 					>
 						<option value="biography">人物介绍</option>
 						<option value="music">音乐作品</option>
@@ -80,7 +80,7 @@ const WikiEditorForm = React.memo(({
 					</select>
 				</div>
 				<div className="space-y-2">
-					<label htmlFor="wiki-event-date" className="text-xs font-medium text-[#9e968e]">
+					<label htmlFor="wiki-event-date" className="text-xs font-medium text-text-muted">
 						事件日期 (可选)
 					</label>
 					<input
@@ -90,14 +90,14 @@ const WikiEditorForm = React.memo(({
 						onChange={(e) =>
 							onFormDataChange({ eventDate: e.target.value })
 						}
-						className="w-full px-4 py-3 bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:outline-none focus:border-[#c8951e] font-serif text-base"
+						className="theme-input w-full px-4 py-3 rounded font-serif text-base"
 					/>
 				</div>
 			</div>
 
 			<div className="space-y-2">
 				<div className="flex justify-between items-center">
-					<label htmlFor="wiki-content" className="text-xs font-medium text-[#9e968e]">
+					<label htmlFor="wiki-content" className="text-xs font-medium text-text-muted">
 						内容 (Markdown) <span className="text-red-500">*</span>
 					</label>
 					<button
@@ -108,7 +108,7 @@ const WikiEditorForm = React.memo(({
 							await onGenerateIntro();
 						}}
 						disabled={generating}
-						className="text-xs font-medium text-[#c8951e] flex items-center gap-1 hover:underline disabled:opacity-50"
+						className="text-xs font-medium text-brand-gold flex items-center gap-1 hover:underline disabled:opacity-50"
 					>
 						<Sparkles size={12} />{" "}
 						{generating ? "生成中..." : "AI 辅助写开头"}
@@ -116,7 +116,7 @@ const WikiEditorForm = React.memo(({
 				</div>
 				<div
 					id="wiki-content"
-					className="border border-[#e0dcd3] rounded overflow-hidden"
+					className="border border-border rounded overflow-hidden"
 				>
 					<MarkdownEditor
 						value={formData.content}
@@ -136,7 +136,7 @@ const WikiEditorForm = React.memo(({
 			</div>
 
 			<div className="space-y-2">
-				<label htmlFor="wiki-tags" className="text-xs font-medium text-[#9e968e]">
+				<label htmlFor="wiki-tags" className="text-xs font-medium text-text-muted">
 					标签 (逗号分隔)
 				</label>
 				<input
@@ -147,12 +147,12 @@ const WikiEditorForm = React.memo(({
 						onFormDataChange({ tags: e.target.value })
 					}
 					placeholder="例如：古风, 原创, 歌手"
-					className="w-full px-4 py-3 bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:outline-none focus:border-[#c8951e]"
+					className="theme-input w-full px-4 py-3 rounded"
 				/>
 			</div>
 
 			<div className="space-y-2">
-				<label className="text-xs font-medium text-[#9e968e]">
+				<label className="text-xs font-medium text-text-muted">
 					地点
 				</label>
 				<LocationTagInput

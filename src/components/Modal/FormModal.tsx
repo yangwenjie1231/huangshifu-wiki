@@ -83,12 +83,12 @@ export const FormModal = ({
 				{children}
 			</div>
 
-			<footer className="px-5 py-3 border-t border-[#e0dcd3] bg-[#f7f5f0]/50 flex justify-end gap-3 pb-safe">
+			<footer className="px-5 py-3 border-t border-border bg-surface-alt/60 flex justify-end gap-3 pb-safe">
 				<button
 					type="button"
 					onClick={onClose}
 					disabled={loading}
-					className="px-4 py-2 rounded border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e] transition-all disabled:opacity-50 text-sm"
+					className="px-4 py-2 rounded theme-button-secondary transition-all disabled:opacity-50 text-sm"
 				>
 					{cancelText}
 				</button>
@@ -96,7 +96,7 @@ export const FormModal = ({
 					<button
 						type="submit"
 						disabled={loading}
-						className="px-5 py-2 rounded bg-[#c8951e] text-white font-medium hover:bg-[#dca828] transition-all disabled:opacity-50 inline-flex items-center gap-2 text-sm"
+						className="px-5 py-2 rounded theme-button-primary font-medium transition-all disabled:opacity-50 inline-flex items-center gap-2 text-sm"
 					>
 						{loading && <Loader2 size={16} className="animate-spin" />}
 						{loading ? "提交中..." : submitText}
@@ -122,7 +122,7 @@ export const FormModal = ({
 						animate={{ opacity: 1, scale: 1, y: 0 }}
 						exit={{ opacity: 0, scale: 0.95, y: 8 }}
 						className={clsx(
-							"w-full bg-white rounded border border-[#e0dcd3] flex flex-col max-h-[90vh]",
+							"w-full bg-surface rounded border border-border flex flex-col max-h-[90vh]",
 							maxWidth,
 						)}
 						onClick={(e) => e.stopPropagation()}
@@ -130,20 +130,20 @@ export const FormModal = ({
 						aria-labelledby="form-modal-title"
 						aria-describedby={subtitle ? "form-modal-subtitle" : undefined}
 					>
-						<header className="px-5 py-4 border-b border-[#e0dcd3] flex items-center justify-between">
+						<header className="px-5 py-4 border-b border-border flex items-center justify-between">
 							<div>
-								<h3 id="form-modal-title" className="text-base font-bold text-[#2c2c2c]">
+								<h3 id="form-modal-title" className="text-base font-bold text-text-primary">
 									{title}
 								</h3>
 								{subtitle && (
-									<p className="text-xs text-[#9e968e] mt-0.5" id="form-modal-subtitle">{subtitle}</p>
+									<p className="text-xs text-text-muted mt-0.5" id="form-modal-subtitle">{subtitle}</p>
 								)}
 							</div>
 							<button
 								ref={closeButtonRef}
 								type="button"
 								onClick={onClose}
-								className="p-1.5 rounded text-[#9e968e] hover:text-[#2c2c2c] hover:bg-[#f7f5f0] transition-colors"
+								className="p-1.5 rounded text-text-muted hover:text-text-primary hover:bg-surface-alt transition-colors"
 								aria-label="关闭"
 							>
 								<X size={18} />

@@ -112,17 +112,17 @@ export const MatchSuggestionModal = ({
 
   return (
     <div className="fixed inset-0 z-[130] bg-black/40 p-4 flex items-center justify-center">
-      <div className="w-full max-w-lg max-h-[90vh] overflow-hidden bg-white rounded border border-[#e0dcd3] flex flex-col">
-        <header className="px-5 py-4 border-b border-[#e0dcd3] flex items-center justify-between">
+      <div className="w-full max-w-lg max-h-[90vh] overflow-hidden bg-surface rounded border border-border flex flex-col">
+        <header className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div>
-            <h3 className="text-base font-bold text-[#2c2c2c]">搜索匹配歌曲</h3>
-            <p className="text-xs text-[#9e968e] mt-0.5">
+            <h3 className="text-base font-bold text-text-primary">搜索匹配歌曲</h3>
+            <p className="text-xs text-text-muted mt-0.5">
               在{platformLabels[targetPlatform]}搜索：{title} - {artist}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded text-[#9e968e] hover:text-[#2c2c2c] hover:bg-[#f7f5f0] transition-colors"
+            className="p-1.5 rounded text-text-muted hover:text-text-primary hover:bg-surface-alt transition-colors"
           >
             <X size={18} />
           </button>
@@ -131,8 +131,8 @@ export const MatchSuggestionModal = ({
         <div className="px-5 py-4 space-y-3 overflow-y-auto flex-1">
           {loading && (
             <div className="flex items-center justify-center py-12">
-              <Loader2 size={28} className="animate-spin text-[#c8951e]" />
-              <span className="ml-3 text-sm text-[#6b6560]">搜索中...</span>
+              <Loader2 size={28} className="animate-spin text-brand-gold" />
+              <span className="ml-3 text-sm text-text-secondary">搜索中...</span>
             </div>
           )}
 
@@ -151,16 +151,16 @@ export const MatchSuggestionModal = ({
                   onClick={() => setSelectedIndex(index)}
                   className={`w-full text-left p-3 rounded border transition-all ${
                     selectedIndex === index
-                      ? 'border-[#c8951e] bg-[#fdf5d8]/30'
-                      : 'border-[#e0dcd3] hover:border-[#c8951e] hover:bg-[#f7f5f0]'
+                      ? 'border-brand-gold bg-brand-gold/10'
+                      : 'border-border hover:border-brand-gold hover:bg-surface-alt'
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <div
                       className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
                         selectedIndex === index
-                          ? 'border-[#c8951e] bg-[#c8951e]'
-                          : 'border-[#e0dcd3]'
+                          ? 'border-brand-gold bg-brand-gold'
+                          : 'border-border'
                       }`}
                     >
                       {selectedIndex === index && <Check size={12} className="text-white" />}
@@ -168,12 +168,12 @@ export const MatchSuggestionModal = ({
                     <img
                       src={suggestion.cover}
                       alt=""
-                      className="w-11 h-11 rounded object-cover shrink-0 border border-[#e0dcd3]"
+                      className="w-11 h-11 rounded object-cover shrink-0 border border-border"
                       referrerPolicy="no-referrer"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-[#2c2c2c] truncate">{suggestion.title}</p>
-                      <p className="text-xs text-[#9e968e] truncate">{suggestion.artist} · {suggestion.album}</p>
+                      <p className="text-sm font-medium text-text-primary truncate">{suggestion.title}</p>
+                      <p className="text-xs text-text-muted truncate">{suggestion.artist} · {suggestion.album}</p>
                       <div className="flex items-center gap-2 mt-1">
                         <span
                           className={`text-[10px] px-1.5 py-0.5 rounded ${
@@ -181,7 +181,7 @@ export const MatchSuggestionModal = ({
                               ? 'bg-green-50 text-green-700'
                               : suggestion.score >= 60
                               ? 'bg-amber-50 text-amber-700'
-                              : 'bg-[#f7f5f0] text-[#9e968e]'
+                              : 'bg-surface-alt text-text-muted'
                           }`}
                         >
                           匹配度 {suggestion.score}%
@@ -192,7 +192,7 @@ export const MatchSuggestionModal = ({
                           </span>
                         )}
                         {suggestion.isAutoSelected && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#fdf5d8] text-[#c8951e]">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded theme-tag">
                             推荐
                           </span>
                         )}
@@ -203,7 +203,7 @@ export const MatchSuggestionModal = ({
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
-                      className="p-1.5 text-[#9e968e] hover:text-[#c8951e] transition-colors shrink-0"
+                      className="p-1.5 text-text-muted hover:text-brand-gold transition-colors shrink-0"
                     >
                       <ExternalLink size={15} />
                     </a>
@@ -214,33 +214,33 @@ export const MatchSuggestionModal = ({
           )}
 
           {searched && suggestions.length === 0 && !loading && !error && (
-            <div className="text-center py-12 text-[#9e968e]">
+            <div className="text-center py-12 text-text-muted">
               <Search size={40} className="mx-auto mb-3 opacity-40" />
               <p className="text-sm">未找到匹配歌曲</p>
             </div>
           )}
 
           {existingPlatformId && (
-            <div className="p-3 rounded bg-[#f7f5f0] border border-[#e0dcd3]">
-              <p className="text-xs text-[#9e968e]">
-                该平台已有ID: <span className="font-mono font-medium text-[#2c2c2c]">{existingPlatformId}</span>
+            <div className="p-3 rounded bg-surface-alt border border-border">
+              <p className="text-xs text-text-muted">
+                该平台已有ID: <span className="font-mono font-medium text-text-primary">{existingPlatformId}</span>
               </p>
             </div>
           )}
         </div>
 
-        <footer className="px-5 py-3 border-t border-[#e0dcd3] bg-[#f7f5f0]/50 flex justify-end gap-3 pb-safe">
+        <footer className="px-5 py-3 border-t border-border bg-surface-alt/60 flex justify-end gap-3 pb-safe">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e] transition-all text-sm"
+            className="px-4 py-2 rounded theme-button-secondary transition-all text-sm"
           >
             取消
           </button>
           <button
             onClick={handleConfirm}
             disabled={selectedIndex === null || loading}
-            className="px-5 py-2 rounded bg-[#c8951e] text-white font-medium hover:bg-[#dca828] disabled:opacity-50 inline-flex items-center gap-2 text-sm transition-all"
+            className="px-5 py-2 rounded theme-button-primary font-medium disabled:opacity-50 inline-flex items-center gap-2 text-sm transition-all"
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : null}
             {loading ? '处理中...' : '确认'}

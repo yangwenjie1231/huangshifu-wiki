@@ -64,10 +64,10 @@ class ErrorBoundaryInner extends Component<ErrorBoundaryProps, ErrorBoundaryStat
                 />
               </svg>
             </div>
-            <h2 className="text-lg font-semibold text-[#2c2c2c] mb-2">
+            <h2 className="text-lg font-semibold text-text-primary mb-2">
               页面出错了
             </h2>
-            <p className="text-sm text-[#9e968e] mb-6">
+            <p className="text-sm text-text-muted mb-6">
               抱歉，页面遇到了一些问题。请尝试刷新页面或返回首页。
             </p>
             {this.state.error && (
@@ -78,13 +78,13 @@ class ErrorBoundaryInner extends Component<ErrorBoundaryProps, ErrorBoundaryStat
             <div className="flex gap-3 justify-center">
               <button
                 onClick={this.handleReset}
-                className="px-4 py-2 bg-[#c8951e] text-white text-sm rounded hover:bg-[#dca828] transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-[#c8951e] focus-visible:ring-offset-2"
+                className="px-4 py-2 theme-button-primary text-sm rounded transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2"
               >
                 重试
               </button>
               <a
                 href="/"
-                className="px-4 py-2 bg-[#f0ece3] text-[#6b6560] text-sm rounded hover:bg-[#e0dcd3] transition-colors inline-block no-underline focus-visible:ring-2 focus-visible:ring-[#c8951e] focus-visible:ring-offset-2"
+                className="px-4 py-2 bg-surface-alt text-text-secondary text-sm rounded hover:bg-bg-tertiary transition-colors inline-block no-underline focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2"
               >
                 返回首页
               </a>

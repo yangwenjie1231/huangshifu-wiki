@@ -54,13 +54,13 @@ export const AdminDashboard = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#2c2c2c] tracking-[0.12em]">仪表盘</h1>
-          <p className="text-sm text-[#9e968e] mt-1">总内容量：{total}</p>
+          <h1 className="text-2xl font-bold text-text-primary tracking-[0.12em]">仪表盘</h1>
+          <p className="text-sm text-text-muted mt-1">总内容量：{total}</p>
         </div>
         <button
           onClick={() => fetchStats(true)}
           disabled={refreshing}
-          className="inline-flex items-center gap-2 px-4 py-2 border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] rounded transition-all disabled:opacity-50"
+          className="inline-flex items-center gap-2 px-4 py-2 border border-border text-text-secondary hover:text-brand-gold hover:border-brand-gold rounded transition-all disabled:opacity-50"
         >
           <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} /> 刷新
         </button>
@@ -69,9 +69,9 @@ export const AdminDashboard = () => {
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {cards.map((c) => (
-            <div key={c.key} className="bg-white border border-[#e0dcd3] rounded p-5 animate-pulse">
-              <div className="h-4 bg-[#f0ece3] rounded w-16 mb-3" />
-              <div className="h-8 bg-[#f0ece3] rounded w-20" />
+            <div key={c.key} className="bg-surface border border-border rounded p-5 animate-pulse">
+              <div className="h-4 bg-bg-tertiary rounded w-16 mb-3" />
+              <div className="h-8 bg-bg-tertiary rounded w-20" />
             </div>
           ))}
         </div>
@@ -83,13 +83,13 @@ export const AdminDashboard = () => {
               <Link
                 key={c.key}
                 to={c.path}
-                className="bg-white border border-[#e0dcd3] rounded p-5 hover:border-[#c8951e] transition-all group"
+                className="bg-surface border border-border rounded p-5 hover:border-brand-gold transition-all group"
               >
                 <div className="flex items-center gap-2 mb-3">
-                  <Icon size={16} className="text-[#9e968e] group-hover:text-[#c8951e] transition-colors" />
-                  <span className="text-sm text-[#9e968e] group-hover:text-[#c8951e] transition-colors">{c.label}</span>
+                  <Icon size={16} className="text-text-muted group-hover:text-brand-gold transition-colors" />
+                  <span className="text-sm text-text-muted group-hover:text-brand-gold transition-colors">{c.label}</span>
                 </div>
-                <p className="text-2xl font-bold text-[#2c2c2c]">{stats[c.key] ?? 0}</p>
+                <p className="text-2xl font-bold text-text-primary">{stats[c.key] ?? 0}</p>
               </Link>
             );
           })}

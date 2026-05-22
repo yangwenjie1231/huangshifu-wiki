@@ -491,10 +491,10 @@ const GalleryDetail = () => {
   if (loading) {
     return (
       <div
-        className="min-h-[calc(100vh-60px)] antique-page"
+        className="min-h-[calc(100vh-60px)] antique-page bg-bg-primary"
       >
         <div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
-          <div className="h-48 bg-[#f0ece3] rounded animate-pulse" />
+          <div className="h-48 bg-surface-alt rounded animate-pulse" />
         </div>
       </div>
     );
@@ -503,13 +503,13 @@ const GalleryDetail = () => {
   if (!gallery) {
     return (
       <div
-        className="min-h-[calc(100vh-60px)] antique-page"
+        className="min-h-[calc(100vh-60px)] antique-page bg-bg-primary"
       >
         <div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
-          <Link to="/gallery" className="inline-flex items-center gap-2 text-sm text-[var(--color-text-antique-muted)] hover:text-[var(--color-accent-antique)] transition-colors">
+          <Link to="/gallery" className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-brand-gold transition-colors">
             <ArrowLeft size={16} /> {t('gallery.backToList')}
           </Link>
-          <div className="mt-6 bg-white rounded border border-[#e0dcd3] p-10 text-center text-[var(--color-text-antique-muted)] italic tracking-[0.1em]">
+          <div className="mt-6 bg-surface rounded border border-border p-10 text-center text-text-muted italic tracking-[0.1em]">
             {t('gallery.notFound')}
           </div>
         </div>
@@ -519,9 +519,8 @@ const GalleryDetail = () => {
 
   return (
     <div
-      className="min-h-[calc(100vh-60px)]"
+      className="min-h-[calc(100vh-60px)] bg-bg-primary"
       style={{
-        backgroundColor: '#f7f5f0',
         fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif",
         lineHeight: 1.8,
       }}
@@ -531,10 +530,10 @@ const GalleryDetail = () => {
       onDrop={handlePageDrop}
     >
       {editing && canManage && pageDragDepth > 0 ? (
-        <div className="pointer-events-none fixed inset-0 z-20 flex items-center justify-center bg-[#f7f5f0]/80 px-4">
-          <div className="w-full max-w-3xl rounded border-2 border-dashed border-[#c8951e] bg-white/95 px-8 py-12 text-center">
-            <p className="text-lg font-bold text-[#2c2c2c]">{t('gallery.dropToUpload')}</p>
-            <p className="mt-2 text-sm text-[#9e968e]">{t('gallery.dropHint')}</p>
+        <div className="pointer-events-none fixed inset-0 z-20 flex items-center justify-center bg-bg-primary/80 px-4">
+          <div className="w-full max-w-3xl rounded border-2 border-dashed border-brand-gold bg-surface/95 px-8 py-12 text-center">
+            <p className="text-lg font-bold text-text-primary">{t('gallery.dropToUpload')}</p>
+            <p className="mt-2 text-sm text-text-muted">{t('gallery.dropHint')}</p>
           </div>
         </div>
       ) : null}
@@ -542,7 +541,7 @@ const GalleryDetail = () => {
       <div className="max-w-[1100px] mx-auto px-6 py-8 pb-32 gallery-detail-page">
         {/* Breadcrumb + Actions */}
         <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
-          <Link to="/gallery" className="inline-flex items-center gap-2 text-sm text-[#9e968e] hover:text-[#c8951e] transition-colors">
+          <Link to="/gallery" className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-brand-gold transition-colors">
             <ArrowLeft size={16} /> {t('gallery.backToList')}
           </Link>
           {canManage && (
@@ -552,14 +551,14 @@ const GalleryDetail = () => {
                   <button
                     onClick={handleSaveMeta}
                     disabled={saving || uploading}
-                    className="px-4 py-2 text-[0.9375rem] rounded bg-[#c8951e] text-white hover:bg-[#dca828] transition-all flex items-center gap-2 disabled:opacity-50"
+                    className="px-4 py-2 text-[0.9375rem] rounded theme-button-primary transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     <Save size={16} /> {saving || uploading ? t('gallery.saving') : t('gallery.saveChanges')}
                   </button>
                   <button
                     onClick={handleCancelEdit}
                     disabled={saving || uploading}
-                    className="px-4 py-2 text-[0.9375rem] rounded border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2 text-[0.9375rem] rounded theme-button-secondary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {t('gallery.cancelEdit')}
                   </button>
@@ -567,7 +566,7 @@ const GalleryDetail = () => {
               ) : (
                 <button
                   onClick={handleEnterEditMode}
-                  className="px-4 py-2 text-[0.9375rem] rounded border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all flex items-center gap-2"
+                  className="px-4 py-2 text-[0.9375rem] rounded theme-button-secondary transition-all flex items-center gap-2"
                 >
                   <Save size={16} /> {t('gallery.enterEditMode')}
                 </button>
@@ -578,8 +577,8 @@ const GalleryDetail = () => {
                 className={clsx(
                   'px-3 py-2 rounded text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5',
                   (editing ? draft?.published : gallery.published)
-                    ? 'bg-green-50 text-green-700 border border-green-200'
-                    : 'bg-amber-50 text-amber-700 border border-amber-200',
+                    ? 'theme-status-success'
+                    : 'theme-status-warning',
                 )}
               >
                 {(editing ? draft?.published : gallery.published) ? <Eye size={14} /> : <EyeOff size={14} />}
@@ -587,7 +586,7 @@ const GalleryDetail = () => {
               </button>
               <button
                 onClick={handleCopyLink}
-                className="px-4 py-2 text-[0.9375rem] rounded border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all flex items-center gap-2"
+                className="px-4 py-2 text-[0.9375rem] rounded theme-button-secondary transition-all flex items-center gap-2"
                 title={t('gallery.copyInternalLink')}
               >
                 <Link2 size={16} /> {t('gallery.copyInternalLink')}
@@ -602,7 +601,7 @@ const GalleryDetail = () => {
           {editing && draft ? (
             <div className="space-y-4 max-w-2xl">
               <div className="space-y-1.5">
-                <label htmlFor="gallery-title" className="block text-sm font-medium text-[#6b6560]">
+                <label htmlFor="gallery-title" className="block text-sm font-medium text-text-secondary">
                   {t('gallery.titleLabel')}
                 </label>
                 <input
@@ -610,26 +609,26 @@ const GalleryDetail = () => {
                   type="text"
                   value={draft.title}
                   onChange={(event) => applyDraft((prev) => prev ? { ...prev, title: event.target.value } : prev)}
-                  className="w-full px-4 py-2.5 rounded border border-[#e0dcd3] bg-white focus:outline-none focus:border-[#c8951e] text-base"
+                  className="theme-input w-full px-4 py-2.5 rounded text-base"
                   placeholder={t('gallery.titlePlaceholder')}
                 />
               </div>
               <div className="space-y-1.5">
-                <label htmlFor="gallery-description" className="block text-sm font-medium text-[#6b6560]">
+                <label htmlFor="gallery-description" className="block text-sm font-medium text-text-secondary">
                   {t('gallery.descriptionLabel')}
                 </label>
                 <textarea
                   id="gallery-description"
                   value={draft.description}
                   onChange={(event) => applyDraft((prev) => prev ? { ...prev, description: event.target.value } : prev)}
-                  className="w-full px-4 py-2.5 rounded border border-[#e0dcd3] bg-white focus:outline-none focus:border-[#c8951e] resize-none text-base"
+                  className="theme-input w-full px-4 py-2.5 rounded resize-none text-base"
                   rows={3}
                   placeholder={t('gallery.descriptionPlaceholder')}
                 />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label htmlFor="gallery-tags" className="block text-sm font-medium text-[#6b6560]">
+                  <label htmlFor="gallery-tags" className="block text-sm font-medium text-text-secondary">
                     {t('gallery.tagsLabel')}
                   </label>
                   <input
@@ -637,12 +636,12 @@ const GalleryDetail = () => {
                     type="text"
                     value={draft.tagsText}
                     onChange={(event) => applyDraft((prev) => prev ? { ...prev, tagsText: event.target.value } : prev)}
-                    className="w-full px-4 py-2.5 rounded border border-[#e0dcd3] bg-white focus:outline-none focus:border-[#c8951e] text-base"
+                    className="theme-input w-full px-4 py-2.5 rounded text-base"
                     placeholder={t('gallery.tagsPlaceholder')}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label htmlFor="gallery-copyright" className="block text-sm font-medium text-[#6b6560]">
+                  <label htmlFor="gallery-copyright" className="block text-sm font-medium text-text-secondary">
                     {t('gallery.copyrightLabel')}
                   </label>
                   <input
@@ -650,7 +649,7 @@ const GalleryDetail = () => {
                     type="text"
                     value={draft.copyrightText}
                     onChange={(event) => applyDraft((prev) => prev ? { ...prev, copyrightText: event.target.value } : prev)}
-                    className="w-full px-4 py-2.5 rounded border border-[#e0dcd3] bg-white focus:outline-none focus:border-[#c8951e] text-base"
+                    className="theme-input w-full px-4 py-2.5 rounded text-base"
                     placeholder={t('gallery.copyrightPlaceholder')}
                   />
                 </div>
@@ -658,27 +657,27 @@ const GalleryDetail = () => {
             </div>
           ) : (
             <div>
-              <h1 className="text-[1.75rem] font-bold text-[#2c2c2c] tracking-[0.12em] mb-2">
+              <h1 className="text-[1.75rem] font-bold text-text-primary tracking-[0.12em] mb-2">
                 {gallery.title}
               </h1>
-              <p className="text-[#6b6560] leading-relaxed">
+              <p className="text-text-secondary leading-relaxed">
                 {gallery.description || t('gallery.noDescription')}
               </p>
               {gallery.copyright && (
-                <p className="text-xs text-[#9e968e] mt-1">{gallery.copyright}</p>
+                <p className="text-xs text-text-muted mt-1">{gallery.copyright}</p>
               )}
             </div>
           )}
         </header>
 
         {/* Info bar */}
-        <div className="flex items-end justify-between border-b border-[#e0dcd3] mb-6 pb-2">
+        <div className="flex items-end justify-between border-b border-border mb-6 pb-2">
           <div className="flex items-center gap-4 flex-wrap">
-            <span className="text-[1.125rem] pb-2 relative tracking-[0.05em] text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]">
+            <span className="text-[1.125rem] pb-2 relative tracking-[0.05em] text-brand-gold font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[var(--color-theme-accent)] after:rounded-[1px]">
               {t('gallery.imageCount', { count: images.length })}
             </span>
             {!editing && gallery.tags?.map((tag) => (
-              <span key={tag} className="text-[11px] text-[#c8951e] bg-[#f7f5f0] border border-[#e0dcd3] px-2 py-0.5 rounded">
+              <span key={tag} className="text-[11px] theme-tag px-2 py-0.5 rounded">
                 #{tag}
               </span>
             ))}
@@ -686,19 +685,19 @@ const GalleryDetail = () => {
               <span
                 className={clsx(
                   'text-[11px] px-2 py-0.5 rounded font-medium',
-                  gallery.published ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-amber-50 text-amber-700 border border-amber-200',
+                  gallery.published ? 'theme-status-success' : 'theme-status-warning',
                 )}
               >
                 {gallery.published ? t('gallery.published') : t('gallery.draftBadge')}
               </span>
             )}
             {editing ? (
-              <span className="text-[11px] px-2 py-0.5 rounded font-medium bg-[#f0ece3] text-[#6b6560] border border-[#e0dcd3]">
+              <span className="text-[11px] px-2 py-0.5 rounded font-medium bg-surface-alt text-text-secondary border border-border">
                 {t('gallery.editMode')}
               </span>
             ) : null}
           </div>
-          <div className="flex items-center gap-3 pb-2 text-[0.8125rem] text-[#9e968e]">
+          <div className="flex items-center gap-3 pb-2 text-[0.8125rem] text-text-muted">
             <span className="flex items-center gap-1"><Clock size={14} /> {formatDateTime(gallery.createdAt)}</span>
             <span className="flex items-center gap-1"><UserIcon size={14} /> {gallery.authorName || gallery.authorUid?.slice(0, 8)}</span>
             {gallery.publishedAt ? <span>{t('gallery.publishedAt')} {formatDateTime(gallery.publishedAt)}</span> : null}
@@ -708,7 +707,7 @@ const GalleryDetail = () => {
         {/* Images Grid */}
         <section className="mb-10">
           {editing ? (
-            <p className="mb-3 text-xs text-[#9e968e]">
+            <p className="mb-3 text-xs text-text-muted">
               {t('gallery.editImageHint')}
             </p>
           ) : null}
@@ -766,7 +765,7 @@ const GalleryDetail = () => {
                       <Trash2 size={11} />
                     </button>
                     {image.isPending ? (
-                      <span className="absolute top-1.5 right-1.5 z-10 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-[#c8951e] text-white">
+                      <span className="absolute top-1.5 right-1.5 z-10 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-theme-accent)] text-white">
                         {t('gallery.pendingUpload')}
                       </span>
                     ) : null}
@@ -780,7 +779,7 @@ const GalleryDetail = () => {
                 type="button"
                 onClick={() => addImagesInputRef.current?.click()}
                 disabled={uploading || saving}
-                className="flex aspect-square items-center justify-center rounded border border-dashed border-[#c8951e]/40 bg-[#f7f5f0] text-[#c8951e] transition-colors hover:border-[#c8951e] hover:bg-[#f7f5f0] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex aspect-square items-center justify-center rounded border border-dashed border-brand-gold/40 bg-surface-alt text-brand-gold transition-colors hover:border-brand-gold hover:bg-surface-alt disabled:opacity-50 disabled:cursor-not-allowed"
                 title={uploading ? t('gallery.uploading') : t('gallery.addImages')}
               >
                 <Plus size={24} />
@@ -791,28 +790,28 @@ const GalleryDetail = () => {
 
         {/* Comments */}
         {gallery.published && (
-          <section className="border-t border-[#e0dcd3] pt-8">
-            <h2 className="text-base font-semibold text-[#2c2c2c] tracking-[0.12em] mb-6 pb-2.5 border-b border-[#e0dcd3] flex items-center gap-2">
-              <span className="w-[3px] h-4 bg-[#c8951e] rounded-[1px] opacity-60 inline-block" />
+          <section className="border-t border-border pt-8">
+            <h2 className="text-base font-semibold text-text-primary tracking-[0.12em] mb-6 pb-2.5 border-b border-border flex items-center gap-2">
+              <span className="w-[3px] h-4 bg-brand-gold rounded-[1px] opacity-60 inline-block" />
               {t('gallery.comments')}
             </h2>
 
             {user && !isBanned && (
               <form onSubmit={handleAddComment} className="mb-8">
                 {replyTo && (
-                  <div className="flex items-center gap-2 mb-2 text-xs text-[#9e968e]">
+                  <div className="flex items-center gap-2 mb-2 text-xs text-text-muted">
                     <span>{t('gallery.replyTo', { name: replyTo.authorName })}</span>
                     <button
                       type="button"
                       onClick={() => setReplyTo(null)}
-                      className="text-[#c8951e] hover:underline"
+                      className="text-brand-gold hover:underline"
                     >
                       {t('gallery.cancel')}
                     </button>
                   </div>
                 )}
                 <div className="flex gap-3">
-                  <div className="w-10 h-10 rounded bg-[#f0ece3] flex-shrink-0 overflow-hidden">
+                  <div className="w-10 h-10 rounded bg-surface-alt flex-shrink-0 overflow-hidden">
                     <img
                       src={user.photoURL || DEFAULT_AVATAR}
                       alt=""
@@ -826,14 +825,14 @@ const GalleryDetail = () => {
                       value={newComment}
                       onChange={(e) => setNewComment(e.target.value)}
                       placeholder={t('gallery.commentPlaceholder')}
-                      className="w-full px-4 py-3 rounded border border-[#e0dcd3] bg-white focus:outline-none focus:border-[#c8951e] resize-none text-base"
+                      className="theme-input w-full px-4 py-3 rounded resize-none text-base"
                       rows={3}
                     />
                     <div className="flex justify-end mt-2">
                       <button
                         type="submit"
                         disabled={!newComment.trim() || submittingComment}
-                        className="px-5 py-2 bg-[#c8951e] text-white text-sm rounded hover:bg-[#dca828] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-5 py-2 theme-button-primary text-sm rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {submittingComment ? t('gallery.sending') : t('gallery.send')}
                       </button>
@@ -844,18 +843,18 @@ const GalleryDetail = () => {
             )}
 
             {user && isBanned && (
-              <p className="text-center text-[#9e968e] italic mb-8">{t('gallery.bannedCannotComment')}</p>
+              <p className="text-center text-text-muted italic mb-8">{t('gallery.bannedCannotComment')}</p>
             )}
 
             {!user && (
-              <p className="text-center text-[#9e968e] italic mb-8">{t('gallery.loginToComment')}</p>
+              <p className="text-center text-text-muted italic mb-8">{t('gallery.loginToComment')}</p>
             )}
 
             <div className="space-y-6">
               {comments.length > 0 ? comments.filter((c) => !c.parentId).map((comment) => (
                 <div key={comment.id} className="space-y-4">
                   <div className="flex gap-3">
-                    <div className="w-10 h-10 rounded bg-[#f0ece3] flex-shrink-0 overflow-hidden">
+                    <div className="w-10 h-10 rounded bg-surface-alt flex-shrink-0 overflow-hidden">
                       <img
                         src={comment.authorPhoto || DEFAULT_AVATAR}
                         alt=""
@@ -866,17 +865,17 @@ const GalleryDetail = () => {
                     </div>
                     <div className="flex-grow">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-semibold text-[#2c2c2c]">{comment.authorName || t('gallery.anonymousUser')}</span>
-                        <span className="text-[10px] text-[#9e968e]">{formatDateTime(comment.createdAt)}</span>
+                        <span className="text-sm font-semibold text-text-primary">{comment.authorName || t('gallery.anonymousUser')}</span>
+                        <span className="text-[10px] text-text-muted">{formatDateTime(comment.createdAt)}</span>
                       </div>
-                      <p className="text-[#6b6560] text-sm leading-relaxed mb-2">{comment.content}</p>
+                      <p className="text-text-secondary text-sm leading-relaxed mb-2">{comment.content}</p>
                       {user && !isBanned && (
                         <button
                           onClick={() => {
                             setReplyTo(comment);
                             window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
                           }}
-                          className="text-[10px] font-medium text-[#c8951e] hover:underline"
+                          className="text-[10px] font-medium text-brand-gold hover:underline"
                         >
                           {t('gallery.reply')}
                         </button>
@@ -885,10 +884,10 @@ const GalleryDetail = () => {
                   </div>
 
                   {comments.filter((c) => c.parentId === comment.id).length > 0 && (
-                    <div className="ml-14 space-y-4 border-l-2 border-[#e0dcd3] pl-6">
+                    <div className="ml-14 space-y-4 border-l-2 border-border pl-6">
                       {comments.filter((c) => c.parentId === comment.id).map((reply) => (
                         <div key={reply.id} className="flex gap-3">
-                          <div className="w-8 h-8 rounded bg-[#f0ece3] flex-shrink-0 overflow-hidden">
+                          <div className="w-8 h-8 rounded bg-surface-alt flex-shrink-0 overflow-hidden">
                             <img
                               src={reply.authorPhoto || DEFAULT_AVATAR}
                               alt=""
@@ -899,10 +898,10 @@ const GalleryDetail = () => {
                           </div>
                           <div className="flex-grow">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-semibold text-[#2c2c2c]">{reply.authorName || t('gallery.anonymousUser')}</span>
-                              <span className="text-[10px] text-[#9e968e]">{formatDateTime(reply.createdAt)}</span>
+                              <span className="text-xs font-semibold text-text-primary">{reply.authorName || t('gallery.anonymousUser')}</span>
+                              <span className="text-[10px] text-text-muted">{formatDateTime(reply.createdAt)}</span>
                             </div>
-                            <p className="text-[#6b6560] text-xs leading-relaxed">{reply.content}</p>
+                            <p className="text-text-secondary text-xs leading-relaxed">{reply.content}</p>
                           </div>
                         </div>
                       ))}
@@ -910,15 +909,15 @@ const GalleryDetail = () => {
                   )}
                 </div>
               )) : (
-                <p className="text-center text-[#9e968e] italic py-8">{t('gallery.noComments')}</p>
+                <p className="text-center text-text-muted italic py-8">{t('gallery.noComments')}</p>
               )}
             </div>
           </section>
         )}
 
         {/* Back to list */}
-        <div className="mt-10 pt-6 border-t border-[#e0dcd3] text-right">
-          <button onClick={() => navigate('/gallery')} className="text-xs text-[#9e968e] hover:text-[#c8951e] transition-colors">
+        <div className="mt-10 pt-6 border-t border-border text-right">
+          <button onClick={() => navigate('/gallery')} className="text-xs text-text-muted hover:text-brand-gold transition-colors">
             {t('gallery.backToList')}
           </button>
         </div>

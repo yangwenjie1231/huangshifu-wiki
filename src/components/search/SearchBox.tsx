@@ -79,11 +79,11 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
 
   const getSuggestionTypeClass = (type: SearchSuggestion["type"]) => {
     switch (type) {
-      case "keyword": return "bg-[#f0ece3] text-[#6b6560]";
-      case "wiki": return "bg-[#f7f5f0] text-[#c8951e]";
+      case "keyword": return "bg-surface-alt text-text-secondary";
+      case "wiki": return "theme-tag";
       case "music": return "bg-red-50 text-red-600";
       case "album": return "bg-purple-50 text-purple-600";
-      default: return "bg-[#f0ece3] text-[#6b6560]";
+      default: return "bg-surface-alt text-text-secondary";
     }
   };
 
@@ -144,7 +144,7 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
   };
 
   return (
-    <div ref={wrapperRef} className="bg-white border border-[#e0dcd3] rounded p-6 mb-6">
+    <div ref={wrapperRef} className="theme-panel rounded p-6 mb-6">
       <form onSubmit={handleSubmit} className="relative group mb-5" role="search" onKeyDown={handleListboxKeyDown}>
         <input
           type="text"
@@ -160,10 +160,10 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
           autoComplete="off"
           aria-owns="search-suggestions"
           aria-expanded={suggestions.length > 0}
-          className="w-full px-12 py-4 bg-[#f7f5f0] border border-[#e0dcd3] rounded focus:outline-none focus:border-[#c8951e] transition-all text-base"
+          className="theme-input w-full px-12 py-4 rounded transition-all text-base"
         />
         <SearchIcon
-          className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9e968e] group-focus-within:text-[#c8951e] transition-colors"
+          className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-brand-gold transition-colors"
           size={20}
         />
 
@@ -173,7 +173,7 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
-              className="absolute left-0 right-0 top-full mt-2 bg-white border border-[#e0dcd3] rounded z-50 overflow-hidden"
+              className="absolute left-0 right-0 top-full mt-2 bg-surface border border-border rounded z-50 overflow-hidden"
               role="listbox"
               id="search-suggestions"
             >
@@ -183,8 +183,8 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
                   type="button"
                   onClick={() => handleSuggestionClick(s)}
                   className={clsx(
-                    "w-full text-left px-4 py-2.5 transition-colors border-b border-[#f0ece3] last:border-0",
-                    i === highlightedIndex ? "bg-[#c8951e] text-white" : "hover:bg-[#f7f5f0]"
+                    "w-full text-left px-4 py-2.5 transition-colors border-b border-border last:border-0",
+                    i === highlightedIndex ? "bg-[var(--color-theme-accent)] text-white" : "hover:bg-surface-alt"
                   )}
                   role="option"
                   aria-selected={i === highlightedIndex}
@@ -194,9 +194,9 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
                     <span className={clsx("px-2 py-0.5 rounded text-[10px] font-medium", getSuggestionTypeClass(s.type))}>
                       {getSuggestionTypeLabel(s.type)}
                     </span>
-                    <span className="text-sm text-[#2c2c2c]">{s.text}</span>
+                    <span className="text-sm text-text-primary">{s.text}</span>
                     {s.subtext && (
-                      <span className="text-xs text-[#9e968e]">{s.subtext}</span>
+                      <span className="text-xs text-text-muted">{s.subtext}</span>
                     )}
                   </div>
                 </button>
@@ -210,7 +210,7 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={aiSearching}
-            className="p-2.5 bg-[#f7f5f0] text-[#9e968e] rounded hover:text-[#c8951e] hover:bg-[#f7f5f0] transition-all"
+            className="p-2.5 bg-surface-alt text-text-muted rounded hover:text-brand-gold transition-all"
             title="AI 图片搜索"
             aria-label="AI 图片搜索"
           >
@@ -222,7 +222,7 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
           </button>
           <button
             type="submit"
-            className="px-6 py-2.5 bg-[#c8951e] text-white rounded font-medium hover:bg-[#dca828] transition-all"
+            className="theme-button-primary px-6 py-2.5 rounded font-medium transition-all"
             aria-label="提交搜索"
           >
             搜索
@@ -238,14 +238,14 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
       </form>
 
       {/* 混合搜索模式切换 */}
-      <div className="flex items-center justify-between mt-4 pt-4 border-t border-[#f0ece3]">
+      <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={onToggleSemanticSearch}
             className={clsx(
-              "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#c8951e] focus:ring-offset-2",
-              semanticImageSearch ? "bg-[#c8951e]" : "bg-[#d0ccc5]"
+              "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-gold focus:ring-offset-2",
+              semanticImageSearch ? "bg-[var(--color-theme-accent)]" : "bg-border"
             )}
             role="switch"
             aria-checked={semanticImageSearch}
@@ -261,15 +261,15 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
           </button>
           <label
             htmlFor="hybrid-search-toggle"
-            className="text-sm text-[#6b6560] cursor-pointer select-none"
+            className="text-sm text-text-secondary cursor-pointer select-none"
           >
             <span className="font-medium">智能混合搜索</span>
-            <span className="ml-1.5 text-xs text-[#9e968e]">(关键词+语义向量融合搜索)</span>
+            <span className="ml-1.5 text-xs text-text-muted">(关键词+语义向量融合搜索)</span>
           </label>
         </div>
-        <div className="text-xs text-[#9e968e]">
+        <div className="text-xs text-text-muted">
           {semanticImageSearch ? (
-            <span className="text-[#c8951e] font-medium">● 混合模式已开启</span>
+            <span className="text-brand-gold font-medium">● 混合模式已开启</span>
           ) : (
             <span>关键词模式</span>
           )}

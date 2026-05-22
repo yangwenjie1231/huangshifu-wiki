@@ -45,26 +45,26 @@ const RelationPreview: React.FC<RelationPreviewProps> = ({
 			initial={{ opacity: 0, y: -10 }}
 			animate={{ opacity: 1, y: 0 }}
 			exit={{ opacity: 0, y: -10 }}
-			className={`p-4 rounded border ${isNew || isEditing ? "border-[#c8951e]/30 bg-[#c8951e]/5" : "border-[#e0dcd3] bg-white"} hover:border-[#c8951e]/40 transition-all`}
+			className={`p-4 rounded border ${isNew || isEditing ? "border-brand-gold/30 bg-brand-gold/5" : "border-border bg-surface"} hover:border-brand-gold/40 transition-all`}
 		>
 			<div className="flex items-start justify-between gap-3">
 				<div className="flex-1">
 					<div className="flex items-center gap-2 mb-1">
-						<h4 className="font-semibold text-[#2c2c2c] text-base">
+						<h4 className="font-semibold text-text-primary text-base">
 							{displayTitle}
 						</h4>
 						{isNew && (
-							<span className="px-2 py-0.5 bg-[#c8951e] text-white text-[10px] font-medium rounded">
+							<span className="px-2 py-0.5 bg-[var(--color-theme-accent)] text-white text-[10px] font-medium rounded">
 								新建
 							</span>
 						)}
 						{isEditing && (
-							<span className="px-2 py-0.5 bg-[#4a90d9] text-white text-[10px] font-medium rounded">
+							<span className="px-2 py-0.5 bg-blue-500 text-white text-[10px] font-medium rounded">
 								编辑中
 							</span>
 						)}
 					</div>
-					<div className="flex flex-wrap items-center gap-2 text-xs text-[#9e968e]">
+					<div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
 						<span className="flex items-center gap-1">
 							<Link2 size={12} />
 							{typeLabel}
@@ -89,7 +89,7 @@ const RelationPreview: React.FC<RelationPreviewProps> = ({
 						<button
 							type="button"
 							onClick={() => onEdit(relation)}
-							className="p-1.5 text-[#9e968e] hover:text-[#c8951e] transition-colors rounded hover:bg-[#f7f5f0]"
+							className="p-1.5 text-text-muted hover:text-brand-gold transition-colors rounded hover:bg-surface-alt"
 							title="编辑关联"
 						>
 							<Edit2 size={14} />
@@ -100,7 +100,7 @@ const RelationPreview: React.FC<RelationPreviewProps> = ({
 						<button
 							type="button"
 							onClick={onRemove}
-							className="p-1.5 text-[#9e968e] hover:text-red-500 transition-colors rounded hover:bg-red-50"
+							className="p-1.5 text-text-muted hover:text-red-500 transition-colors rounded hover:bg-red-50"
 							title="移除关联"
 						>
 							<X size={14} />
@@ -122,7 +122,7 @@ const RelationPreview: React.FC<RelationPreviewProps> = ({
 
 			{/* 描述信息 */}
 			{relation.metadata?.description && (
-				<p className="text-sm text-[#6b6560] mt-3 line-clamp-2">
+				<p className="text-sm text-text-secondary mt-3 line-clamp-2">
 					{relation.metadata.description}
 				</p>
 			)}
@@ -145,13 +145,13 @@ const RelationPreview: React.FC<RelationPreviewProps> = ({
 						relation.metadata.tags.slice(0, 5).map((tag, idx) => (
 							<span
 								key={idx}
-								className="px-2 py-1 bg-[#f7f5f0] text-[#6b6560] text-[10px] font-medium rounded"
+								className="px-2 py-1 bg-surface-alt text-text-secondary text-[10px] font-medium rounded"
 							>
 								#{tag}
 							</span>
 						))}
 					{relation.metadata?.authorName && (
-						<span className="px-2 py-1 bg-[#f7f5f0] text-[#c8951e] text-[10px] font-medium rounded">
+						<span className="px-2 py-1 bg-surface-alt text-brand-gold text-[10px] font-medium rounded">
 							👤 {relation.metadata.authorName}
 						</span>
 					)}

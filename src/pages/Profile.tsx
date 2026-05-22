@@ -163,8 +163,8 @@ const Profile = () => {
 
   if (!user) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center bg-[var(--color-bg-antique)]">
-        <p className="text-[#9e968e] italic">请先登录以查看个人资料</p>
+      <div className="min-h-[60vh] flex items-center justify-center bg-bg-primary">
+        <p className="text-text-muted italic">请先登录以查看个人资料</p>
       </div>
     );
   }
@@ -210,22 +210,21 @@ const Profile = () => {
 
   return (
     <div
-      className="min-h-[calc(100vh-60px)]"
+      className="min-h-[calc(100vh-60px)] bg-bg-primary"
       style={{
-        backgroundColor: '#f7f5f0',
         fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif",
         lineHeight: 1.8,
       }}
     >
       <div className="max-w-[900px] mx-auto px-6 py-12">
         {/* Profile Header */}
-        <div className="bg-white border border-[#e0dcd3] rounded p-8 mb-6">
+        <div className="theme-panel rounded p-8 mb-6">
           <div className="flex flex-col sm:flex-row items-start gap-6">
             <div className="relative shrink-0 group">
               <img
                 src={formData.photoURL || DEFAULT_AVATAR}
                 alt=""
-                className="w-24 h-24 rounded-full border-2 border-[#e0dcd3] object-cover"
+                className="w-24 h-24 rounded-full border-2 border-border object-cover"
                 referrerPolicy="no-referrer"
                 onError={handleAvatarError}
               />
@@ -246,13 +245,13 @@ const Profile = () => {
                       type="text"
                       value={formData.displayName}
                       onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
-                      className="text-2xl font-bold text-[#2c2c2c] bg-[#f7f5f0] px-3 py-1 rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none w-full max-w-sm"
+                      className="theme-input text-2xl font-bold px-3 py-1 rounded w-full max-w-sm"
                       placeholder="输入昵称..."
                     />
                   ) : (
-                    <h1 className="text-2xl font-bold text-[#2c2c2c]">{profile?.displayName || user.displayName}</h1>
+                    <h1 className="text-2xl font-bold text-text-primary">{profile?.displayName || user.displayName}</h1>
                   )}
-                  <p className="text-sm text-[#9e968e] flex items-center gap-1.5 mt-1">
+                  <p className="text-sm text-text-muted flex items-center gap-1.5 mt-1">
                     <Mail size={13} /> {user.email}
                   </p>
                 </div>
@@ -269,14 +268,14 @@ const Profile = () => {
                           });
                           setIsEditing(false);
                         }}
-                        className="px-3 py-1.5 border border-[#e0dcd3] text-[#6b6560] rounded text-sm hover:border-[#c8951e] hover:text-[#c8951e] transition-all flex items-center gap-1"
+                        className="theme-button-secondary px-3 py-1.5 rounded text-sm transition-all flex items-center gap-1"
                       >
                         <X size={14} /> 取消
                       </button>
                       <button
                         onClick={handleSave}
                         disabled={loading}
-                        className="px-3 py-1.5 bg-[#c8951e] text-white rounded text-sm hover:bg-[#dca828] transition-all flex items-center gap-1 disabled:opacity-50"
+                        className="theme-button-primary px-3 py-1.5 rounded text-sm transition-all flex items-center gap-1 disabled:opacity-50"
                       >
                         <Save size={14} /> {loading ? '保存中...' : '保存'}
                       </button>
@@ -291,7 +290,7 @@ const Profile = () => {
                         });
                         setIsEditing(true);
                       }}
-                      className="px-3 py-1.5 border border-[#e0dcd3] text-[#6b6560] rounded text-sm hover:border-[#c8951e] hover:text-[#c8951e] transition-all flex items-center gap-1"
+                      className="theme-button-secondary px-3 py-1.5 rounded text-sm transition-all flex items-center gap-1"
                     >
                       <Edit3 size={14} /> 编辑资料
                     </button>
@@ -300,19 +299,19 @@ const Profile = () => {
               </div>
 
               <div className="grid grid-cols-3 gap-4 mb-6">
-                <div className="border border-[#e0dcd3] rounded p-3">
-                  <p className="text-xs text-[#9e968e] mb-0.5">等级</p>
-                  <p className="text-lg font-semibold text-[#2c2c2c]">Lv.{profile?.level || 1}</p>
+                <div className="theme-panel-soft rounded p-3">
+                  <p className="text-xs text-text-muted mb-0.5">等级</p>
+                  <p className="text-lg font-semibold text-text-primary">Lv.{profile?.level || 1}</p>
                 </div>
-                <div className="border border-[#e0dcd3] rounded p-3">
-                  <p className="text-xs text-[#9e968e] mb-0.5">身份</p>
-                  <p className="text-lg font-semibold text-[#2c2c2c]">{profile?.role || 'User'}</p>
+                <div className="theme-panel-soft rounded p-3">
+                  <p className="text-xs text-text-muted mb-0.5">身份</p>
+                  <p className="text-lg font-semibold text-text-primary">{profile?.role || 'User'}</p>
                 </div>
-                <div className="border border-[#e0dcd3] rounded p-3">
-                  <p className="text-xs text-[#9e968e] mb-0.5">状态</p>
+                <div className="theme-panel-soft rounded p-3">
+                  <p className="text-xs text-text-muted mb-0.5">状态</p>
                   <p className={clsx(
                     'text-lg font-semibold',
-                    profile?.status === 'banned' ? 'text-red-600' : 'text-[#2c2c2c]',
+                    profile?.status === 'banned' ? 'text-red-600' : 'text-text-primary',
                   )}>
                     {profile?.status === 'banned' ? '已封禁' : '正常'}
                   </p>
@@ -324,11 +323,11 @@ const Profile = () => {
                   value={formData.bio}
                   onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
                   rows={3}
-                  className="w-full px-4 py-3 bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-sm text-[#6b6560] resize-none"
+                  className="theme-input w-full px-4 py-3 rounded text-sm text-text-secondary resize-none"
                   placeholder="写点什么介绍一下自己吧..."
                 />
               ) : (
-                <p className="text-sm text-[#6b6560] italic">
+                <p className="text-sm text-text-secondary italic">
                   {profile?.bio || '这位粉丝很神秘，还没有写下任何简介...'}
                 </p>
               )}
@@ -337,7 +336,7 @@ const Profile = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 border-b border-[#e0dcd3] mb-6 overflow-x-auto">
+        <div className="flex items-center gap-1 border-b border-border mb-6 overflow-x-auto">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -345,14 +344,14 @@ const Profile = () => {
               className={clsx(
                 'px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-1.5 relative',
                 activeTab === tab.id
-                  ? 'text-[#c8951e]'
-                  : 'text-[#6b6560] hover:text-[#c8951e]',
+                  ? 'text-brand-gold'
+                  : 'text-text-secondary hover:text-brand-gold',
               )}
             >
               {tab.icon}
               {tab.label}
               {activeTab === tab.id && (
-                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#c8951e] rounded-[1px]" />
+                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[var(--color-theme-accent)] rounded-[1px]" />
               )}
             </button>
           ))}
@@ -361,18 +360,18 @@ const Profile = () => {
         {/* Tab Content */}
         <div>
           {activeTab === 'profile' ? (
-            <div className="bg-white border border-[#e0dcd3] rounded p-6">
-              <h3 className="text-base font-semibold text-[#2c2c2c] mb-4 pb-2 border-b border-[#e0dcd3]">个人简介</h3>
+            <div className="theme-panel rounded p-6">
+              <h3 className="text-base font-semibold text-text-primary mb-4 pb-2 border-b border-border">个人简介</h3>
               {isEditing ? (
                 <textarea
                   value={formData.bio}
                   onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
                   rows={4}
-                  className="w-full px-4 py-3 bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-sm text-[#6b6560] resize-none"
+                  className="theme-input w-full px-4 py-3 rounded text-sm text-text-secondary resize-none"
                   placeholder="写点什么介绍一下自己吧..."
                 />
               ) : (
-                <p className="text-sm text-[#6b6560] leading-relaxed">
+                <p className="text-sm text-text-secondary leading-relaxed">
                   {profile?.bio || '这位粉丝很神秘，还没有写下任何简介...'}
                 </p>
               )}
@@ -381,14 +380,14 @@ const Profile = () => {
             <div className="space-y-3">
               {postsLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <Loader2 size={24} className="animate-spin text-[#c8951e]" />
+                  <Loader2 size={24} className="animate-spin text-brand-gold" />
                 </div>
               ) : myPosts.length > 0 ? (
                 myPosts.map((post) => (
                   <Link
                     key={post.id}
                     to={`/forum/${post.id}`}
-                    className="block p-4 bg-white border border-[#e0dcd3] rounded hover:border-[#c8951e] transition-all"
+                    className="block p-4 theme-panel rounded hover:border-brand-gold transition-all"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
@@ -399,23 +398,23 @@ const Profile = () => {
                               ? 'bg-green-50 text-green-700'
                               : post.status === 'pending'
                                 ? 'bg-amber-50 text-amber-700'
-                                : 'bg-[#f7f5f0] text-[#9e968e]',
+                                : 'bg-surface-alt text-text-muted',
                           )}>
                             {post.status === 'published' ? '已发布' : post.status === 'pending' ? '待审核' : post.status}
                           </span>
-                          <span className="text-xs text-[#9e968e]">{post.section}</span>
+                          <span className="text-xs text-text-muted">{post.section}</span>
                         </div>
-                        <p className="text-sm font-medium text-[#2c2c2c] truncate">{post.title}</p>
+                        <p className="text-sm font-medium text-text-primary truncate">{post.title}</p>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-xs text-[#9e968e]">{format(new Date(post.createdAt), 'MM-dd HH:mm')}</p>
+                        <p className="text-xs text-text-muted">{format(new Date(post.createdAt), 'MM-dd HH:mm')}</p>
                       </div>
                     </div>
                   </Link>
                 ))
               ) : (
-                <div className="text-center py-12 bg-white border border-dashed border-[#e0dcd3] rounded">
-                  <p className="text-sm text-[#9e968e]">暂无帖子</p>
+                <div className="text-center py-12 bg-surface border border-dashed border-border rounded">
+                  <p className="text-sm text-text-muted">暂无帖子</p>
                 </div>
               )}
             </div>
@@ -423,28 +422,28 @@ const Profile = () => {
             <div className="space-y-3">
               {commentsLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <Loader2 size={24} className="animate-spin text-[#c8951e]" />
+                  <Loader2 size={24} className="animate-spin text-brand-gold" />
                 </div>
               ) : myComments.length > 0 ? (
                 myComments.map((comment) => (
-                  <div key={comment.id} className="p-4 bg-white border border-[#e0dcd3] rounded">
+                  <div key={comment.id} className="p-4 theme-panel rounded">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs text-[#9e968e]">回复了</span>
+                      <span className="text-xs text-text-muted">回复了</span>
                       {comment.post ? (
-                        <Link to={`/forum/${comment.post.id}`} className="text-xs text-[#c8951e] hover:underline">
+                        <Link to={`/forum/${comment.post.id}`} className="text-xs text-brand-gold hover:underline">
                           {comment.post.title}
                         </Link>
                       ) : (
-                        <span className="text-xs text-[#9e968e]">原帖子已删除</span>
+                        <span className="text-xs text-text-muted">原帖子已删除</span>
                       )}
                     </div>
-                    <p className="text-sm text-[#6b6560] line-clamp-2">{comment.content}</p>
-                    <p className="text-xs text-[#9e968e] mt-2">{format(new Date(comment.createdAt), 'MM-dd HH:mm')}</p>
+                    <p className="text-sm text-text-secondary line-clamp-2">{comment.content}</p>
+                    <p className="text-xs text-text-muted mt-2">{format(new Date(comment.createdAt), 'MM-dd HH:mm')}</p>
                   </div>
                 ))
               ) : (
-                <div className="text-center py-12 bg-white border border-dashed border-[#e0dcd3] rounded">
-                  <p className="text-sm text-[#9e968e]">暂无评论</p>
+                <div className="text-center py-12 bg-surface border border-dashed border-border rounded">
+                  <p className="text-sm text-text-muted">暂无评论</p>
                 </div>
               )}
             </div>
@@ -452,14 +451,14 @@ const Profile = () => {
             <div className="space-y-3">
               {historyLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <Loader2 size={24} className="animate-spin text-[#c8951e]" />
+                  <Loader2 size={24} className="animate-spin text-brand-gold" />
                 </div>
               ) : myHistory.length > 0 ? (
                 myHistory.map((item) => (
                   <Link
                     key={item.id}
                     to={item.targetType === 'wiki' ? `/wiki/${item.target?.slug || item.targetId}` : item.targetType === 'post' ? `/forum/${item.target?.id || item.targetId}` : '/music'}
-                    className="block p-4 bg-white border border-[#e0dcd3] rounded hover:border-[#c8951e] transition-all"
+                    className="block p-4 theme-panel rounded hover:border-brand-gold transition-all"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
@@ -467,24 +466,24 @@ const Profile = () => {
                           <span className={clsx(
                             'px-2 py-0.5 rounded text-[10px] font-medium',
                             item.targetType === 'wiki'
-                              ? 'bg-[#f7f5f0] text-[#c8951e]'
+                              ? 'theme-tag'
                               : item.targetType === 'post'
-                                ? 'bg-[#fdf5d8] text-[#c8951e]'
-                                : 'bg-[#f7f5f0] text-[#9e968e]',
+                                ? 'theme-tag'
+                                : 'bg-surface-alt text-text-muted',
                           )}>
                             {item.targetType === 'wiki' ? '百科' : item.targetType === 'post' ? '帖子' : '音乐'}
                           </span>
                         </div>
-                        <p className="text-sm font-medium text-[#2c2c2c] truncate">{item.target?.title || item.targetId}</p>
-                        <p className="text-xs text-[#9e968e] truncate">{item.target?.category || (item.targetType === 'post' ? '社区帖子' : '')}</p>
+                        <p className="text-sm font-medium text-text-primary truncate">{item.target?.title || item.targetId}</p>
+                        <p className="text-xs text-text-muted truncate">{item.target?.category || (item.targetType === 'post' ? '社区帖子' : '')}</p>
                       </div>
-                      <p className="text-xs text-[#9e968e] whitespace-nowrap">{format(new Date(item.createdAt), 'MM-dd HH:mm')}</p>
+                      <p className="text-xs text-text-muted whitespace-nowrap">{format(new Date(item.createdAt), 'MM-dd HH:mm')}</p>
                     </div>
                   </Link>
                 ))
               ) : (
-                <div className="text-center py-12 bg-white border border-dashed border-[#e0dcd3] rounded">
-                  <p className="text-sm text-[#9e968e]">暂无浏览历史</p>
+                <div className="text-center py-12 bg-surface border border-dashed border-border rounded">
+                  <p className="text-sm text-text-muted">暂无浏览历史</p>
                 </div>
               )}
             </div>
@@ -503,8 +502,8 @@ const Profile = () => {
                     className={clsx(
                       'px-3 py-1.5 text-xs rounded transition-all border',
                       favoriteFilter === item.id
-                        ? 'bg-[#c8951e] text-white border-[#c8951e]'
-                        : 'bg-white text-[#6b6560] border-[#e0dcd3] hover:border-[#c8951e] hover:text-[#c8951e]',
+                        ? 'theme-button-primary border-brand-gold'
+                        : 'theme-button-secondary',
                     )}
                   >
                     {item.label}
@@ -514,7 +513,7 @@ const Profile = () => {
 
               {favoritesLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <Loader2 size={24} className="animate-spin text-[#c8951e]" />
+                  <Loader2 size={24} className="animate-spin text-brand-gold" />
                 </div>
               ) : groupedFavorites.length > 0 ? (
                 <div className="space-y-3">
@@ -522,7 +521,7 @@ const Profile = () => {
                     <Link
                       key={item.id}
                       to={item.href}
-                      className="block p-4 bg-white border border-[#e0dcd3] rounded hover:border-[#c8951e] transition-all"
+                      className="block p-4 theme-panel rounded hover:border-brand-gold transition-all"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
@@ -530,25 +529,25 @@ const Profile = () => {
                             <span className={clsx(
                               'px-2 py-0.5 rounded text-[10px] font-medium',
                               item.targetType === 'wiki'
-                                ? 'bg-[#f7f5f0] text-[#c8951e]'
+                                ? 'theme-tag'
                                 : item.targetType === 'post'
-                                  ? 'bg-[#fdf5d8] text-[#c8951e]'
-                                  : 'bg-[#f7f5f0] text-[#9e968e]',
+                                  ? 'theme-tag'
+                                  : 'bg-surface-alt text-text-muted',
                             )}>
                               {item.targetType === 'wiki' ? '百科' : item.targetType === 'post' ? '帖子' : '音乐'}
                             </span>
                           </div>
-                          <p className="text-sm font-medium text-[#2c2c2c] truncate">{item.title}</p>
-                          <p className="text-xs text-[#9e968e] truncate">{item.subtitle}</p>
+                          <p className="text-sm font-medium text-text-primary truncate">{item.title}</p>
+                          <p className="text-xs text-text-muted truncate">{item.subtitle}</p>
                         </div>
-                        <p className="text-[10px] text-[#9e968e] whitespace-nowrap">{item.createdAt?.slice(0, 10)}</p>
+                        <p className="text-[10px] text-text-muted whitespace-nowrap">{item.createdAt?.slice(0, 10)}</p>
                       </div>
                     </Link>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-12 bg-white border border-dashed border-[#e0dcd3] rounded">
-                  <p className="text-sm text-[#9e968e]">暂无收藏内容</p>
+                <div className="text-center py-12 bg-surface border border-dashed border-border rounded">
+                  <p className="text-sm text-text-muted">暂无收藏内容</p>
                 </div>
               )}
             </div>

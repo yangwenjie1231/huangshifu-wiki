@@ -51,15 +51,15 @@ const MusicFilters: React.FC<MusicFiltersProps> = ({
 	} as const;
 
 	return (
-		<div className="flex items-end justify-between border-b border-[#e0dcd3] mb-5">
+		<div className="flex items-end justify-between border-b border-border mb-5">
 			<div className="flex gap-5">
 				<button
 					onClick={() => onTabChange('music')}
 					className={clsx(
 						'text-[1.125rem] pb-2 relative tracking-[0.05em] transition-all cursor-pointer',
 						activeTab === 'music'
-							? "text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]"
-							: 'text-[#9e968e] hover:text-[#c8951e]'
+							? "text-brand-gold font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[var(--color-theme-accent)] after:rounded-[1px]"
+							: 'text-text-muted hover:text-brand-gold'
 					)}
 				>
 					{t('music.tabMusic')}
@@ -69,8 +69,8 @@ const MusicFilters: React.FC<MusicFiltersProps> = ({
 					className={clsx(
 						'text-[1.125rem] pb-2 relative tracking-[0.05em] transition-all cursor-pointer',
 						activeTab === 'albums'
-							? "text-[#c8951e] font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#c8951e] after:rounded-[1px]"
-							: 'text-[#9e968e] hover:text-[#c8951e]'
+							? "text-brand-gold font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[var(--color-theme-accent)] after:rounded-[1px]"
+							: 'text-text-muted hover:text-brand-gold'
 					)}
 				>
 					{t('music.tabAlbums')}
@@ -78,14 +78,14 @@ const MusicFilters: React.FC<MusicFiltersProps> = ({
 				{activeTab === 'albums' && isAdmin && (
 					<button
 						onClick={onCreateAlbum}
-						className="text-[0.8125rem] text-[#c8951e] font-medium hover:text-[#dca828] transition-colors flex items-center gap-1 self-center mb-1 cursor-pointer"
+						className="text-[0.8125rem] text-brand-gold font-medium hover:text-brand-gold/80 transition-colors flex items-center gap-1 self-center mb-1 cursor-pointer"
 					>
 						<Plus size={14} /> {t('music.createAlbum')}
 					</button>
 				)}
 			</div>
 
-			<div className="flex items-center gap-3 pb-2 text-[0.8125rem] text-[#9e968e]">
+			<div className="flex items-center gap-3 pb-2 text-[0.8125rem] text-text-muted">
 				{viewMode && onViewModeChange && (
 					<ViewModeSelector value={viewMode} onChange={onViewModeChange} size="sm" />
 				)}
@@ -99,8 +99,8 @@ const MusicFilters: React.FC<MusicFiltersProps> = ({
 								className={clsx(
 									'px-2 py-1 transition-colors cursor-pointer',
 									sortBy === key
-										? 'text-[#2c2c2c] font-medium'
-										: 'hover:text-[#6b6560]'
+										? 'text-text-primary font-medium'
+										: 'hover:text-text-secondary'
 								)}
 								>
 									{sortLabel[key]}
@@ -108,27 +108,27 @@ const MusicFilters: React.FC<MusicFiltersProps> = ({
 							))}
 							<button
 								onClick={() => onSortOrderChange(sortOrder === 'asc' ? 'desc' : 'asc')}
-								className="p-1 hover:text-[#c8951e] transition-colors cursor-pointer"
+								className="p-1 hover:text-brand-gold transition-colors cursor-pointer"
 								title={sortOrder === 'asc' ? t('music.sortOrder.asc') : t('music.sortOrder.desc')}
 							>
 								<ArrowUpDown size={13} />
 							</button>
 						</div>
-						<span className="mx-1 text-[#e0dcd3]">|</span>
-						<label className="flex items-center gap-1.5 cursor-pointer select-none hover:text-[#6b6560] transition-colors">
+						<span className="mx-1 text-border">|</span>
+						<label className="flex items-center gap-1.5 cursor-pointer select-none hover:text-text-secondary transition-colors">
 							<input
 								type="checkbox"
 								checked={showAccompaniments}
 								onChange={(e) => onShowAccompanimentsChange(e.target.checked)}
-								className="w-3 h-3 rounded-sm border-[#e0dcd3] text-[#c8951e] focus:ring-0 focus:ring-offset-0 accent-[#c8951e]"
+								className="w-3 h-3 rounded-sm border-border text-brand-gold focus:ring-0 focus:ring-offset-0 accent-[var(--color-theme-accent)]"
 							/>
 							<span className="hidden sm:inline">{t('music.showAccompaniments')}</span>
 							<span className="sm:hidden" title={t('music.showAccompaniments')}>伴奏</span>
 						</label>
-						<span className="mx-1 text-[#e0dcd3]">|</span>
+						<span className="mx-1 text-border">|</span>
 					</>
 				)}
-				<span className="text-[#9e968e]">
+				<span className="text-text-muted">
 					{activeTab === 'music' ? `${musicCount} ${t('music.unit.song')}` : `${albumCount} ${t('music.unit.album')}`}
 				</span>
 			</div>

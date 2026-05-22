@@ -95,9 +95,9 @@ export const AdminToolPage = ({ type: propType }: { type?: ToolType }) => {
       case 'sensitive_check':
         return (
           <div className="space-y-4">
-            <p className="text-sm text-[#9e968e]">输入文本内容进行敏感词检测</p>
+            <p className="text-sm text-text-muted">输入文本内容进行敏感词检测</p>
             <textarea
-              className="w-full p-4 bg-[#f7f5f0] border border-[#e0dcd3] rounded focus:outline-none focus:border-[#c8951e] text-base"
+              className="w-full p-4 bg-surface-alt border border-border rounded focus:outline-none focus:border-brand-gold text-base"
               rows={8}
               placeholder="请输入要检测的文本内容..."
               value={sensitiveText}
@@ -106,21 +106,21 @@ export const AdminToolPage = ({ type: propType }: { type?: ToolType }) => {
             <button
               onClick={handleSensitiveCheck}
               disabled={sensitiveLoading || !sensitiveText.trim()}
-              className="px-6 py-2 bg-[#c8951e] text-white rounded font-medium hover:bg-[#dca828] transition-all disabled:opacity-50"
+              className="px-6 py-2 bg-brand-gold-dark text-white rounded font-medium hover:bg-brand-gold transition-all disabled:opacity-50"
             >
               {sensitiveLoading ? '检测中...' : '开始检测'}
             </button>
             {sensitiveResult.length > 0 ? (
-              <div className="p-4 bg-red-50 border border-red-200 rounded">
+              <div className="p-4 theme-status-error rounded">
                 <p className="text-sm font-medium text-red-600 mb-2">检测到 {sensitiveResult.length} 个敏感词：</p>
                 <div className="flex flex-wrap gap-2">
                   {sensitiveResult.map((word) => (
-                    <span key={word} className="px-3 py-1 bg-red-100 text-red-600 rounded text-xs font-medium">{word}</span>
+                    <span key={word} className="px-3 py-1 theme-status-error rounded text-xs font-medium">{word}</span>
                   ))}
                 </div>
               </div>
             ) : sensitiveText.trim() && !sensitiveLoading ? (
-              <div className="p-4 bg-green-50 border border-green-200 rounded">
+              <div className="p-4 theme-status-success rounded">
                 <p className="text-sm font-medium text-green-600">未检测到敏感词</p>
               </div>
             ) : null}
@@ -129,23 +129,23 @@ export const AdminToolPage = ({ type: propType }: { type?: ToolType }) => {
       case 'birthday':
         return (
           <div className="space-y-5">
-            <div className="bg-white border border-[#e0dcd3] rounded p-4 flex flex-wrap items-center gap-3">
-              <span className="text-sm font-medium text-[#6b6560]">筛选类型：</span>
+            <div className="bg-surface border border-border rounded p-4 flex flex-wrap items-center gap-3">
+              <span className="text-sm font-medium text-text-secondary">筛选类型：</span>
               {['all', 'notice', 'school_history', 'honor_alumni', 'campus', 'guestbook', 'contact', 'program'].map((t) => (
                 <button
                   key={t}
                   onClick={() => setBirthdayFilter(t)}
-                  className={clsx('px-3 py-1.5 rounded text-xs font-medium transition-all', birthdayFilter === t ? 'bg-[#c8951e] text-white' : 'bg-[#f7f5f0] text-[#6b6560] hover:bg-[#f0ece3]')}
+                  className={clsx('px-3 py-1.5 rounded text-xs font-medium transition-all', birthdayFilter === t ? 'bg-brand-gold-dark text-white' : 'bg-surface-alt text-text-secondary hover:bg-bg-tertiary')}
                 >
                   {t === 'all' ? '全部' : t === 'school_history' ? '校史' : t === 'honor_alumni' ? '校友' : t === 'campus' ? '校园' : t === 'guestbook' ? '留言壁' : t === 'contact' ? '联系' : t === 'program' ? '节目' : '通知'}
                 </button>
               ))}
             </div>
 
-            <div className="bg-white border border-[#e0dcd3] rounded p-5">
-              <h3 className="text-sm font-semibold text-[#2c2c2c] mb-3">新增配置</h3>
+            <div className="bg-surface border border-border rounded p-5">
+              <h3 className="text-sm font-semibold text-text-primary mb-3">新增配置</h3>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <select value={newConfig.type} onChange={(e) => setNewConfig({ ...newConfig, type: e.target.value })} className="px-4 py-2 bg-[#f7f5f0] border border-[#e0dcd3] rounded text-sm focus:outline-none focus:border-[#c8951e]">
+                <select value={newConfig.type} onChange={(e) => setNewConfig({ ...newConfig, type: e.target.value })} className="px-4 py-2 bg-surface-alt border border-border rounded text-sm focus:outline-none focus:border-brand-gold">
                   <option value="notice">通知公告</option>
                   <option value="school_history">校史拾遗</option>
                   <option value="honor_alumni">荣誉校友</option>
@@ -154,8 +154,8 @@ export const AdminToolPage = ({ type: propType }: { type?: ToolType }) => {
                   <option value="contact">联系我们</option>
                   <option value="program">生贺节目</option>
                 </select>
-                <input type="text" placeholder="标题" value={newConfig.title} onChange={(e) => setNewConfig({ ...newConfig, title: e.target.value })} className="px-4 py-2 bg-[#f7f5f0] border border-[#e0dcd3] rounded text-sm focus:outline-none focus:border-[#c8951e]" />
-                <input type="number" placeholder="排序" value={newConfig.sortOrder} onChange={(e) => setNewConfig({ ...newConfig, sortOrder: Number(e.target.value) })} className="px-4 py-2 bg-[#f7f5f0] border border-[#e0dcd3] rounded text-sm focus:outline-none focus:border-[#c8951e]" />
+                <input type="text" placeholder="标题" value={newConfig.title} onChange={(e) => setNewConfig({ ...newConfig, title: e.target.value })} className="px-4 py-2 bg-surface-alt border border-border rounded text-sm focus:outline-none focus:border-brand-gold" />
+                <input type="number" placeholder="排序" value={newConfig.sortOrder} onChange={(e) => setNewConfig({ ...newConfig, sortOrder: Number(e.target.value) })} className="px-4 py-2 bg-surface-alt border border-border rounded text-sm focus:outline-none focus:border-brand-gold" />
                 <button
                   onClick={async () => {
                     if (!newConfig.title.trim()) return;
@@ -168,37 +168,37 @@ export const AdminToolPage = ({ type: propType }: { type?: ToolType }) => {
                       show('创建失败', { variant: 'error' });
                     }
                   }}
-                  className="px-5 py-2 bg-[#c8951e] text-white rounded text-sm font-medium hover:bg-[#dca828] transition-all"
+                  className="px-5 py-2 bg-brand-gold-dark text-white rounded text-sm font-medium hover:bg-brand-gold transition-all"
                 >
                   添加配置
                 </button>
               </div>
-              <textarea placeholder="内容 (支持 Markdown)" value={newConfig.content} onChange={(e) => setNewConfig({ ...newConfig, content: e.target.value })} className="w-full mt-3 px-4 py-2 bg-[#f7f5f0] border border-[#e0dcd3] rounded text-sm focus:outline-none focus:border-[#c8951e] h-24" />
+              <textarea placeholder="内容 (支持 Markdown)" value={newConfig.content} onChange={(e) => setNewConfig({ ...newConfig, content: e.target.value })} className="w-full mt-3 px-4 py-2 bg-surface-alt border border-border rounded text-sm focus:outline-none focus:border-brand-gold h-24" />
             </div>
 
-            <div className="bg-white border border-[#e0dcd3] rounded overflow-hidden">
+            <div className="bg-surface border border-border rounded overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-[#f7f5f0] border-b border-[#e0dcd3]">
+                    <tr className="bg-surface-alt border-b border-border">
                       {['类型', '标题', '排序', '状态', '操作'].map((col) => (
-                        <th key={col} className="px-5 py-3 text-[11px] font-semibold text-[#9e968e] uppercase tracking-wider">{col}</th>
+                        <th key={col} className="px-5 py-3 text-[11px] font-semibold text-text-muted uppercase tracking-wider">{col}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#f0ece3]">
+                  <tbody className="divide-y divide-border">
                     {birthdayLoading ? (
                       [1, 2, 3].map((i) => (
-                        <tr key={i} className="animate-pulse"><td colSpan={5} className="px-5 py-4"><div className="h-6 bg-[#f7f5f0] rounded" /></td></tr>
+                        <tr key={i} className="animate-pulse"><td colSpan={5} className="px-5 py-4"><div className="h-6 bg-surface-alt rounded" /></td></tr>
                       ))
                     ) : (
                       (birthdayFilter === 'all' ? birthdayData : birthdayData.filter((d) => d.type === birthdayFilter)).map((item) => (
-                        <tr key={item.id} className="hover:bg-[#f7f5f0] transition-colors group">
-                          <td className="px-5 py-4"><span className="px-2 py-0.5 bg-[#f7f5f0] text-[#c8951e] text-[10px] font-medium rounded">{item.type}</span></td>
-                          <td className="px-5 py-4 text-sm font-medium text-[#2c2c2c]">{item.title}</td>
-                          <td className="px-5 py-4 text-sm text-[#9e968e]">{item.sortOrder}</td>
+                        <tr key={item.id} className="hover:bg-surface-alt transition-colors group">
+                          <td className="px-5 py-4"><span className="px-2 py-0.5 bg-surface-alt text-brand-gold text-[10px] font-medium rounded">{item.type}</span></td>
+                          <td className="px-5 py-4 text-sm font-medium text-text-primary">{item.title}</td>
+                          <td className="px-5 py-4 text-sm text-text-muted">{item.sortOrder}</td>
                           <td className="px-5 py-4">
-                            <span className={clsx('px-2 py-0.5 rounded text-[10px] font-medium', item.isActive ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500')}>
+                            <span className={clsx('px-2 py-0.5 rounded text-[10px] font-medium', item.isActive ? 'theme-status-success' : 'bg-surface-alt text-text-muted')}>
                               {item.isActive ? '启用' : '禁用'}
                             </span>
                           </td>
@@ -209,12 +209,12 @@ export const AdminToolPage = ({ type: propType }: { type?: ToolType }) => {
                                   try { await apiPatch(`/api/birthday/config/${item.id}/toggle`); await fetchBirthday(); show(item.isActive ? '已禁用' : '已启用', { variant: 'success' }); }
                                   catch { show('操作失败', { variant: 'error' }); }
                                 }}
-                                className={clsx('p-1.5 rounded transition-all', item.isActive ? 'text-amber-500 hover:bg-amber-50' : 'text-green-500 hover:bg-green-50')}
+                                className={clsx('p-1.5 rounded transition-all', item.isActive ? 'text-amber-500 hover:bg-surface-alt' : 'text-green-500 hover:bg-surface-alt')}
                                 title={item.isActive ? '禁用' : '启用'}
                               >
                                 {item.isActive ? <XCircle size={16} /> : <CheckCircle size={16} />}
                               </button>
-                              <button onClick={() => setEditingConfig(item)} className="p-1.5 text-[#c8951e] hover:bg-[#f7f5f0] rounded transition-all" title="编辑">
+                              <button onClick={() => setEditingConfig(item)} className="p-1.5 text-brand-gold hover:bg-surface-alt rounded transition-all" title="编辑">
                                 <Sparkles size={16} />
                               </button>
                               <button
@@ -223,7 +223,7 @@ export const AdminToolPage = ({ type: propType }: { type?: ToolType }) => {
                                   try { await apiDelete(`/api/birthday/config/${item.id}`); await fetchBirthday(); show('已删除', { variant: 'success' }); }
                                   catch { show('删除失败', { variant: 'error' }); }
                                 }}
-                                className="p-1.5 text-red-400 hover:bg-red-50 rounded transition-all"
+                                className="p-1.5 text-red-400 hover:bg-surface-alt rounded transition-all"
                                 title="删除"
                               >
                                 <Trash2 size={16} />
@@ -247,32 +247,32 @@ export const AdminToolPage = ({ type: propType }: { type?: ToolType }) => {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-[#2c2c2c] tracking-[0.12em] flex items-center gap-2">
-          <Icon size={24} className="text-[#c8951e]" /> {cfg.title}
+        <h1 className="text-2xl font-bold text-text-primary tracking-[0.12em] flex items-center gap-2">
+          <Icon size={24} className="text-brand-gold" /> {cfg.title}
         </h1>
       </div>
       {renderContent()}
 
       {editingConfig && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white border border-[#e0dcd3] rounded p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-bold text-[#2c2c2c] mb-4">编辑配置</h3>
+          <div className="bg-surface border border-border rounded p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-bold text-text-primary mb-4">编辑配置</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[#6b6560] mb-1">标题</label>
-                <input type="text" value={editingConfig.title} onChange={(e) => setEditingConfig({ ...editingConfig, title: e.target.value })} className="w-full px-4 py-2 bg-[#f7f5f0] border border-[#e0dcd3] rounded text-sm focus:outline-none focus:border-[#c8951e]" />
+                <label className="block text-sm font-medium text-text-secondary mb-1">标题</label>
+                <input type="text" value={editingConfig.title} onChange={(e) => setEditingConfig({ ...editingConfig, title: e.target.value })} className="w-full px-4 py-2 bg-surface-alt border border-border rounded text-sm focus:outline-none focus:border-brand-gold" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#6b6560] mb-1">排序</label>
-                <input type="number" value={editingConfig.sortOrder} onChange={(e) => setEditingConfig({ ...editingConfig, sortOrder: Number(e.target.value) })} className="w-full px-4 py-2 bg-[#f7f5f0] border border-[#e0dcd3] rounded text-sm focus:outline-none focus:border-[#c8951e]" />
+                <label className="block text-sm font-medium text-text-secondary mb-1">排序</label>
+                <input type="number" value={editingConfig.sortOrder} onChange={(e) => setEditingConfig({ ...editingConfig, sortOrder: Number(e.target.value) })} className="w-full px-4 py-2 bg-surface-alt border border-border rounded text-sm focus:outline-none focus:border-brand-gold" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#6b6560] mb-1">内容 (Markdown)</label>
-                <textarea value={editingConfig.content} onChange={(e) => setEditingConfig({ ...editingConfig, content: e.target.value })} className="w-full px-4 py-2 bg-[#f7f5f0] border border-[#e0dcd3] rounded text-sm focus:outline-none focus:border-[#c8951e] h-40" />
+                <label className="block text-sm font-medium text-text-secondary mb-1">内容 (Markdown)</label>
+                <textarea value={editingConfig.content} onChange={(e) => setEditingConfig({ ...editingConfig, content: e.target.value })} className="w-full px-4 py-2 bg-surface-alt border border-border rounded text-sm focus:outline-none focus:border-brand-gold h-40" />
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setEditingConfig(null)} className="px-5 py-2 bg-[#f0ece3] text-[#6b6560] rounded font-medium hover:bg-[#e0dcd3] transition-all">取消</button>
+              <button onClick={() => setEditingConfig(null)} className="px-5 py-2 bg-bg-tertiary text-text-secondary rounded font-medium hover:bg-surface-alt transition-all">取消</button>
               <button
                 onClick={async () => {
                   try {
@@ -288,7 +288,7 @@ export const AdminToolPage = ({ type: propType }: { type?: ToolType }) => {
                     show('更新失败', { variant: 'error' });
                   }
                 }}
-                className="px-5 py-2 bg-[#c8951e] text-white rounded font-medium hover:bg-[#dca828] transition-all"
+                className="px-5 py-2 bg-brand-gold-dark text-white rounded font-medium hover:bg-brand-gold transition-all"
               >
                 保存
               </button>

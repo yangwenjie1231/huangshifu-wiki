@@ -78,23 +78,23 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
     }
   };
 
-  if (loading) return <div className="py-4 text-center text-xs text-[#9e968e] animate-pulse">加载中...</div>;
+  if (loading) return <div className="py-4 text-center text-xs text-text-muted animate-pulse">加载中...</div>;
   if (!song) return null;
 
   const isCurrent = currentSong?.id === song.id;
 
   return (
-    <div className="bg-[#f7f5f0] rounded border border-[#e0dcd3] p-4">
+    <div className="bg-surface-alt rounded border border-border p-4">
       <div className="flex items-center gap-3 mb-3">
         <img 
           src={song.cover} 
           alt={song.title + ' 封面'}
-          className="w-12 h-12 rounded object-cover bg-[#f0ece3] flex-shrink-0"
+          className="w-12 h-12 rounded object-cover bg-surface flex-shrink-0"
           referrerPolicy="no-referrer"
         />
         <div className="min-w-0 flex-1">
-          <h4 className="text-sm font-semibold text-[#2c2c2c] truncate">{song.title}</h4>
-          <p className="text-xs text-[#9e968e] truncate">{song.artist} — {song.album}</p>
+          <h4 className="text-sm font-semibold text-text-primary truncate">{song.title}</h4>
+          <p className="text-xs text-text-muted truncate">{song.artist} — {song.album}</p>
         </div>
       </div>
 
@@ -105,31 +105,31 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
         value={currentTime}
         onChange={(e) => seekTo(parseFloat(e.target.value))}
         disabled={!duration}
-        className="w-full h-1 bg-[#e0dcd3] rounded-full appearance-none cursor-pointer mb-3 accent-antique"
+        className="w-full h-1 bg-border rounded-full appearance-none cursor-pointer mb-3 accent-antique"
       />
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <button 
             onClick={playPrevious}
-            className="p-1.5 text-[#6b6560] hover:text-[#c8951e] hover:bg-[#f0ece3] rounded-full transition-all"
+            className="p-1.5 text-text-secondary hover:text-brand-gold hover:bg-surface rounded-full transition-all"
           >
             <SkipBack size={16} />
           </button>
           <button 
             onClick={togglePlay}
-            className="w-8 h-8 bg-[#c8951e] text-white rounded-full flex items-center justify-center hover:bg-[#dca828] transition-all"
+            className="w-8 h-8 theme-button-primary rounded-full flex items-center justify-center transition-all"
           >
             {(isCurrent && isPlaying) ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
           </button>
           <button 
             onClick={playNext}
-            className="p-1.5 text-[#6b6560] hover:text-[#c8951e] hover:bg-[#f0ece3] rounded-full transition-all"
+            className="p-1.5 text-text-secondary hover:text-brand-gold hover:bg-surface rounded-full transition-all"
           >
             <SkipForward size={16} />
           </button>
         </div>
-        <span className="text-xs text-[#9e968e]">
+        <span className="text-xs text-text-muted">
           {formatTime(currentTime)} / {formatTime(duration)}
         </span>
       </div>

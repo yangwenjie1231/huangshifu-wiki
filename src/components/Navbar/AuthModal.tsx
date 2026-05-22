@@ -115,12 +115,12 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 						initial={{ opacity: 0, scale: 0.95, y: 8 }}
 						animate={{ opacity: 1, scale: 1, y: 0 }}
 						exit={{ opacity: 0, scale: 0.95, y: 8 }}
-						className="w-full max-w-md bg-white rounded border border-[#e0dcd3] p-6"
+						className="w-full max-w-md bg-surface rounded border border-border p-6"
 						ref={modalRef}
 						onKeyDown={handleKeyDown}
 					>
 						<div className="flex items-center justify-between mb-5">
-							<h3 className="text-lg font-bold text-[#2c2c2c]">
+							<h3 className="text-lg font-bold text-text-primary">
 								{authMode === "wechat"
 									? t('auth.wechatLogin')
 									: authMode === "login"
@@ -130,7 +130,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 							<button
 								type="button"
 								onClick={onClose}
-								className="text-[#9e968e] hover:text-[#c8951e] transition-colors"
+								className="text-text-muted hover:text-brand-gold transition-colors"
 							>
 								<X size={20} />
 							</button>
@@ -150,7 +150,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 												? t('auth.placeholderWechatDisplayName')
 												: t('auth.placeholderDisplayName')
 										}
-										className="w-full px-4 py-2.5 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-[#2c2c2c]"
+										className="theme-input w-full px-4 py-2.5 text-sm rounded"
 									/>
 								</div>
 							)}
@@ -165,7 +165,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 											value={wechatCode}
 											onChange={(e) => setWechatCode(e.target.value)}
 											placeholder={t('auth.placeholderWechatCode')}
-											className="w-full px-4 py-2.5 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-[#2c2c2c]"
+											className="theme-input w-full px-4 py-2.5 text-sm rounded"
 										/>
 									</div>
 									<div>
@@ -176,10 +176,10 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 											value={wechatPhotoURL}
 											onChange={(e) => setWechatPhotoURL(e.target.value)}
 											placeholder={t('auth.placeholderPhotoURL')}
-											className="w-full px-4 py-2.5 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-[#2c2c2c]"
+											className="theme-input w-full px-4 py-2.5 text-sm rounded"
 										/>
 									</div>
-									<p className="text-xs text-[#9e968e] leading-relaxed">
+									<p className="text-xs text-text-muted leading-relaxed">
 										{t('auth.mockCodeHint')}
 									</p>
 								</>
@@ -195,7 +195,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 											value={email}
 											onChange={(e) => setEmail(e.target.value)}
 											placeholder={t('auth.placeholderEmail')}
-											className="w-full px-4 py-2.5 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-[#2c2c2c]"
+											className="theme-input w-full px-4 py-2.5 text-sm rounded"
 										/>
 									</div>
 									<div>
@@ -209,7 +209,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 											value={password}
 											onChange={(e) => setPassword(e.target.value)}
 											placeholder={t('auth.placeholderPassword')}
-											className="w-full px-4 py-2.5 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-[#2c2c2c]"
+											className="theme-input w-full px-4 py-2.5 text-sm rounded"
 										/>
 									</div>
 								</>
@@ -218,7 +218,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 							<button
 								type="submit"
 								disabled={authLoading}
-								className="w-full px-4 py-2.5 bg-[#c8951e] text-white rounded font-medium hover:bg-[#dca828] active:scale-[0.98] transition-all disabled:opacity-50 text-sm"
+								className="theme-button-primary w-full px-4 py-2.5 rounded font-medium active:scale-[0.98] transition-all disabled:opacity-50 text-sm"
 							>
 								{authLoading
 									? authMode === "login"
@@ -240,7 +240,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 								onClick={() =>
 									setAuthMode(authMode === "login" ? "register" : "login")
 								}
-								className="font-medium text-[#c8951e] hover:underline"
+								className="font-medium text-brand-gold hover:underline"
 							>
 								{authMode === "login"
 									? t('auth.noAccountGoRegister')
@@ -251,7 +251,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 								onClick={() =>
 									setAuthMode(authMode === "wechat" ? "login" : "wechat")
 								}
-								className="font-medium text-[#c8951e] hover:underline"
+								className="font-medium text-brand-gold hover:underline"
 							>
 								{authMode === "wechat" ? t('auth.switchToAccount') : t('auth.switchToWechat')}
 							</button>

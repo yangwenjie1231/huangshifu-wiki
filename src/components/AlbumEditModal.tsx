@@ -95,43 +95,43 @@ export const AlbumEditModal = ({ open, onClose, onSuccess, album }: AlbumEditMod
       maxWidth="max-w-lg"
     >
       <div className="space-y-1.5">
-        <label className="text-sm font-medium text-[#2c2c2c]">专辑标题 <span className="text-red-500">*</span></label>
+        <label className="text-sm font-medium text-text-primary">专辑标题 <span className="text-red-500">*</span></label>
         <input
           type="text"
           value={formData.title}
           onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
           placeholder="例如：黄诗扶 1st Album"
-          className="w-full px-3 py-2 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-[#2c2c2c]"
+          className="theme-input w-full px-3 py-2 text-sm rounded"
         />
       </div>
       <div className="space-y-1.5">
-        <label className="text-sm font-medium text-[#2c2c2c]">艺术家 <span className="text-red-500">*</span></label>
+        <label className="text-sm font-medium text-text-primary">艺术家 <span className="text-red-500">*</span></label>
         <input
           type="text"
           value={formData.artist}
           onChange={(e) => setFormData((prev) => ({ ...prev, artist: e.target.value }))}
           placeholder="例如：黄诗扶"
-          className="w-full px-3 py-2 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-[#2c2c2c]"
+          className="theme-input w-full px-3 py-2 text-sm rounded"
         />
       </div>
       <div className="space-y-1.5">
-        <label className="text-sm font-medium text-[#2c2c2c]">描述</label>
+        <label className="text-sm font-medium text-text-primary">描述</label>
         <textarea
           value={formData.description || ''}
           onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
           placeholder="专辑简介（可选）"
           rows={3}
-          className="w-full px-3 py-2 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none resize-none"
+          className="theme-input w-full px-3 py-2 text-sm rounded resize-none"
         />
       </div>
       <div className="space-y-1.5">
-        <label className="text-sm font-medium text-[#2c2c2c]">原始链接</label>
+        <label className="text-sm font-medium text-text-primary">原始链接</label>
         <input
           type="text"
           value={formData.platformUrl || ''}
           onChange={(e) => setFormData((prev) => ({ ...prev, platformUrl: e.target.value }))}
           placeholder="例如：https://music.163.com/album?id=123456（可选）"
-          className="w-full px-3 py-2 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-[#2c2c2c]"
+          className="theme-input w-full px-3 py-2 text-sm rounded"
         />
       </div>
     </FormModal>

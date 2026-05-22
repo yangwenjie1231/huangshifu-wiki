@@ -3,30 +3,23 @@ import { UserPreferences, ViewMode, ThemeMode, DEFAULT_PREFERENCES } from '../ty
 import { apiGet, apiPatch } from '../lib/apiClient';
 import { useAuth } from './AuthContext';
 import type { AuthMeResponse } from '../types/api';
-
-const STORAGE_KEY = 'user_preferences';
-
-function getSystemTheme(): 'default' | 'dark' {
-  if (typeof window === 'undefined') return 'default';
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default';
-}
-
-function resolveTheme(mode: ThemeMode): 'default' | 'dark' {
-  if (mode === 'system') return getSystemTheme();
-  return mode;
-}
-
-function applyTheme(resolved: 'default' | 'dark'): void {
-  if (typeof document === 'undefined') return;
-  document.documentElement.setAttribute('data-theme', resolved);
-}
+import {
+  applyResolvedTheme,
+  hasStoredPreferenceValues,
+  mergeStoredPreferences,
+  normalizeStoredPreferences,
+  readStoredPreferences,
+  resolveThemeMode,
+  writeStoredPreferences,
+  type ResolvedTheme,
+} from '../lib/theme';
 
 interface UserPreferencesContextType {
   preferences: UserPreferences;
   updatePreferences: (updates: Partial<UserPreferences>) => Promise<void>;
   setViewMode: (mode: ViewMode) => Promise<void>;
   setTheme: (mode: ThemeMode) => Promise<void>;
-  resolvedTheme: 'default' | 'dark';
+  resolvedTheme: ResolvedTheme;
   loading: boolean;
 }
 
@@ -42,8 +35,16 @@ const UserPreferencesContext = createContext<UserPreferencesContextType>({
 export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading: authLoading } = useAuth();
   const [preferences, setPreferences] = useState<UserPreferences>(DEFAULT_PREFERENCES);
-  const [resolvedTheme, setResolvedTheme] = useState<'default' | 'dark'>('default');
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>('default');
   const [loading, setLoading] = useState(true);
+
+  const applyPreferences = useCallback((nextPreferences: UserPreferences) => {
+    setPreferences(nextPreferences)
+    writeStoredPreferences(nextPreferences, user?.uid)
+    const resolved = resolveThemeMode(nextPreferences.theme)
+    setResolvedTheme(resolved)
+    applyResolvedTheme(resolved)
+  }, [user?.uid])
 
   useEffect(() => {
     const loadPreferences = async () => {
@@ -51,37 +52,33 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
         if (user) {
           try {
             const userData = await fetchUserPreferencesFromAPI();
-            if (userData?.preferences) {
-              const prefs = {
-                ...DEFAULT_PREFERENCES,
-                ...(userData.preferences as Partial<UserPreferences>),
-              };
-              setPreferences(prefs);
-              const resolved = resolveTheme(prefs.theme);
-              setResolvedTheme(resolved);
-              applyTheme(resolved);
+            const storedPreferences = readStoredPreferences(user.uid, {
+              includeLegacyFallback: true,
+            })
+
+            if (hasStoredPreferenceValues(userData?.preferences)) {
+              applyPreferences(
+                mergeStoredPreferences(
+                  storedPreferences,
+                  userData.preferences as Partial<UserPreferences>
+                )
+              )
+            } else {
+              applyPreferences(storedPreferences)
             }
           } catch (error) {
             console.error('Failed to load user preferences from API:', error);
-            const localPrefs = loadFromLocalStorage();
-            setPreferences(localPrefs);
-            const resolved = resolveTheme(localPrefs.theme);
-            setResolvedTheme(resolved);
-            applyTheme(resolved);
+            applyPreferences(readStoredPreferences(user.uid, { includeLegacyFallback: true }))
           }
         } else {
-          const localPrefs = loadFromLocalStorage();
-          setPreferences(localPrefs);
-          const resolved = resolveTheme(localPrefs.theme);
-          setResolvedTheme(resolved);
-          applyTheme(resolved);
+          applyPreferences(readStoredPreferences())
         }
         setLoading(false);
       }
     };
 
     loadPreferences();
-  }, [user, authLoading]);
+  }, [applyPreferences, user, authLoading]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -89,35 +86,15 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = () => {
       if (preferences.theme === 'system') {
-        const resolved = getSystemTheme();
+        const resolved = resolveThemeMode('system');
         setResolvedTheme(resolved);
-        applyTheme(resolved);
+        applyResolvedTheme(resolved);
       }
     };
 
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, [preferences.theme]);
-
-  const loadFromLocalStorage = (): UserPreferences => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        return { ...DEFAULT_PREFERENCES, ...JSON.parse(stored) };
-      }
-    } catch (error) {
-      console.error('Failed to load preferences from localStorage:', error);
-    }
-    return DEFAULT_PREFERENCES;
-  };
-
-  const saveToLocalStorage = (prefs: UserPreferences) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
-    } catch (error) {
-      console.error('Failed to save preferences to localStorage:', error);
-    }
-  };
 
   const fetchUserPreferencesFromAPI = async (): Promise<{ preferences?: Record<string, unknown> } | null> => {
     try {
@@ -130,15 +107,11 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
   };
 
   const updatePreferences = useCallback(async (updates: Partial<UserPreferences>) => {
-    const newPrefs = { ...preferences, ...updates };
-    setPreferences(newPrefs);
-    saveToLocalStorage(newPrefs);
-
-    if (updates.theme !== undefined) {
-      const resolved = resolveTheme(updates.theme);
-      setResolvedTheme(resolved);
-      applyTheme(resolved);
-    }
+    const newPrefs = normalizeStoredPreferences({
+      ...preferences,
+      ...updates,
+    });
+    applyPreferences(newPrefs)
 
     if (user) {
       try {
@@ -147,7 +120,7 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
         console.error('Failed to sync preferences to server:', error);
       }
     }
-  }, [preferences, user]);
+  }, [applyPreferences, preferences, user]);
 
   const setViewMode = useCallback((mode: ViewMode) => {
     return updatePreferences({ viewMode: mode });

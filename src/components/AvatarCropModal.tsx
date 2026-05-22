@@ -128,15 +128,15 @@ export const AvatarCropModal = ({ open, onClose, onSuccess }: AvatarCropModalPro
 
   return (
     <div className="fixed inset-0 z-[120] bg-black/40 p-4 flex items-center justify-center">
-      <div className="w-full max-w-md bg-white rounded border border-[#e0dcd3] flex flex-col overflow-hidden">
-        <header className="px-5 py-4 border-b border-[#e0dcd3] flex items-center justify-between">
+      <div className="w-full max-w-md bg-surface rounded border border-border flex flex-col overflow-hidden">
+        <header className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div>
-            <h3 className="text-base font-bold text-[#2c2c2c]">修改头像</h3>
-            <p className="text-xs text-[#9e968e] mt-0.5">选择图片并调整裁剪区域</p>
+            <h3 className="text-base font-bold text-text-primary">修改头像</h3>
+            <p className="text-xs text-text-muted mt-0.5">选择图片并调整裁剪区域</p>
           </div>
           <button
             onClick={handleClose}
-            className="p-1.5 rounded text-[#9e968e] hover:text-[#2c2c2c] hover:bg-[#f7f5f0] transition-colors"
+            className="p-1.5 rounded text-text-muted hover:text-text-primary hover:bg-surface-alt transition-colors"
             aria-label="关闭"
           >
             <X size={18} />
@@ -156,15 +156,15 @@ export const AvatarCropModal = ({ open, onClose, onSuccess }: AvatarCropModalPro
               />
               <label
                 htmlFor="avatar-file-input"
-                className="flex flex-col items-center justify-center gap-3 w-32 h-32 rounded-full border-2 border-dashed border-[#e0dcd3] cursor-pointer hover:border-[#c8951e] transition-colors"
+                className="flex flex-col items-center justify-center gap-3 w-32 h-32 rounded-full border-2 border-dashed border-border cursor-pointer hover:border-brand-gold transition-colors"
               >
-                <Upload size={28} className="text-[#9e968e]" />
-                <span className="text-sm text-[#9e968e]">选择图片</span>
+                <Upload size={28} className="text-text-muted" />
+                <span className="text-sm text-text-muted">选择图片</span>
               </label>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-4">
-              <div className="relative w-64 h-64 overflow-hidden rounded-full border-2 border-[#e0dcd3]">
+              <div className="relative w-64 h-64 overflow-hidden rounded-full border-2 border-border">
                 <ReactCrop
                   crop={crop}
                   onChange={(_, percentCrop) => setCrop(percentCrop)}
@@ -181,10 +181,10 @@ export const AvatarCropModal = ({ open, onClose, onSuccess }: AvatarCropModalPro
                   />
                 </ReactCrop>
               </div>
-              <p className="text-xs text-[#9e968e]">拖动裁剪框调整头像区域</p>
+              <p className="text-xs text-text-muted">拖动裁剪框调整头像区域</p>
               <button
                 onClick={() => { setImageSrc(''); if (inputRef.current) inputRef.current.value = ''; }}
-                className="text-sm text-[#6b6560] hover:text-[#c8951e] underline"
+                className="text-sm text-text-secondary hover:text-brand-gold underline"
               >
                 重新选择
               </button>
@@ -195,17 +195,17 @@ export const AvatarCropModal = ({ open, onClose, onSuccess }: AvatarCropModalPro
           )}
         </div>
 
-        <footer className="px-5 py-3 border-t border-[#e0dcd3] bg-[#f7f5f0]/50 flex items-center justify-end gap-3">
+        <footer className="px-5 py-3 border-t border-border bg-surface-alt/60 flex items-center justify-end gap-3">
           <button
             onClick={handleClose}
-            className="px-4 py-2 rounded border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e] transition-all text-sm"
+            className="px-4 py-2 rounded theme-button-secondary transition-all text-sm"
           >
             取消
           </button>
           <button
             onClick={handleConfirm}
             disabled={!imageSrc || !crop || uploading}
-            className="px-5 py-2 rounded bg-[#c8951e] text-white font-medium hover:bg-[#dca828] disabled:opacity-50 inline-flex items-center gap-2 text-sm transition-all"
+            className="px-5 py-2 rounded theme-button-primary font-medium disabled:opacity-50 inline-flex items-center gap-2 text-sm transition-all"
           >
             {uploading ? <Loader2 size={14} className="animate-spin" /> : null}
             {uploading ? '上传中...' : '确认'}

@@ -74,13 +74,13 @@ export const AdminReviews = () => {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-[#2c2c2c] tracking-[0.12em]">审核队列</h1>
-        <button onClick={() => { invalidateApiCacheByPrefix('/api/admin/review-queue'); fetchQueue(); }} className="px-4 py-2 border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] rounded text-sm transition-all">
+        <h1 className="text-2xl font-bold text-text-primary tracking-[0.12em]">审核队列</h1>
+        <button onClick={() => { invalidateApiCacheByPrefix('/api/admin/review-queue'); fetchQueue(); }} className="px-4 py-2 border border-border text-text-secondary hover:text-brand-gold hover:border-brand-gold rounded text-sm transition-all">
           刷新队列
         </button>
       </div>
 
-      <div className="bg-white border border-[#e0dcd3] rounded p-4 flex flex-wrap items-center gap-3">
+      <div className="bg-surface border border-border rounded p-4 flex flex-wrap items-center gap-3">
         {([
           { id: 'all', label: '全部待审' },
           { id: 'wiki', label: '百科待审' },
@@ -91,7 +91,7 @@ export const AdminReviews = () => {
             onClick={() => setFilter(item.id)}
             className={clsx(
               'px-4 py-2 rounded text-xs font-medium transition-all',
-              filter === item.id ? 'bg-[#c8951e] text-white' : 'bg-[#f7f5f0] text-[#6b6560] hover:bg-[#f0ece3]',
+              filter === item.id ? 'bg-brand-gold-dark text-white' : 'bg-surface-alt text-text-secondary hover:bg-bg-tertiary',
             )}
           >
             {item.label}
@@ -102,26 +102,26 @@ export const AdminReviews = () => {
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-28 bg-white border border-[#e0dcd3] rounded animate-pulse" />
+            <div key={i} className="h-28 bg-surface border border-border rounded animate-pulse" />
           ))}
         </div>
       ) : items.length > 0 ? (
         <div className="space-y-3">
           {items.map((item) => (
-            <div key={`${item.reviewType}-${item.reviewId}`} className="bg-white border border-[#e0dcd3] rounded p-5">
+            <div key={`${item.reviewType}-${item.reviewId}`} className="bg-surface border border-border rounded p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className={clsx('px-2 py-0.5 text-[10px] font-medium rounded', item.reviewType === 'wiki' ? 'bg-[#f7f5f0] text-[#c8951e]' : 'bg-[#f0ece3] text-[#6b6560]')}>
+                    <span className={clsx('px-2 py-0.5 text-[10px] font-medium rounded', item.reviewType === 'wiki' ? 'bg-surface-alt text-brand-gold' : 'bg-bg-tertiary text-text-secondary')}>
                       {item.reviewType === 'wiki' ? '百科' : '帖子'}
                     </span>
-                    <span className="px-2 py-0.5 text-[10px] font-medium rounded bg-amber-50 text-amber-700">待审核</span>
+                    <span className="px-2 py-0.5 text-[10px] font-medium rounded theme-status-warning">待审核</span>
                   </div>
-                  <p className="font-semibold text-[#2c2c2c] mb-1">{item.title || item.slug || item.id}</p>
-                  <p className="text-xs text-[#9e968e] line-clamp-2">{(String(item.content || '')).replace(/[#*`]/g, '').slice(0, 160) || '无内容摘要'}</p>
-                  <p className="text-[10px] text-[#9e968e] mt-2">更新时间：{formatDateTime(item.updatedAt, 'N/A')}</p>
+                  <p className="font-semibold text-text-primary mb-1">{item.title || item.slug || item.id}</p>
+                  <p className="text-xs text-text-muted line-clamp-2">{(String(item.content || '')).replace(/[#*`]/g, '').slice(0, 160) || '无内容摘要'}</p>
+                  <p className="text-[10px] text-text-muted mt-2">更新时间：{formatDateTime(item.updatedAt, 'N/A')}</p>
                   {Array.isArray(item.sensitiveWords) && item.sensitiveWords.length > 0 && (
-                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
+                    <div className="mt-2 p-2 theme-status-error rounded">
                       <span className="text-[10px] font-medium text-red-600">检测到敏感词: </span>
                       {item.sensitiveWords.map((w) => (
                         <span key={w} className="text-[10px] text-red-500 mr-1">#{w}</span>
@@ -130,10 +130,10 @@ export const AdminReviews = () => {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => handleAction(item, 'reject')} className="px-4 py-2 rounded text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-all">
+                  <button onClick={() => handleAction(item, 'reject')} className="px-4 py-2 rounded text-xs font-medium theme-status-error hover:opacity-90 transition-all">
                     驳回
                   </button>
-                  <button onClick={() => handleAction(item, 'approve')} className="px-4 py-2 rounded text-xs font-medium bg-green-50 text-green-700 hover:bg-green-100 transition-all">
+                  <button onClick={() => handleAction(item, 'approve')} className="px-4 py-2 rounded text-xs font-medium theme-status-success hover:opacity-90 transition-all">
                     通过
                   </button>
                 </div>
@@ -142,7 +142,7 @@ export const AdminReviews = () => {
           ))}
         </div>
       ) : (
-        <div className="bg-white border border-[#e0dcd3] rounded py-16 text-center text-[#9e968e] italic">当前没有待审核内容</div>
+        <div className="bg-surface border border-border rounded py-16 text-center text-text-muted italic">当前没有待审核内容</div>
       )}
     </div>
   );

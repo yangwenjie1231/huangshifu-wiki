@@ -1,0 +1,253 @@
+import {
+  DEFAULT_PREFERENCES,
+  type ThemeMode,
+  type UserPreferences,
+  type ViewMode,
+} from '../types/userPreferences'
+
+export type ResolvedTheme = 'default' | 'dark'
+
+export const THEME_STORAGE_KEY = 'user_preferences'
+
+type ThemeStorageState = {
+  guest?: Partial<UserPreferences>
+  legacy?: Partial<UserPreferences>
+  users: Record<string, Partial<UserPreferences>>
+}
+
+export const THEME_META_COLOR: Record<ResolvedTheme, string> = {
+  default: '#f7d64a',
+  dark: '#171411',
+}
+
+export function isThemeMode(value: unknown): value is ThemeMode {
+  return value === 'default' || value === 'dark' || value === 'system'
+}
+
+export function normalizeThemeMode(value: unknown): ThemeMode {
+  if (isThemeMode(value)) {
+    return value
+  }
+
+  return 'system'
+}
+
+export function isViewMode(value: unknown): value is ViewMode {
+  return value === 'large' || value === 'medium' || value === 'small' || value === 'list'
+}
+
+export function normalizeViewMode(value: unknown): ViewMode {
+  if (isViewMode(value)) {
+    return value
+  }
+
+  return DEFAULT_PREFERENCES.viewMode
+}
+
+export function normalizeStoredPreferences(
+  value?: Partial<UserPreferences> | Record<string, unknown> | null
+): UserPreferences {
+  return {
+    ...DEFAULT_PREFERENCES,
+    viewMode: normalizeViewMode(value?.viewMode),
+    theme: normalizeThemeMode(value?.theme),
+  }
+}
+
+export function hasStoredPreferenceValues(
+  value?: Partial<UserPreferences> | Record<string, unknown> | null
+): boolean {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  return isViewMode(value.viewMode) || isThemeMode(value.theme)
+}
+
+export function mergeStoredPreferences(
+  base: UserPreferences,
+  value?: Partial<UserPreferences> | Record<string, unknown> | null
+): UserPreferences {
+  if (!value || typeof value !== 'object') {
+    return base
+  }
+
+  return {
+    viewMode: isViewMode(value.viewMode) ? value.viewMode : base.viewMode,
+    theme: isThemeMode(value.theme) ? value.theme : base.theme,
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function readThemeStorageState(): ThemeStorageState {
+  if (typeof window === 'undefined') {
+    return { users: {} }
+  }
+
+  try {
+    const raw = window.localStorage.getItem(THEME_STORAGE_KEY)
+    if (!raw) {
+      return { users: {} }
+    }
+
+    const parsed = JSON.parse(raw) as unknown
+    if (!isRecord(parsed)) {
+      return { users: {} }
+    }
+
+    const users: Record<string, Partial<UserPreferences>> = isRecord(parsed.users)
+      ? Object.fromEntries(
+          Object.entries(parsed.users).filter(([, value]) => isRecord(value))
+        )
+      : {}
+
+    if (isRecord(parsed.guest)) {
+      return {
+        guest: parsed.guest,
+        users,
+      }
+    }
+
+    if (!('guest' in parsed) && !('users' in parsed)) {
+      return {
+        legacy: parsed,
+        users,
+      }
+    }
+
+    return { users }
+  } catch {
+    return { users: {} }
+  }
+}
+
+function writeThemeStorageState(state: ThemeStorageState): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const nextState: { guest?: UserPreferences; users: Record<string, UserPreferences> } = {
+    users: Object.fromEntries(
+      Object.entries(state.users).map(([uid, preferences]) => [
+        uid,
+        normalizeStoredPreferences(preferences),
+      ])
+    ),
+  }
+
+  const guestSource = state.guest ?? state.legacy
+  if (guestSource) {
+    nextState.guest = normalizeStoredPreferences(guestSource)
+  }
+
+  window.localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(nextState))
+}
+
+function resolveStoredPreferences(
+  state: ThemeStorageState,
+  uid?: string | null,
+  options?: { includeLegacyFallback?: boolean }
+): Partial<UserPreferences> | undefined {
+  if (uid) {
+    return state.users[uid] ?? (options?.includeLegacyFallback ? state.legacy : undefined)
+  }
+
+  return state.guest ?? state.legacy
+}
+
+export function getSystemResolvedTheme(): ResolvedTheme {
+  if (typeof window === 'undefined') {
+    return 'default'
+  }
+
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default'
+}
+
+export function resolveThemeMode(mode: ThemeMode): ResolvedTheme {
+  if (mode === 'system') {
+    return getSystemResolvedTheme()
+  }
+
+  return mode
+}
+
+export function readBootstrapThemeMode(): ThemeMode {
+  if (typeof window === 'undefined') {
+    return DEFAULT_PREFERENCES.theme
+  }
+
+  try {
+    const state = readThemeStorageState()
+    // Bootstrap 早于认证初始化执行，这里只读取匿名可见的偏好，
+    // 不在首屏阶段猜测当前登录用户。
+    return normalizeStoredPreferences(state.guest ?? state.legacy).theme
+  } catch {
+    return DEFAULT_PREFERENCES.theme
+  }
+}
+
+export function readStoredPreferences(
+  uid?: string | null,
+  options?: { includeLegacyFallback?: boolean }
+): UserPreferences {
+  if (typeof window === 'undefined') {
+    return DEFAULT_PREFERENCES
+  }
+
+  try {
+    const state = readThemeStorageState()
+    return normalizeStoredPreferences(resolveStoredPreferences(state, uid, options))
+  } catch {
+    return DEFAULT_PREFERENCES
+  }
+}
+
+export function writeStoredPreferences(preferences: UserPreferences, uid?: string | null): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    const state = readThemeStorageState()
+    const normalized = normalizeStoredPreferences(preferences)
+
+    if (uid) {
+      state.users[uid] = normalized
+    } else {
+      state.guest = normalized
+    }
+
+    writeThemeStorageState(state)
+  } catch {
+    // ignore storage failures
+  }
+}
+
+export function applyResolvedTheme(theme: ResolvedTheme): void {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  const root = document.documentElement
+  const meta = document.querySelector('meta[name="theme-color"]')
+  const colorScheme = theme === 'dark' ? 'dark' : 'light'
+  const metaColor = THEME_META_COLOR[theme]
+
+  if (
+    root.getAttribute('data-theme') === theme &&
+    root.style.colorScheme === colorScheme &&
+    (!meta || meta.getAttribute('content') === metaColor)
+  ) {
+    return
+  }
+
+  root.setAttribute('data-theme', theme)
+  root.style.colorScheme = colorScheme
+
+  if (meta) {
+    meta.setAttribute('content', metaColor)
+  }
+}

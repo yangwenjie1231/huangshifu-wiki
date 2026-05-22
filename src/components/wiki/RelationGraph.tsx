@@ -198,11 +198,11 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
   }, [graph, currentSlug, handleClick]);
 
   if (!graph.nodes.length) {
-    return <div className="text-sm text-[#9e968e]">暂无可展示的关系图谱。</div>;
+    return <div className="text-sm text-text-muted">暂无可展示的关系图谱。</div>;
   }
 
   return (
-    <div className="rounded border border-[#c8951e]/20 bg-gradient-to-br from-[#f7f5f0] to-white p-6 sm:p-8">
+    <div className="rounded border border-brand-gold/20 bg-gradient-to-br from-surface-alt to-surface p-6 sm:p-8">
       <div
         ref={containerRef}
         className={`w-full h-[400px] sm:h-[500px] cursor-${cursor}`}
@@ -212,13 +212,13 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
 
       <div className="mt-6 flex flex-wrap gap-4 text-sm">
         {(Object.entries(RELATION_TYPE_LABELS) as [WikiRelationType, string][]).map(([type, label]) => (
-          <div key={type} className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#f7f5f0] rounded">
+          <div key={type} className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-alt rounded">
             <span className={`inline-block h-3 w-3 rounded`} style={{ backgroundColor: RELATION_GRAPH_TYPE_COLORS[type] }} />
-            <span className="text-[#6b6560] font-medium">{label}</span>
+            <span className="text-text-secondary font-medium">{label}</span>
           </div>
         ))}
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#f7f5f0]/50 rounded">
-          <span className="text-[#9e968e] font-medium">虚线表示反向推断关系</span>
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-alt/50 rounded">
+          <span className="text-text-muted font-medium">虚线表示反向推断关系</span>
         </div>
       </div>
     </div>

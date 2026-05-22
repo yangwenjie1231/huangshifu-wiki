@@ -6,6 +6,7 @@ import { ToastProvider } from './components/Toast';
 import { randomId } from './lib/randomId';
 import { initThirdPartyScripts } from './utils/scriptLoader';
 import { initWebVitals } from './utils/webVitals';
+import { applyResolvedTheme, readBootstrapThemeMode, resolveThemeMode } from './lib/theme';
 import './index.css';
 
 declare global {
@@ -17,6 +18,8 @@ declare global {
 if (globalThis.crypto && typeof globalThis.crypto.randomUUID !== 'function') {
   globalThis.crypto.randomUUID = randomId as Crypto['randomUUID'];
 }
+
+applyResolvedTheme(resolveThemeMode(readBootstrapThemeMode()))
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

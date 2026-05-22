@@ -72,13 +72,13 @@ const WikiHistory = () => {
 		<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
 			<Link
 				to={`/wiki/${slug}`}
-				className="inline-flex items-center gap-2 text-sm text-[#9e968e] hover:text-[#c8951e] transition-colors mb-5"
+				className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-brand-gold transition-colors mb-5"
 			>
 				<ArrowLeft size={18} /> 返回页面
 			</Link>
 
-			<div className="bg-white rounded border border-[#e0dcd3] p-8 sm:p-10">
-				<h2 className="text-3xl font-serif font-bold text-[#c8951e] mb-8 flex items-center gap-3">
+			<div className="bg-surface rounded border border-border p-8 sm:p-10">
+				<h2 className="text-3xl font-serif font-bold text-brand-gold mb-8 flex items-center gap-3">
 					<History size={28} /> 历史版本: {slug}
 				</h2>
 
@@ -87,7 +87,7 @@ const WikiHistory = () => {
 						{[1, 2, 3].map((i) => (
 							<div
 								key={i}
-								className="h-20 bg-[#f7f5f0] rounded animate-pulse"
+								className="h-20 bg-surface-alt rounded animate-pulse"
 							></div>
 						))}
 					</div>
@@ -96,17 +96,17 @@ const WikiHistory = () => {
 						{revisions.map((rev, i) => (
 							<div
 								key={rev.id}
-								className="p-6 bg-[#f7f5f0]/30 border border-[#e0dcd3] rounded flex items-center justify-between group hover:bg-[#f7f5f0] transition-all"
+								className="p-6 bg-surface-alt/50 border border-border rounded flex items-center justify-between group hover:bg-surface-alt transition-all"
 							>
 								<div className="flex items-center gap-4">
-									<div className="w-10 h-10 rounded bg-[#c8951e]/10 flex items-center justify-center text-[#c8951e] font-bold">
+									<div className="w-10 h-10 rounded bg-brand-gold/10 flex items-center justify-center text-brand-gold font-bold">
 										{revisions.length - i}
 									</div>
 									<div>
-										<p className="text-sm font-bold text-[#2c2c2c]">
+										<p className="text-sm font-bold text-text-primary">
 											{formatDate(rev.createdAt, "yyyy-MM-dd HH:mm:ss")}
 										</p>
-										<p className="text-xs text-[#9e968e]">
+										<p className="text-xs text-text-muted">
 											编辑者: {rev.editorName} ({rev.editorUid.substring(0, 6)})
 										</p>
 									</div>
@@ -115,13 +115,13 @@ const WikiHistory = () => {
 									<button
 										onClick={() => handlePreviewRevision(rev)}
 										disabled={loadingRevision}
-										className="px-4 py-2 bg-white text-[#c8951e] text-xs font-bold rounded border border-[#c8951e]/20 hover:bg-[#c8951e] hover:text-white transition-all opacity-0 group-hover:opacity-100 disabled:opacity-50"
+										className="px-4 py-2 bg-surface text-brand-gold text-xs font-bold rounded border border-brand-gold/20 hover:bg-brand-gold hover:text-white transition-all opacity-0 group-hover:opacity-100 disabled:opacity-50"
 									>
 										{loadingRevision ? "加载中..." : "预览内容"}
 									</button>
 									<button
 										onClick={() => handleRollback(rev)}
-										className="px-4 py-2 bg-white text-[#c8951e] text-xs font-bold rounded border border-[#c8951e]/20 hover:bg-[#c8951e] hover:text-white transition-all opacity-0 group-hover:opacity-100"
+										className="px-4 py-2 bg-surface text-brand-gold text-xs font-bold rounded border border-brand-gold/20 hover:bg-brand-gold hover:text-white transition-all opacity-0 group-hover:opacity-100"
 									>
 										回滚到此版本
 									</button>
@@ -130,7 +130,7 @@ const WikiHistory = () => {
 						))}
 					</div>
 				) : (
-					<p className="text-center text-[#9e968e] italic py-12">暂无历史记录</p>
+					<p className="text-center text-text-muted italic py-12">暂无历史记录</p>
 				)}
 			</div>
 
@@ -141,14 +141,14 @@ const WikiHistory = () => {
 							initial={{ opacity: 0, scale: 0.95 }}
 							animate={{ opacity: 1, scale: 1 }}
 							exit={{ opacity: 0, scale: 0.95 }}
-							className="bg-white rounded w-full max-w-4xl max-h-[80vh] overflow-hidden flex flex-col"
+						className="bg-surface rounded w-full max-w-4xl max-h-[80vh] overflow-hidden flex flex-col border border-border"
 						>
-							<div className="p-8 border-b border-gray-100 flex justify-between items-center">
+							<div className="p-8 border-b border-border flex justify-between items-center">
 								<div>
-									<h3 className="text-2xl font-serif font-bold text-[#c8951e]">
+									<h3 className="text-2xl font-serif font-bold text-brand-gold">
 										版本预览
 									</h3>
-									<p className="text-xs text-[#9e968e] mt-1">
+									<p className="text-xs text-text-muted mt-1">
 										{formatDate(
 											selectedRevision.createdAt,
 											"yyyy-MM-dd HH:mm:ss",
@@ -158,21 +158,21 @@ const WikiHistory = () => {
 								</div>
 								<button
 									onClick={() => setSelectedRevision(null)}
-									className="p-2 text-[#9e968e] hover:text-red-500"
+									className="p-2 text-text-muted hover:text-red-500"
 								>
 									<X size={24} />
 								</button>
 							</div>
-							<div className="p-8 sm:p-12 overflow-y-auto flex-grow prose prose-stone max-w-none">
-								<h1 className="text-4xl font-serif font-bold text-[#c8951e] mb-8">
+								<div className="p-8 sm:p-12 overflow-y-auto flex-grow prose max-w-none">
+								<h1 className="text-4xl font-serif font-bold text-brand-gold mb-8">
 									{selectedRevision.title}
 								</h1>
 								<WikiMarkdown content={selectedRevision.content} />
 							</div>
-							<div className="p-8 border-t border-gray-100 flex justify-end gap-4">
+							<div className="p-8 border-t border-border flex justify-end gap-4">
 								<button
 									onClick={() => setSelectedRevision(null)}
-									className="px-8 py-3 text-[#9e968e] font-bold hover:text-[#c8951e]"
+									className="px-8 py-3 text-text-muted font-bold hover:text-brand-gold"
 								>
 									关闭
 								</button>
@@ -181,7 +181,7 @@ const WikiHistory = () => {
 										handleRollback(selectedRevision);
 										setSelectedRevision(null);
 									}}
-									className="px-8 py-3 bg-[#c8951e] text-white rounded font-bold hover:bg-[#c8951e]/90 transition-all"
+									className="px-8 py-3 theme-button-primary rounded font-bold transition-all"
 								>
 									回滚到此版本
 								</button>

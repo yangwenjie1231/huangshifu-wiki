@@ -384,21 +384,19 @@ const Music = () => {
     return <PageSkeleton variant="music" />;
   }
 
-  return (
-    <div
-      className="gufeng-music-page min-h-screen"
-      style={{
-        backgroundColor: '#f7f5f0',
-        color: '#2c2c2c',
-        fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif",
-        lineHeight: 1.8,
-      }}
+	return (
+		<div
+			className="gufeng-music-page min-h-screen bg-bg-primary"
+			style={{
+				fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif",
+				lineHeight: 1.8,
+			}}
     >
       <div className="max-w-[1100px] mx-auto px-6 py-8 pb-32 md:pb-32">
         {/* Header */}
         <header className="mb-7">
           <div className="flex items-end justify-between flex-wrap gap-3">
-            <h1 className="text-[1.75rem] font-semibold tracking-[0.12em] text-[#2c2c2c]">{t('music.title')}</h1>
+            <h1 className="text-[1.75rem] font-semibold tracking-[0.12em] text-text-primary">{t('music.title')}</h1>
             {isAdmin && (
               <div className="flex flex-wrap gap-3">
                 <button
@@ -410,8 +408,8 @@ const Music = () => {
                    className={clsx(
                      "px-4 py-2 text-[0.9375rem] rounded border transition-all",
                      isBatchMode
-                       ? "bg-[#c8951e] text-white border-[#c8951e]"
-                       : "bg-transparent text-[#6b6560] border-[#e0dcd3] hover:text-[#c8951e] hover:border-[#c8951e]"
+                       ? "bg-[var(--color-theme-accent)] text-white border-[var(--color-theme-accent)]"
+                       : "bg-transparent text-text-secondary border-border hover:text-brand-gold hover:border-brand-gold"
                    )}
                 >
                   <List size={16} className="inline mr-1.5 -mt-0.5" />
@@ -422,7 +420,7 @@ const Music = () => {
                     if (isBanned) { show('账号已被封禁，无法执行此操作', { variant: 'error' }); return; }
                     setIsImportModalOpen(true);
                   }}
-                  className="px-4 py-2 text-[0.9375rem] rounded border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all"
+                  className="px-4 py-2 text-[0.9375rem] rounded border border-border text-text-secondary hover:text-brand-gold hover:border-brand-gold transition-all"
                 >
                   <Search size={16} className="inline mr-1.5 -mt-0.5" />
                   {t('music.linkImport')}
@@ -432,14 +430,14 @@ const Music = () => {
                     if (isBanned) { show('账号已被封禁，无法执行此操作', { variant: 'error' }); return; }
                     setIsAdding(!isAdding);
                   }}
-                  className="px-4 py-2 text-[0.9375rem] rounded bg-[#c8951e] text-white hover:bg-[#dca828] transition-all"
+                  className="px-4 py-2 text-[0.9375rem] rounded theme-button-primary transition-all"
                 >
                   {isAdding ? <X size={16} className="inline mr-1.5 -mt-0.5" /> : <Plus size={16} className="inline mr-1.5 -mt-0.5" />}
                   {isAdding ? t('music.cancelAdd') : t('music.addMusic')}
                 </button>
                 <Link
                   to="/music/links"
-                  className="px-4 py-2 text-[0.9375rem] rounded border border-[#e0dcd3] text-[#6b6560] hover:text-[#c8951e] hover:border-[#c8951e] transition-all"
+                  className="px-4 py-2 text-[0.9375rem] rounded border border-border text-text-secondary hover:text-brand-gold hover:border-brand-gold transition-all"
                 >
                   <Link2 size={16} className="inline mr-1.5 -mt-0.5" />
                   {t('music.linkManage')}
@@ -456,18 +454,18 @@ const Music = () => {
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="mb-7 p-6 md:p-8 bg-white rounded border border-[#e0dcd3]"
+              className="mb-7 p-6 md:p-8 bg-surface rounded border border-border"
             >
-              <h3 className="text-lg font-semibold text-[#2c2c2c] mb-5 flex items-center gap-2">
-                <Sparkles size={18} className="text-[#c8951e]" /> {t('music.inputMusicId')}
+              <h3 className="text-lg font-semibold text-text-primary mb-5 flex items-center gap-2">
+                <Sparkles size={18} className="text-brand-gold" /> {t('music.inputMusicId')}
               </h3>
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-4">
-                  <label className="text-sm font-medium text-[#6b6560]">{t('music.selectPlatform')}：</label>
+                  <label className="text-sm font-medium text-text-secondary">{t('music.selectPlatform')}：</label>
                   <select
                     value={selectedPlatform}
                     onChange={e => setSelectedPlatform(e.target.value as typeof selectedPlatform)}
-                    className="px-4 py-2 bg-[#f7f5f0] rounded border border-[#e0dcd3] text-sm focus:outline-none focus:border-[#c8951e] text-[#2c2c2c]"
+                    className="theme-input px-4 py-2 rounded text-sm"
                     style={{ fontFamily: "inherit" }}
                   >
                     <option value="netease">{t('music.platforms.netease')}</option>
@@ -481,14 +479,14 @@ const Music = () => {
                   value={searchId}
                   onChange={e => setSearchId(e.target.value)}
                   placeholder={`${t('music.inputPlaceholder')} ${selectedPlatform === 'netease' ? t('music.platforms.netease') : selectedPlatform === 'qq' ? t('music.platforms.tencent') : selectedPlatform === 'kugou' ? t('music.platforms.kugou') : selectedPlatform === 'baidu' ? t('music.platforms.baidu') : t('music.platforms.kuwo')} ${t('music.idOrLinkList')}`}
-                  className="w-full px-4 py-3 bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:outline-none focus:border-[#c8951e] min-h-[100px] text-sm text-[#2c2c2c] resize-y"
+                  className="theme-input w-full px-4 py-3 rounded min-h-[100px] text-sm resize-y"
                   style={{ fontFamily: "inherit" }}
                 />
                 <div className="flex justify-end">
                   <button
                     onClick={handleAddSong}
                     disabled={loading}
-                    className="px-6 py-2.5 bg-[#c8951e] text-white rounded text-sm font-medium hover:bg-[#dca828] transition-all disabled:opacity-50"
+                    className="px-6 py-2.5 theme-button-primary rounded text-sm font-medium transition-all disabled:opacity-50"
                   >
                     {loading ? t('music.processing') : t('music.getAndAdd')}
                   </button>
@@ -526,10 +524,10 @@ const Music = () => {
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
-                className="bg-white rounded p-8 max-w-md w-full border border-[#e0dcd3]"
+                className="bg-surface rounded p-8 max-w-md w-full border border-border"
               >
-                <h3 className="text-xl font-semibold text-[#2c2c2c] mb-4 tracking-wide">{t('music.confirmDelete')}</h3>
-                <p className="text-[#6b6560] mb-8 text-[0.9375rem]">
+                <h3 className="text-xl font-semibold text-text-primary mb-4 tracking-wide">{t('music.confirmDelete')}</h3>
+                <p className="text-text-secondary mb-8 text-[0.9375rem]">
                   {confirmModal.type === 'single'
                     ? t('music.confirmDeleteSingle')
                     : t('music.confirmDeleteBatch', { count: selectedSongs.size })}
@@ -537,13 +535,13 @@ const Music = () => {
                 <div className="flex gap-4">
                   <button
                     onClick={() => setConfirmModal({ show: false, type: 'single' })}
-                    className="flex-1 px-6 py-3 bg-[#f0ece3] text-[#6b6560] rounded font-semibold hover:bg-[#e0dcd3] transition-all"
+                    className="flex-1 px-6 py-3 bg-surface-alt text-text-secondary rounded font-semibold hover:bg-bg-tertiary transition-all"
                   >
                     {t('music.cancel')}
                   </button>
                   <button
                     onClick={() => confirmModal.type === 'single' ? handleDeleteSong(confirmModal.id!) : handleBatchDelete()}
-                    className="flex-1 px-6 py-3 bg-[#c8951e] text-white rounded font-semibold hover:bg-[#dca828] transition-all"
+                    className="flex-1 px-6 py-3 theme-button-primary rounded font-semibold transition-all"
                   >
                     {t('music.confirmDeleteButton')}
                   </button>
@@ -582,7 +580,7 @@ const Music = () => {
               <div className="flex flex-col mt-6">
                 {paginatedSongs.length > 0 ? (
                   <>
-                    <div className="divide-y divide-[#ebe8e0]">
+                    <div className="divide-y divide-border">
                       {paginatedSongs.map((song) => (
                         <SongCard
                           key={song.docId}
@@ -609,41 +607,41 @@ const Music = () => {
                           initial={{ opacity: 0, y: 12 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: 12 }}
-                          className="border border-[#e0dcd3] rounded overflow-hidden mt-6 bg-white"
+                          className="border border-border rounded overflow-hidden mt-6 bg-surface"
                         >
-                          <div className="p-5 bg-[#f7f5f0]">
+                          <div className="p-5 bg-surface-alt">
                             <div className="flex items-center justify-between mb-3">
-                              <h3 className="font-semibold text-[#2c2c2c] flex items-center gap-2 text-[0.9375rem]">
+                              <h3 className="font-semibold text-text-primary flex items-center gap-2 text-[0.9375rem]">
                                 <MessageSquare size={16} />
                                 {t('music.relatedPosts')}
                               </h3>
                               <button
                                 onClick={() => setSelectedSongForPosts(null)}
-                                className="p-1.5 hover:bg-[#f0ece3] rounded transition-colors"
+                                className="p-1.5 hover:bg-bg-tertiary rounded transition-colors"
                               >
-                                <X size={16} className="text-[#9e968e]" />
+                                <X size={16} className="text-text-muted" />
                               </button>
                             </div>
                           </div>
-                          <div className="divide-y divide-[#ebe8e0]">
+                          <div className="divide-y divide-border">
                             {loadingPosts ? (
-                              <div className="p-8 text-center text-[#9e968e] italic">{t('music.loading')}</div>
+                              <div className="p-8 text-center text-text-muted italic">{t('music.loading')}</div>
                             ) : songPosts.length > 0 ? (
                               songPosts.map((post) => (
-                                <div key={post.id} className="p-5 hover:bg-[#f7f5f0] transition-colors">
+                                <div key={post.id} className="p-5 hover:bg-surface-alt transition-colors">
                                   <div className="flex items-center gap-3 mb-1.5">
-                                    <span className="font-semibold text-sm text-[#2c2c2c]">{post.title}</span>
-                                    <span className="text-xs text-[#9e968e]">by {post.authorUid?.substring(0, 6)}</span>
+                                    <span className="font-semibold text-sm text-text-primary">{post.title}</span>
+                                    <span className="text-xs text-text-muted">by {post.authorUid?.substring(0, 6)}</span>
                                   </div>
-                                  <p className="text-sm text-[#6b6560] line-clamp-2">{post.content}</p>
-                                  <div className="flex items-center gap-4 mt-2 text-xs text-[#9e968e]">
+                                  <p className="text-sm text-text-secondary line-clamp-2">{post.content}</p>
+                                  <div className="flex items-center gap-4 mt-2 text-xs text-text-muted">
                                     <span className="flex items-center gap-1"><Heart size={12} /> {post.likesCount}</span>
                                     <span className="flex items-center gap-1"><MessageSquare size={12} /> {post.commentsCount}</span>
                                   </div>
                                 </div>
                               ))
                             ) : (
-                              <div className="p-8 text-center text-[#9e968e] italic">{t('music.noPosts')}</div>
+                              <div className="p-8 text-center text-text-muted italic">{t('music.noPosts')}</div>
                             )}
                           </div>
                         </motion.div>
@@ -664,7 +662,7 @@ const Music = () => {
                     )}
                   </>
                 ) : (
-                  <div className="py-20 text-center text-[#9e968e] italic tracking-[0.1em]">{t('music.noMusic')}</div>
+                  <div className="py-20 text-center text-text-muted italic tracking-[0.1em]">{t('music.noMusic')}</div>
                 )}
               </div>
             ) : (
@@ -673,9 +671,9 @@ const Music = () => {
                   <div className={clsx("grid", VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
                     {[1,2,3,4,5,6].map(i => (
                       <div key={i} className="animate-pulse">
-                        <div className="aspect-square rounded bg-[#f0ece3] mb-2.5" />
-                        <div className="h-4 bg-[#f0ece3] rounded w-2/3 mb-1.5" />
-                        <div className="h-3 bg-[#f0ece3] rounded w-1/2" />
+                        <div className="aspect-square rounded bg-surface-alt mb-2.5" />
+                        <div className="h-4 bg-surface-alt rounded w-2/3 mb-1.5" />
+                        <div className="h-3 bg-surface-alt rounded w-1/2" />
                       </div>
                     ))}
                   </div>
@@ -704,7 +702,7 @@ const Music = () => {
                     )}
                   </>
                 ) : (
-                  <div className="py-20 text-center text-[#9e968e] italic tracking-[0.1em]">{t('music.noAlbums')}</div>
+                  <div className="py-20 text-center text-text-muted italic tracking-[0.1em]">{t('music.noAlbums')}</div>
                 )}
               </div>
             )}
@@ -713,8 +711,8 @@ const Music = () => {
           {/* Sidebar */}
           <aside className="lg:sticky lg:top-20">
             {/* Now Playing */}
-            <div className="py-5 border-b border-[#e0dcd3]">
-              <h3 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-3.5">
+            <div className="py-5 border-b border-border">
+              <h3 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-3.5">
                 {t('music.playing')}
               </h3>
               {currentSong ? (
@@ -723,36 +721,36 @@ const Music = () => {
                     <img
                       src={currentSong.cover}
                       alt=""
-                      className="w-10 h-10 rounded object-cover bg-[#f0ece3] flex-shrink-0"
+                      className="w-10 h-10 rounded object-cover bg-surface-alt flex-shrink-0"
                       referrerPolicy="no-referrer"
                     />
                     <div className="min-w-0">
-                      <p className="text-[0.875rem] text-[#2c2c2c] truncate font-medium">{currentSong.title}</p>
-                      <p className="text-xs text-[#9e968e] truncate">{currentSong.artist}</p>
+                      <p className="text-[0.875rem] text-text-primary truncate font-medium">{currentSong.title}</p>
+                      <p className="text-xs text-text-muted truncate">{currentSong.artist}</p>
                     </div>
                   </div>
                   <MusicPlayer songId={currentSong.id} />
                 </div>
               ) : (
                 <div className="py-5 text-center">
-                  <p className="text-sm text-[#9e968e]">{t('music.selectSongToPlay')}</p>
+                  <p className="text-sm text-text-muted">{t('music.selectSongToPlay')}</p>
                 </div>
               )}
             </div>
 
             {/* Stats */}
             <div className="py-5">
-              <h3 className="text-[0.875rem] font-semibold text-[#6b6560] tracking-[0.12em] uppercase mb-3.5">
+              <h3 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-3.5">
                 统计
               </h3>
               <div className="flex flex-col gap-2.5">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-[#9e968e]">单曲</span>
-                  <span className="text-[#2c2c2c] font-medium">{songs.length}</span>
+                  <span className="text-text-muted">单曲</span>
+                  <span className="text-text-primary font-medium">{songs.length}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-[#9e968e]">专辑</span>
-                  <span className="text-[#2c2c2c] font-medium">{albums.length}</span>
+                  <span className="text-text-muted">专辑</span>
+                  <span className="text-text-primary font-medium">{albums.length}</span>
                 </div>
               </div>
             </div>

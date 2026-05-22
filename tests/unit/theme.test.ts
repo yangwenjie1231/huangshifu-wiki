@@ -1,0 +1,255 @@
+// @vitest-environment jsdom
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import {
+  hasStoredPreferenceValues,
+  mergeStoredPreferences,
+  normalizeThemeMode,
+  normalizeStoredPreferences,
+  readBootstrapThemeMode,
+  resolveThemeMode,
+  applyResolvedTheme,
+  readStoredPreferences,
+  writeStoredPreferences,
+  THEME_STORAGE_KEY,
+} from '../../src/lib/theme'
+import { DEFAULT_PREFERENCES } from '../../src/types/userPreferences'
+
+describe('theme helpers', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+    document.documentElement.removeAttribute('data-theme')
+    document.documentElement.style.colorScheme = ''
+    let meta = document.querySelector('meta[name="theme-color"]')
+    if (!meta) {
+      meta = document.createElement('meta')
+      meta.setAttribute('name', 'theme-color')
+      document.head.appendChild(meta)
+    }
+    meta.setAttribute('content', '#FFD700')
+  })
+
+  it('normalizes unsupported theme values to system', () => {
+    expect(normalizeThemeMode('academy')).toBe('system')
+    expect(normalizeThemeMode('dark')).toBe('dark')
+  })
+
+  it('reads stored theme mode from user preferences payload', () => {
+    window.localStorage.setItem(
+      THEME_STORAGE_KEY,
+      JSON.stringify({
+        guest: {
+          viewMode: 'medium',
+          theme: 'dark',
+        },
+        users: {},
+      })
+    )
+
+    expect(readStoredPreferences().theme).toBe('dark')
+  })
+
+  it('normalizes stored preferences and ignores unsupported values', () => {
+    window.localStorage.setItem(
+      THEME_STORAGE_KEY,
+      JSON.stringify({
+        viewMode: 'cinema',
+        theme: 'academy',
+        extra: 'ignored',
+      })
+    )
+
+    expect(readStoredPreferences()).toEqual(DEFAULT_PREFERENCES)
+    expect(
+      normalizeStoredPreferences({
+        viewMode: 'large',
+        theme: 'dark',
+        extra: 'ignored',
+      } as Record<string, unknown>)
+    ).toEqual({
+      viewMode: 'large',
+      theme: 'dark',
+    })
+  })
+
+  it('detects whether stored preferences contain supported values', () => {
+    expect(hasStoredPreferenceValues(undefined)).toBe(false)
+    expect(hasStoredPreferenceValues({})).toBe(false)
+    expect(hasStoredPreferenceValues({ theme: 'dark' })).toBe(true)
+    expect(hasStoredPreferenceValues({ viewMode: 'small' })).toBe(true)
+    expect(hasStoredPreferenceValues({ theme: 'academy' })).toBe(false)
+  })
+
+  it('merges stored preferences onto an existing base without resetting missing fields', () => {
+    expect(
+      mergeStoredPreferences(
+        {
+          viewMode: 'small',
+          theme: 'dark',
+        },
+        {
+          theme: 'default',
+        }
+      )
+    ).toEqual({
+      viewMode: 'small',
+      theme: 'default',
+    })
+  })
+
+  it('writes only normalized user preference fields', () => {
+    writeStoredPreferences({
+      viewMode: 'small',
+      theme: 'dark',
+    })
+
+    expect(JSON.parse(window.localStorage.getItem(THEME_STORAGE_KEY) || '{}')).toEqual({
+      guest: {
+        viewMode: 'small',
+        theme: 'dark',
+      },
+      users: {},
+    })
+  })
+
+  it('stores user-scoped preferences without affecting guest preferences', () => {
+    writeStoredPreferences(
+      {
+        viewMode: 'list',
+        theme: 'default',
+      },
+      'user-1'
+    )
+
+    expect(readStoredPreferences()).toEqual(DEFAULT_PREFERENCES)
+    expect(readStoredPreferences('user-1')).toEqual({
+      viewMode: 'list',
+      theme: 'default',
+    })
+    expect(JSON.parse(window.localStorage.getItem(THEME_STORAGE_KEY) || '{}')).toEqual({
+      users: {
+        'user-1': {
+          viewMode: 'list',
+          theme: 'default',
+        },
+      },
+    })
+  })
+
+  it('reads legacy flat storage as guest preferences', () => {
+    window.localStorage.setItem(
+      THEME_STORAGE_KEY,
+      JSON.stringify({
+        viewMode: 'small',
+        theme: 'dark',
+      })
+    )
+
+    expect(readStoredPreferences()).toEqual({
+      viewMode: 'small',
+      theme: 'dark',
+    })
+  })
+
+  it('uses legacy flat storage as authenticated fallback during migration', () => {
+    window.localStorage.setItem(
+      THEME_STORAGE_KEY,
+      JSON.stringify({
+        viewMode: 'small',
+        theme: 'dark',
+      })
+    )
+
+    expect(readStoredPreferences('user-1', { includeLegacyFallback: true })).toEqual({
+      viewMode: 'small',
+      theme: 'dark',
+    })
+    expect(readStoredPreferences('user-1')).toEqual(DEFAULT_PREFERENCES)
+  })
+
+  it('bootstrap intentionally ignores user-scoped theme and keeps guest theme', () => {
+    window.localStorage.setItem(
+      THEME_STORAGE_KEY,
+      JSON.stringify({
+        guest: {
+          viewMode: 'medium',
+          theme: 'default',
+        },
+        users: {
+          'user-1': {
+            viewMode: 'small',
+            theme: 'dark',
+          },
+        },
+      })
+    )
+
+    expect(readBootstrapThemeMode()).toBe('default')
+  })
+
+  it('uses legacy flat theme as bootstrap fallback during migration', () => {
+    window.localStorage.setItem(
+      THEME_STORAGE_KEY,
+      JSON.stringify({
+        viewMode: 'small',
+        theme: 'dark',
+      })
+    )
+
+    expect(readBootstrapThemeMode()).toBe('dark')
+  })
+
+  it('bootstrap intentionally ignores user-scoped theme when guest preferences are absent', () => {
+    window.localStorage.setItem(
+      THEME_STORAGE_KEY,
+      JSON.stringify({
+        users: {
+          'user-1': {
+            viewMode: 'small',
+            theme: 'dark',
+          },
+        },
+      })
+    )
+
+    expect(readBootstrapThemeMode()).toBe('system')
+  })
+
+  it('resolves system theme using matchMedia', () => {
+    vi.spyOn(window, 'matchMedia').mockReturnValue({
+      matches: true,
+      media: '(prefers-color-scheme: dark)',
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    } as unknown as MediaQueryList)
+
+    expect(resolveThemeMode('system')).toBe('dark')
+  })
+
+  it('applies resolved theme to html and theme-color meta', () => {
+    applyResolvedTheme('dark')
+
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+    expect(document.documentElement.style.colorScheme).toBe('dark')
+    expect(document.querySelector('meta[name="theme-color"]')?.getAttribute('content')).toBe('#171411')
+  })
+
+  it('skips duplicate DOM writes when the resolved theme is already applied', () => {
+    applyResolvedTheme('dark')
+
+    const rootSetAttributeSpy = vi.spyOn(document.documentElement, 'setAttribute')
+    const meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement
+    const metaSetAttributeSpy = vi.spyOn(meta, 'setAttribute')
+
+    applyResolvedTheme('dark')
+
+    expect(rootSetAttributeSpy).not.toHaveBeenCalled()
+    expect(metaSetAttributeSpy).not.toHaveBeenCalled()
+
+    rootSetAttributeSpy.mockRestore()
+    metaSetAttributeSpy.mockRestore()
+  })
+})

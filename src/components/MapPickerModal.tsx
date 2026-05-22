@@ -237,26 +237,26 @@ export const MapPickerModal = ({
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded border border-[#e0dcd3] w-[90vw] h-[80vh] max-w-4xl flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#e0dcd3]">
-          <h2 className="text-base font-bold text-[#2c2c2c]">选择地点</h2>
+      <div className="relative bg-surface rounded border border-border w-[90vw] h-[80vh] max-w-4xl flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <h2 className="text-base font-bold text-text-primary">选择地点</h2>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded text-[#9e968e] hover:text-[#2c2c2c] hover:bg-[#f7f5f0] transition-colors"
+            className="p-1 rounded text-text-muted hover:text-text-primary hover:bg-surface-alt transition-colors"
           >
             <X size={18} />
           </button>
         </div>
 
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-[#e0dcd3]">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
           <div className="relative flex-1">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9e968e]" />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
             <input
               ref={searchInputRef}
               type="text"
               placeholder="搜索地址..."
-              className="w-full pl-9 pr-4 py-2 text-sm bg-[#f7f5f0] rounded border border-[#e0dcd3] focus:border-[#c8951e] focus:outline-none text-[#2c2c2c]"
+              className="theme-input w-full pl-9 pr-4 py-2 text-sm rounded"
               onKeyDown={(e) => {
                 if (e.nativeEvent.isComposing) return;
                 if (e.key !== 'Enter') return;
@@ -269,23 +269,23 @@ export const MapPickerModal = ({
             type="button"
             onClick={handleSearch}
             disabled={searching}
-            className="px-4 py-2 rounded bg-[#c8951e] text-white text-sm font-medium hover:bg-[#dca828] transition-all disabled:opacity-50"
+            className="px-4 py-2 rounded theme-button-primary text-sm font-medium transition-all disabled:opacity-50"
           >
             {searching ? <Loader2 size={14} className="animate-spin" /> : '搜索'}
           </button>
         </div>
 
         {searchResults.length > 0 && (
-          <div className="absolute top-[7.5rem] left-4 right-4 bg-white rounded border border-[#e0dcd3] z-10 max-h-60 overflow-y-auto">
+          <div className="absolute top-[7.5rem] left-4 right-4 bg-surface rounded border border-border z-10 max-h-60 overflow-y-auto">
             {searchResults.map((result, index) => (
               <button
                 key={index}
                 type="button"
                 onClick={() => handleResultSelect(result)}
-                className="w-full px-4 py-3 text-left border-b border-[#e0dcd3] last:border-b-0 hover:bg-[#f7f5f0] transition-colors"
+                className="w-full px-4 py-3 text-left border-b border-border last:border-b-0 hover:bg-surface-alt transition-colors"
               >
-                <div className="text-sm font-medium text-[#2c2c2c]">{result.name}</div>
-                <div className="text-xs text-[#9e968e]">{result.address}</div>
+                <div className="text-sm font-medium text-text-primary">{result.name}</div>
+                <div className="text-xs text-text-muted">{result.address}</div>
               </button>
             ))}
           </div>
@@ -293,20 +293,20 @@ export const MapPickerModal = ({
 
         <div className="flex-1 relative">
           {loading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#f7f5f0]">
+            <div className="absolute inset-0 flex items-center justify-center bg-surface-alt">
               <div className="text-center">
-                <Loader2 size={28} className="animate-spin text-[#c8951e] mx-auto" />
-                <p className="mt-2 text-sm text-[#9e968e]">地图加载中...</p>
+                <Loader2 size={28} className="animate-spin text-brand-gold mx-auto" />
+                <p className="mt-2 text-sm text-text-muted">地图加载中...</p>
               </div>
             </div>
           )}
           {error && (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#f7f5f0]">
+            <div className="absolute inset-0 flex items-center justify-center bg-surface-alt">
               <div className="text-center">
-                <MapPin size={28} className="text-[#9e968e] mx-auto" />
+                <MapPin size={28} className="text-text-muted mx-auto" />
                 <p className="mt-2 text-sm text-red-500">{error}</p>
                 {!AMAP_JS_API_KEY && (
-                  <p className="mt-1 text-xs text-[#9e968e]">请在 .env.local 中配置 VITE_AMAP_JS_API_KEY</p>
+                  <p className="mt-1 text-xs text-text-muted">请在 .env.local 中配置 VITE_AMAP_JS_API_KEY</p>
                 )}
               </div>
             </div>
@@ -315,24 +315,24 @@ export const MapPickerModal = ({
         </div>
 
         {selectedLocation && (
-          <div className="px-4 py-3 border-t border-[#e0dcd3] bg-[#f7f5f0]">
+          <div className="px-4 py-3 border-t border-border bg-surface-alt">
             <div className="flex items-start gap-2">
-              <MapPin size={18} className="text-[#c8951e] mt-0.5 shrink-0" />
+              <MapPin size={18} className="text-brand-gold mt-0.5 shrink-0" />
               <div>
-                <div className="text-sm font-medium text-[#2c2c2c]">
+                <div className="text-sm font-medium text-text-primary">
                   {selectedLocation.province}{selectedLocation.city}{selectedLocation.district}
                 </div>
-                <div className="text-xs text-[#9e968e]">{selectedLocation.address}</div>
+                <div className="text-xs text-text-muted">{selectedLocation.address}</div>
               </div>
             </div>
           </div>
         )}
 
-        <div className="flex justify-end gap-2 px-4 py-3 border-t border-[#e0dcd3] pb-safe">
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-border pb-safe">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded border border-[#e0dcd3] text-[#6b6560] hover:border-[#c8951e] hover:text-[#c8951e] transition-all text-sm"
+            className="px-4 py-2 rounded theme-button-secondary transition-all text-sm"
           >
             取消
           </button>
@@ -340,7 +340,7 @@ export const MapPickerModal = ({
             type="button"
             onClick={handleConfirm}
             disabled={!selectedLocation}
-            className="px-4 py-2 rounded bg-[#c8951e] text-white font-medium hover:bg-[#dca828] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            className="px-4 py-2 rounded theme-button-primary font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
             确认选择
           </button>

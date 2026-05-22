@@ -108,6 +108,41 @@
   color-scheme: light;
 }
 
+[data-theme="dark"] {
+  color-scheme: dark;
+  --color-theme-bg: #171411;
+  --color-theme-text: #f4ede2;
+  --color-theme-muted: #b8ab9a;
+  --color-theme-surface: #211c18;
+  --color-theme-surface-alt: #2a241f;
+  --color-theme-border: #4a3d31;
+  --color-theme-accent: #d4a843;
+  --color-theme-accent-strong: #f0d39a;
+  --shadow-theme-card: 0 16px 40px rgba(0, 0, 0, 0.28);
+  --theme-header-image: linear-gradient(135deg, rgba(212, 168, 67, 0.14), rgba(244, 237, 226, 0.03));
+  --color-bg-primary: #171411;
+  --color-bg-secondary: #211c18;
+  --color-bg-tertiary: #2a241f;
+  --color-surface: #211c18;
+  --color-surface-alt: #2a241f;
+  --color-border: #4a3d31;
+  --color-border-light: #5b4a3b;
+  --color-text-primary: #f4ede2;
+  --color-text-secondary: #d6c7b4;
+  --color-text-muted: #b8ab9a;
+  --color-text-antique: #f4ede2;
+  --color-text-antique-muted: #b8ab9a;
+  --color-text-placeholder: #8d7f70;
+  --color-bg-antique: #171411;
+  --color-accent-antique: #d4a843;
+  --color-surface-error: #2e2621;
+  --color-surface-form: #211c18;
+  --glass-bg: rgba(32, 27, 23, 0.62);
+  --glass-bg-strong: rgba(36, 30, 26, 0.82);
+  --glass-border: rgba(255, 240, 214, 0.1);
+  --glass-shadow: 0 10px 32px rgba(0, 0, 0, 0.35);
+}
+
 @layer base {
   /* #root 容器：确保在移动端/iPad 正确撑开并可见 */
   #root {
@@ -135,6 +170,7 @@
     font-family: var(--font-theme-main);
     margin: 0;
     padding: 0;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -143,8 +179,8 @@
 
   /* 全局 ::selection 样式 - 古风黄色调 */
   ::selection {
-    background-color: #fdf5d8;
-    color: #c8951e;
+    background-color: color-mix(in srgb, var(--color-brand-gold) 30%, transparent);
+    color: var(--color-theme-accent);
   }
 
   /* skip-to-content 无障碍样式 */
@@ -204,12 +240,99 @@
   border-radius: var(--radius-theme-card);
 }
 
+.theme-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-theme-card);
+}
+
+.theme-panel-soft {
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+}
+
+.theme-divider {
+  border-color: var(--color-border);
+}
+
+.theme-input {
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.theme-input::placeholder {
+  color: var(--color-text-placeholder);
+}
+
+.theme-input:focus {
+  outline: none;
+  border-color: var(--color-theme-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-theme-accent) 16%, transparent);
+}
+
+.theme-button-primary {
+  background: var(--color-theme-accent);
+  color: #fff;
+}
+
+.theme-button-primary:hover {
+  background: var(--color-brand-gold-dark);
+}
+
+.theme-button-secondary {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+.theme-button-secondary:hover {
+  border-color: var(--color-theme-accent);
+  color: var(--color-theme-accent);
+}
+
+.theme-tag {
+  background: color-mix(in srgb, var(--color-theme-accent) 12%, transparent);
+  color: var(--color-theme-accent);
+  border: 1px solid color-mix(in srgb, var(--color-theme-accent) 22%, transparent);
+}
+
+.theme-status-success {
+  background: color-mix(in srgb, var(--color-success) 14%, var(--color-surface));
+  color: color-mix(in srgb, var(--color-success-hover) 82%, var(--color-text-primary));
+  border: 1px solid color-mix(in srgb, var(--color-success) 26%, transparent);
+}
+
+.theme-status-warning {
+  background: color-mix(in srgb, var(--color-warning) 14%, var(--color-surface));
+  color: color-mix(in srgb, var(--color-warning-hover) 82%, var(--color-text-primary));
+  border: 1px solid color-mix(in srgb, var(--color-warning) 26%, transparent);
+}
+
+.theme-status-error {
+  background: color-mix(in srgb, var(--color-error) 14%, var(--color-surface));
+  color: color-mix(in srgb, var(--color-error-hover) 82%, var(--color-text-primary));
+  border: 1px solid color-mix(in srgb, var(--color-error) 24%, transparent);
+}
+
+.theme-status-warning-soft {
+  background: color-mix(in srgb, var(--color-warning) 10%, var(--color-surface));
+  color: color-mix(in srgb, var(--color-warning-hover) 78%, var(--color-text-primary));
+  border: 1px solid color-mix(in srgb, var(--color-warning) 20%, transparent);
+}
+
 .glass {
-  @apply bg-white/60 backdrop-blur-md border border-white/20;
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
 }
 
 .glass-dark {
-  @apply bg-black/40 backdrop-blur-md border border-white/10;
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* 旋转动画 - 用于加载指示器或装饰性元素 */
@@ -227,20 +350,20 @@ input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 12px;
   height: 12px;
-  background: #FFD700;
+  background: var(--color-brand-gold);
   border-radius: 50%;
   cursor: pointer;
-  border: 2px solid #FFD700;
+  border: 2px solid var(--color-brand-gold);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 input[type="range"]::-moz-range-thumb {
   width: 12px;
   height: 12px;
-  background: #FFD700;
+  background: var(--color-brand-gold);
   border-radius: 50%;
   cursor: pointer;
-  border: 2px solid #FFD700;
+  border: 2px solid var(--color-brand-gold);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
@@ -1033,4 +1156,27 @@ html {
 [data-theme="dark"] input[type="range"]::-moz-range-thumb {
   background: #d4a843;
   border-color: #d4a843;
+}
+
+[data-theme="dark"] .wmde-markdown,
+[data-theme="dark"] .w-md-editor,
+[data-theme="dark"] .w-md-editor-text,
+[data-theme="dark"] .w-md-editor-text-pre,
+[data-theme="dark"] .w-md-editor-text-input,
+[data-theme="dark"] .w-md-editor-preview {
+  background-color: var(--color-surface) !important;
+  color: var(--color-text-primary) !important;
+}
+
+[data-theme="dark"] .w-md-editor-toolbar {
+  background-color: var(--color-surface-alt) !important;
+  border-bottom-color: var(--color-border) !important;
+}
+
+[data-theme="dark"] .w-md-editor-toolbar button {
+  color: var(--color-text-secondary) !important;
+}
+
+[data-theme="dark"] .w-md-editor-toolbar button:hover {
+  background-color: rgba(255, 255, 255, 0.06) !important;
 }
