@@ -40,6 +40,10 @@ describe('apiClient', () => {
   });
 
   it('sends JSON body for write requests', async () => {
+    vi.stubGlobal('document', {
+      cookie: 'XSRF-TOKEN=test-xsrf-token',
+    });
+
     fetchMock
       .mockResolvedValueOnce(new Response(JSON.stringify({ saved: true }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ saved: true }), { status: 200 }))
@@ -54,22 +58,49 @@ describe('apiClient', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       '/api/posts',
-      expect.objectContaining({ method: 'POST', body: JSON.stringify({ title: 'post' }) }),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ title: 'post' }),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-XSRF-TOKEN': 'test-xsrf-token',
+        },
+      }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       '/api/posts/1',
-      expect.objectContaining({ method: 'PUT', body: JSON.stringify({ title: 'updated' }) }),
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ title: 'updated' }),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-XSRF-TOKEN': 'test-xsrf-token',
+        },
+      }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
       '/api/posts/1',
-      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ title: 'patched' }) }),
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ title: 'patched' }),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-XSRF-TOKEN': 'test-xsrf-token',
+        },
+      }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,
       '/api/posts/1',
-      expect.objectContaining({ method: 'DELETE' }),
+      expect.objectContaining({
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-XSRF-TOKEN': 'test-xsrf-token',
+        },
+      }),
     );
   });
 
@@ -84,6 +115,10 @@ describe('apiClient', () => {
   });
 
   it('uploads multipart form data without JSON headers', async () => {
+    vi.stubGlobal('document', {
+      cookie: 'XSRF-TOKEN=test-xsrf-token',
+    });
+
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ file: { url: '/uploads/demo.png' } }), { status: 200 }),
     );
@@ -99,6 +134,9 @@ describe('apiClient', () => {
       expect.objectContaining({
         method: 'POST',
         credentials: 'include',
+        headers: {
+          'X-XSRF-TOKEN': 'test-xsrf-token',
+        },
         body: formData,
       }),
     );

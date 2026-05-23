@@ -16,6 +16,7 @@ import {
   type DedupOptions,
 } from '../utils/requestDedup';
 import type { z } from 'zod';
+import { getXsrfToken } from './xsrf';
 
 interface BaseRequestOptions extends RequestInit {
   query?: Record<string, string | number | boolean | undefined | null>;
@@ -33,12 +34,6 @@ interface RequestOptions<T = unknown> extends BaseRequestOptions {
 const API_JSON_HEADERS = {
   'Content-Type': 'application/json',
 };
-
-function getXsrfToken(): string | undefined {
-  if (typeof document === 'undefined') return undefined;
-  const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
-  return match ? decodeURIComponent(match[1]) : undefined;
-}
 
 /**
  * 默认去重选项
@@ -268,9 +263,11 @@ export async function apiUpload<T>(path: string, formData: FormData, options?: A
   }
 
   // 否则使用 fetch
+  const xsrfToken = getXsrfToken();
   const response = await fetch(path, {
     method: 'POST',
     credentials: 'include',
+    headers: xsrfToken ? { 'X-XSRF-TOKEN': xsrfToken } : undefined,
     body: formData,
     signal,
   });

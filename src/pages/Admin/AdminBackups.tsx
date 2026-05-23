@@ -87,12 +87,13 @@ const AdminBackups = () => {
     }
     setActionLoading('download');
     try {
+      const xsrfToken = getXsrfToken();
       const response = await fetch(`/api/admin/backup/${encodeURIComponent(filename)}/download`, {
         method: 'POST',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          ...(getXsrfToken() ? { 'X-XSRF-TOKEN': getXsrfToken()! } : {}),
+          ...(xsrfToken ? { 'X-XSRF-TOKEN': xsrfToken } : {}),
         },
         body: JSON.stringify({ password: secret }),
       });

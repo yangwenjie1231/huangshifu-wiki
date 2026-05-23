@@ -1,3 +1,5 @@
+import { getXsrfToken } from './xsrf';
+
 export interface AuthProviderInfo {
   providerId: string;
   displayName: string | null;
@@ -155,9 +157,11 @@ export async function loginWithWeChat<T = unknown>(code: string, profile?: { dis
 }
 
 export async function logoutRequest() {
+  const xsrfToken = getXsrfToken();
   const response = await fetch('/api/auth/logout', {
     method: 'POST',
     credentials: 'include',
+    headers: xsrfToken ? { 'X-XSRF-TOKEN': xsrfToken } : undefined,
   });
 
   await parseJsonResponse(response);

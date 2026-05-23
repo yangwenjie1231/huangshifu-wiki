@@ -145,11 +145,24 @@ describe('auth module', () => {
     await refreshAuthState();
     expect(auth.currentUser?.uid).toBe('u_before_logout');
 
+    vi.stubGlobal('document', {
+      cookie: 'XSRF-TOKEN=test-xsrf-token',
+    });
+
     fetchMock
       .mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ user: null }), { status: 200 }));
 
     await logoutRequest();
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/auth/logout',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'X-XSRF-TOKEN': 'test-xsrf-token' },
+      }),
+    );
     expect(auth.currentUser).toBeNull();
   });
 

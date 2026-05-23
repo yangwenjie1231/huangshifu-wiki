@@ -201,7 +201,7 @@ if (CORS_ORIGIN) {
     origin: origins.length === 1 ? origins[0] : origins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-XSRF-TOKEN'],
     maxAge: CORS_MAX_AGE,
     preflightContinue: false,
     optionsSuccessStatus: 204,
