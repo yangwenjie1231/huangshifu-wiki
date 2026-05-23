@@ -283,6 +283,9 @@ app.use(requestLoggerMiddleware);
 
 // 静态文件服务 - 必须在路由注册之前
 app.use('/uploads', express.static(uploadsDir));
+app.use('/uploads', (_req, res) => {
+  res.status(404).end();
+});
 
 registerRegionRoutes(app);
 registerExifRoutes(app);
