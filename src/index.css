@@ -5,24 +5,26 @@
   --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
 
-  /* 普通主题 - 油菜花黄色系 */
-  --color-brand-primary: #FFD700;
-  --color-brand-olive: #5A5A40;
-  --color-brand-cream: #FDFDF7;
-  --color-brand-paper: #FFFFFF;
-  --color-theme-bg: #FDFDF7;
-  --color-theme-text: #111827;
-  --color-theme-muted: #6B7280;
-  --color-theme-surface: #FFFFFF;
-  --color-theme-surface-alt: #FAF7F0;
-  --color-theme-border: #E5DED1;
-  --color-theme-accent: #5A5A40;
-  --color-theme-accent-strong: #2C1810;
+  /* 普通主题 - 原站米白 / 金棕色系 */
+  --color-brand-primary: #c8951e;
+  --color-brand-olive: #6b6560;
+  --color-brand-cream: #f7f5f0;
+  --color-brand-paper: #ffffff;
+  --color-theme-bg: #f7f5f0;
+  --color-theme-text: #2c2c2c;
+  --color-theme-muted: #9e968e;
+  --color-theme-surface: #ffffff;
+  --color-theme-surface-alt: #f0ece3;
+  --color-theme-border: #e0dcd3;
+  --color-theme-accent: #8a6313;
+  --color-theme-accent-strong: #6f4f0f;
+  --color-theme-accent-soft: #f3e7c4;
+  --color-theme-accent-contrast: #fffdf8;
   --font-theme-main: var(--font-sans);
   --font-theme-serif: var(--font-serif);
   --radius-theme-card: 1.5rem;
   --shadow-theme-card: 0 10px 30px rgba(0, 0, 0, 0.06);
-  --theme-header-image: linear-gradient(135deg, rgba(255, 215, 0, 0.12), rgba(90, 90, 64, 0.08));
+  --theme-header-image: linear-gradient(135deg, rgba(200, 149, 30, 0.12), rgba(240, 236, 227, 0.7));
   
   /* 高亮文字色 - 苹果标志性渐变色彩 */
   --color-highlight-1: rgba(255, 149, 0, 0.8);
@@ -41,39 +43,39 @@
   /* ===== 设计令牌别名系统 (Design Token Aliases) ===== */
   /* 将语义化命名映射到项目已有颜色，保持向后兼容 */
 
-  /* 品牌色 (Brand) - 金黄色系 */
-  --color-brand-gold: #FFD700;
-  --color-brand-gold-light: #FFE44D;
-  --color-brand-gold-dark: #D4AF37;
+  /* 品牌色 (Brand) - 原站金棕色 */
+  --color-brand-gold: #c8951e;
+  --color-brand-gold-light: #d9ab47;
+  --color-brand-gold-dark: #a87912;
 
   /* 背景色 (Background) */
-  --color-bg-primary: #FDFDF7;
-  --color-bg-secondary: #FAF7F0;
-  --color-bg-tertiary: #F5F2EB;
+  --color-bg-primary: #f7f5f0;
+  --color-bg-secondary: #f0ece3;
+  --color-bg-tertiary: #ebe4d6;
 
   /* 表面色 (Surface) */
-  --color-surface: #FFFFFF;
-  --color-surface-alt: #FAF7F0;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f7f5f0;
 
   /* 边框色 (Border) */
-  --color-border: #E5DED1;
-  --color-border-light: #F0EAD8;
+  --color-border: #e0dcd3;
+  --color-border-light: #ece6da;
 
   /* 文字色 (Text) */
-  --color-text-primary: #111827;
-  --color-text-secondary: #4B5563;
-  --color-text-muted: #6B7280;
+  --color-text-primary: #2c2c2c;
+  --color-text-secondary: #6b6560;
+  --color-text-muted: #9e968e;
   --color-text-antique: #2c2c2c;
   --color-text-antique-muted: #9e968e;
-  --color-text-placeholder: #999;
+  --color-text-placeholder: #a9a29c;
 
   /* 古风页面色 (Antique Page) */
   --color-bg-antique: #f7f5f0;
   --color-accent-antique: #c8951e;
 
   /* 占位/错误状态色 (Placeholder & Error State) */
-  --color-surface-error: #f0f0f0;
-  --color-surface-form: #fafafa;
+  --color-surface-error: #f5f2eb;
+  --color-surface-form: #faf7f2;
   --color-action-blue: #1890ff;
 
   /* 功能色 (Functional) */
@@ -110,36 +112,38 @@
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --color-theme-bg: #171411;
-  --color-theme-text: #f4ede2;
+  --color-theme-bg: #1f1a16;
+  --color-theme-text: #efe6d8;
   --color-theme-muted: #b8ab9a;
-  --color-theme-surface: #211c18;
-  --color-theme-surface-alt: #2a241f;
-  --color-theme-border: #4a3d31;
-  --color-theme-accent: #d4a843;
-  --color-theme-accent-strong: #f0d39a;
+  --color-theme-surface: #2a231e;
+  --color-theme-surface-alt: #342c25;
+  --color-theme-border: #51453a;
+  --color-theme-accent: #b07b17;
+  --color-theme-accent-strong: #d4a843;
+  --color-theme-accent-soft: rgba(212, 168, 67, 0.18);
+  --color-theme-accent-contrast: #fff8eb;
   --shadow-theme-card: 0 16px 40px rgba(0, 0, 0, 0.28);
-  --theme-header-image: linear-gradient(135deg, rgba(212, 168, 67, 0.14), rgba(244, 237, 226, 0.03));
-  --color-bg-primary: #171411;
-  --color-bg-secondary: #211c18;
-  --color-bg-tertiary: #2a241f;
-  --color-surface: #211c18;
-  --color-surface-alt: #2a241f;
-  --color-border: #4a3d31;
-  --color-border-light: #5b4a3b;
-  --color-text-primary: #f4ede2;
-  --color-text-secondary: #d6c7b4;
+  --theme-header-image: linear-gradient(135deg, rgba(200, 149, 30, 0.18), rgba(52, 44, 37, 0.7));
+  --color-bg-primary: #1f1a16;
+  --color-bg-secondary: #2a231e;
+  --color-bg-tertiary: #342c25;
+  --color-surface: #2a231e;
+  --color-surface-alt: #342c25;
+  --color-border: #51453a;
+  --color-border-light: #67584a;
+  --color-text-primary: #efe6d8;
+  --color-text-secondary: #d0c1ac;
   --color-text-muted: #b8ab9a;
-  --color-text-antique: #f4ede2;
+  --color-text-antique: #efe6d8;
   --color-text-antique-muted: #b8ab9a;
-  --color-text-placeholder: #8d7f70;
-  --color-bg-antique: #171411;
-  --color-accent-antique: #d4a843;
-  --color-surface-error: #2e2621;
-  --color-surface-form: #211c18;
-  --glass-bg: rgba(32, 27, 23, 0.62);
-  --glass-bg-strong: rgba(36, 30, 26, 0.82);
-  --glass-border: rgba(255, 240, 214, 0.1);
+  --color-text-placeholder: #8f8172;
+  --color-bg-antique: #1f1a16;
+  --color-accent-antique: #c8951e;
+  --color-surface-error: #3a2f28;
+  --color-surface-form: #2a231e;
+  --glass-bg: rgba(42, 35, 30, 0.58);
+  --glass-bg-strong: rgba(52, 44, 37, 0.82);
+  --glass-border: rgba(255, 236, 204, 0.12);
   --glass-shadow: 0 10px 32px rgba(0, 0, 0, 0.35);
 }
 
@@ -170,7 +174,6 @@
     font-family: var(--font-theme-main);
     margin: 0;
     padding: 0;
-    transition: background-color 0.2s ease, color 0.2s ease;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -179,8 +182,8 @@
 
   /* 全局 ::selection 样式 - 古风黄色调 */
   ::selection {
-    background-color: color-mix(in srgb, var(--color-brand-gold) 30%, transparent);
-    color: var(--color-theme-accent);
+    background-color: #fdf5d8;
+    color: #c8951e;
   }
 
   /* skip-to-content 无障碍样式 */
@@ -273,11 +276,13 @@
 
 .theme-button-primary {
   background: var(--color-theme-accent);
-  color: #fff;
+  color: var(--color-theme-accent-contrast);
+  box-shadow: 0 2px 8px rgba(138, 99, 19, 0.12);
 }
 
 .theme-button-primary:hover {
-  background: var(--color-brand-gold-dark);
+  background: var(--color-brand-gold);
+  box-shadow: 0 8px 18px rgba(138, 99, 19, 0.22);
 }
 
 .theme-button-secondary {
@@ -292,9 +297,9 @@
 }
 
 .theme-tag {
-  background: color-mix(in srgb, var(--color-theme-accent) 12%, transparent);
+  background: var(--color-theme-accent-soft);
   color: var(--color-theme-accent);
-  border: 1px solid color-mix(in srgb, var(--color-theme-accent) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-theme-accent) 28%, transparent);
 }
 
 .theme-status-success {

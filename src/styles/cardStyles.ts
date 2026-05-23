@@ -6,7 +6,7 @@
  */
 
 export const CARD = {
-	/** 卡片基础容器：白底、边框、圆角、hover 高亮、overflow 隐藏、group 上下文 */
+	/** 卡片基础容器：使用主题语义色，随浅色/深色模式切换 */
 	base: "bg-surface border border-border rounded overflow-hidden hover:border-brand-gold transition-all group",
 
 	// ── 布局变体 ──────────────────────────────────────────────
@@ -22,7 +22,7 @@ export const CARD = {
 
 	// ── 子元素样式 ────────────────────────────────────────────
 
-	/** 标签 / 徽章（浅金底、金色字） */
+	/** 标签 / 徽章（使用主题语义色） */
 	tag: "px-2 py-0.5 theme-tag text-[10px] font-medium rounded",
 
 	/** 元信息行（时间、点赞等） */

@@ -52,7 +52,7 @@ export const DefaultHome = () => {
           <div className="flex flex-wrap items-center justify-center gap-3">
             <Link
               to='/wiki'
-              className="px-6 py-2.5 bg-brand-gold text-white text-[0.9375rem] rounded hover:bg-brand-gold/90 transition-all flex items-center gap-2"
+              className="px-6 py-2.5 theme-button-primary text-[0.9375rem] rounded transition-all flex items-center gap-2"
             >
               <Library size={16} /> 进入百科
             </Link>
