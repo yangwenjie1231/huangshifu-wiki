@@ -1081,7 +1081,6 @@ npm run download:sensitive-words
 | `EditLock`        | 编辑锁                                  |
 | `WikiBranch`      | Wiki 分支                              |
 | `WikiPullRequest` | Wiki PR                              |
-| `BirthdayConfig`  | 生贺配置（用于"从前书院"皮肤的内容管理）                |
 
 ***
 
@@ -1183,46 +1182,6 @@ pm2 restart huangshifu-wiki --update-env
 
 根据存储策略切换使用。
 
-### BirthdayConfig 表结构
-
-`BirthdayConfig` 表用于存储"从前书院"生贺特别皮肤的内容配置，支持管理员通过后台动态修改。
-
-| 字段          | 类型       | 说明                                                                                     |
-| ----------- | -------- | -------------------------------------------------------------------------------------- |
-| `id`        | String   | 唯一标识（cuid）                                                                             |
-| `type`      | String   | 配置类型：`notice`/`school_history`/`honor_alumni`/`campus`/`guestbook`/`contact`/`program` |
-| `title`     | String   | 标题                                                                                     |
-| `content`   | String   | 内容（JSON 字符串格式）                                                                         |
-| `sortOrder` | Int      | 排序顺序                                                                                   |
-| `isActive`  | Boolean  | 是否启用                                                                                   |
-| `createdAt` | DateTime | 创建时间                                                                                   |
-| `updatedAt` | DateTime | 更新时间                                                                                   |
-
-**API 接口**：
-
-| 接口                                | 方法     | 说明             |
-| --------------------------------- | ------ | -------------- |
-| `/api/birthday/config`            | GET    | 获取所有生贺配置       |
-| `/api/birthday/config/:type`      | GET    | 按类型获取配置        |
-| `/api/birthday/config`            | POST   | 创建配置（需管理员权限）   |
-| `/api/birthday/config/:id`        | PUT    | 更新配置（需管理员权限）   |
-| `/api/birthday/config/:id/toggle` | PATCH  | 切换激活状态（需管理员权限） |
-| `/api/birthday/config/:id`        | DELETE | 删除配置（需管理员权限）   |
-
-**配置类型说明**：
-
-| 类型               | 说明    | content 格式                                         |
-| ---------------- | ----- | -------------------------------------------------- |
-| `notice`         | 通知公告  | `{ concertDate, concertLocation, callToAction }`   |
-| `school_history` | 校史拾遗  | 纯文本                                                |
-| `honor_alumni`   | 荣誉校友  | `{ titles[], representativeWorks[], description }` |
-| `campus`         | 雅学之境  | 纯文本                                                |
-| `guestbook`      | 学子留言壁 | `[{ nickname, content }]`                          |
-| `contact`        | 联系我们  | `{ department, description, contacts[] }`          |
-| `program`        | 生贺节目  | `{ category: 'music'/'video'/'dance'/'easter' }`   |
-
-***
-
 ## 附录：更新日志
 
 ### v7.x
@@ -1253,16 +1212,6 @@ pm2 restart huangshifu-wiki --update-env
 
 ### v6.x
 
-- **从前书院生贺皮肤配置系统**：新增 `BirthdayConfig` 数据库模型和完整 CRUD API，支持管理员通过后台动态管理生贺页面内容
-  - 新增 `prisma/schema.prisma`：`BirthdayConfig` 模型
-  - 新增 `src/server/birthday/birthdayService.ts`：生贺配置服务
-  - 新增 `src/server/birthday/routes.ts`：RESTful API 路由
-  - 新增 `src/pages/Recruit.tsx`：`/recruit` 招募与培养页面
-  - 更新 `src/pages/Admin.tsx`：新增"生贺配置"管理 Tab
-  - 更新 `src/pages/Home.tsx`：AcademyHome 组件新增 8 个内容模块
-  - 新增 `prisma/seed-birthday.ts`：生贺配置种子数据脚本
-  - **数据库变更**：新增 `BirthdayConfig` 表
-  - **部署注意**：需执行 `npm run db:generate` 和 `npm run db:push`（开发环境）或 `npm run db:deploy`（生产环境）以应用新的 Prisma schema。可选执行 `npx tsx prisma/seed-birthday.ts` 初始化默认生贺配置数据。
 - **移除 firebaseCompat 兼容层**：彻底删除 `src/lib/firebaseCompat/` 与 `src/firebase.ts`
   - `imageService` 改为直接调用 `/api/image-maps`（按 MD5 查重 + upsert 映射）
   - `Music` 页面认证引用改为 `src/lib/auth.ts`

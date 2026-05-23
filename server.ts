@@ -28,7 +28,6 @@ import { requestLoggerMiddleware } from './src/server/middleware/requestLogger';
 import { globalLimiter, isRateLimitDisabledInDevelopment } from './src/server/middleware/rateLimiter';
 import { registerRegionRoutes } from './src/server/location/routes';
 import { registerExifRoutes } from './src/server/location/exifRoutes';
-import { registerBirthdayRoutes } from './src/server/birthday/routes';
 import { registerAuthRoutes } from './src/server/routes/auth.routes';
 import { registerUsersRoutes } from './src/server/routes/users.routes';
 import { registerWikiRoutes } from './src/server/routes/wiki.routes';
@@ -307,7 +306,6 @@ app.use('/uploads', (_req, res) => {
 
 registerRegionRoutes(app);
 registerExifRoutes(app);
-registerBirthdayRoutes(app);
 registerAuthRoutes(app);
 registerUsersRoutes(app);
 registerWikiRoutes(app);

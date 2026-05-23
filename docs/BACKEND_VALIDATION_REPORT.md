@@ -438,7 +438,6 @@ if (!page || !canViewWikiPage(page, req.authUser)) {
 | Geo Service | `tests/unit/geoService.test.ts` | 9 | ✅ |
 | Random ID | `tests/unit/randomId.test.ts` | 5 | ✅ |
 | View Modes | `tests/unit/viewModes.test.ts` | 6 | ✅ |
-| Birthday Service | `tests/unit/birthdayService.test.ts` | 8 | ✅ |
 | Format Utils | `tests/unit/formatUtils.test.ts` | 7 | ✅ |
 | HTML Sanitizer | `tests/unit/htmlSanitizer.test.ts` | 18 | ✅ |
 | Relation Sorter | `tests/unit/relationSorter.test.ts` | 26 | ✅ |

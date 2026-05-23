@@ -1,12 +1,3 @@
-export interface BirthdayConfig {
-  id: string;
-  type: string;
-  title: string;
-  content: string;
-  sortOrder: number;
-  isActive: boolean;
-}
-
 export interface AnimatedStatProps {
   value: number;
   suffix?: string;

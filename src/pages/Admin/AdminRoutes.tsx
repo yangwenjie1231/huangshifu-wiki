@@ -30,7 +30,6 @@ export const AdminRoutes = () => (
       <Route path="backups" element={<AdminToolPage type="backups" />} />
       <Route path="images" element={<AdminToolPage type="images" />} />
       <Route path="sensitive_check" element={<AdminToolPage type="sensitive_check" />} />
-      <Route path="birthday" element={<AdminToolPage type="birthday" />} />
       <Route path="markdown_links" element={<AdminToolPage type="markdown_links" />} />
       <Route path="disk-monitor" element={<AdminDiskMonitor />} />
       <Route path="variant-manager" element={<AdminVariantManager />} />

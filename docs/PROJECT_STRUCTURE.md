@@ -16,7 +16,7 @@
 - 💬 **论坛系统** - 分版块讨论、评论互动
 - 🔍 **智能搜索** - 基于 CLIP 嵌入向量的图片语义搜索
 - 👤 **用户系统** - 角色权限管理、个人中心
-- 🎨 **多主题支持** - Academy / Default 双主题
+- 🎨 **多主题支持** - Default / Dark / System 主题模式
 - 📱 **PWA + 小程序** - 支持离线访问和微信小程序
 
 ---
@@ -81,8 +81,7 @@ huangshifu-wiki/
 
 | 页面 | 文件 | 功能描述 |
 |------|------|----------|
-| **首页** | `Home.tsx` | 支持 Academy/Default 双主题首页 |
-| | `home/AcademyHome.tsx` | 学院主题首页 |
+| **首页** | `Home.tsx` | 首页入口 |
 | | `home/DefaultHome.tsx` | 默认主题首页 |
 | **Wiki** | `Wiki.tsx` | Wiki 百科页面（列表/详情/编辑） |
 | **论坛** | `Forum.tsx` | 论坛帖子列表和详情 |
@@ -227,7 +226,7 @@ huangshifu-wiki/
 |---------|------|
 | `AuthContext.tsx` | 用户认证状态 |
 | `MusicContext.tsx` | 音乐播放状态 |
-| `ThemeContext.tsx` | 主题状态（Academy/Default） |
+| `ThemeContext.tsx` | 主题状态（Default/Dark/System） |
 | `UserPreferencesContext.tsx` | 用户偏好设置 |
 
 ### 4.6 类型定义 (`src/types/`)
@@ -306,27 +305,20 @@ huangshifu-wiki/
 | `routes.ts` | 位置相关路由 |
 | `exifRoutes.ts` | EXIF 相关路由 |
 
-#### 5.3.4 生日服务 (`src/server/birthday/`)
-
-| 文件 | 功能 |
-|------|------|
-| `birthdayService.ts` | 生日计算和提醒 |
-| `routes.ts` | 生日相关路由 |
-
-#### 5.3.5 S3 服务 (`src/server/s3/`)
+#### 5.3.4 S3 服务 (`src/server/s3/`)
 
 | 文件 | 功能 |
 |------|------|
 | `s3Service.ts` | S3 客户端封装 |
 
-#### 5.3.6 图片服务 (`src/server/services/`)
+#### 5.3.5 图片服务 (`src/server/services/`)
 
 | 文件 | 功能 |
 |------|------|
 | `imageSyncService.ts` | 图片同步服务 |
 | `galleryImageSyncService.ts` | 图库图片同步 |
 
-#### 5.3.7 Wiki 服务 (`src/server/wiki/`)
+#### 5.3.6 Wiki 服务 (`src/server/wiki/`)
 
 | 文件 | 功能 |
 |------|------|
@@ -631,7 +623,6 @@ prisma/migrations/
 ### 6.5 种子数据
 
 - `seed.ts` - 初始化种子数据
-- `seed-birthday.ts` - 生日数据种子
 
 ---
 
@@ -644,7 +635,6 @@ prisma/migrations/
 | `apiClient.test.ts` | API 客户端 |
 | `apiTypes.test.ts` | API 类型 |
 | `auth.test.ts` | 认证工具 |
-| `birthdayService.test.ts` | 生日服务 |
 | `cache.test.ts` | 缓存工具 |
 | `clipEmbedding.test.ts` | CLIP 嵌入 |
 | `contentUtils.test.ts` | 内容工具 |
@@ -745,15 +735,12 @@ IMAGE_SEARCH_RESULT_LIMIT=24
 
 | 文档 | 内容 |
 |------|------|
-| `home.md` | 项目主页文档 |
 | `p0-implementation.md` | P0 功能实现文档 |
 | `p0-v6-edit-lock-and-gallery-workflow.md` | 编辑锁和图库工作流 |
 | `p2-wechat-mini-program.md` | 微信小程序接入 |
 | `server-deployment.md` | 服务器部署指南 |
 | `docker-deployment.md` | Docker 部署指南 |
 | `IMAGE_SYSTEM.md` | 图片系统设计 |
-| `UI_IMPROVE.md` | UI 改进计划 |
-| `theme-academy-skin.md` | Academy 主题设计 |
 | `supported-embed-platforms.md` | 支持的嵌入平台 |
 | `500-error-troubleshooting.md` | 500 错误排查 |
 | `开发路线图-P0-P1-P2.md` | 开发路线图 |

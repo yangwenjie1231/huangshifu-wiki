@@ -24,7 +24,7 @@ export function useI18n() {
   return { t };
 }
 
-export function getI18n(_theme?: string) {
+export function getI18n() {
   const t = (key: string, params?: Record<string, string | number>): string => {
     const text = getNestedValue(defaultLocale as unknown as Record<string, unknown>, key);
     return params ? replaceParams(text, params) : text;

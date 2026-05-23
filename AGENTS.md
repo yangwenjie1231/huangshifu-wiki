@@ -100,7 +100,7 @@
 - `s3.routes.ts`
 - `music-song.routes.ts`
 - `uploads.routes.ts`
-- 以及 `src/server/location/routes.ts`、`src/server/location/exifRoutes.ts`、`src/server/birthday/routes.ts`
+- 以及 `src/server/location/routes.ts`、`src/server/location/exifRoutes.ts`
 
 ## 5. 前端约束
 

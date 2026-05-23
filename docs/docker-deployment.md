@@ -8,7 +8,6 @@
 - 向量检索继续使用 Qdrant（Docker 容器）。
 - 数据库初始化使用 Prisma Migration：`npm run db:deploy`。
 - 首次上线后执行一次 `npm run db:seed` 初始化管理员账号。
-- （可选）首次上线后执行 `npx tsx prisma/seed-birthday.ts` 初始化生贺配置数据。
 
 适用架构：
 
@@ -532,24 +531,7 @@ npm run regions:import
 docker exec -it hsf-postgres psql -U hsf_wiki -d huangshifu_wiki -c "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;"
 ```
 
-返回应包含 `User`、`WikiPage`、`MusicTrack`、`Album`、`ImageEmbedding`、`ImageMap`、`SongCover`、`Region`、`BirthdayConfig` 等表。
-
-### 5.4.1 初始化生贺配置数据（可选）
-
-首次部署后，如需初始化"从前书院"生贺皮肤的默认配置数据，可执行种子脚本：
-
-```bash
-docker exec -it hsf-app npx tsx prisma/seed-birthday.ts
-```
-
-该脚本会创建以下默认生贺配置：
-- 教务处文件通知公告（巡演信息）
-- 校史拾遗
-- 荣誉校友（黄诗扶信息）
-- 雅学之境（校园环境）
-- 学子留言壁（示例留言）
-- 联系我们（招生办联系方式）
-- 生贺节目（音乐/视频/舞蹈/彩蛋四类）
+返回应包含 `User`、`WikiPage`、`MusicTrack`、`Album`、`ImageEmbedding`、`ImageMap`、`SongCover`、`Region` 等表。
 
 ---
 
@@ -669,8 +651,6 @@ docker compose up -d app
 docker compose logs -f app
 ```
 
-> **生贺配置（v6.x+）**：如果代码更新包含 BirthdayConfig 模型变更，需执行 `npm run db:deploy` 应用迁移。
->
 > **地点标签功能（v4.0+）**：如果需要更新行政区划数据，可执行：
 > ```bash
 > npm run regions:import

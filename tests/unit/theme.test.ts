@@ -29,7 +29,7 @@ describe('theme helpers', () => {
   })
 
   it('normalizes unsupported theme values to system', () => {
-    expect(normalizeThemeMode('academy')).toBe('system')
+    expect(normalizeThemeMode('sepia')).toBe('system')
     expect(normalizeThemeMode('dark')).toBe('dark')
   })
 
@@ -53,7 +53,7 @@ describe('theme helpers', () => {
       THEME_STORAGE_KEY,
       JSON.stringify({
         viewMode: 'cinema',
-        theme: 'academy',
+        theme: 'sepia',
         extra: 'ignored',
       })
     )
@@ -76,7 +76,7 @@ describe('theme helpers', () => {
     expect(hasStoredPreferenceValues({})).toBe(false)
     expect(hasStoredPreferenceValues({ theme: 'dark' })).toBe(true)
     expect(hasStoredPreferenceValues({ viewMode: 'small' })).toBe(true)
-    expect(hasStoredPreferenceValues({ theme: 'academy' })).toBe(false)
+    expect(hasStoredPreferenceValues({ theme: 'sepia' })).toBe(false)
   })
 
   it('merges stored preferences onto an existing base without resetting missing fields', () => {
