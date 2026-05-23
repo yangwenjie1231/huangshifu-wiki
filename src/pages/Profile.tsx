@@ -8,6 +8,7 @@ import { format } from 'date-fns';
 import { AvatarCropModal } from '../components/AvatarCropModal';
 import { useToast } from '../components/Toast';
 import { DEFAULT_AVATAR, handleAvatarError } from '../lib/defaultAvatar';
+import { formatAdminRole } from '../lib/formatUtils';
 import type { FavoriteItem, HistoryItem } from '../types/entities';
 
 type FavoriteTargetType = 'wiki' | 'post' | 'music';
@@ -305,7 +306,7 @@ const Profile = () => {
                 </div>
                 <div className="theme-panel-soft rounded p-3">
                   <p className="text-xs text-text-muted mb-0.5">身份</p>
-                  <p className="text-lg font-semibold text-text-primary">{profile?.role || 'User'}</p>
+                  <p className="text-lg font-semibold text-text-primary">{formatAdminRole(profile?.role ?? user?.role)}</p>
                 </div>
                 <div className="theme-panel-soft rounded p-3">
                   <p className="text-xs text-text-muted mb-0.5">状态</p>

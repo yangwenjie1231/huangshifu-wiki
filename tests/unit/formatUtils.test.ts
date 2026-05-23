@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatTime } from '../../src/lib/formatUtils';
+import { formatAdminRole, formatTime } from '../../src/lib/formatUtils';
 
 describe('formatUtils', () => {
   describe('formatTime', () => {
@@ -30,6 +30,24 @@ describe('formatUtils', () => {
 
     it('pads seconds with leading zero', () => {
       expect(formatTime(61)).toBe('1:01');
+    });
+  });
+
+  describe('formatAdminRole', () => {
+    it('formats built-in roles to Chinese labels', () => {
+      expect(formatAdminRole('user')).toBe('普通用户');
+      expect(formatAdminRole('admin')).toBe('管理员');
+      expect(formatAdminRole('super_admin')).toBe('超级管理员');
+    });
+
+    it('defaults empty roles to normal user', () => {
+      expect(formatAdminRole()).toBe('普通用户');
+      expect(formatAdminRole(null)).toBe('普通用户');
+      expect(formatAdminRole('')).toBe('普通用户');
+    });
+
+    it('preserves unknown roles', () => {
+      expect(formatAdminRole('auditor')).toBe('auditor');
     });
   });
 });

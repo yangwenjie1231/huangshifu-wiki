@@ -6,6 +6,7 @@ import { useToast } from '../../components/Toast';
 import { SmartImage } from '../../components/SmartImage';
 import { useAuth } from '../../context/AuthContext';
 import { DEFAULT_AVATAR } from '../../lib/defaultAvatar';
+import { formatAdminRole } from '../../lib/formatUtils';
 import type { AdminDataItem } from '../../types/entities';
 
 export const AdminUsers = () => {
@@ -14,6 +15,9 @@ export const AdminUsers = () => {
   const [data, setData] = useState<AdminDataItem[]>([]);
   const [loading, setLoading] = useState(true);
   const { show } = useToast();
+
+  const getNextRole = (role?: string) => (role === 'admin' ? 'user' : 'admin')
+  const getRoleToggleTitle = (role?: string) => (getNextRole(role) === 'admin' ? '设为管理员' : '设为普通用户')
 
   const fetchData = async () => {
     setLoading(true);
@@ -56,8 +60,8 @@ export const AdminUsers = () => {
       show('只有超级管理员可以更改权限', { variant: 'error' });
       return;
     }
-    const newRole = target.role === 'admin' ? 'user' : 'admin';
-    if (!window.confirm(`确定要将 ${target.displayName || target.uid} 的角色更改为 ${newRole} 吗？`)) return;
+    const newRole = getNextRole(target.role);
+    if (!window.confirm(`确定要将 ${target.displayName || target.uid} 的角色更改为 ${formatAdminRole(newRole)} 吗？`)) return;
     try {
       await apiPut(`/api/users/${target.uid}/role`, { role: newRole });
       setData((prev) => prev.map((item) => (item.uid === target.uid ? { ...item, role: newRole } : item)));
@@ -107,7 +111,7 @@ export const AdminUsers = () => {
                     </td>
                     <td className="px-5 py-4">
                       <span className={clsx('px-2 py-0.5 rounded text-[10px] font-medium', item.role === 'super_admin' ? 'bg-brand-gold/15 text-brand-gold' : item.role === 'admin' ? 'theme-status-error' : 'bg-surface-alt text-brand-gold')}>
-                        {item.role === 'super_admin' ? '超级管理员' : item.role || 'user'}
+                        {formatAdminRole(item.role)}
                       </span>
                     </td>
                     <td className="px-5 py-4">
@@ -118,8 +122,8 @@ export const AdminUsers = () => {
                     <td className="px-5 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         {isSuperAdmin && item.uid !== currentUser?.uid && (
-                          <button onClick={() => toggleRole(item)} className="p-1.5 text-brand-gold hover:bg-surface-alt rounded transition-all" title={item.role === 'admin' ? '取消管理员' : '设为管理员'}>
-                            {item.role === 'admin' ? <XCircle size={16} /> : <CheckCircle size={16} />}
+                          <button onClick={() => toggleRole(item)} className="p-1.5 text-brand-gold hover:bg-surface-alt rounded transition-all" title={getRoleToggleTitle(item.role)}>
+                            {getNextRole(item.role) === 'admin' ? <CheckCircle size={16} /> : <XCircle size={16} />}
                           </button>
                         )}
                         {item.uid !== currentUser?.uid && (
