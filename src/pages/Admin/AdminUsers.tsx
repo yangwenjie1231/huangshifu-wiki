@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Trash2, CheckCircle, XCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import { clsx } from 'clsx';
-import { apiDelete, apiGet, apiPatch, apiPost } from '../../lib/apiClient';
+import { apiDelete, apiGet, apiPost, apiPut } from '../../lib/apiClient';
 import { useToast } from '../../components/Toast';
 import { SmartImage } from '../../components/SmartImage';
 import { useAuth } from '../../context/AuthContext';
@@ -59,7 +59,7 @@ export const AdminUsers = () => {
     const newRole = target.role === 'admin' ? 'user' : 'admin';
     if (!window.confirm(`确定要将 ${target.displayName || target.uid} 的角色更改为 ${newRole} 吗？`)) return;
     try {
-      await apiPatch(`/api/users/${target.uid}/role`, { role: newRole });
+      await apiPut(`/api/users/${target.uid}/role`, { role: newRole });
       setData((prev) => prev.map((item) => (item.uid === target.uid ? { ...item, role: newRole } : item)));
       show('角色已更新', { variant: 'success' });
     } catch (e) {

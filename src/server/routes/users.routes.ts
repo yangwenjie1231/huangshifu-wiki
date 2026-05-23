@@ -427,7 +427,7 @@ router.get('/', requireAdmin, asyncHandler(async (_req, res) => {
   }
 }));
 
-router.put('/:userId/role', requireSuperAdmin, asyncHandler(async (req: AuthenticatedRequest, res) => {
+const updateUserRoleHandler = asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const { role } = req.body as { role?: PrismaUserRole };
     if (!role || !['user', 'admin', 'super_admin'].includes(role)) {
@@ -460,7 +460,11 @@ router.put('/:userId/role', requireSuperAdmin, asyncHandler(async (req: Authenti
     console.error('Update user role error:', error);
     res.status(500).json({ error: '更新角色失败' });
   }
-}));
+})
+
+router.route('/:userId/role')
+  .put(requireSuperAdmin, updateUserRoleHandler)
+  .patch(requireSuperAdmin, updateUserRoleHandler)
 
 router.put('/:userId/ban', requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
