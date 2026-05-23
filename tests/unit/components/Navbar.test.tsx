@@ -24,6 +24,18 @@ vi.mock('../../../src/lib/i18n', () => ({
   }),
 }));
 
+vi.mock('../../../src/context/AuthContext', () => ({
+  useAuth: () => ({
+    user: null,
+    profile: null,
+    isAdmin: false,
+    isBanned: false,
+    loading: false,
+    ensureInitialized: vi.fn(),
+    refreshAuth: vi.fn(),
+  }),
+}));
+
 describe('Navbar', () => {
   beforeEach(() => {
     vi.clearAllMocks();

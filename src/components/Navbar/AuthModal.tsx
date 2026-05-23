@@ -29,8 +29,18 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 	const modalRef = useRef<HTMLDivElement>(null)
 	const previousFocusRef = useRef<HTMLElement | null>(null)
 
+	const resetForm = () => {
+		setEmail("")
+		setPassword("")
+		setDisplayName("")
+		setWechatCode("")
+		setWechatPhotoURL("")
+	}
+
 	useEffect(() => {
 		if (open) {
+			setAuthMode(initialMode)
+			resetForm()
 			previousFocusRef.current = document.activeElement as HTMLElement
 			requestAnimationFrame(() => {
 				const firstInput = modalRef.current?.querySelector('input')
@@ -39,7 +49,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 		} else {
 			previousFocusRef.current?.focus()
 		}
-	}, [open])
+	}, [open, initialMode])
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {
 		if (e.key !== 'Tab' || !modalRef.current) return
@@ -81,11 +91,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 				})
 			}
 			onClose();
-			setEmail("");
-			setPassword("");
-			setDisplayName("");
-			setWechatCode("");
-			setWechatPhotoURL("");
+			resetForm()
 			onAuthSuccess();
 		} catch (error) {
 			console.error("Auth failed:", error);
@@ -130,6 +136,7 @@ export const AuthModal = ({ open, onClose, onAuthSuccess, initialMode = "login" 
 							<button
 								type="button"
 								onClick={onClose}
+								aria-label="关闭"
 								className="text-text-muted hover:text-brand-gold transition-colors"
 							>
 								<X size={20} />
