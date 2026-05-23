@@ -1,19 +1,12 @@
-import React, { useState, useCallback, useMemo } from "react";
-import { Bell } from "lucide-react";
-import { clsx } from "clsx";
-import { motion, AnimatePresence } from "motion/react";
-import { apiGet, apiPost } from "../../lib/apiClient";
-import { useAuth } from "../../context/AuthContext";
-import type { NotificationItem } from "../../types/entities";
-import type { NotificationsResponse } from "../../types/api";
-
-interface ReviewNotificationPayload {
-	approved?: boolean;
-	targetType?: "wiki" | "post";
-	targetId?: string;
-	title?: string;
-	note?: string | null;
-}
+import React, { useCallback, useMemo, useState } from 'react'
+import { Bell } from 'lucide-react'
+import { clsx } from 'clsx'
+import { AnimatePresence, motion } from 'motion/react'
+import { useAuth } from '../../context/AuthContext'
+import { apiGet, apiPost } from '../../lib/apiClient'
+import { getNotificationLink, getNotificationText } from '../../lib/notifications'
+import type { NotificationsResponse } from '../../types/api'
+import type { NotificationItem } from '../../types/entities'
 
 interface NotificationPanelProps {
 	onNavigate: (link: string) => void;
@@ -28,39 +21,7 @@ const NotificationItem = React.memo(({
 	isRead: boolean;
 	onClick: () => void;
 }) => {
-	const text = useMemo(() => {
-		switch (notif.type) {
-			case "reply":
-				return "回复了你的" + (notif.payload.parentId ? "评论" : "帖子");
-			case "like":
-				return "赞了你的帖子";
-			case "review_result": {
-				const payload = notif.payload as ReviewNotificationPayload;
-				const target =
-					payload.targetType === "wiki"
-						? "百科"
-						: payload.targetType === "post"
-							? "帖子"
-							: "内容";
-				const title =
-					typeof payload.title === "string" && payload.title.trim()
-						? `《${payload.title}》`
-						: "";
-				const base =
-					payload.approved === true
-						? `已通过你的${target}编辑审核`
-						: `已驳回你的${target}编辑审核`;
-				if (payload.approved === true) {
-					return `${base}${title ? `：${title}` : ""}`;
-				}
-				const note =
-					typeof payload.note === "string" ? payload.note.trim() : "";
-				return `${base}${title ? `：${title}` : ""}${note ? `（原因：${note}）` : ""}`;
-			}
-			default:
-				return "有新通知";
-		}
-	}, [notif]);
+	const text = useMemo(() => getNotificationText(notif), [notif]);
 
 	return (
 		<button
@@ -88,7 +49,9 @@ const NotificationItem = React.memo(({
 
 NotificationItem.displayName = 'NotificationItem';
 
-export const NotificationPanel = React.memo(({ onNavigate }: NotificationPanelProps) => {
+export const NotificationPanel = React.memo(({
+	onNavigate,
+}: NotificationPanelProps) => {
 	const { user } = useAuth();
 	const [notifPanelOpen, setNotifPanelOpen] = useState(false);
 	const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -142,10 +105,17 @@ export const NotificationPanel = React.memo(({ onNavigate }: NotificationPanelPr
 	}, []);
 
 	const handleItemClick = useCallback((notif: NotificationItem) => {
-		if (!notif.isRead)
+		if (!notif.isRead) {
 			markNotificationRead(notif.id);
+		}
+
+		const link = getNotificationLink(notif)
 		setNotifPanelOpen(false);
-	}, [markNotificationRead]);
+
+		if (link) {
+			onNavigate(link)
+		}
+	}, [markNotificationRead, onNavigate]);
 
 	if (!user) return null;
 
@@ -160,7 +130,9 @@ export const NotificationPanel = React.memo(({ onNavigate }: NotificationPanelPr
 			>
 				<Bell size={20} />
 				{unreadCount > 0 && (
-					<span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center bg-[var(--color-error)] text-white text-[10px] font-bold rounded px-1">
+					<span
+						className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center bg-[var(--color-error)] text-white text-[10px] font-bold rounded px-1"
+					>
 						{unreadCount > 99 ? "99+" : unreadCount}
 					</span>
 				)}

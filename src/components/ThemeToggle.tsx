@@ -19,16 +19,18 @@ const THEME_OPTIONS: ThemeMode[] = ['default', 'dark', 'system'];
 
 interface ThemeToggleProps {
   fullWidth?: boolean
+  compact?: boolean
 }
 
-export function ThemeToggle({ fullWidth = false }: ThemeToggleProps) {
+export function ThemeToggle({ fullWidth = false, compact = false }: ThemeToggleProps) {
   const { preferences, setTheme, resolvedTheme } = useUserPreferences();
   const currentTheme = preferences.theme ?? 'system';
 
   return (
     <div
       className={clsx(
-        'inline-flex items-center rounded-lg border border-border bg-surface-alt p-1',
+        'inline-flex items-center border border-border bg-surface-alt',
+        compact ? 'rounded-md p-0.5' : 'rounded-lg p-1',
         fullWidth && 'flex w-full'
       )}
       role="group"
@@ -46,7 +48,8 @@ export function ThemeToggle({ fullWidth = false }: ThemeToggleProps) {
             type="button"
             onClick={() => void setTheme(mode)}
             className={clsx(
-              'inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md px-3 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2 cursor-pointer',
+              'inline-flex items-center justify-center gap-1.5 transition-colors focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2 cursor-pointer',
+              compact ? 'min-h-8 rounded-[0.4rem] px-2 text-xs' : 'min-h-9 rounded-md px-3 text-sm',
               fullWidth && 'flex-1',
               isActive
                 ? 'bg-surface text-text-primary shadow-sm'
