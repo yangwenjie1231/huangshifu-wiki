@@ -234,7 +234,7 @@ describe('theme helpers', () => {
 
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
     expect(document.documentElement.style.colorScheme).toBe('dark')
-    expect(document.querySelector('meta[name="theme-color"]')?.getAttribute('content')).toBe('#171411')
+    expect(document.querySelector('meta[name="theme-color"]')?.getAttribute('content')).toBe('#1f1a16')
   })
 
   it('skips duplicate DOM writes when the resolved theme is already applied', () => {
