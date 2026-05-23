@@ -126,6 +126,11 @@
 - `src/utils/webVitals.ts` 负责 Web Vitals 采集
 - `main.tsx` 在 `load` 后注册 Service Worker
 
+### 主题与样式
+
+- 主题色、状态色、图表配色、关系图配色统一走共享 token 或主题语义类，不要在页面和组件中分散硬编码
+- `theme-color` 及其相关测试要和实际主题实现保持一致
+
 ## 6. 后端约束
 
 ### 中间件
