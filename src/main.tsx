@@ -12,6 +12,7 @@ import './index.css';
 declare global {
   interface Window {
     hideStaticFallback?: () => void;
+    __HSF_BOOTSTRAP_AUTH_UID__?: string | null;
   }
 }
 

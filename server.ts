@@ -53,6 +53,7 @@ import { registerAdminVariantsRoutes } from './src/server/routes/admin.variants.
 import { warmup as clipWarmup } from './src/server/vector/clipEmbedding';
 import { cloudSyncService } from './src/server/services/cloudSyncService';
 import { variantGenerator } from './src/server/services/variantGenerator';
+import type { AuthenticatedRequest } from './src/server/types';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -84,6 +85,7 @@ fs.mkdirSync(backupsDir, { recursive: true });
 const DEFAULT_PORT = Number(process.env.PORT) || 3003;
 const DEFAULT_HMR_PORT = Number(process.env.VITE_HMR_PORT) || 24678;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '';
+const HTML_BOOTSTRAP_AUTH_UID_PLACEHOLDER = '"__HSF_BOOTSTRAP_AUTH_UID_VALUE__"';
 
 function parseCorsOrigins(envValue: string): string[] {
   return envValue
@@ -133,6 +135,22 @@ function isDevLocalOrPrivateOrigin(origin: string): boolean {
   } catch {
     return false;
   }
+}
+
+function injectHtmlBootstrapState(
+  html: string,
+  options: { authUid: string | null; nonce?: string | null }
+): string {
+  let nextHtml = html.replaceAll(
+    HTML_BOOTSTRAP_AUTH_UID_PLACEHOLDER,
+    JSON.stringify(options.authUid)
+  );
+
+  if (options.nonce) {
+    nextHtml = nextHtml.replace(/<script/g, `<script nonce="${options.nonce}"`);
+  }
+
+  return nextHtml;
 }
 
 const CORS_MAX_AGE = 86400;
@@ -388,12 +406,27 @@ async function startServer() {
           clientPort: hmrPort,
         },
       },
-      appType: 'spa',
+      appType: 'custom',
     });
     app.use(vite.middlewares);
+    app.get('*', async (req: AuthenticatedRequest, res, next) => {
+      try {
+        const htmlPath = path.join(process.cwd(), 'index.html');
+        let html = await fs.promises.readFile(htmlPath, 'utf-8');
+        html = injectHtmlBootstrapState(html, {
+          authUid: req.authUser?.uid ?? null,
+        });
+        html = await vite.transformIndexHtml(req.originalUrl, html);
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.status(200).send(html);
+      } catch (error) {
+        vite.ssrFixStacktrace(error as Error);
+        next(error);
+      }
+    });
   } else {
     // SPA fallback - 所有未匹配的路由返回 index.html（注入 CSP nonce）
-    app.get('*', (req, res) => {
+    app.get('*', (req: AuthenticatedRequest, res) => {
       const distPath = path.join(process.cwd(), 'dist');
       const htmlPath = path.join(distPath, 'index.html');
       fs.readFile(htmlPath, 'utf-8', (err, html) => {
@@ -401,10 +434,10 @@ async function startServer() {
           res.status(500).send('Internal Server Error');
           return;
         }
-        const nonce = res.locals.nonce;
-        if (nonce) {
-          html = html.replace(/<script/g, `<script nonce="${nonce}"`);
-        }
+        html = injectHtmlBootstrapState(html, {
+          authUid: req.authUser?.uid ?? null,
+          nonce: res.locals.nonce as string | undefined,
+        });
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.send(html);
       });

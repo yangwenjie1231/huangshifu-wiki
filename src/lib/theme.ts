@@ -4,6 +4,7 @@ import {
   type UserPreferences,
   type ViewMode,
 } from '../types/userPreferences'
+import { readBootstrapAuthUid } from './auth'
 import { THEME_META_COLOR } from './colorTokens'
 
 export type ResolvedTheme = 'default' | 'dark'
@@ -175,14 +176,8 @@ export function readBootstrapThemeMode(): ThemeMode {
     return DEFAULT_PREFERENCES.theme
   }
 
-  try {
-    const state = readThemeStorageState()
-    // Bootstrap 早于认证初始化执行，这里只读取匿名可见的偏好，
-    // 不在首屏阶段猜测当前登录用户。
-    return normalizeStoredPreferences(state.guest ?? state.legacy).theme
-  } catch {
-    return DEFAULT_PREFERENCES.theme
-  }
+  const bootstrapUid = readBootstrapAuthUid()
+  return readStoredPreferences(bootstrapUid, { includeLegacyFallback: true }).theme
 }
 
 export function readStoredPreferences(

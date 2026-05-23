@@ -63,6 +63,20 @@ export async function refreshAuthState() {
   return currentUser;
 }
 
+export function readBootstrapAuthUid(): string | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  const bootstrapUid = window.__HSF_BOOTSTRAP_AUTH_UID__
+  if (typeof bootstrapUid !== 'string') {
+    return null
+  }
+
+  const normalizedUid = bootstrapUid.trim()
+  return normalizedUid || null
+}
+
 export const auth = {
   get currentUser() {
     return currentUser;
