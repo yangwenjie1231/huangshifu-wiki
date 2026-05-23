@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SearchBox } from '../../../src/components/search/SearchBox';
@@ -39,6 +40,7 @@ describe('SearchBox', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    cleanup();
   });
 
   it('renders search input with correct placeholder', () => {
@@ -71,6 +73,29 @@ describe('SearchBox', () => {
     }
   });
 
+  it('keeps the typed value visible when used as a controlled input', async () => {
+    const user = userEvent.setup();
+
+    const ControlledWrapper = () => {
+      const [query, setQuery] = React.useState('');
+
+      return (
+        <SearchBox
+          {...defaultProps}
+          query={query}
+          onQueryChange={setQuery}
+        />
+      );
+    };
+
+    const { container } = renderWithRouter(<ControlledWrapper />);
+
+    const input = container.querySelector('input[type="text"]') as HTMLInputElement;
+    await user.type(input, 'test');
+
+    expect(input).toHaveValue('test');
+  });
+
   it('calls onSearch when form is submitted', async () => {
     const user = userEvent.setup();
     const onSearch = vi.fn();
@@ -81,6 +106,21 @@ describe('SearchBox', () => {
       await user.click(submitBtn);
       expect(onSearch).toHaveBeenCalledWith('test');
     }
+  });
+
+  it('submits immediately after IME composition ends', async () => {
+    const user = userEvent.setup();
+    const onSearch = vi.fn();
+    const { container } = renderWithRouter(<SearchBox {...defaultProps} query="测试" onSearch={onSearch} />);
+
+    const input = container.querySelector('input[type="text"]') as HTMLInputElement;
+    const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+    fireEvent.compositionStart(input);
+    fireEvent.compositionEnd(input);
+    await user.click(submitBtn);
+
+    expect(onSearch).toHaveBeenCalledWith('测试');
   });
 
   it('renders AI image search button', () => {

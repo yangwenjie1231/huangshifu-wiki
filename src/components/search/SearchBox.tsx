@@ -31,17 +31,10 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isComposingRef = useRef(false);
 
   // 建议列表键盘导航状态
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const [isComposing, setIsComposing] = useState(false);
-
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, []);
 
   useEffect(() => {
     if (!suggestions.length) return;
@@ -56,7 +49,7 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isComposing) return
+    if (isComposingRef.current) return
     onSearch(query);
   };
 
@@ -150,11 +143,15 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
           type="text"
           value={query}
           onChange={(e) => {
-            const val = e.target.value;
-            if (debounceRef.current) clearTimeout(debounceRef.current);
-            debounceRef.current = setTimeout(() => onQueryChange(val), 300);
+            onQueryChange(e.target.value);
           }}
           onFocus={() => query.length >= 2 && onQueryChange(query)}
+          onCompositionStart={() => {
+            isComposingRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            isComposingRef.current = false;
+          }}
           placeholder="搜索百科、帖子、图集、音乐或专辑..."
           aria-label="搜索百科、帖子、图集、音乐或专辑"
           autoComplete="off"
