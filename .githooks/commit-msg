@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+msg_file="$1"
+
+allow_literal_newlines="$(git config --bool --get hooks.allowLiteralNewlines || true)"
+
+if [ "$allow_literal_newlines" = "true" ]; then
+  exit 0
+fi
+
+if grep -q '\\n' "$msg_file"; then
+  cat >&2 <<'EOF'
+[commit-msg] 检测到提交信息中包含字面量 \n
+
+默认已阻止本次提交，请改用真实换行。
+
+如果你确实需要跳过这条检查，推荐显式执行：
+git -c hooks.allowLiteralNewlines=true commit ...
+EOF
+  exit 1
+fi
