@@ -1,4 +1,4 @@
-import { EChartsComponent, chartTheme, defaultTooltipSettings } from './EChartsComponent';
+import { EChartsComponent, chartPalette, chartTheme, defaultTooltipSettings } from './EChartsComponent';
 import type { EChartsOption } from 'echarts';
 
 interface ContentDistributionChartProps {
@@ -24,7 +24,7 @@ export const ContentDistributionChart: React.FC<ContentDistributionChartProps> =
       right: '10%',
       top: 'center',
       textStyle: {
-        color: '#6B7280',
+        color: chartPalette.label,
         fontFamily: 'Noto Sans SC, sans-serif',
       },
     },
@@ -36,7 +36,7 @@ export const ContentDistributionChart: React.FC<ContentDistributionChartProps> =
         avoidLabelOverlap: false,
         itemStyle: {
           borderRadius: 8,
-          borderColor: '#fff',
+          borderColor: chartPalette.white,
           borderWidth: 2,
         },
         label: {

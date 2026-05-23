@@ -59,7 +59,7 @@ const RelationPreview: React.FC<RelationPreviewProps> = ({
 							</span>
 						)}
 						{isEditing && (
-							<span className="px-2 py-0.5 bg-blue-500 text-white text-[10px] font-medium rounded">
+							<span className="px-2 py-0.5 theme-bg-info-soft theme-text-info text-[10px] font-medium rounded">
 								编辑中
 							</span>
 						)}
@@ -100,7 +100,7 @@ const RelationPreview: React.FC<RelationPreviewProps> = ({
 						<button
 							type="button"
 							onClick={onRemove}
-							className="p-1.5 text-text-muted hover:text-red-500 transition-colors rounded hover:bg-red-50"
+							className="p-1.5 text-text-muted theme-icon-button-danger transition-colors rounded hover:bg-[color-mix(in_srgb,var(--color-error)_10%,var(--color-surface))]"
 							title="移除关联"
 						>
 							<X size={14} />
@@ -111,7 +111,7 @@ const RelationPreview: React.FC<RelationPreviewProps> = ({
 						<button
 							type="button"
 							onClick={onConfirm}
-							className="p-1.5 text-green-600 hover:text-green-700 transition-colors rounded hover:bg-green-50"
+							className="p-1.5 theme-text-success transition-colors rounded hover:bg-[color-mix(in_srgb,var(--color-success)_10%,var(--color-surface))]"
 							title="确认添加"
 						>
 							<Check size={14} />

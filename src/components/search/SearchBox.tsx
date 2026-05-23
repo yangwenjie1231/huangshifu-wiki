@@ -81,7 +81,7 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
     switch (type) {
       case "keyword": return "bg-surface-alt text-text-secondary";
       case "wiki": return "theme-tag";
-      case "music": return "bg-red-50 text-red-600";
+      case "music": return "theme-status-error";
       case "album": return "bg-purple-50 text-purple-600";
       default: return "bg-surface-alt text-text-secondary";
     }

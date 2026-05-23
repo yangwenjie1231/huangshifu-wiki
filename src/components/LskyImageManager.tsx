@@ -5,7 +5,7 @@ import { useLskyAlbums } from '../hooks/useLskyAlbums';
 
 export function LskyImageManager() {
   const [activeTab, setActiveTab] = useState<'upload' | 'photos' | 'albums'>('upload');
-  
+
   return (
     <div className="lsky-manager">
       <style>{`
@@ -18,7 +18,7 @@ export function LskyImageManager() {
           display: flex;
           gap: 10px;
           margin-bottom: 20px;
-          border-bottom: 2px solid #e0e0e0;
+          border-bottom: 2px solid var(--color-border);
         }
         .lsky-tab {
           padding: 10px 20px;
@@ -26,26 +26,26 @@ export function LskyImageManager() {
           border: none;
           cursor: pointer;
           font-size: 16px;
-          color: #666;
+          color: var(--color-text-secondary);
           border-bottom: 2px solid transparent;
           margin-bottom: -2px;
         }
         .lsky-tab.active {
-          color: #1890ff;
-          border-bottom-color: #1890ff;
+          color: var(--color-action-blue);
+          border-bottom-color: var(--color-action-blue);
         }
         .lsky-upload-area {
-          border: 2px dashed #d9d9d9;
+          border: 2px dashed var(--color-border);
           border-radius: 8px;
           padding: 40px;
           text-align: center;
-          background: #fafafa;
+          background: var(--color-surface-form);
           cursor: pointer;
           transition: all 0.3s;
         }
         .lsky-upload-area:hover {
-          border-color: #1890ff;
-          background: #f0f5ff;
+          border-color: var(--color-action-blue);
+          background: color-mix(in srgb, var(--color-action-blue) 10%, var(--color-surface-form));
         }
         .lsky-upload-area.uploading {
           pointer-events: none;
@@ -54,27 +54,27 @@ export function LskyImageManager() {
         .lsky-progress {
           width: 100%;
           height: 8px;
-          background: #f0f0f0;
+          background: var(--color-surface-error);
           border-radius: 4px;
           margin-top: 10px;
           overflow: hidden;
         }
         .lsky-progress-bar {
           height: 100%;
-          background: #1890ff;
+          background: var(--color-action-blue);
           transition: width 0.3s;
         }
         .lsky-error {
-          color: #ff4d4f;
+          color: var(--color-error);
           padding: 10px;
-          background: #fff2f0;
+          background: color-mix(in srgb, var(--color-error) 10%, var(--color-surface));
           border-radius: 4px;
           margin-top: 10px;
         }
         .lsky-success {
-          color: #52c41a;
+          color: var(--color-success-hover);
           padding: 10px;
-          background: #f6ffed;
+          background: color-mix(in srgb, var(--color-success) 10%, var(--color-surface));
           border-radius: 4px;
           margin-top: 10px;
         }
@@ -84,13 +84,14 @@ export function LskyImageManager() {
           gap: 16px;
         }
         .lsky-photo-card {
-          border: 1px solid #f0f0f0;
+          border: 1px solid var(--color-border-light);
           border-radius: 8px;
           overflow: hidden;
           transition: all 0.3s;
+          background: var(--color-surface);
         }
         .lsky-photo-card:hover {
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+          box-shadow: var(--shadow-theme-card);
         }
         .lsky-photo-card img {
           width: 100%;
@@ -107,19 +108,20 @@ export function LskyImageManager() {
         }
         .lsky-btn {
           padding: 6px 12px;
-          border: 1px solid #d9d9d9;
-          background: white;
+          border: 1px solid var(--color-border);
+          background: var(--color-surface);
           border-radius: 4px;
           cursor: pointer;
           font-size: 14px;
+          color: var(--color-text-secondary);
         }
         .lsky-btn:hover {
-          color: #1890ff;
-          border-color: #1890ff;
+          color: var(--color-action-blue);
+          border-color: var(--color-action-blue);
         }
         .lsky-btn.danger:hover {
-          color: #ff4d4f;
-          border-color: #ff4d4f;
+          color: var(--color-error);
+          border-color: var(--color-error);
         }
         .lsky-albums-list {
           display: flex;
@@ -131,9 +133,9 @@ export function LskyImageManager() {
           justify-content: space-between;
           align-items: center;
           padding: 16px;
-          border: 1px solid #f0f0f0;
+          border: 1px solid var(--color-border-light);
           border-radius: 8px;
-          background: white;
+          background: var(--color-surface);
         }
         .lsky-album-info h3 {
           margin: 0 0 4px 0;
@@ -141,18 +143,18 @@ export function LskyImageManager() {
         }
         .lsky-album-info p {
           margin: 0;
-          color: #999;
+          color: var(--color-text-placeholder);
           font-size: 14px;
         }
         .lsky-empty {
           text-align: center;
           padding: 40px;
-          color: #999;
+          color: var(--color-text-placeholder);
         }
         .lsky-loading {
           text-align: center;
           padding: 40px;
-          color: #666;
+          color: var(--color-text-secondary);
         }
       `}</style>
 
@@ -249,7 +251,14 @@ function UploadPanel() {
               type="text"
               value={data.url}
               readOnly
-              style={{ width: '100%', padding: '8px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+              style={{
+                width: '100%',
+                padding: '8px',
+                border: '1px solid var(--color-border)',
+                borderRadius: '4px',
+                background: 'var(--color-surface)',
+                color: 'var(--color-text-primary)',
+              }}
             />
             <div style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
               <button className="lsky-btn" onClick={handleCopyUrl}>复制 URL</button>
@@ -390,7 +399,14 @@ function AlbumsPanel() {
               type="text"
               value={newAlbumName}
               onChange={(e) => setNewAlbumName(e.target.value)}
-              style={{ width: '100%', padding: '8px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+              style={{
+                width: '100%',
+                padding: '8px',
+                border: '1px solid var(--color-border)',
+                borderRadius: '4px',
+                background: 'var(--color-surface)',
+                color: 'var(--color-text-primary)',
+              }}
               placeholder="输入相册名称"
             />
           </div>
@@ -399,7 +415,15 @@ function AlbumsPanel() {
             <textarea
               value={newAlbumDesc}
               onChange={(e) => setNewAlbumDesc(e.target.value)}
-              style={{ width: '100%', padding: '8px', border: '1px solid #d9d9d9', borderRadius: '4px', minHeight: '60px' }}
+              style={{
+                width: '100%',
+                padding: '8px',
+                border: '1px solid var(--color-border)',
+                borderRadius: '4px',
+                minHeight: '60px',
+                background: 'var(--color-surface)',
+                color: 'var(--color-text-primary)',
+              }}
               placeholder="输入相册描述（可选）"
             />
           </div>

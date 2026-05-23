@@ -210,7 +210,7 @@ const AdminBackups = () => {
                       <button onClick={() => handleDownload(backup.filename)} className="p-2 text-brand-gold hover:bg-surface-alt rounded transition-all" title="下载">
                         <Download size={18} />
                       </button>
-                      <button onClick={() => openDeleteDialog(backup.filename)} className="p-2 text-red-400 hover:bg-surface-alt rounded transition-all" title="删除">
+                      <button onClick={() => openDeleteDialog(backup.filename)} className="p-2 theme-icon-button-danger hover:bg-surface-alt rounded transition-all" title="删除">
                         <Trash2 size={18} />
                       </button>
                     </div>
@@ -243,7 +243,7 @@ const AdminBackups = () => {
 
             {(dialog === 'restore' || dialog === 'download' || dialog === 'delete') && (
               <div className="flex items-start gap-3 p-3 rounded theme-status-warning">
-                <AlertTriangle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                <AlertTriangle size={18} className="theme-text-warning shrink-0 mt-0.5" />
                 <p className="text-sm">
                   {dialog === 'restore'
                     ? '恢复操作将覆盖当前数据库中的所有数据，此操作不可逆，请谨慎操作。'
@@ -295,7 +295,10 @@ const AdminBackups = () => {
               <button
                 onClick={() => { if (dialog === 'create') handleCreate(); else if (dialog === 'restore') handleRestore(); else if (dialog === 'download') confirmDownload(); else if (dialog === 'delete') handleDelete(); }}
                 disabled={actionLoading !== null}
-                className={clsx('px-4 py-2 rounded text-sm font-medium text-white disabled:opacity-50 inline-flex items-center gap-2', dialog === 'delete' || dialog === 'restore' ? 'bg-red-500 hover:opacity-90' : dialog === 'download' ? 'bg-brand-gold-dark hover:bg-brand-gold' : 'bg-brand-gold-dark hover:bg-brand-gold')}
+                className={clsx(
+                  'px-4 py-2 rounded text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2',
+                  dialog === 'delete' || dialog === 'restore' ? 'theme-button-danger' : 'theme-button-primary'
+                )}
               >
                 {actionLoading && <Loader2 size={14} className="animate-spin" />}
                 {dialog === 'create' && '创建备份'}

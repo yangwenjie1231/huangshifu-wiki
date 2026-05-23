@@ -246,7 +246,7 @@ export const CoverManager = ({
                       <button
                         onClick={() => handleDelete(cover.id)}
                         disabled={deleting === cover.id || cover.isDefault}
-                        className="p-1.5 bg-white rounded text-red-500 hover:text-red-700 transition-colors disabled:opacity-50"
+                        className="p-1.5 bg-surface rounded theme-text-error transition-colors disabled:opacity-50"
                         title="删除"
                       >
                         {deleting === cover.id ? (

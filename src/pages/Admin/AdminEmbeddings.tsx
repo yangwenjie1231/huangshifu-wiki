@@ -327,8 +327,8 @@ const AdminEmbeddings = () => {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <StatCard label="等待中" value={summary[section.key].pending} />
                 <StatCard label="处理中" value={summary[section.key].processing} accent="text-brand-gold" />
-                <StatCard label="就绪" value={summary[section.key].ready} accent="text-green-600" />
-                <StatCard label="失败" value={summary[section.key].failed} accent="text-red-500" />
+                <StatCard label="就绪" value={summary[section.key].ready} accent="theme-text-success" />
+                <StatCard label="失败" value={summary[section.key].failed} accent="theme-text-error" />
               </div>
             </div>
           ))}
@@ -369,8 +369,8 @@ const AdminEmbeddings = () => {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <StatCard label="等待中" value={status.textSummary[section.key].pending} />
                       <StatCard label="处理中" value={status.textSummary[section.key].processing} accent="text-brand-gold" />
-                      <StatCard label="就绪" value={status.textSummary[section.key].ready} accent="text-green-600" />
-                      <StatCard label="失败" value={status.textSummary[section.key].failed} accent="text-red-500" />
+                      <StatCard label="就绪" value={status.textSummary[section.key].ready} accent="theme-text-success" />
+                      <StatCard label="失败" value={status.textSummary[section.key].failed} accent="theme-text-error" />
                     </div>
                   </div>
                 ))}
@@ -419,10 +419,10 @@ const AdminEmbeddings = () => {
               </div>
               {(status.modelErrors.image || status.modelErrors.text || status.modelErrors.tokenizer) && (
                 <div className="p-3 theme-status-error rounded mt-2">
-                  <p className="text-xs text-red-600 font-medium mb-1">模型加载错误：</p>
-                  {status.modelErrors.image && <p className="text-xs text-red-500">图像模型: {status.modelErrors.image}</p>}
-                  {status.modelErrors.text && <p className="text-xs text-red-500">文本模型: {status.modelErrors.text}</p>}
-                  {status.modelErrors.tokenizer && <p className="text-xs text-red-500">分词器: {status.modelErrors.tokenizer}</p>}
+                  <p className="text-xs theme-text-error font-medium mb-1">模型加载错误：</p>
+                  {status.modelErrors.image && <p className="text-xs theme-text-error">图像模型: {status.modelErrors.image}</p>}
+                  {status.modelErrors.text && <p className="text-xs theme-text-error">文本模型: {status.modelErrors.text}</p>}
+                  {status.modelErrors.tokenizer && <p className="text-xs theme-text-error">分词器: {status.modelErrors.tokenizer}</p>}
                 </div>
               )}
               <div className="mt-2 text-xs text-text-muted">缓存目录：{status.modelCacheDir} | 量化精度：{status.actualDtype}</div>
@@ -557,7 +557,7 @@ const AdminEmbeddings = () => {
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {errors.map((error) => (
                 <div key={error.id} className="flex items-start gap-3 p-3 rounded border border-border hover:bg-surface-alt transition-colors">
-                  <AlertTriangle size={16} className="text-red-400 mt-0.5 shrink-0" />
+                  <AlertTriangle size={16} className="theme-text-error mt-0.5 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <span className={clsx('px-1.5 py-0.5 rounded text-[10px] font-medium',
@@ -571,7 +571,7 @@ const AdminEmbeddings = () => {
                       <span className="text-xs text-text-muted">{format(new Date(error.updatedAt), 'yyyy-MM-dd HH:mm')}</span>
                     </div>
                     <p className="text-sm text-text-primary truncate">{getSourceLabel(error)}</p>
-                    {error.errorMessage && <p className="text-xs text-red-500 mt-1">{error.errorMessage}</p>}
+                    {error.errorMessage && <p className="text-xs theme-text-error mt-1">{error.errorMessage}</p>}
                   </div>
                 </div>
               ))}

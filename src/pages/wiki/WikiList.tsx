@@ -195,7 +195,7 @@ const WikiList = () => {
 				</>
 			) : (
 				<div className="bg-surface p-20 rounded border border-border text-center">
-					<Book size={48} className="mx-auto text-gray-200 mb-6" />
+					<Book size={48} className="mx-auto text-border-light mb-6" />
 					<p className="text-text-muted italic">暂无相关百科页面</p>
 				</div>
 			)}

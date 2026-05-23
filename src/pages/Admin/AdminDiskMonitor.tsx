@@ -136,14 +136,14 @@ export const AdminDiskMonitor: React.FC = () => {
   };
 
   const statusIcon = (status: string) => {
-    if (status === 'critical') return <XCircle size={14} className="text-red-500" />;
-    if (status === 'warning') return <AlertTriangle size={14} className="text-amber-500" />;
-    return <CheckCircle size={14} className="text-green-500" />;
+    if (status === 'critical') return <XCircle size={14} className="theme-text-error" />;
+    if (status === 'warning') return <AlertTriangle size={14} className="theme-text-warning" />;
+    return <CheckCircle size={14} className="theme-text-success" />;
   };
 
   const barColor = (status: string) => {
-    if (status === 'critical') return 'bg-red-400';
-    if (status === 'warning') return 'bg-amber-400';
+    if (status === 'critical') return 'bg-[var(--color-error)]';
+    if (status === 'warning') return 'bg-[var(--color-warning)]';
     return 'bg-brand-gold-dark';
   };
 
@@ -170,8 +170,8 @@ export const AdminDiskMonitor: React.FC = () => {
       <div className="space-y-5">
         <h1 className="text-2xl font-bold text-text-primary tracking-[0.12em]">磁盘监控</h1>
         <div className="p-4 theme-status-error rounded">
-          <p className="text-sm text-red-600 font-medium">{error}</p>
-          <button onClick={fetchDiskStatus} className="mt-2 px-4 py-2 bg-brand-gold-dark text-white rounded text-sm font-medium hover:bg-brand-gold transition-all">
+          <p className="text-sm theme-text-error font-medium">{error}</p>
+          <button onClick={fetchDiskStatus} className="mt-2 px-4 py-2 theme-button-primary rounded text-sm font-medium transition-all">
             重试
           </button>
         </div>
@@ -206,9 +206,9 @@ export const AdminDiskMonitor: React.FC = () => {
 
       {error && (
         <div className="flex items-start gap-3 p-3 rounded theme-status-error">
-          <XCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
-          <p className="text-sm text-red-600 flex-1">{error}</p>
-          <button onClick={() => setError(null)} className="p-1 text-red-400 hover:text-red-600">
+          <XCircle size={18} className="theme-text-error shrink-0 mt-0.5" />
+          <p className="text-sm theme-text-error flex-1">{error}</p>
+          <button onClick={() => setError(null)} className="p-1 theme-icon-button-danger">
             <X size={14} />
           </button>
         </div>
@@ -216,8 +216,8 @@ export const AdminDiskMonitor: React.FC = () => {
 
       {saveSuccess && (
         <div className="flex items-center gap-3 p-3 rounded theme-status-success">
-          <CheckCircle size={18} className="text-green-500 shrink-0" />
-          <p className="text-sm font-medium text-green-600">配置保存成功，新阈值已立即生效</p>
+          <CheckCircle size={18} className="theme-text-success shrink-0" />
+          <p className="text-sm font-medium theme-text-success">配置保存成功，新阈值已立即生效</p>
         </div>
       )}
 
@@ -237,7 +237,7 @@ export const AdminDiskMonitor: React.FC = () => {
                 {statusIcon(diskStatus.status)}
                 <span className="text-xs text-text-muted">剩余空间</span>
               </div>
-              <p className={`text-2xl font-bold ${diskStatus.status === 'critical' ? 'text-red-600' : 'text-text-primary'}`}>
+              <p className={`text-2xl font-bold ${diskStatus.status === 'critical' ? 'theme-text-error' : 'text-text-primary'}`}>
                 {diskStatus.freeSpaceGB.toFixed(1)}<span className="text-sm font-normal text-text-muted ml-1">GB</span>
               </p>
             </div>
@@ -311,7 +311,7 @@ export const AdminDiskMonitor: React.FC = () => {
             <div className="flex items-center gap-2">
               <Settings size={18} className="text-brand-gold" />
               <h3 className="text-sm font-semibold text-text-secondary">告警阈值配置</h3>
-              <span className="px-2 py-0.5 bg-brand-gold/10 text-brand-gold text-[10px] font-medium rounded">实时生效</span>
+              <span className="px-2 py-0.5 theme-tag text-[10px] font-medium rounded">实时生效</span>
             </div>
             <button onClick={handleCancelEdit} className="p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-alt rounded transition-all">
               <X size={18} />
@@ -320,8 +320,8 @@ export const AdminDiskMonitor: React.FC = () => {
 
           {validationErrors.length > 0 && (
             <div className="flex items-start gap-3 p-3 rounded theme-status-error mb-4">
-              <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
-              <ul className="text-sm text-red-600 list-disc list-inside">
+              <AlertTriangle size={18} className="theme-text-error shrink-0 mt-0.5" />
+              <ul className="text-sm theme-text-error list-disc list-inside">
                 {validationErrors.map((err, i) => <li key={i}>{err}</li>)}
               </ul>
             </div>

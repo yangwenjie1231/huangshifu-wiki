@@ -6,7 +6,7 @@
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
 
   /* 普通主题 - 原站米白 / 金棕色系 */
-  --color-brand-primary: #c8951e;
+  --color-brand-primary: #b07b17;
   --color-brand-olive: #6b6560;
   --color-brand-cream: #f7f5f0;
   --color-brand-paper: #ffffff;
@@ -20,11 +20,14 @@
   --color-theme-accent-strong: #6f4f0f;
   --color-theme-accent-soft: #f3e7c4;
   --color-theme-accent-contrast: #fffdf8;
+  --color-theme-button-contrast: #fff;
+  --color-theme-text-inverse: #fff;
+  --color-theme-selection-text: #2c2c2c;
   --font-theme-main: var(--font-sans);
   --font-theme-serif: var(--font-serif);
   --radius-theme-card: 1.5rem;
   --shadow-theme-card: 0 10px 30px rgba(0, 0, 0, 0.06);
-  --theme-header-image: linear-gradient(135deg, rgba(200, 149, 30, 0.12), rgba(240, 236, 227, 0.7));
+  --theme-header-image: linear-gradient(135deg, rgba(176, 123, 23, 0.12), rgba(240, 236, 227, 0.7));
   
   /* 高亮文字色 - 苹果标志性渐变色彩 */
   --color-highlight-1: rgba(255, 149, 0, 0.8);
@@ -44,7 +47,7 @@
   /* 将语义化命名映射到项目已有颜色，保持向后兼容 */
 
   /* 品牌色 (Brand) - 原站金棕色 */
-  --color-brand-gold: #c8951e;
+  --color-brand-gold: #b07b17;
   --color-brand-gold-light: #d9ab47;
   --color-brand-gold-dark: #a87912;
 
@@ -71,7 +74,7 @@
 
   /* 古风页面色 (Antique Page) */
   --color-bg-antique: #f7f5f0;
-  --color-accent-antique: #c8951e;
+  --color-accent-antique: #b07b17;
 
   /* 占位/错误状态色 (Placeholder & Error State) */
   --color-surface-error: #f5f2eb;
@@ -95,6 +98,29 @@
   --glass-saturate: 180%;
   --glass-border: rgba(255, 255, 255, 0.2);
   --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  --shadow-brand-soft: 0 2px 8px rgba(138, 99, 19, 0.12);
+  --shadow-brand-hover: 0 8px 18px rgba(138, 99, 19, 0.22);
+  --shadow-range-thumb: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --color-static-footer-bg: #faf9f7;
+  --color-static-footer-border: #eee;
+  --color-static-footer-text: #999;
+  --color-range-thumb: var(--color-brand-gold);
+  --color-range-thumb-border: var(--color-brand-gold);
+  --color-dark-glass-bg: rgba(30, 28, 26, 0.6);
+  --color-dark-glass-border: rgba(255, 255, 255, 0.08);
+  --color-menu-hover-bg: rgba(255, 255, 255, 0.08);
+  --shadow-menu-hover: inset -2px -2px 2px rgba(255, 255, 255, 0.05);
+  --color-editor-toolbar-hover: rgba(255, 255, 255, 0.06);
+  --color-highlight-shadow-1: rgba(255, 149, 0, 0.3);
+  --color-highlight-shadow-2: rgba(255, 99, 132, 0.3);
+  --color-highlight-shadow-3: rgba(153, 102, 255, 0.3);
+  --color-highlight-shadow-4: rgba(54, 162, 235, 0.3);
+  --color-liquid-border-strong: rgba(255, 255, 255, 0.5);
+  --color-liquid-tint: rgba(255, 255, 255, 0.25);
+  --shadow-liquid-hover: 0 12px 40px rgba(0, 0, 0, 0.15);
+  --shadow-liquid-shine: inset 2px 2px 1px 0 rgba(255, 255, 255, 0.5), inset -1px -1px 1px 1px rgba(255, 255, 255, 0.5);
+  --color-menu-hover-light: rgba(255, 255, 255, 0.5);
+  --shadow-menu-hover-light: inset -2px -2px 2px rgba(0, 0, 0, 0.1);
 
   /* Liquid Glass 流动效果变量 */
   --morph-duration: 400ms;
@@ -122,8 +148,11 @@
   --color-theme-accent-strong: #d4a843;
   --color-theme-accent-soft: rgba(212, 168, 67, 0.18);
   --color-theme-accent-contrast: #fff8eb;
+  --color-theme-button-contrast: #fff;
+  --color-theme-text-inverse: #fff;
+  --color-theme-selection-text: #e8d4a8;
   --shadow-theme-card: 0 16px 40px rgba(0, 0, 0, 0.28);
-  --theme-header-image: linear-gradient(135deg, rgba(200, 149, 30, 0.18), rgba(52, 44, 37, 0.7));
+  --theme-header-image: linear-gradient(135deg, rgba(176, 123, 23, 0.18), rgba(52, 44, 37, 0.7));
   --color-bg-primary: #1f1a16;
   --color-bg-secondary: #2a231e;
   --color-bg-tertiary: #342c25;
@@ -138,13 +167,21 @@
   --color-text-antique-muted: #b8ab9a;
   --color-text-placeholder: #8f8172;
   --color-bg-antique: #1f1a16;
-  --color-accent-antique: #c8951e;
+  --color-accent-antique: #b07b17;
   --color-surface-error: #3a2f28;
   --color-surface-form: #2a231e;
   --glass-bg: rgba(42, 35, 30, 0.58);
   --glass-bg-strong: rgba(52, 44, 37, 0.82);
   --glass-border: rgba(255, 236, 204, 0.12);
   --glass-shadow: 0 10px 32px rgba(0, 0, 0, 0.35);
+  --shadow-brand-soft: 0 2px 8px rgba(0, 0, 0, 0.18);
+  --shadow-brand-hover: 0 10px 22px rgba(0, 0, 0, 0.28);
+  --color-static-footer-bg: #1e1c1a;
+  --color-static-footer-border: #3d3832;
+  --color-static-footer-text: #7a7268;
+  --color-range-thumb: #d4a843;
+  --color-range-thumb-border: #d4a843;
+  --shadow-range-thumb: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 @layer base {
@@ -182,8 +219,8 @@
 
   /* 全局 ::selection 样式 - 古风黄色调 */
   ::selection {
-    background-color: #fdf5d8;
-    color: #c8951e;
+    background-color: color-mix(in srgb, var(--color-theme-accent) 26%, transparent);
+    color: var(--color-theme-selection-text);
   }
 
   /* skip-to-content 无障碍样式 */
@@ -194,7 +231,7 @@
     z-index: 9999;
     padding: 0.75rem 1.5rem;
     background: var(--color-brand-gold);
-    color: white;
+    color: var(--color-theme-text-inverse);
     text-decoration: none;
     font-weight: 600;
     transition: top 0.3s ease;
@@ -277,12 +314,12 @@
 .theme-button-primary {
   background: var(--color-theme-accent);
   color: var(--color-theme-accent-contrast);
-  box-shadow: 0 2px 8px rgba(138, 99, 19, 0.12);
+  box-shadow: var(--shadow-brand-soft);
 }
 
 .theme-button-primary:hover {
   background: var(--color-brand-gold);
-  box-shadow: 0 8px 18px rgba(138, 99, 19, 0.22);
+  box-shadow: var(--shadow-brand-hover);
 }
 
 .theme-button-secondary {
@@ -294,6 +331,46 @@
 .theme-button-secondary:hover {
   border-color: var(--color-theme-accent);
   color: var(--color-theme-accent);
+}
+
+.theme-button-danger-outline {
+  border-color: color-mix(in srgb, var(--color-error) 22%, transparent);
+  color: color-mix(in srgb, var(--color-error-hover) 88%, var(--color-text-primary));
+}
+
+.theme-button-danger-outline:hover {
+  border-color: color-mix(in srgb, var(--color-error) 32%, transparent);
+  color: var(--color-error-hover);
+  background: color-mix(in srgb, var(--color-error) 10%, var(--color-surface));
+}
+
+.theme-button-danger {
+  background: var(--color-error-hover);
+  color: var(--color-theme-button-contrast);
+}
+
+.theme-button-danger:hover {
+  background: var(--color-error);
+}
+
+.theme-button-warning {
+  background: var(--color-warning-hover);
+  color: var(--color-theme-button-contrast);
+}
+
+.theme-button-warning:hover {
+  background: var(--color-warning);
+}
+
+.theme-button-warning-outline {
+  border-color: color-mix(in srgb, var(--color-warning) 22%, transparent);
+  color: color-mix(in srgb, var(--color-warning-hover) 88%, var(--color-text-primary));
+}
+
+.theme-button-warning-outline:hover {
+  border-color: color-mix(in srgb, var(--color-warning) 32%, transparent);
+  color: var(--color-warning-hover);
+  background: color-mix(in srgb, var(--color-warning) 10%, var(--color-surface));
 }
 
 .theme-tag {
@@ -326,6 +403,74 @@
   border: 1px solid color-mix(in srgb, var(--color-warning) 20%, transparent);
 }
 
+.theme-text-success {
+  color: color-mix(in srgb, var(--color-success-hover) 88%, var(--color-text-primary));
+}
+
+.theme-text-warning {
+  color: color-mix(in srgb, var(--color-warning-hover) 88%, var(--color-text-primary));
+}
+
+.theme-text-warning-soft {
+  color: color-mix(in srgb, var(--color-warning-hover) 70%, var(--color-text-primary));
+}
+
+.theme-text-error {
+  color: color-mix(in srgb, var(--color-error-hover) 88%, var(--color-text-primary));
+}
+
+.theme-text-info {
+  color: color-mix(in srgb, var(--color-info-hover) 88%, var(--color-text-primary));
+}
+
+.theme-bg-success-soft {
+  background: color-mix(in srgb, var(--color-success) 10%, var(--color-surface));
+}
+
+.theme-bg-warning-soft {
+  background: color-mix(in srgb, var(--color-warning) 10%, var(--color-surface));
+}
+
+.theme-bg-error-soft {
+  background: color-mix(in srgb, var(--color-error) 10%, var(--color-surface));
+}
+
+.theme-bg-info-soft {
+  background: color-mix(in srgb, var(--color-info) 10%, var(--color-surface));
+}
+
+.theme-border-success-soft {
+  border-color: color-mix(in srgb, var(--color-success) 22%, transparent);
+}
+
+.theme-border-warning-soft {
+  border-color: color-mix(in srgb, var(--color-warning) 22%, transparent);
+}
+
+.theme-border-error-soft {
+  border-color: color-mix(in srgb, var(--color-error) 22%, transparent);
+}
+
+.theme-border-info-soft {
+  border-color: color-mix(in srgb, var(--color-info) 22%, transparent);
+}
+
+.theme-icon-button-danger {
+  color: color-mix(in srgb, var(--color-error) 78%, var(--color-text-primary));
+}
+
+.theme-icon-button-danger:hover {
+  color: var(--color-error-hover);
+}
+
+.theme-icon-button-warning {
+  color: color-mix(in srgb, var(--color-warning) 82%, var(--color-text-primary));
+}
+
+.theme-icon-button-warning:hover {
+  color: var(--color-warning-hover);
+}
+
 .glass {
   background: var(--glass-bg-strong);
   backdrop-filter: blur(12px);
@@ -334,10 +479,10 @@
 }
 
 .glass-dark {
-  background: rgba(0, 0, 0, 0.32);
+  background: color-mix(in srgb, var(--color-bg-primary) 28%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--color-dark-glass-border);
 }
 
 /* 旋转动画 - 用于加载指示器或装饰性元素 */
@@ -355,21 +500,21 @@ input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 12px;
   height: 12px;
-  background: var(--color-brand-gold);
+  background: var(--color-range-thumb);
   border-radius: 50%;
   cursor: pointer;
-  border: 2px solid var(--color-brand-gold);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border: 2px solid var(--color-range-thumb-border);
+  box-shadow: var(--shadow-range-thumb);
 }
 
 input[type="range"]::-moz-range-thumb {
   width: 12px;
   height: 12px;
-  background: var(--color-brand-gold);
+  background: var(--color-range-thumb);
   border-radius: 50%;
   cursor: pointer;
-  border: 2px solid var(--color-brand-gold);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border: 2px solid var(--color-range-thumb-border);
+  box-shadow: var(--shadow-range-thumb);
 }
 
 .pb-safe {
@@ -519,7 +664,7 @@ img {
 /* CTA 按钮样式 */
 .btn-cta {
   background: var(--color-cta);
-  color: white;
+  color: var(--color-theme-text-inverse);
   font-weight: 600;
   padding: 0.75rem 1.5rem;
   border-radius: 0.75rem;
@@ -556,7 +701,7 @@ img {
 @media (prefers-color-scheme: light) {
   .liquidGlass-wrapper {
     background: var(--glass-bg-strong);
-    border-color: rgba(255, 255, 255, 0.5);
+    border-color: var(--color-liquid-border-strong);
   }
 }
 
@@ -565,7 +710,7 @@ img {
   padding: 0.8rem;
   border-radius: 2.5rem;
   transform: scale(var(--focus-scale));
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-liquid-hover);
 }
 
 /* 扭曲层 */
@@ -583,7 +728,7 @@ img {
   position: absolute;
   z-index: 1;
   inset: 0;
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--color-liquid-tint);
 }
 
 /* 光泽层 */
@@ -591,7 +736,7 @@ img {
   position: absolute;
   z-index: 2;
   inset: 0;
-  box-shadow: inset 2px 2px 1px 0 rgba(255, 255, 255, 0.5), inset -1px -1px 1px 1px rgba(255, 255, 255, 0.5);
+  box-shadow: var(--shadow-liquid-shine);
 }
 
 /* 内容层 */
@@ -622,8 +767,8 @@ img {
 }
 
 .menu-item:hover {
-  background-color: rgba(255, 255, 255, 0.5);
-  box-shadow: inset -2px -2px 2px rgba(0, 0, 0, 0.1);
+  background-color: var(--color-menu-hover-light);
+  box-shadow: var(--shadow-menu-hover-light);
   backdrop-filter: blur(2px);
 }
 
@@ -673,22 +818,22 @@ img {
 /* 高亮文字效果 */
 .text-highlight-1 {
   color: var(--color-highlight-1);
-  text-shadow: 0 0 10px rgba(255, 149, 0, 0.3);
+  text-shadow: 0 0 10px var(--color-highlight-shadow-1);
 }
 
 .text-highlight-2 {
   color: var(--color-highlight-2);
-  text-shadow: 0 0 10px rgba(255, 99, 132, 0.3);
+  text-shadow: 0 0 10px var(--color-highlight-shadow-2);
 }
 
 .text-highlight-3 {
   color: var(--color-highlight-3);
-  text-shadow: 0 0 10px rgba(153, 102, 255, 0.3);
+  text-shadow: 0 0 10px var(--color-highlight-shadow-3);
 }
 
 .text-highlight-4 {
   color: var(--color-highlight-4);
-  text-shadow: 0 0 10px rgba(54, 162, 235, 0.3);
+  text-shadow: 0 0 10px var(--color-highlight-shadow-4);
 }
 
 /* prefers-reduced-motion 支持 */
@@ -888,7 +1033,7 @@ html {
 .gufeng-song-item:nth-child(6) { animation-delay: 0.12s; }
 
 .gufeng-btn { transition: all 0.3s ease; }
-.gufeng-btn:hover { background-color: #f0ece3; color: #c8951e; }
+.gufeng-btn:hover { background-color: var(--color-theme-surface-alt); color: var(--color-brand-gold); }
 
 /* ========================================
    Task 8: 375px Responsive Styles
@@ -1101,16 +1246,16 @@ html {
 
 .static-fallback-footer {
   display: none;
-  background: #faf9f7;
-  border-top: 1px solid #eee;
+  background: var(--color-static-footer-bg);
+  border-top: 1px solid var(--color-static-footer-border);
   padding: 12px;
   text-align: center;
   font-size: 12px;
-  color: #999;
+  color: var(--color-static-footer-text);
 }
 
 .static-fallback-link {
-  color: #999;
+  color: var(--color-static-footer-text);
   text-decoration: none;
 }
 
@@ -1122,45 +1267,34 @@ html {
   position: absolute;
 }
 
-[data-theme="dark"] ::selection {
-  background-color: rgba(200, 149, 30, 0.3);
-  color: #e8d4a8;
-}
-
 [data-theme="dark"] .liquidGlass-wrapper {
   background: var(--glass-bg);
   border-color: var(--glass-border);
 }
 
 [data-theme="dark"] .glass {
-  background: rgba(30, 28, 26, 0.6);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: var(--color-dark-glass-bg);
+  border-color: var(--color-dark-glass-border);
 }
 
 [data-theme="dark"] .gufeng-btn:hover {
-  background-color: #2e2a26;
-  color: #d4a843;
+  background-color: var(--color-surface-alt);
+  color: var(--color-theme-accent-strong);
 }
 
 [data-theme="dark"] .menu-item:hover {
-  background-color: rgba(255, 255, 255, 0.08);
-  box-shadow: inset -2px -2px 2px rgba(255, 255, 255, 0.05);
-}
-
-[data-theme="dark"] .static-fallback-footer {
-  background: #1e1c1a;
-  border-top-color: #3d3832;
-  color: #7a7268;
+  background-color: var(--color-menu-hover-bg);
+  box-shadow: var(--shadow-menu-hover);
 }
 
 [data-theme="dark"] input[type="range"]::-webkit-slider-thumb {
-  background: #d4a843;
-  border-color: #d4a843;
+  background: var(--color-range-thumb);
+  border-color: var(--color-range-thumb-border);
 }
 
 [data-theme="dark"] input[type="range"]::-moz-range-thumb {
-  background: #d4a843;
-  border-color: #d4a843;
+  background: var(--color-range-thumb);
+  border-color: var(--color-range-thumb-border);
 }
 
 [data-theme="dark"] .wmde-markdown,
@@ -1183,5 +1317,5 @@ html {
 }
 
 [data-theme="dark"] .w-md-editor-toolbar button:hover {
-  background-color: rgba(255, 255, 255, 0.06) !important;
+  background-color: var(--color-editor-toolbar-hover) !important;
 }

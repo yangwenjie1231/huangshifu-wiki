@@ -178,7 +178,7 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
             <div className="mt-5 flex justify-end gap-3">
               <button
                 onClick={onResetFilters}
-                className="text-xs text-text-muted hover:text-red-500 transition-colors"
+                className="text-xs text-text-muted theme-icon-button-danger transition-colors"
               >
                 重置筛选
               </button>

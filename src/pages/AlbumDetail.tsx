@@ -262,7 +262,7 @@ const AlbumDetail = () => {
                   disabled={favoriting === track.docId}
                   className={clsx(
                     'p-2 transition-colors flex-shrink-0',
-                    track.favoritedByMe ? 'text-red-500' : 'text-text-muted hover:text-red-500',
+                    track.favoritedByMe ? 'theme-text-error' : 'text-text-muted theme-icon-button-danger',
                     favoriting === track.docId && 'opacity-50 cursor-not-allowed',
                   )}
                 >

@@ -311,7 +311,7 @@ const Profile = () => {
                   <p className="text-xs text-text-muted mb-0.5">状态</p>
                   <p className={clsx(
                     'text-lg font-semibold',
-                    profile?.status === 'banned' ? 'text-red-600' : 'text-text-primary',
+                    profile?.status === 'banned' ? 'theme-text-error' : 'text-text-primary',
                   )}>
                     {profile?.status === 'banned' ? '已封禁' : '正常'}
                   </p>
@@ -395,9 +395,9 @@ const Profile = () => {
                           <span className={clsx(
                             'px-2 py-0.5 rounded text-[10px] font-medium',
                             post.status === 'published'
-                              ? 'bg-green-50 text-green-700'
+                              ? 'theme-status-success'
                               : post.status === 'pending'
-                                ? 'bg-amber-50 text-amber-700'
+                                ? 'theme-status-warning'
                                 : 'bg-surface-alt text-text-muted',
                           )}>
                             {post.status === 'published' ? '已发布' : post.status === 'pending' ? '待审核' : post.status}

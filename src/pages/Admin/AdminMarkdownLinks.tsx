@@ -201,7 +201,7 @@ export default function AdminMarkdownLinks() {
               <input type="checkbox" checked={mapping.useRegex} onChange={(e) => updateMapping(index, 'useRegex', e.target.checked)} className="w-4 h-4 accent-brand-gold" />
               <span className="text-sm text-text-secondary">正则</span>
             </label>
-            <button onClick={() => removeMapping(index)} className="px-3 py-2 text-red-400 hover:bg-surface-alt rounded transition-all" disabled={mappings.length === 1}>删除</button>
+            <button onClick={() => removeMapping(index)} className="px-3 py-2 theme-icon-button-danger hover:bg-surface-alt rounded transition-all" disabled={mappings.length === 1}>删除</button>
           </div>
         ))}
         <button onClick={addMapping} className="mt-2 px-4 py-2 text-sm text-brand-gold border border-brand-gold/30 rounded hover:bg-brand-gold/10 transition-all">+ 添加映射</button>
@@ -226,7 +226,7 @@ export default function AdminMarkdownLinks() {
                 <div className="text-xs text-text-muted">{item.slug}</div>
                 {item.preview.replaced ? (
                   <div className="mt-2 text-sm">
-                    <span className="text-green-600 text-xs">将替换 {item.preview.replaceCount} 处</span>
+                    <span className="theme-text-success text-xs">将替换 {item.preview.replaceCount} 处</span>
                     <ul className="mt-1 space-y-1">
                       {item.preview.replacements.map((r: any, i: number) => (
                         <li key={i} className="text-xs text-text-secondary">{r.type}: {r.oldUrl} → {r.newUrl}</li>
@@ -248,17 +248,17 @@ export default function AdminMarkdownLinks() {
           <h3 className="text-sm font-semibold text-text-primary mb-4">{dryRun ? '预览更新结果' : '更新结果'}</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <div className="bg-surface border border-border rounded p-4"><div className="text-2xl font-bold text-text-primary">{updateResult.totalPages}</div><div className="text-xs text-text-muted">处理页面</div></div>
-            <div className="bg-surface border border-border rounded p-4"><div className="text-2xl font-bold text-green-600">{updateResult.successCount}</div><div className="text-xs text-text-muted">成功</div></div>
+            <div className="bg-surface border border-border rounded p-4"><div className="text-2xl font-bold theme-text-success">{updateResult.successCount}</div><div className="text-xs text-text-muted">成功</div></div>
             <div className="bg-surface border border-border rounded p-4"><div className="text-2xl font-bold text-brand-gold">{updateResult.skipCount}</div><div className="text-xs text-text-muted">跳过</div></div>
-            <div className="bg-surface border border-border rounded p-4"><div className="text-2xl font-bold text-red-500">{updateResult.failCount}</div><div className="text-xs text-text-muted">失败</div></div>
+            <div className="bg-surface border border-border rounded p-4"><div className="text-2xl font-bold theme-text-error">{updateResult.failCount}</div><div className="text-xs text-text-muted">失败</div></div>
           </div>
           <div className="text-sm text-text-muted">执行时间: {updateResult.executionTime}ms</div>
           {updateResult.results.some((r) => !r.success) && (
             <div className="mt-4">
-              <h4 className="font-medium text-red-500 text-sm mb-2">失败详情</h4>
+              <h4 className="font-medium theme-text-error text-sm mb-2">失败详情</h4>
               <div className="space-y-1 max-h-48 overflow-y-auto">
                 {updateResult.results.filter((r) => !r.success).map((r) => (
-                  <div key={r.slug} className="text-sm text-red-500">{r.title} ({r.slug}): {r.error}</div>
+                  <div key={r.slug} className="text-sm theme-text-error">{r.title} ({r.slug}): {r.error}</div>
                 ))}
               </div>
             </div>

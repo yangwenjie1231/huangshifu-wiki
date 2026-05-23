@@ -73,7 +73,7 @@ export const AdminLocks = () => {
                     <td className="px-5 py-4 text-sm text-text-secondary">{item.username} ({item.userId?.slice(0, 8) ?? '未知'})</td>
                     <td className="px-5 py-4 text-xs text-text-muted">{formatDateTime(item.expiresAt, 'N/A')}</td>
                     <td className="px-5 py-4 text-right">
-                      <button onClick={() => releaseLock(item)} className="p-1.5 text-amber-600 hover:bg-surface-alt rounded transition-all opacity-0 group-hover:opacity-100" title="强制释放">
+                      <button onClick={() => releaseLock(item)} className="p-1.5 theme-icon-button-warning hover:bg-surface-alt rounded transition-all opacity-0 group-hover:opacity-100" title="强制释放">
                         <Lock size={16} />
                       </button>
                     </td>

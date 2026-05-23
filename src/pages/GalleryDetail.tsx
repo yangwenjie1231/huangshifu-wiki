@@ -759,7 +759,7 @@ const GalleryDetail = () => {
                   <>
                     <button
                       onClick={() => handleDeleteImage(index)}
-                      className="absolute top-1.5 left-1.5 z-10 p-1 rounded bg-black/50 text-white hover:bg-red-500/80 transition-colors"
+                      className="absolute top-1.5 left-1.5 z-10 p-1 rounded bg-black/50 text-white hover:bg-[var(--color-error)]/80 transition-colors"
                       title={t('gallery.deleteImage')}
                     >
                       <Trash2 size={11} />

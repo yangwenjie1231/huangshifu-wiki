@@ -124,7 +124,7 @@ const SongCard = React.memo(function SongCard({
 								disabled={isFavoriting}
 								className={clsx(
 									"p-2 rounded transition-colors",
-									song.favoritedByMe ? "text-red-500" : "text-text-muted hover:text-red-500"
+									song.favoritedByMe ? "theme-text-error" : "text-text-muted theme-icon-button-danger"
 								)}
 								title={t('music.favorite')}
 							>
@@ -160,7 +160,7 @@ const SongCard = React.memo(function SongCard({
 							{isAdmin && (
 								<button
 								onClick={(e) => { e.stopPropagation(); onDelete(song.docId); }}
-								className="p-2 text-text-muted hover:text-red-500 transition-colors"
+								className="p-2 text-text-muted theme-icon-button-danger transition-colors"
 								title={t('music.deleteSong')}
 								aria-label={`删除 ${song.title}`}
 							>
@@ -176,7 +176,7 @@ const SongCard = React.memo(function SongCard({
 								disabled={isFavoriting}
 								className={clsx(
 									"p-2 rounded transition-colors",
-									song.favoritedByMe ? "text-red-500" : "text-text-muted"
+									song.favoritedByMe ? "theme-text-error" : "text-text-muted"
 								)}
 							>
 								<Heart size={15} />

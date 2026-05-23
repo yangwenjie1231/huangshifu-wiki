@@ -85,7 +85,7 @@ export const Navbar = () => {
 						{user ? (
 							<div className="flex items-center" style={{ gap: '16px' }}>
 								{isBanned && (
-									<span className="text-[10px] font-bold px-2 py-1 rounded bg-red-50 text-red-600">
+									<span className="text-[10px] font-bold px-2 py-1 rounded theme-status-error">
 										账号受限
 									</span>
 									)}
@@ -115,7 +115,7 @@ export const Navbar = () => {
 										<button
 											type="button"
 											onClick={handleLogout}
-											className="text-text-muted hover:text-red-500 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2"
+											className="text-text-muted theme-icon-button-danger transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2"
 											aria-label="退出登录"
 										>
 											<LogOut size={18} />

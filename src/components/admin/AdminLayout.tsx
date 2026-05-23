@@ -179,7 +179,7 @@ export const AdminLayout = () => {
           <span className="text-sm text-text-muted hidden sm:inline">{user?.displayName || user?.uid || ''}</span>
           <button
             onClick={() => logoutRequest()}
-            className="p-2 hover:bg-surface-alt rounded text-text-muted hover:text-red-500 transition-colors"
+            className="p-2 hover:bg-surface-alt rounded text-text-muted theme-icon-button-danger transition-colors"
             title="退出登录"
           >
             <LogOut size={18} />

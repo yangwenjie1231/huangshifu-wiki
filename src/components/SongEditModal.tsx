@@ -220,7 +220,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
         maxWidth="max-w-lg"
       >
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-text-primary">歌曲标题 <span className="text-red-500">*</span></label>
+          <label className="text-sm font-medium text-text-primary">歌曲标题 <span className="theme-text-error">*</span></label>
           <input
             type="text"
             value={formData.title}
@@ -230,7 +230,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
           />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-text-primary">艺术家 <span className="text-red-500">*</span></label>
+          <label className="text-sm font-medium text-text-primary">艺术家 <span className="theme-text-error">*</span></label>
           <input
             type="text"
             value={formData.artist}
@@ -381,7 +381,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
                               delete next[platform.key];
                               return next;
                             })}
-                            className="p-1.5 text-text-muted hover:text-red-500 transition-colors"
+                            className="p-1.5 text-text-muted theme-icon-button-danger transition-colors"
                             title="移除"
                           >
                             <Trash2 size={14} />
@@ -445,7 +445,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
                       <button
                         type="button"
                         onClick={() => handleRemoveCustomPlatformLink(index)}
-                        className="p-1.5 text-text-muted hover:text-red-500 transition-colors"
+                        className="p-1.5 text-text-muted theme-icon-button-danger transition-colors"
                       >
                         <Trash2 size={14} />
                       </button>

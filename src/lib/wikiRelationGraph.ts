@@ -3,6 +3,7 @@ import {
 	RELATION_TYPE_LABELS,
 	type WikiRelationType,
 } from "./relationConstants";
+import { RELATION_GRAPH_COLOR_TOKENS } from "./colorTokens";
 
 export type RelationGraphNode = {
 	slug: string;
@@ -37,16 +38,53 @@ export type MiniRelationGraphRelation = {
 	label?: string | null;
 };
 
+const RELATION_GRAPH_COMMON = RELATION_GRAPH_COLOR_TOKENS.common;
+
+const RELATION_GRAPH_PALETTE = {
+	related_person: {
+		edge: RELATION_GRAPH_COLOR_TOKENS.relatedPerson.edge,
+		background: RELATION_GRAPH_COLOR_TOKENS.relatedPerson.background,
+		border: RELATION_GRAPH_COLOR_TOKENS.relatedPerson.border,
+		highlightBackground: RELATION_GRAPH_COLOR_TOKENS.relatedPerson.highlightBackground,
+		highlightBorder: RELATION_GRAPH_COLOR_TOKENS.relatedPerson.highlightBorder,
+		fontColor: RELATION_GRAPH_COMMON.fontLight,
+	},
+	work_relation: {
+		edge: RELATION_GRAPH_COLOR_TOKENS.workRelation.edge,
+		background: RELATION_GRAPH_COLOR_TOKENS.workRelation.background,
+		border: RELATION_GRAPH_COMMON.borderWarm,
+		highlightBackground: RELATION_GRAPH_COLOR_TOKENS.workRelation.highlightBackground,
+		highlightBorder: RELATION_GRAPH_COMMON.highlightWarm,
+		fontColor: RELATION_GRAPH_COMMON.fontDark,
+	},
+	timeline_relation: {
+		edge: RELATION_GRAPH_COLOR_TOKENS.timelineRelation.edge,
+		background: RELATION_GRAPH_COMMON.layerWarm,
+		border: RELATION_GRAPH_COMMON.borderWarm,
+		highlightBackground: RELATION_GRAPH_COMMON.layerWarmHighlight,
+		highlightBorder: RELATION_GRAPH_COMMON.highlightWarm,
+		fontColor: RELATION_GRAPH_COMMON.fontDark,
+	},
+	custom: {
+		edge: RELATION_GRAPH_COLOR_TOKENS.custom.edge,
+		background: RELATION_GRAPH_COMMON.layerWarm,
+		border: RELATION_GRAPH_COMMON.borderWarm,
+		highlightBackground: RELATION_GRAPH_COMMON.layerWarmHighlight,
+		highlightBorder: RELATION_GRAPH_COMMON.highlightWarm,
+		fontColor: RELATION_GRAPH_COMMON.fontDark,
+	},
+} as const;
+
 type Point = {
 	x: number;
 	y: number;
 };
 
 export const RELATION_GRAPH_TYPE_COLORS: Record<WikiRelationType, string> = {
-	related_person: "#6B8E23",
-	work_relation: "#CD853F",
-	timeline_relation: "#4682B4",
-	custom: "#9370DB",
+	related_person: RELATION_GRAPH_PALETTE.related_person.edge,
+	work_relation: RELATION_GRAPH_PALETTE.work_relation.edge,
+	timeline_relation: RELATION_GRAPH_PALETTE.timeline_relation.edge,
+	custom: RELATION_GRAPH_PALETTE.custom.edge,
 };
 
 type RelationGraphNodeStyle = {
@@ -62,11 +100,11 @@ type RelationGraphNodeStyle = {
 };
 
 const CENTER_NODE_STYLE: RelationGraphNodeStyle = {
-	background: "#6B8E23",
-	border: "#556B2F",
-	highlightBackground: "#8FBC8F",
-	highlightBorder: "#6B8E23",
-	fontColor: "#ffffff",
+	background: RELATION_GRAPH_PALETTE.related_person.background,
+	border: RELATION_GRAPH_PALETTE.related_person.border,
+	highlightBackground: RELATION_GRAPH_PALETTE.related_person.highlightBackground,
+	highlightBorder: RELATION_GRAPH_PALETTE.related_person.highlightBorder,
+	fontColor: RELATION_GRAPH_PALETTE.related_person.fontColor,
 	fontSize: 16,
 	size: 34,
 	borderWidth: 3,
@@ -74,11 +112,11 @@ const CENTER_NODE_STYLE: RelationGraphNodeStyle = {
 };
 
 const FIRST_LAYER_NODE_STYLE: RelationGraphNodeStyle = {
-	background: "#F4A460",
-	border: "#D2B48C",
-	highlightBackground: "#FFA07A",
-	highlightBorder: "#DAA520",
-	fontColor: "#2F2F2F",
+	background: RELATION_GRAPH_PALETTE.work_relation.background,
+	border: RELATION_GRAPH_PALETTE.work_relation.border,
+	highlightBackground: RELATION_GRAPH_PALETTE.work_relation.highlightBackground,
+	highlightBorder: RELATION_GRAPH_PALETTE.work_relation.highlightBorder,
+	fontColor: RELATION_GRAPH_PALETTE.work_relation.fontColor,
 	fontSize: 14,
 	size: 26,
 	borderWidth: 2,
@@ -86,11 +124,11 @@ const FIRST_LAYER_NODE_STYLE: RelationGraphNodeStyle = {
 };
 
 const SECOND_LAYER_NODE_STYLE: RelationGraphNodeStyle = {
-	background: "#DEB887",
-	border: "#D2B48C",
-	highlightBackground: "#E6C89C",
-	highlightBorder: "#DAA520",
-	fontColor: "#2F2F2F",
+	background: RELATION_GRAPH_PALETTE.timeline_relation.background,
+	border: RELATION_GRAPH_PALETTE.timeline_relation.border,
+	highlightBackground: RELATION_GRAPH_PALETTE.timeline_relation.highlightBackground,
+	highlightBorder: RELATION_GRAPH_PALETTE.timeline_relation.highlightBorder,
+	fontColor: RELATION_GRAPH_PALETTE.timeline_relation.fontColor,
 	fontSize: 13,
 	size: 22,
 	borderWidth: 2,

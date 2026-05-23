@@ -11,6 +11,7 @@ import {
   truncateGraphLabel,
   type RelationGraphData,
 } from '../../lib/wikiRelationGraph';
+import { RELATION_GRAPH_COLOR_TOKENS } from '../../lib/colorTokens';
 
 export type { RelationGraphData, RelationGraphEdge, RelationGraphNode } from '../../lib/wikiRelationGraph';
 
@@ -19,6 +20,12 @@ type RelationGraphProps = {
   currentSlug: string;
   onNodeClick?: (slug: string) => void;
 };
+
+const RELATION_GRAPH_SHADOWS = {
+  node: RELATION_GRAPH_COLOR_TOKENS.shadows.node,
+  edge: RELATION_GRAPH_COLOR_TOKENS.shadows.edge,
+  edgeStroke: RELATION_GRAPH_COLOR_TOKENS.shadows.edgeStroke,
+} as const;
 
 const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -61,7 +68,7 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
           },
           shadow: {
             enabled: true,
-            color: 'rgba(0,0,0,0.2)',
+            color: RELATION_GRAPH_SHADOWS.node,
             size: 10,
             x: 0,
             y: 0,
@@ -92,7 +99,7 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
             size: 12,
             face: 'sans',
             strokeWidth: 2,
-            strokeColor: '#ffffff',
+            strokeColor: RELATION_GRAPH_SHADOWS.edgeStroke,
             align: 'middle',
           },
           smooth: {
@@ -102,7 +109,7 @@ const RelationGraph = ({ graph, currentSlug, onNodeClick }: RelationGraphProps) 
           },
           shadow: {
             enabled: true,
-            color: 'rgba(0,0,0,0.1)',
+            color: RELATION_GRAPH_SHADOWS.edge,
             size: 4,
           },
         };

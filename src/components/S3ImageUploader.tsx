@@ -133,7 +133,7 @@ export const S3ImageUploader: React.FC<S3ImageUploaderProps> = ({
             {!uploadedUrl && (
               <button
                 onClick={(e) => { e.stopPropagation(); handleRemove(); }}
-                className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded hover:bg-red-600"
+                className="absolute top-2 right-2 p-1 theme-button-danger rounded"
               >
                 <X size={14} />
               </button>
@@ -157,13 +157,13 @@ export const S3ImageUploader: React.FC<S3ImageUploaderProps> = ({
         ) : error ? (
           <div className="space-y-3">
             <div className="flex justify-center">
-              <div className="w-14 h-14 rounded bg-red-50 flex items-center justify-center">
-                <AlertCircle size={28} className="text-red-500" />
+              <div className="w-14 h-14 rounded theme-bg-error-soft flex items-center justify-center">
+                <AlertCircle size={28} className="theme-text-error" />
               </div>
             </div>
             <div>
-              <p className="text-sm text-red-600 font-medium">上传失败</p>
-              <p className="text-xs text-red-400 mt-1">{error.message}</p>
+              <p className="text-sm theme-text-error font-medium">上传失败</p>
+              <p className="text-xs theme-text-error mt-1">{error.message}</p>
             </div>
             <button
               onClick={(e) => { e.stopPropagation(); handleRemove(); }}
@@ -192,17 +192,17 @@ export const S3ImageUploader: React.FC<S3ImageUploaderProps> = ({
         )}
 
         {validationError && (
-          <div className="mt-3 p-2 bg-red-50 rounded text-sm text-red-600">{validationError}</div>
+          <div className="mt-3 p-2 theme-bg-error-soft rounded text-sm theme-text-error">{validationError}</div>
         )}
 
         <input ref={inputRef} type="file" accept={accept} onChange={handleInputChange} className="hidden" />
       </div>
 
       {uploadedUrl && (
-        <div className="p-3 bg-green-50 rounded border border-green-100">
+        <div className="p-3 theme-bg-success-soft rounded border theme-border-success-soft">
           <div className="flex items-center gap-2 mb-1">
-            <CheckCircle size={15} className="text-green-600" />
-            <span className="text-sm font-medium text-green-700">上传成功</span>
+            <CheckCircle size={15} className="theme-text-success" />
+            <span className="text-sm font-medium theme-text-success">上传成功</span>
           </div>
           <div className="space-y-1">
             <p className="text-xs text-text-muted break-all">Key: {uploadedKey}</p>

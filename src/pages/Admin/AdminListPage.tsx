@@ -178,11 +178,11 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
                       <td className="px-5 py-4 text-right">
                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           {type === 'announcements' && (
-                            <button onClick={() => toggleAnnouncement(item)} className={clsx('p-1.5 rounded transition-all', item.active ? 'text-green-600 hover:bg-surface-alt' : 'text-text-muted hover:bg-surface-alt')} title={item.active ? '禁用' : '启用'}>
+                            <button onClick={() => toggleAnnouncement(item)} className={clsx('p-1.5 rounded transition-all', item.active ? 'theme-text-success hover:bg-surface-alt' : 'text-text-muted hover:bg-surface-alt')} title={item.active ? '禁用' : '启用'}>
                               {item.active ? <CheckCircle size={16} /> : <XCircle size={16} />}
                             </button>
                           )}
-                          <button onClick={() => handleDelete(rowId)} className="p-1.5 text-red-400 hover:bg-surface-alt rounded transition-all" title="删除">
+                          <button onClick={() => handleDelete(rowId)} className="p-1.5 theme-icon-button-danger hover:bg-surface-alt rounded transition-all" title="删除">
                             <Trash2 size={16} />
                           </button>
                         </div>

@@ -4,6 +4,7 @@ import {
   type UserPreferences,
   type ViewMode,
 } from '../types/userPreferences'
+import { THEME_META_COLOR } from './colorTokens'
 
 export type ResolvedTheme = 'default' | 'dark'
 
@@ -13,11 +14,6 @@ type ThemeStorageState = {
   guest?: Partial<UserPreferences>
   legacy?: Partial<UserPreferences>
   users: Record<string, Partial<UserPreferences>>
-}
-
-export const THEME_META_COLOR: Record<ResolvedTheme, string> = {
-  default: '#f7d64a',
-  dark: '#171411',
 }
 
 export function isThemeMode(value: unknown): value is ThemeMode {

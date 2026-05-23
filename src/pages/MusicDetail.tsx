@@ -228,8 +228,8 @@ const MusicDetail = () => {
                     className={clsx(
                       'inline-flex items-center gap-2 px-5 py-2.5 border text-[0.9375rem] rounded transition-all',
                       song.favoritedByMe
-                        ? 'border-red-200 text-red-500 bg-red-50'
-                        : 'border-border text-text-secondary hover:text-red-500 hover:border-red-200',
+                        ? 'theme-border-error-soft theme-text-error theme-bg-error-soft'
+                        : 'theme-button-danger-outline text-text-secondary',
                       favoriting && 'opacity-50 cursor-not-allowed',
                     )}
                   >

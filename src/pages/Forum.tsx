@@ -593,7 +593,7 @@ const PostDetail = () => {
 							</button>
 						)}
 						{post.status === "rejected" && post.reviewNote ? (
-							<span className="text-[0.8125rem] text-red-500 self-center mb-1">
+							<span className="text-[0.8125rem] theme-text-error self-center mb-1">
 								{t('forum.rejectedPrefix')}{post.reviewNote}
 							</span>
 						) : null}
@@ -631,7 +631,7 @@ const PostDetail = () => {
 											<button
 												type="button"
 												onClick={() => setReplyTo(null)}
-												className="text-text-muted hover:text-red-500 transition-colors"
+												className="text-text-muted theme-icon-button-danger transition-colors"
 											>
 												<X size={14} />
 											</button>
@@ -659,11 +659,11 @@ const PostDetail = () => {
 										</button>
 									</div>
 									{isBanned ? (
-										<p className="mt-2 text-xs text-red-500">
+										<p className="mt-2 text-xs theme-text-error">
 											{t('forum.bannedCannotComment')}
 										</p>
 									) : !canComment ? (
-										<p className="mt-2 text-xs text-amber-600">
+										<p className="mt-2 text-xs theme-text-warning">
 											{t('forum.onlyPublishedCanComment')}
 										</p>
 									) : null}
@@ -782,8 +782,8 @@ const PostDetail = () => {
 									className={clsx(
 										"flex-1 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
 										post.likedByMe
-											? "bg-red-500 text-white border border-transparent"
-											: "bg-surface border border-border text-text-secondary hover:border-red-400 hover:text-red-500",
+											? "theme-button-danger border border-transparent"
+											: "bg-surface border theme-button-danger-outline text-text-secondary",
 										(!user || liking) && "opacity-50 cursor-not-allowed",
 									)}
 									title={post.likedByMe ? t('forum.unlike') : t('forum.like')}
@@ -796,8 +796,8 @@ const PostDetail = () => {
 									className={clsx(
 										"flex-1 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
 										post.dislikedByMe
-											? "bg-orange-500 text-white border border-transparent"
-											: "bg-surface border border-border text-text-secondary hover:border-orange-400 hover:text-orange-500",
+											? "theme-button-warning border border-transparent"
+											: "bg-surface border theme-button-warning-outline text-text-secondary",
 										(!user || disliking) && "opacity-50 cursor-not-allowed",
 									)}
 									title={post.dislikedByMe ? t('forum.unDislike') : t('forum.dislike')}
@@ -1075,7 +1075,7 @@ const PostEditor = () => {
 					</h1>
 					<button
 						onClick={() => navigate(-1)}
-						className="p-2 text-text-muted hover:text-red-500 transition-colors"
+						className="p-2 text-text-muted theme-icon-button-danger transition-colors"
 					>
 						<X size={24} />
 					</button>
@@ -1090,7 +1090,7 @@ const PostEditor = () => {
 				>
 					<div className="space-y-2">
 						<label className="text-xs font-bold uppercase tracking-widest text-text-muted">
-							{t('forum.titleLabel')} <span className="text-red-500">*</span>
+							{t('forum.titleLabel')} <span className="theme-text-error">*</span>
 						</label>
 						<input
 							type="text"
@@ -1106,7 +1106,7 @@ const PostEditor = () => {
 
 					<div className="space-y-2">
 						<label className="text-xs font-bold uppercase tracking-widest text-text-muted">
-							{t('forum.sectionLabel')} <span className="text-red-500">*</span>
+							{t('forum.sectionLabel')} <span className="theme-text-error">*</span>
 						</label>
 						<select
 							value={formData.section}
@@ -1164,7 +1164,7 @@ const PostEditor = () => {
 
 					<div className="space-y-2">
 						<label className="text-xs font-bold uppercase tracking-widest text-text-muted">
-							{t('forum.contentLabel')} <span className="text-red-500">*</span>
+							{t('forum.contentLabel')} <span className="theme-text-error">*</span>
 						</label>
 						<div
 							className="border border-border rounded overflow-hidden bg-surface"

@@ -13,6 +13,14 @@ import {
 	layoutRelationGraphRadial,
 	truncateGraphLabel,
 } from "../../lib/wikiRelationGraph";
+import { RELATION_GRAPH_COLOR_TOKENS } from "../../lib/colorTokens";
+
+const MINI_RELATION_GRAPH_DECORATION = {
+	labelShadow: RELATION_GRAPH_COLOR_TOKENS.shadows.label,
+	nodeShadowFilter: RELATION_GRAPH_COLOR_TOKENS.shadows.nodeFilter,
+	centerTextShadow: RELATION_GRAPH_COLOR_TOKENS.shadows.centerText,
+	legendBackgroundClass: "bg-surface/90",
+} as const;
 
 interface MiniRelationGraphProps {
 	relations: WikiRelationRecord[];
@@ -268,7 +276,7 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 								fill={edgeColor}
 								fontSize="10"
 								fontWeight={600}
-								className="[text-shadow:0_1px_2px_rgba(255,255,255,0.8)]"
+								style={{ textShadow: MINI_RELATION_GRAPH_DECORATION.labelShadow }}
 							>
 								{edgeLabel}
 							</text>
@@ -299,7 +307,7 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 								fill={nodeStyle.background}
 								stroke={nodeStyle.border}
 								strokeWidth={nodeStyle.borderWidth}
-								filter="drop-shadow(0 1px 2px rgba(0,0,0,0.1))"
+								filter={MINI_RELATION_GRAPH_DECORATION.nodeShadowFilter}
 							/>
 							<text
 								x={0}
@@ -311,7 +319,7 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 								fontWeight={700}
 								style={{
 									textShadow: node.isCenter
-										? "0 1px 2px rgba(0,0,0,0.2)"
+										? MINI_RELATION_GRAPH_DECORATION.centerTextShadow
 										: "none",
 								}}
 							>
@@ -329,7 +337,7 @@ const MiniRelationGraph: React.FC<MiniRelationGraphProps> = ({
 					return (
 						<div
 							key={type}
-							className="flex items-center gap-1.5 px-2 py-1 bg-white/90 rounded text-[10px]"
+							className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] ${MINI_RELATION_GRAPH_DECORATION.legendBackgroundClass}`}
 						>
 							<div
 							className="w-2 h-2 rounded-full"

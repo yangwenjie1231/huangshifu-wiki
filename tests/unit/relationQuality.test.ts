@@ -194,14 +194,14 @@ describe('relationQuality', () => {
 
   describe('getQualityLevelColor', () => {
     it('returns correct color classes', () => {
-      expect(getQualityLevelColor('excellent')).toBe('bg-green-100 text-green-700');
-      expect(getQualityLevelColor('good')).toBe('bg-blue-100 text-blue-700');
-      expect(getQualityLevelColor('fair')).toBe('bg-yellow-100 text-yellow-700');
-      expect(getQualityLevelColor('poor')).toBe('bg-red-100 text-red-700');
+      expect(getQualityLevelColor('excellent')).toBe('theme-status-success');
+      expect(getQualityLevelColor('good')).toBe('theme-bg-info-soft theme-text-info');
+      expect(getQualityLevelColor('fair')).toBe('theme-status-warning');
+      expect(getQualityLevelColor('poor')).toBe('theme-status-error');
     });
 
     it('returns default color for unknown level', () => {
-      expect(getQualityLevelColor('unknown' as QualityLevel)).toBe('bg-gray-100 text-gray-700');
+      expect(getQualityLevelColor('unknown' as QualityLevel)).toBe('bg-surface-alt text-text-secondary');
     });
   });
 

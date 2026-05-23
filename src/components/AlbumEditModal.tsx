@@ -95,7 +95,7 @@ export const AlbumEditModal = ({ open, onClose, onSuccess, album }: AlbumEditMod
       maxWidth="max-w-lg"
     >
       <div className="space-y-1.5">
-        <label className="text-sm font-medium text-text-primary">专辑标题 <span className="text-red-500">*</span></label>
+        <label className="text-sm font-medium text-text-primary">专辑标题 <span className="theme-text-error">*</span></label>
         <input
           type="text"
           value={formData.title}
@@ -105,7 +105,7 @@ export const AlbumEditModal = ({ open, onClose, onSuccess, album }: AlbumEditMod
         />
       </div>
       <div className="space-y-1.5">
-        <label className="text-sm font-medium text-text-primary">艺术家 <span className="text-red-500">*</span></label>
+        <label className="text-sm font-medium text-text-primary">艺术家 <span className="theme-text-error">*</span></label>
         <input
           type="text"
           value={formData.artist}

@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#FFD700" />
+    <meta name="theme-color" content="#b07b17" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="format-detection" content="telephone=no" />
     <script>
-      (function(){try{var k='user_preferences';var raw=localStorage.getItem(k);var parsed=raw?JSON.parse(raw):{};var isObj=parsed&&typeof parsed==='object'&&!Array.isArray(parsed);var legacy=isObj&&!('guest'in parsed)&&!('users'in parsed)?parsed:undefined;var source=isObj&&parsed.guest&&typeof parsed.guest==='object'?parsed.guest:legacy;var mode=source&&typeof source.theme==='string'?source.theme:'system';if(mode!=='default'&&mode!=='dark'&&mode!=='system'){mode='system'}var resolved=mode==='system'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'default'):mode;var root=document.documentElement;root.setAttribute('data-theme',resolved);root.style.colorScheme=resolved==='dark'?'dark':'light';var meta=document.querySelector('meta[name="theme-color"]');if(meta){meta.setAttribute('content',resolved==='dark'?'#171411':'#f7d64a')}}catch(e){}})();
+      (function(){try{var themeMeta={default:'#b07b17',dark:'#1f1a16'};var k='user_preferences';var raw=localStorage.getItem(k);var parsed=raw?JSON.parse(raw):{};var isObj=parsed&&typeof parsed==='object'&&!Array.isArray(parsed);var legacy=isObj&&!('guest'in parsed)&&!('users'in parsed)?parsed:undefined;var source=isObj&&parsed.guest&&typeof parsed.guest==='object'?parsed.guest:legacy;var mode=source&&typeof source.theme==='string'?source.theme:'system';if(mode!=='default'&&mode!=='dark'&&mode!=='system'){mode='system'}var resolved=mode==='system'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'default'):mode;var root=document.documentElement;root.setAttribute('data-theme',resolved);root.style.colorScheme=resolved==='dark'?'dark':'light';var meta=document.querySelector('meta[name="theme-color"]');if(meta){meta.setAttribute('content',themeMeta[resolved]||themeMeta.default)}}catch(e){}})();
     </script>
 
     <!-- 预连接到关键第三方域名，加速后续请求但不阻塞渲染 -->

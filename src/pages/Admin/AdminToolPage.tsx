@@ -112,7 +112,7 @@ export const AdminToolPage = ({ type: propType }: { type?: ToolType }) => {
             </button>
             {sensitiveResult.length > 0 ? (
               <div className="p-4 theme-status-error rounded">
-                <p className="text-sm font-medium text-red-600 mb-2">检测到 {sensitiveResult.length} 个敏感词：</p>
+                <p className="text-sm font-medium theme-text-error mb-2">检测到 {sensitiveResult.length} 个敏感词：</p>
                 <div className="flex flex-wrap gap-2">
                   {sensitiveResult.map((word) => (
                     <span key={word} className="px-3 py-1 theme-status-error rounded text-xs font-medium">{word}</span>
@@ -121,7 +121,7 @@ export const AdminToolPage = ({ type: propType }: { type?: ToolType }) => {
               </div>
             ) : sensitiveText.trim() && !sensitiveLoading ? (
               <div className="p-4 theme-status-success rounded">
-                <p className="text-sm font-medium text-green-600">未检测到敏感词</p>
+                <p className="text-sm font-medium theme-text-success">未检测到敏感词</p>
               </div>
             ) : null}
           </div>
@@ -209,7 +209,7 @@ export const AdminToolPage = ({ type: propType }: { type?: ToolType }) => {
                                   try { await apiPatch(`/api/birthday/config/${item.id}/toggle`); await fetchBirthday(); show(item.isActive ? '已禁用' : '已启用', { variant: 'success' }); }
                                   catch { show('操作失败', { variant: 'error' }); }
                                 }}
-                                className={clsx('p-1.5 rounded transition-all', item.isActive ? 'text-amber-500 hover:bg-surface-alt' : 'text-green-500 hover:bg-surface-alt')}
+                                className={clsx('p-1.5 rounded transition-all', item.isActive ? 'theme-icon-button-warning hover:bg-surface-alt' : 'theme-text-success hover:bg-surface-alt')}
                                 title={item.isActive ? '禁用' : '启用'}
                               >
                                 {item.isActive ? <XCircle size={16} /> : <CheckCircle size={16} />}
@@ -223,7 +223,7 @@ export const AdminToolPage = ({ type: propType }: { type?: ToolType }) => {
                                   try { await apiDelete(`/api/birthday/config/${item.id}`); await fetchBirthday(); show('已删除', { variant: 'success' }); }
                                   catch { show('删除失败', { variant: 'error' }); }
                                 }}
-                                className="p-1.5 text-red-400 hover:bg-surface-alt rounded transition-all"
+                                className="p-1.5 theme-icon-button-danger hover:bg-surface-alt rounded transition-all"
                                 title="删除"
                               >
                                 <Trash2 size={16} />

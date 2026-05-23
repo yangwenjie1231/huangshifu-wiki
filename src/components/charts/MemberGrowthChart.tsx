@@ -1,4 +1,4 @@
-import { EChartsComponent, chartTheme, defaultGridSettings, defaultTooltipSettings } from './EChartsComponent';
+import { EChartsComponent, chartPalette, chartTheme, defaultGridSettings, defaultTooltipSettings } from './EChartsComponent';
 import type { EChartsOption } from 'echarts';
 
 interface MemberGrowthChartProps {
@@ -19,11 +19,11 @@ export const MemberGrowthChart: React.FC<MemberGrowthChartProps> = ({ data, styl
       data: data.map((item) => item.month),
       axisLine: {
         lineStyle: {
-          color: '#E5DED1',
+          color: chartPalette.axis,
         },
       },
       axisLabel: {
-        color: '#6B7280',
+        color: chartPalette.label,
         fontFamily: 'Noto Sans SC, sans-serif',
       },
     },
@@ -33,12 +33,12 @@ export const MemberGrowthChart: React.FC<MemberGrowthChartProps> = ({ data, styl
         show: false,
       },
       axisLabel: {
-        color: '#6B7280',
+        color: chartPalette.label,
         fontFamily: 'Noto Sans SC, sans-serif',
       },
       splitLine: {
         lineStyle: {
-          color: '#F5F5F5',
+          color: chartPalette.splitLine,
         },
       },
     },
@@ -54,8 +54,8 @@ export const MemberGrowthChart: React.FC<MemberGrowthChartProps> = ({ data, styl
             x2: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: '#FFD700' },
-              { offset: 1, color: '#E5C100' },
+              { offset: 0, color: chartPalette.barStart },
+              { offset: 1, color: chartPalette.barEnd },
             ],
           },
           borderRadius: [8, 8, 0, 0],

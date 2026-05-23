@@ -43,7 +43,7 @@ const MATCH_SOURCE_LABELS: Record<string, string> = {
 
 const MATCH_SOURCE_STYLES: Record<string, string> = {
   keyword: 'bg-surface-alt text-text-secondary',
-  semantic: 'bg-amber-50 text-amber-600',
+  semantic: 'theme-status-warning',
   hybrid: 'theme-tag',
 }
 
@@ -89,7 +89,7 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = React.memo(({ c
               {config.title}
             </h3>
             {config.chunkPreview && (
-              <p className="text-xs text-amber-600/70 mt-0.5 line-clamp-2 leading-relaxed">
+              <p className="text-xs theme-text-warning-soft mt-0.5 line-clamp-2 leading-relaxed">
                 {config.chunkPreview}
               </p>
             )}
@@ -135,7 +135,7 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = React.memo(({ c
               {config.title}
             </h3>
             {config.chunkPreview && (
-              <p className="text-xs text-amber-600/70 mb-2 line-clamp-2 leading-relaxed">
+              <p className="text-xs theme-text-warning-soft mb-2 line-clamp-2 leading-relaxed">
                 {config.chunkPreview}
               </p>
             )}

@@ -199,7 +199,7 @@ export const MusicImportModal = ({ open, onClose, onImported }: MusicImportModal
                 {parsing ? '解析中' : '解析链接'}
               </button>
             </div>
-            {error ? <p className="text-sm text-red-500 mt-2">{error}</p> : null}
+            {error ? <p className="text-sm theme-text-error mt-2">{error}</p> : null}
           </div>
 
           {preview && (
@@ -269,7 +269,7 @@ export const MusicImportModal = ({ open, onClose, onImported }: MusicImportModal
               </div>
 
               {importResult ? (
-                <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-100 rounded px-4 py-3">
+                <div className="flex items-center gap-2 text-sm theme-text-success theme-bg-success-soft border theme-border-success-soft rounded px-4 py-3">
                   <CheckCircle2 size={15} />
                   <span>{importResult}</span>
                 </div>

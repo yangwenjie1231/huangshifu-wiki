@@ -186,9 +186,9 @@ export const AdminVariantManager: React.FC = () => {
 
       {error && (
         <div className="flex items-start gap-3 p-3 rounded theme-status-error">
-          <XCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
-          <p className="text-sm text-red-600 flex-1">{error}</p>
-          <button onClick={() => setError(null)} className="p-1 text-red-400 hover:text-red-600">
+          <XCircle size={18} className="theme-text-error shrink-0 mt-0.5" />
+          <p className="text-sm theme-text-error flex-1">{error}</p>
+          <button onClick={() => setError(null)} className="p-1 theme-icon-button-danger">
             <Trash2 size={14} />
           </button>
         </div>
@@ -205,9 +205,9 @@ export const AdminVariantManager: React.FC = () => {
             {[
               { label: '等待处理', value: variantStats.queueLength, icon: Clock, color: 'text-text-primary' },
               { label: '正在处理', value: variantStats.processingCount, icon: Loader2, color: 'text-brand-gold' },
-              { label: '今日完成', value: variantStats.completedToday, icon: CheckCircle, color: 'text-green-600' },
-              { label: '今日失败', value: variantStats.failedToday, icon: XCircle, color: 'text-red-500' },
-              { label: '超时次数', value: variantStats.timeoutCount, icon: AlertTriangle, color: 'text-amber-500' },
+              { label: '今日完成', value: variantStats.completedToday, icon: CheckCircle, color: 'theme-text-success' },
+              { label: '今日失败', value: variantStats.failedToday, icon: XCircle, color: 'theme-text-error' },
+              { label: '超时次数', value: variantStats.timeoutCount, icon: AlertTriangle, color: 'theme-text-warning' },
               { label: '平均耗时', value: `${variantStats.averageProcessingTime}ms`, icon: Clock, color: 'text-text-secondary' },
             ].map((item) => {
               const Icon = item.icon;
@@ -237,7 +237,7 @@ export const AdminVariantManager: React.FC = () => {
               { label: '已完成', value: cleanupStats.completedVariants, badge: 'theme-status-success' },
               { label: '失败数', value: cleanupStats.failedVariants, badge: 'theme-status-error' },
               { label: '待处理', value: cleanupStats.pendingOrProcessing, badge: 'theme-status-warning' },
-              { label: '孤儿目录', value: cleanupStats.estimatedOrphanedDirectories, badge: 'bg-brand-gold/10 text-brand-gold' },
+              { label: '孤儿目录', value: cleanupStats.estimatedOrphanedDirectories, badge: 'theme-tag' },
             ].map((item) => (
               <div key={item.label} className="bg-surface-alt rounded p-3">
                 <span className="text-[11px] text-text-muted">{item.label}</span>
@@ -288,14 +288,14 @@ export const AdminVariantManager: React.FC = () => {
         {rebuildResult && (
           <div className="mt-4 p-3 rounded theme-status-success">
             <div className="flex items-center gap-2 mb-2">
-              <CheckCircle size={16} className="text-green-500" />
-              <p className="text-sm font-medium text-green-600">重建任务已提交</p>
+              <CheckCircle size={16} className="theme-text-success" />
+              <p className="text-sm font-medium theme-text-success">重建任务已提交</p>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
               <div><span className="text-text-muted">扫描总数</span><p className="font-medium text-text-primary">{rebuildResult.summary?.totalScanned ?? 0}</p></div>
               <div><span className="text-text-muted">入队数量</span><p className="font-medium text-text-primary">{rebuildResult.summary?.queuedForRebuild ?? 0}</p></div>
               <div><span className="text-text-muted">跳过数量</span><p className="font-medium text-text-primary">{rebuildResult.summary?.skipped ?? 0}</p></div>
-              <div><span className="text-text-muted">错误数量</span><p className={`font-medium ${(rebuildResult.summary?.errors ?? 0) > 0 ? 'text-red-600' : 'text-text-primary'}`}>{rebuildResult.summary?.errors ?? 0}</p></div>
+              <div><span className="text-text-muted">错误数量</span><p className={`font-medium ${(rebuildResult.summary?.errors ?? 0) > 0 ? 'theme-text-error' : 'text-text-primary'}`}>{rebuildResult.summary?.errors ?? 0}</p></div>
             </div>
           </div>
         )}
@@ -340,16 +340,16 @@ export const AdminVariantManager: React.FC = () => {
         )}
 
         {cleanupResult && (
-          <div className="mt-4 p-3 rounded bg-brand-gold/10 border border-border">
+          <div className="mt-4 p-3 rounded theme-bg-warning-soft border theme-border-warning-soft">
             <div className="flex items-center gap-2 mb-2">
               <CheckCircle size={16} className="text-brand-gold" />
               <p className="text-sm font-medium text-text-primary">清理完成</p>
-              <span className="px-2 py-0.5 bg-surface-alt text-brand-gold text-[10px] font-medium rounded">{cleanupResult.type}</span>
+              <span className="px-2 py-0.5 theme-tag text-[10px] font-medium rounded">{cleanupResult.type}</span>
             </div>
             <div className="grid grid-cols-3 gap-3 text-sm">
-              <div><span className="text-text-muted">释放空间</span><p className="font-medium text-green-600">{formatBytes(cleanupResult.freedSpace)}</p></div>
+              <div><span className="text-text-muted">释放空间</span><p className="font-medium theme-text-success">{formatBytes(cleanupResult.freedSpace)}</p></div>
               <div><span className="text-text-muted">删除文件</span><p className="font-medium text-text-primary">{cleanupResult.deletedCount}</p></div>
-              <div><span className="text-text-muted">错误数量</span><p className={`font-medium ${cleanupResult.errorsCount > 0 ? 'text-red-600' : 'text-text-primary'}`}>{cleanupResult.errorsCount}</p></div>
+              <div><span className="text-text-muted">错误数量</span><p className={`font-medium ${cleanupResult.errorsCount > 0 ? 'theme-text-error' : 'text-text-primary'}`}>{cleanupResult.errorsCount}</p></div>
             </div>
           </div>
         )}

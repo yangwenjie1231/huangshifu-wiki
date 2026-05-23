@@ -85,7 +85,7 @@ export const MobileMenu = ({
 							{user ? (
 								<div className="space-y-4">
 									{isBanned && (
-										<div className="px-3 py-2 bg-red-50 text-red-600 rounded text-xs">
+										<div className="px-3 py-2 theme-status-error rounded text-xs">
 											账号已封禁
 											{profile?.banReason ? `：${profile.banReason}` : ""}
 										</div>
@@ -124,7 +124,7 @@ export const MobileMenu = ({
 										onClick={() => {
 											onLogout();
 										}}
-										className="w-full flex items-center gap-3 p-3 bg-red-50 text-red-500 rounded"
+										className="w-full flex items-center gap-3 p-3 theme-status-error rounded"
 									>
 										<LogOut size={20} />
 										<span className="text-sm font-medium">退出登录</span>
@@ -137,7 +137,7 @@ export const MobileMenu = ({
 										onClick={() => {
 											onOpenAuth("register");
 										}}
-										className="w-full flex items-center justify-center gap-2 py-4 bg-green-500 text-white rounded font-bold"
+										className="w-full flex items-center justify-center gap-2 py-4 theme-button-primary rounded font-bold"
 									>
 										<MessageCircle size={20} />
 										账号注册

@@ -47,11 +47,11 @@ class ErrorBoundaryInner extends Component<ErrorBoundaryProps, ErrorBoundaryStat
         >
           <div className="text-center max-w-md">
             <div
-              className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center"
+              className="w-16 h-16 mx-auto mb-4 rounded-full theme-bg-error-soft flex items-center justify-center"
               aria-hidden="true"
             >
               <svg
-                className="w-8 h-8 text-red-400"
+                className="w-8 h-8 theme-text-error"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -71,7 +71,7 @@ class ErrorBoundaryInner extends Component<ErrorBoundaryProps, ErrorBoundaryStat
               抱歉，页面遇到了一些问题。请尝试刷新页面或返回首页。
             </p>
             {this.state.error && (
-              <pre className="text-xs text-left text-red-600 bg-red-50 p-3 rounded mb-4 overflow-auto max-h-32 whitespace-pre-wrap break-all">
+              <pre className="text-xs text-left theme-text-error theme-bg-error-soft p-3 rounded mb-4 overflow-auto max-h-32 whitespace-pre-wrap break-all">
                 {this.state.error.message || String(this.state.error)}
               </pre>
             )}

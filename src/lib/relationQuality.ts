@@ -155,15 +155,15 @@ export function calculateRelationQuality(
 export function getQualityLevelColor(level: QualityLevel): string {
 	switch (level) {
 		case "excellent":
-			return "bg-green-100 text-green-700";
+			return "theme-status-success";
 		case "good":
-			return "bg-blue-100 text-blue-700";
+			return "theme-bg-info-soft theme-text-info";
 		case "fair":
-			return "bg-yellow-100 text-yellow-700";
+			return "theme-status-warning";
 		case "poor":
-			return "bg-red-100 text-red-700";
+			return "theme-status-error";
 		default:
-			return "bg-gray-100 text-gray-700";
+			return "bg-surface-alt text-text-secondary";
 	}
 }
 

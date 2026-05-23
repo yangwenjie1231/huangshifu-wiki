@@ -137,7 +137,7 @@ export const MatchSuggestionModal = ({
           )}
 
           {error && !loading && (
-            <div className="flex items-center gap-2 p-3 rounded bg-red-50 text-red-600 text-sm">
+            <div className="flex items-center gap-2 p-3 rounded theme-status-error text-sm">
               <AlertCircle size={18} />
               <span>{error}</span>
             </div>
@@ -178,16 +178,16 @@ export const MatchSuggestionModal = ({
                         <span
                           className={`text-[10px] px-1.5 py-0.5 rounded ${
                             suggestion.score >= 80
-                              ? 'bg-green-50 text-green-700'
+                              ? 'theme-status-success'
                               : suggestion.score >= 60
-                              ? 'bg-amber-50 text-amber-700'
+                              ? 'theme-status-warning'
                               : 'bg-surface-alt text-text-muted'
                           }`}
                         >
                           匹配度 {suggestion.score}%
                         </span>
                         {suggestion.alreadyLinked && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded theme-bg-info-soft theme-text-info">
                             已关联
                           </span>
                         )}

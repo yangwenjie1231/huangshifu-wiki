@@ -238,7 +238,7 @@ const WikiPageView = () => {
 							</button>
 						)}
 						{page.status === "rejected" && page.reviewNote ? (
-							<span className="text-[0.8125rem] text-red-500 self-center mb-1">
+							<span className="text-[0.8125rem] theme-text-error self-center mb-1">
 								{t('wiki.rejectedPrefix')}{page.reviewNote}
 							</span>
 						) : null}
@@ -375,8 +375,8 @@ const WikiPageView = () => {
 									className={clsx(
 										"flex-1 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
 										page.likedByMe
-											? "bg-red-500 text-white border border-transparent"
-											: "bg-surface border border-border text-text-secondary hover:border-red-400 hover:text-red-500",
+											? "theme-button-danger border border-transparent"
+											: "bg-surface border theme-button-danger-outline text-text-secondary",
 										(!user || liking) && "opacity-50 cursor-not-allowed",
 									)}
 									title={page.likedByMe ? t('wiki.unlike') : t('wiki.like')}
@@ -389,8 +389,8 @@ const WikiPageView = () => {
 									className={clsx(
 										"flex-1 px-3 py-2 rounded text-sm font-medium transition-all flex items-center justify-center gap-1.5",
 										page.dislikedByMe
-											? "bg-orange-500 text-white border border-transparent"
-											: "bg-surface border border-border text-text-secondary hover:border-orange-400 hover:text-orange-500",
+											? "theme-button-warning border border-transparent"
+											: "bg-surface border theme-button-warning-outline text-text-secondary",
 										(!user || disliking) && "opacity-50 cursor-not-allowed",
 									)}
 									title={page.dislikedByMe ? t('wiki.undislike') : t('wiki.dislike')}

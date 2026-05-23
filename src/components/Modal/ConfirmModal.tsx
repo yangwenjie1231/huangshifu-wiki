@@ -18,19 +18,19 @@ interface ConfirmModalProps {
 
 const variantStyles = {
 	danger: {
-		iconBg: "bg-red-50",
-		iconText: "text-red-600",
-		buttonBg: "bg-red-600 hover:bg-red-700",
+		iconBg: "theme-bg-error-soft",
+		iconText: "theme-text-error",
+		buttonBg: "theme-button-danger",
 	},
 	warning: {
-		iconBg: "bg-amber-50",
-		iconText: "text-amber-600",
-		buttonBg: "bg-amber-600 hover:bg-amber-700",
+		iconBg: "theme-bg-warning-soft",
+		iconText: "theme-text-warning",
+		buttonBg: "theme-button-warning",
 	},
 	info: {
-		iconBg: "bg-brand-gold/10",
+		iconBg: "theme-tag",
 		iconText: "text-brand-gold",
-		buttonBg: "bg-[var(--color-theme-accent)] hover:bg-[var(--color-brand-gold-dark)]",
+		buttonBg: "theme-button-primary",
 	},
 };
 
@@ -144,7 +144,7 @@ export const ConfirmModal = ({
 								onClick={onConfirm}
 								disabled={loading}
 								className={clsx(
-									"px-5 py-2 rounded text-white font-medium transition-all disabled:opacity-50 inline-flex items-center gap-2 text-sm",
+									"px-5 py-2 rounded font-medium transition-all disabled:opacity-50 inline-flex items-center gap-2 text-sm",
 									styles.buttonBg,
 								)}
 							>

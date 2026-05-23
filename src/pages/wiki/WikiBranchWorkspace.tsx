@@ -319,7 +319,7 @@ const WikiBranchWorkspace = () => {
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div>
 								<label className="text-xs font-bold uppercase tracking-widest text-brand-gold/60">
-									标题 <span className="text-red-500">*</span>
+									标题 <span className="theme-text-error">*</span>
 								</label>
 								<input
 									type="text"
@@ -330,7 +330,7 @@ const WikiBranchWorkspace = () => {
 							</div>
 							<div>
 								<label className="text-xs font-bold uppercase tracking-widest text-brand-gold/60">
-									分类 <span className="text-red-500">*</span>
+									分类 <span className="theme-text-error">*</span>
 								</label>
 								<select
 									value={category}
@@ -396,7 +396,7 @@ const WikiBranchWorkspace = () => {
 								<button
 									onClick={handleResolveConflict}
 									disabled={resolvingConflict || isBanned}
-									className="px-6 py-2 rounded bg-red-100 text-red-700 text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+									className="px-6 py-2 rounded theme-status-error text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
 								>
 									{resolvingConflict ? "处理中..." : "解决冲突并重开 PR"}
 								</button>

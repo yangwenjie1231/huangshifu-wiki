@@ -1,4 +1,4 @@
-import { EChartsComponent, chartTheme, defaultGridSettings, defaultTooltipSettings } from './EChartsComponent';
+import { EChartsComponent, chartPalette, chartTheme, defaultGridSettings, defaultTooltipSettings } from './EChartsComponent';
 import type { EChartsOption } from 'echarts';
 
 interface ActivityTrendChartProps {
@@ -24,11 +24,11 @@ export const ActivityTrendChart: React.FC<ActivityTrendChartProps> = ({
       boundaryGap: false,
       axisLine: {
         lineStyle: {
-          color: '#E5DED1',
+          color: chartPalette.axis,
         },
       },
       axisLabel: {
-        color: '#6B7280',
+        color: chartPalette.label,
         fontFamily: 'Noto Sans SC, sans-serif',
       },
     },
@@ -38,12 +38,12 @@ export const ActivityTrendChart: React.FC<ActivityTrendChartProps> = ({
         show: false,
       },
       axisLabel: {
-        color: '#6B7280',
+        color: chartPalette.label,
         fontFamily: 'Noto Sans SC, sans-serif',
       },
       splitLine: {
         lineStyle: {
-          color: '#F5F5F5',
+          color: chartPalette.splitLine,
         },
       },
     },
@@ -55,12 +55,12 @@ export const ActivityTrendChart: React.FC<ActivityTrendChartProps> = ({
         symbol: 'circle',
         symbolSize: 8,
         lineStyle: {
-          color: '#007AFF',
+          color: chartPalette.linePrimary,
           width: 3,
         },
         itemStyle: {
-          color: '#007AFF',
-          borderColor: '#fff',
+          color: chartPalette.linePrimary,
+          borderColor: chartPalette.white,
           borderWidth: 2,
         },
         areaStyle: {
@@ -71,8 +71,8 @@ export const ActivityTrendChart: React.FC<ActivityTrendChartProps> = ({
             x2: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(0, 122, 255, 0.3)' },
-              { offset: 1, color: 'rgba(0, 122, 255, 0.05)' },
+              { offset: 0, color: chartPalette.linePrimarySoft },
+              { offset: 1, color: chartPalette.linePrimarySoftEnd },
             ],
           },
         },

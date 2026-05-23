@@ -191,7 +191,7 @@ export const AvatarCropModal = ({ open, onClose, onSuccess }: AvatarCropModalPro
             </div>
           )}
           {error && (
-            <p className="text-sm text-red-500 text-center bg-red-50 rounded px-3 py-2">{error}</p>
+            <p className="text-sm theme-text-error text-center theme-bg-error-soft rounded px-3 py-2">{error}</p>
           )}
         </div>
 

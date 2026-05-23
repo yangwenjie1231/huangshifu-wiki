@@ -128,7 +128,7 @@ const GalleryCard = React.memo(({ gallery, viewMode, isAdmin, deletingGalleryId,
       <button
         onClick={(event) => onRequestDelete(event, gallery)}
         disabled={deletingGalleryId === gallery.id}
-        className="absolute top-2 left-2 p-2.5 rounded bg-surface/90 border border-border text-text-muted hover:text-red-500 transition-all disabled:cursor-not-allowed disabled:opacity-60"
+        className="absolute top-2 left-2 p-2.5 rounded bg-surface/90 border border-border text-text-muted theme-icon-button-danger transition-all disabled:cursor-not-allowed disabled:opacity-60"
         title="删除图集"
         aria-label="删除图集"
       >
@@ -388,7 +388,7 @@ const GalleryList = () => {
                   <button
                     onClick={handleConfirmDeleteGallery}
                     disabled={Boolean(deletingGalleryId)}
-                    className="flex-1 px-6 py-3 bg-red-500 text-white rounded font-semibold hover:bg-red-600 active:scale-[0.98] transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                    className="flex-1 px-6 py-3 theme-button-danger rounded font-semibold active:scale-[0.98] transition-all disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {deletingGalleryId ? '删除中...' : '确定删除'}
                   </button>
@@ -636,14 +636,14 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
       >
         <div className="p-6 border-b border-border flex justify-between items-center">
           <h2 className="text-[1.5rem] font-bold text-text-primary tracking-[0.12em]">上传新图集</h2>
-          <button onClick={handleClose} className="p-2 text-text-muted hover:text-red-500 transition-colors">
+          <button onClick={handleClose} className="p-2 text-text-muted theme-icon-button-danger transition-colors">
             <X size={24} />
           </button>
         </div>
 
         <div className="flex-grow overflow-y-auto p-6 space-y-6">
           <div className="space-y-2">
-            <label className="text-xs font-medium text-text-muted">图集标题 <span className="text-red-500">*</span></label>
+            <label className="text-xs font-medium text-text-muted">图集标题 <span className="theme-text-error">*</span></label>
             <input
               type="text"
               value={title}
@@ -740,7 +740,7 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
                     />
                     <button
                       onClick={() => removeFile(i)}
-                      className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute top-1 right-1 p-1 theme-button-danger rounded opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       <X size={12} />
                     </button>

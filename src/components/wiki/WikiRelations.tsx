@@ -782,7 +782,7 @@ className="rounded border border-border"
 								>
 									<div className="px-3 py-2 text-xs text-text-muted border-b border-border bg-surface-alt">
 										直接输入{" "}
-										<code className="bg-gray-200 px-1 rounded">
+										<code className="bg-surface-alt px-1 rounded">
 											[[标题]]
 										</code>{" "}
 										格式更快

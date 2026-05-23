@@ -9,6 +9,7 @@ import {
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import type { EChartsOption } from 'echarts';
+import { CHART_COLOR_TOKENS } from '../../lib/colorTokens';
 
 echarts.use([
   BarChart,
@@ -67,8 +68,16 @@ export const EChartsComponent: React.FC<EChartsComponentProps> = ({
   return <div ref={chartRef} style={style} className={className} />;
 };
 
+export const chartPalette = CHART_COLOR_TOKENS;
+
 export const chartTheme = {
-  color: ['#FFD700', '#5A5A40', '#22C55E', '#007AFF', '#5856D6'],
+  color: [
+  chartPalette.series.brandGold,
+  chartPalette.series.brandOlive,
+  chartPalette.series.success,
+  chartPalette.series.info,
+  chartPalette.series.accent,
+  ],
   backgroundColor: 'transparent',
   textStyle: {
     fontFamily: 'Noto Sans SC, sans-serif',
@@ -85,11 +94,11 @@ export const defaultGridSettings = {
 
 export const defaultTooltipSettings = {
   trigger: 'axis' as const,
-  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-  borderColor: '#E5DED1',
+  backgroundColor: chartPalette.tooltipBackground,
+  borderColor: chartPalette.tooltipBorder,
   borderWidth: 1,
   textStyle: {
-    color: '#111827',
+    color: chartPalette.tooltipText,
     fontFamily: 'Noto Sans SC, sans-serif',
   },
 };

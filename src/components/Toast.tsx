@@ -84,7 +84,7 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
               <span
                 className={[
                   'inline-block h-2 w-2 rounded-full',
-                  toast.variant === 'error' ? 'bg-red-500' : 'bg-brand-gold',
+                  toast.variant === 'error' ? 'bg-[var(--color-error)]' : 'bg-brand-gold',
                 ].join(' ')}
                 aria-hidden="true"
               />

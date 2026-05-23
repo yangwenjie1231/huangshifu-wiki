@@ -158,7 +158,7 @@ const WikiHistory = () => {
 								</div>
 								<button
 									onClick={() => setSelectedRevision(null)}
-									className="p-2 text-text-muted hover:text-red-500"
+									className="p-2 text-text-muted theme-icon-button-danger"
 								>
 									<X size={24} />
 								</button>

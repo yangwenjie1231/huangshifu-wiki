@@ -230,7 +230,7 @@ const AdminImages: React.FC = () => {
                           <span className="px-2 py-1 bg-surface-alt text-text-muted rounded text-xs font-mono">{image.id.slice(0, 8)}</span>
                           <span className="text-xs text-text-muted font-mono">{image.md5.slice(0, 12)}</span>
                           {getStorageBadge(image.storageType)}
-                          {image.blurhash && <span className="px-2 py-0.5 bg-brand-gold/10 text-brand-gold rounded text-[10px]">Blurhash</span>}
+                          {image.blurhash && <span className="px-2 py-0.5 theme-tag rounded text-[10px]">Blurhash</span>}
                         </div>
                         <div className="space-y-1">
                           {image.localUrl && <div className="flex items-center gap-2"><CheckCircle size={14} className="text-brand-gold flex-shrink-0" /><span className="text-xs text-text-secondary truncate">本地: {image.localUrl}</span></div>}
@@ -249,7 +249,7 @@ const AdminImages: React.FC = () => {
                       <button onClick={() => setEditingImage(image)} className="p-2 text-brand-gold hover:bg-surface-alt rounded transition-all" title="编辑">
                         <Edit2 size={18} />
                       </button>
-                      <button onClick={() => handleDelete(image.id)} className="p-2 text-red-400 hover:bg-surface-alt rounded transition-all" title="删除">
+                      <button onClick={() => handleDelete(image.id)} className="p-2 theme-icon-button-danger hover:bg-surface-alt rounded transition-all" title="删除">
                         <Trash2 size={18} />
                       </button>
                     </div>
@@ -274,8 +274,8 @@ const AdminImages: React.FC = () => {
               <div><label className="block text-sm font-medium text-text-secondary mb-1">ID</label><input type="text" value={editingImage.id} disabled className="w-full px-4 py-2 bg-surface-alt border border-border rounded text-sm font-mono" /></div>
               <div><label className="block text-sm font-medium text-text-secondary mb-1">MD5</label><input type="text" value={editingImage.md5} disabled className="w-full px-4 py-2 bg-surface-alt border border-border rounded text-sm font-mono" /></div>
               <div><label className="block text-sm font-medium text-text-secondary mb-1">本地 URL</label><input type="text" value={editingImage.localUrl} onChange={(e) => setEditingImage({ ...editingImage, localUrl: e.target.value })} className="w-full px-4 py-2 border border-border rounded text-sm focus:outline-none focus:border-brand-gold" placeholder="https://..." /></div>
-              <div><label className="block text-sm font-medium text-text-secondary mb-1">S3 URL {editingImage.s3Url && <span className="text-green-600 text-xs">已配置</span>}</label><input type="text" value={editingImage.s3Url || ''} onChange={(e) => setEditingImage({ ...editingImage, s3Url: e.target.value })} className="w-full px-4 py-2 border border-border rounded text-sm focus:outline-none focus:border-brand-gold" placeholder="https://cdn.yourdomain.com/..." /></div>
-              <div><label className="block text-sm font-medium text-text-secondary mb-1">外部图床 URL {editingImage.externalUrl && <span className="text-green-600 text-xs">已配置</span>}</label><input type="text" value={editingImage.externalUrl || ''} onChange={(e) => setEditingImage({ ...editingImage, externalUrl: e.target.value })} className="w-full px-4 py-2 border border-border rounded text-sm focus:outline-none focus:border-brand-gold" placeholder="https://..." /></div>
+              <div><label className="block text-sm font-medium text-text-secondary mb-1">S3 URL {editingImage.s3Url && <span className="theme-text-success text-xs">已配置</span>}</label><input type="text" value={editingImage.s3Url || ''} onChange={(e) => setEditingImage({ ...editingImage, s3Url: e.target.value })} className="w-full px-4 py-2 border border-border rounded text-sm focus:outline-none focus:border-brand-gold" placeholder="https://cdn.yourdomain.com/..." /></div>
+              <div><label className="block text-sm font-medium text-text-secondary mb-1">外部图床 URL {editingImage.externalUrl && <span className="theme-text-success text-xs">已配置</span>}</label><input type="text" value={editingImage.externalUrl || ''} onChange={(e) => setEditingImage({ ...editingImage, externalUrl: e.target.value })} className="w-full px-4 py-2 border border-border rounded text-sm focus:outline-none focus:border-brand-gold" placeholder="https://..." /></div>
               <div><label className="block text-sm font-medium text-text-secondary mb-1">存储类型</label><select value={editingImage.storageType || 'local'} onChange={(e) => setEditingImage({ ...editingImage, storageType: e.target.value as any })} className="w-full px-4 py-2 border border-border rounded text-sm focus:outline-none focus:border-brand-gold"><option value="local">本地服务器</option><option value="s3">S3 图床</option><option value="external">外部图床</option></select></div>
               <div className="flex gap-3 pt-2">
                 <button onClick={() => setEditingImage(null)} className="flex-1 px-4 py-2 bg-bg-tertiary text-text-secondary rounded font-medium hover:bg-surface-alt transition-all">取消</button>

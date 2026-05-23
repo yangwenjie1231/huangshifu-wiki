@@ -122,9 +122,9 @@ export const AdminReviews = () => {
                   <p className="text-[10px] text-text-muted mt-2">更新时间：{formatDateTime(item.updatedAt, 'N/A')}</p>
                   {Array.isArray(item.sensitiveWords) && item.sensitiveWords.length > 0 && (
                     <div className="mt-2 p-2 theme-status-error rounded">
-                      <span className="text-[10px] font-medium text-red-600">检测到敏感词: </span>
+                      <span className="text-[10px] font-medium theme-text-error">检测到敏感词: </span>
                       {item.sensitiveWords.map((w) => (
-                        <span key={w} className="text-[10px] text-red-500 mr-1">#{w}</span>
+                        <span key={w} className="text-[10px] theme-text-error mr-1">#{w}</span>
                       ))}
                     </div>
                   )}

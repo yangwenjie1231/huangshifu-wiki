@@ -108,7 +108,7 @@ const WikiTimeline = () => {
 				</div>
 			) : (
 				<div className="text-center py-20 bg-surface rounded border border-border">
-					<Calendar size={48} className="mx-auto text-gray-200 mb-6" />
+					<Calendar size={48} className="mx-auto text-border-light mb-6" />
 					<p className="text-text-muted italic">
 						暂无时间轴数据，请在编辑页面设置"事件日期"
 					</p>

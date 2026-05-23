@@ -295,7 +295,7 @@ export const GlobalMusicPlayer = () => {
           <p className="text-[0.875rem] font-semibold text-text-primary truncate tracking-wide">{currentSong.title}</p>
           <p className="text-xs text-text-muted truncate mt-0.5">{currentSong.artist}</p>
           {audioStats.isStalling && (
-            <p className="text-[0.7rem] text-amber-600 animate-pulse">缓冲中...</p>
+            <p className="text-[0.7rem] theme-text-warning animate-pulse">缓冲中...</p>
           )}
         </div>
 
@@ -369,7 +369,7 @@ export const GlobalMusicPlayer = () => {
 
         <button
           onClick={() => setCurrentSong(null)}
-          className="p-1.5 text-text-muted hover:text-red-500 hover:bg-surface-alt rounded-full transition-all flex-shrink-0"
+          className="p-1.5 text-text-muted theme-icon-button-danger hover:bg-surface-alt rounded-full transition-all flex-shrink-0"
         >
           <X size={18} />
         </button>

@@ -316,7 +316,7 @@ const WikiEditor = () => {
 					<button
 						type="button"
 						onClick={() => navigate(-1)}
-						className="p-2 text-text-muted hover:text-red-500"
+						className="p-2 text-text-muted theme-icon-button-danger"
 					>
 						<X size={24} />
 					</button>

@@ -85,7 +85,7 @@ const WikiEditorActionBar = React.memo(({
 										<button
 											type="button"
 											onClick={onCancelRecommendation}
-											className="px-3 py-1.5 bg-red-50 text-red-600 rounded text-xs font-medium hover:bg-red-100 active:scale-[0.98] transition-all"
+											className="px-3 py-1.5 theme-status-error rounded text-xs font-medium hover:opacity-90 active:scale-[0.98] transition-all"
 										>
 											取消
 										</button>

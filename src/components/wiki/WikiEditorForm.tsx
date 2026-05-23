@@ -98,7 +98,7 @@ const WikiEditorForm = React.memo(({
 			<div className="space-y-2">
 				<div className="flex justify-between items-center">
 					<label htmlFor="wiki-content" className="text-xs font-medium text-text-muted">
-						内容 (Markdown) <span className="text-red-500">*</span>
+						内容 (Markdown) <span className="theme-text-error">*</span>
 					</label>
 					<button
 						type="button"

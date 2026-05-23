@@ -304,7 +304,7 @@ export const MapPickerModal = ({
             <div className="absolute inset-0 flex items-center justify-center bg-surface-alt">
               <div className="text-center">
                 <MapPin size={28} className="text-text-muted mx-auto" />
-                <p className="mt-2 text-sm text-red-500">{error}</p>
+                <p className="mt-2 text-sm theme-text-error">{error}</p>
                 {!AMAP_JS_API_KEY && (
                   <p className="mt-1 text-xs text-text-muted">请在 .env.local 中配置 VITE_AMAP_JS_API_KEY</p>
                 )}
