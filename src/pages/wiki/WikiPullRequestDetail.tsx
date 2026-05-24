@@ -6,6 +6,7 @@ import { clsx } from "clsx";
 import { useToast } from "../../components/Toast";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import { formatDate } from "../../lib/dateUtils";
+import { submitFormOnModifierEnter } from "../../lib/formShortcuts";
 import type { WikiPullRequestItem, WikiPrDiffResponse } from "./types";
 import { getPrStatusText } from "./types";
 
@@ -251,24 +252,32 @@ const WikiPullRequestDetail = () => {
 				)}
 
 				{pullRequest.status === "open" && (
-					<div className="space-y-2">
+					<form
+						onSubmit={(event) => {
+							event.preventDefault();
+							void handleComment();
+						}}
+						className="space-y-2"
+					>
 						<textarea
 							value={comment}
 							onChange={(event) => setComment(event.target.value)}
+							onKeyDown={submitFormOnModifierEnter}
 							rows={3}
 							className="theme-input w-full mt-1 px-4 py-3 rounded text-sm"
 							placeholder="写下你的评审意见..."
 						/>
+						<p className="text-xs text-text-muted">按 Ctrl/Cmd + Enter 发布评论</p>
 						<div className="flex justify-end">
 							<button
-								onClick={handleComment}
+								type="submit"
 								disabled={saving || !comment.trim()}
 								className="px-5 py-2 rounded theme-button-primary text-xs font-medium disabled:opacity-50 transition-all"
 							>
 								发表评论
 							</button>
 						</div>
-					</div>
+					</form>
 				)}
 			</div>
 		</div>

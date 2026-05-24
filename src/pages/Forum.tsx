@@ -45,6 +45,7 @@ import { usePagination } from "../hooks/usePagination";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { useI18n } from "../lib/i18n";
 import { useToggleInteraction } from "../hooks/useToggleInteraction";
+import { submitFormOnModifierEnter } from "../lib/formShortcuts";
 
 type PostItem = {
 	id: string;
@@ -387,6 +388,7 @@ const PostDetail = () => {
 	const [newComment, setNewComment] = useState("");
 	const [replyTo, setReplyTo] = useState<CommentItem | null>(null);
 	const [loading, setLoading] = useState(true);
+	const [submittingComment, setSubmittingComment] = useState(false);
 	const [submittingReview, setSubmittingReview] = useState(false);
 	const { user, profile, isBanned } = useAuth();
 	const isAdmin = profile?.role === "admin" || profile?.role === "super_admin";
@@ -440,7 +442,7 @@ const PostDetail = () => {
 
 	const handleAddComment = async (e: React.FormEvent) => {
 		e.preventDefault();
-		if (!postId || !user || !newComment.trim()) return;
+		if (!postId || !user || !newComment.trim() || submittingComment) return;
 		if (isBanned) {
 			show(t('forum.bannedCannotComment'), { variant: "error" });
 			return;
@@ -451,6 +453,7 @@ const PostDetail = () => {
 		}
 
 		try {
+			setSubmittingComment(true);
 			const data = await apiPost<{ comment: CommentItem }>(
 				`/api/posts/${postId}/comments`,
 				{
@@ -473,6 +476,8 @@ const PostDetail = () => {
 		} catch (error) {
 			console.error("Error adding comment:", error);
 			show(t('forum.commentFailed'), { variant: "error" });
+		} finally {
+			setSubmittingComment(false);
 		}
 	};
 
@@ -641,6 +646,7 @@ const PostDetail = () => {
 										<textarea
 											value={newComment}
 											onChange={(e) => setNewComment(e.target.value)}
+											onKeyDown={submitFormOnModifierEnter}
 											placeholder={
 												replyTo
 													? t('forum.replyToPlaceholder', { name: replyTo.authorName })
@@ -650,14 +656,17 @@ const PostDetail = () => {
 											disabled={!canComment || isBanned}
 											className="theme-input w-full px-4 py-3 rounded resize-none"
 										/>
-										<button
-											type="submit"
-											disabled={!canComment || isBanned}
-											className="absolute bottom-3 right-3 px-3 py-1.5 theme-button-primary text-sm rounded active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-										>
-											<Send size={14} />
-										</button>
+											<button
+												type="submit"
+												disabled={!newComment.trim() || !canComment || isBanned || submittingComment}
+												className="absolute bottom-3 right-3 px-3 py-1.5 theme-button-primary text-sm rounded active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+											>
+												<Send size={14} />
+											</button>
 									</div>
+									<p className="mt-2 text-xs text-text-muted">
+										{t('forum.commentShortcutHint')}
+									</p>
 									{isBanned ? (
 										<p className="mt-2 text-xs theme-text-error">
 											{t('forum.bannedCannotComment')}

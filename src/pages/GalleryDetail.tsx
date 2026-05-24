@@ -23,6 +23,7 @@ import { useI18n } from '../lib/i18n';
 import { formatDateTime, toDateValue } from '../lib/dateUtils';
 import { DEFAULT_AVATAR, handleAvatarError } from '../lib/defaultAvatar';
 import { getImagePreference } from '../services/imageService';
+import { submitFormOnModifierEnter } from '../lib/formShortcuts';
 
 type GalleryImage = {
   id: string;
@@ -318,7 +319,7 @@ const GalleryDetail = () => {
 
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!galleryId || !user || !newComment.trim()) return;
+    if (!galleryId || !user || !newComment.trim() || submittingComment) return;
     if (isBanned) {
       show(t('gallery.bannedCannotComment'), { variant: 'error' });
       return;
@@ -824,11 +825,13 @@ const GalleryDetail = () => {
                     <textarea
                       value={newComment}
                       onChange={(e) => setNewComment(e.target.value)}
+                      onKeyDown={submitFormOnModifierEnter}
                       placeholder={t('gallery.commentPlaceholder')}
                       className="theme-input w-full px-4 py-3 rounded resize-none text-base"
                       rows={3}
                     />
-                    <div className="flex justify-end mt-2">
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs text-text-muted">{t('gallery.commentShortcutHint')}</p>
                       <button
                         type="submit"
                         disabled={!newComment.trim() || submittingComment}
