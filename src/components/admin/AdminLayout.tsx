@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import {
+  type LucideIcon,
   LayoutDashboard,
   CheckCircle,
   Book,
@@ -32,7 +33,25 @@ import { setAuthErrorCallback } from '../../lib/errorHandler';
 import { HeaderUserControls } from '../HeaderUserControls';
 import { useToast } from '../Toast';
 
-const contentNav = [
+type AdminNavItem = {
+  id: string;
+  label: string;
+  path: string;
+  icon: LucideIcon;
+};
+
+const dashboardNavItem: AdminNavItem = {
+  id: 'dashboard',
+  label: '仪表盘',
+  path: '/admin',
+  icon: LayoutDashboard,
+};
+
+const mobileUtilityNav: AdminNavItem[] = [
+  { id: 'home', label: '返回主页', path: '/', icon: Home },
+];
+
+const contentNav: AdminNavItem[] = [
   { id: 'wiki', label: '百科管理', path: '/admin/wiki', icon: Book },
   { id: 'music', label: '音乐管理', path: '/admin/music', icon: Music },
   { id: 'posts', label: '帖子管理', path: '/admin/posts', icon: MessageSquare },
@@ -41,7 +60,7 @@ const contentNav = [
   { id: 'announcements', label: '公告管理', path: '/admin/announcements', icon: Megaphone },
 ];
 
-const siteNav = [
+const siteNav: AdminNavItem[] = [
   { id: 'reviews', label: '审核队列', path: '/admin/reviews', icon: CheckCircle },
   { id: 'users', label: '用户管理', path: '/admin/users', icon: Users },
   { id: 'locks', label: '编辑锁', path: '/admin/locks', icon: Lock },
@@ -56,6 +75,55 @@ const siteNav = [
   { id: 'variant-manager', label: '变体管理', path: '/admin/variant-manager', icon: RefreshCw },
 ];
 
+const SidebarNavLink = ({
+  item,
+  currentPath,
+  sidebarCollapsed,
+  mobileOpen,
+  onClick,
+  match = 'prefix',
+  paddingClassName = 'px-3 py-2',
+  className,
+}: {
+  item: AdminNavItem;
+  currentPath: string;
+  sidebarCollapsed: boolean;
+  mobileOpen: boolean;
+  onClick: () => void;
+  match?: 'exact' | 'prefix' | 'none';
+  paddingClassName?: string;
+  className?: string;
+}) => {
+  const Icon = item.icon;
+  const isActive =
+    match === 'exact'
+      ? currentPath === item.path
+      : match === 'prefix'
+        ? currentPath === item.path || currentPath.startsWith(`${item.path}/`)
+        : false;
+
+  return (
+    <Link
+      to={item.path}
+      onClick={onClick}
+      className={clsx(
+        'flex items-center gap-3 rounded transition-all',
+        paddingClassName,
+        isActive
+          ? 'bg-surface-alt text-brand-gold font-medium'
+          : 'text-text-secondary hover:bg-surface-alt hover:text-brand-gold',
+        className,
+      )}
+      title={sidebarCollapsed && !mobileOpen ? item.label : undefined}
+    >
+      <Icon size={18} className="shrink-0" />
+      {(!sidebarCollapsed || mobileOpen) && (
+        <span className="whitespace-nowrap text-sm">{item.label}</span>
+      )}
+    </Link>
+  );
+};
+
 const NavGroup = ({
   title,
   items,
@@ -65,7 +133,7 @@ const NavGroup = ({
   onClick,
 }: {
   title: string;
-  items: typeof contentNav;
+  items: AdminNavItem[];
   currentPath: string;
   sidebarCollapsed: boolean;
   mobileOpen: boolean;
@@ -79,26 +147,15 @@ const NavGroup = ({
     )}
     <div className="space-y-0.5">
       {items.map((item) => {
-        const Icon = item.icon;
-        const isActive = currentPath === item.path || currentPath.startsWith(`${item.path}/`);
         return (
-          <Link
+          <SidebarNavLink
             key={item.id}
-            to={item.path}
+            item={item}
+            currentPath={currentPath}
+            sidebarCollapsed={sidebarCollapsed}
+            mobileOpen={mobileOpen}
             onClick={onClick}
-            className={clsx(
-              'flex items-center gap-3 px-3 py-2 rounded transition-all',
-              isActive
-                ? 'bg-surface-alt text-brand-gold font-medium'
-                : 'text-text-secondary hover:bg-surface-alt hover:text-brand-gold',
-            )}
-            title={sidebarCollapsed && !mobileOpen ? item.label : undefined}
-          >
-            <Icon size={18} className="shrink-0" />
-            {(!sidebarCollapsed || mobileOpen) && (
-              <span className="whitespace-nowrap text-sm">{item.label}</span>
-            )}
-          </Link>
+          />
         );
       })}
     </div>
@@ -136,6 +193,7 @@ export const AdminLayout = () => {
   }, [navigate]);
 
   const currentPath = location.pathname;
+  const closeMobileMenu = () => setMobileOpen(false);
 
   const handleLogout = async () => {
     try {
@@ -173,7 +231,7 @@ export const AdminLayout = () => {
         <div className="flex items-center gap-3">
           <button
             className="md:hidden p-2 hover:bg-surface-alt rounded text-text-secondary"
-            onClick={() => setMobileOpen(!mobileOpen)}
+            onClick={() => setMobileOpen((open) => !open)}
           >
             {mobileOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
@@ -195,7 +253,7 @@ export const AdminLayout = () => {
       <div className="flex flex-1 overflow-hidden relative">
         {/* Mobile overlay */}
         {mobileOpen && (
-          <div className="fixed inset-0 bg-black/30 z-40 md:hidden" onClick={() => setMobileOpen(false)} />
+          <div className="fixed inset-0 bg-black/30 z-40 md:hidden" onClick={closeMobileMenu} />
         )}
 
         {/* Sidebar */}
@@ -208,24 +266,31 @@ export const AdminLayout = () => {
           )}
         >
           <nav className="flex-1 p-2 overflow-y-auto overflow-x-hidden">
+            {mobileUtilityNav.map((item) => (
+              <SidebarNavLink
+                key={item.id}
+                item={item}
+                currentPath={currentPath}
+                sidebarCollapsed={sidebarCollapsed}
+                mobileOpen={mobileOpen}
+                onClick={closeMobileMenu}
+                match="none"
+                paddingClassName="px-3 py-2.5"
+                className="mb-3 md:hidden"
+              />
+            ))}
+
             {/* Dashboard */}
             <div className="mb-3">
-              <Link
-                to="/admin"
-                onClick={() => setMobileOpen(false)}
-                className={clsx(
-                  'flex items-center gap-3 px-3 py-2.5 rounded transition-all',
-                  currentPath === '/admin'
-                    ? 'bg-surface-alt text-brand-gold font-medium'
-                    : 'text-text-secondary hover:bg-surface-alt hover:text-brand-gold',
-                )}
-                title={sidebarCollapsed ? '仪表盘' : undefined}
-              >
-                <LayoutDashboard size={18} className="shrink-0" />
-                {(!sidebarCollapsed || mobileOpen) && (
-                  <span className="whitespace-nowrap text-sm">仪表盘</span>
-                )}
-              </Link>
+              <SidebarNavLink
+                item={dashboardNavItem}
+                currentPath={currentPath}
+                sidebarCollapsed={sidebarCollapsed}
+                mobileOpen={mobileOpen}
+                onClick={closeMobileMenu}
+                match="exact"
+                paddingClassName="px-3 py-2.5"
+              />
             </div>
 
             <NavGroup
@@ -234,7 +299,7 @@ export const AdminLayout = () => {
               currentPath={currentPath}
               sidebarCollapsed={sidebarCollapsed}
               mobileOpen={mobileOpen}
-              onClick={() => setMobileOpen(false)}
+              onClick={closeMobileMenu}
             />
 
             <NavGroup
@@ -243,7 +308,7 @@ export const AdminLayout = () => {
               currentPath={currentPath}
               sidebarCollapsed={sidebarCollapsed}
               mobileOpen={mobileOpen}
-              onClick={() => setMobileOpen(false)}
+              onClick={closeMobileMenu}
             />
           </nav>
 
