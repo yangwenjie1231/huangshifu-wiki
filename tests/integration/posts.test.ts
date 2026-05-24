@@ -605,6 +605,123 @@ describe('Posts API - 文章接口测试', () => {
   });
 
   // ============================================================================
+  // 删除评论接口测试（需要认证）
+  // ============================================================================
+  describe('DELETE /api/posts/comments/:id - 删除评论', () => {
+    it('删除父评论时应软删除并保留子评论可见', async () => {
+      const post = await createCurrentUserPost({
+        title: 'Soft Delete Parent Comment Test',
+        status: 'published',
+      });
+
+      const parent = await prisma.postComment.create({
+        data: {
+          postId: post.id,
+          authorUid: testUser.user.uid,
+          content: 'Parent comment content',
+        },
+      });
+
+      const child = await prisma.postComment.create({
+        data: {
+          postId: post.id,
+          authorUid: testUser.user.uid,
+          content: 'Child comment content',
+          parentId: parent.id,
+        },
+      });
+
+      await prisma.post.update({
+        where: { id: post.id },
+        data: { commentsCount: 2 },
+      });
+
+      const deleteResponse = await request(app)
+        .delete(`/api/posts/comments/${parent.id}`)
+        .set('Authorization', `Bearer ${userToken}`);
+
+      expect(deleteResponse.status).toBe(200);
+      expect(deleteResponse.body).toEqual({ success: true });
+
+      const dbParent = await prisma.postComment.findUnique({
+        where: { id: parent.id },
+      });
+      expect(dbParent).not.toBeNull();
+      expect(dbParent?.deletedAt).not.toBeNull();
+      expect(dbParent?.deletedBy).toBe(testUser.user.uid);
+
+      const dbChild = await prisma.postComment.findUnique({
+        where: { id: child.id },
+      });
+      expect(dbChild?.deletedAt).toBeNull();
+      expect(dbChild?.parentId).toBe(parent.id);
+
+      const publicResponse = await request(app).get(`/api/posts/${post.id}`);
+      expect(publicResponse.status).toBe(200);
+      expect(publicResponse.body.comments).toHaveLength(2);
+      expect(publicResponse.body.comments[0].id).toBe(parent.id);
+      expect(publicResponse.body.comments[0].content).toBe('评论已删除');
+      expect(publicResponse.body.comments[0].isDeleted).toBe(true);
+      expect(publicResponse.body.comments[1].id).toBe(child.id);
+      expect(publicResponse.body.comments[1].content).toBe('Child comment content');
+
+      const adminResponse = await request(app)
+        .get(`/api/posts/${post.id}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(adminResponse.status).toBe(200);
+      expect(adminResponse.body.comments[0].content).toBe('Parent comment content');
+      expect(adminResponse.body.comments[0].isDeleted).toBe(true);
+
+      const replyDeletedParentResponse = await request(app)
+        .post(`/api/posts/${post.id}/comments`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({
+          content: 'Reply to deleted parent',
+          parentId: parent.id,
+        });
+      expect(replyDeletedParentResponse.status).toBe(400);
+      expect(replyDeletedParentResponse.body.error).toBe('回复目标不存在');
+
+      const dbPost = await prisma.post.findUnique({
+        where: { id: post.id },
+      });
+      expect(dbPost?.commentsCount).toBe(2);
+    });
+
+    it('不应通过帖子删评接口删除图集评论', async () => {
+      const gallery = await prisma.gallery.create({
+        data: {
+          title: `Gallery For Comment Delete ${Date.now()}`,
+          description: 'Test gallery',
+          authorUid: testUser.user.uid,
+          authorName: testUser.user.displayName,
+          published: true,
+        },
+      });
+
+      const galleryComment = await prisma.postComment.create({
+        data: {
+          galleryId: gallery.id,
+          authorUid: testUser.user.uid,
+          content: 'Gallery comment content',
+        },
+      });
+
+      const response = await request(app)
+        .delete(`/api/posts/comments/${galleryComment.id}`)
+        .set('Authorization', `Bearer ${userToken}`);
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe('评论未找到');
+
+      const dbComment = await prisma.postComment.findUnique({
+        where: { id: galleryComment.id },
+      });
+      expect(dbComment?.deletedAt).toBeNull();
+    });
+  });
+
+  // ============================================================================
   // 创建文章接口测试（需要认证）
   // ============================================================================
   describe('POST /api/posts - 创建文章', () => {

@@ -749,6 +749,7 @@ router.get('/:userId/comments', asyncHandler(async (req: AuthenticatedRequest, r
   try {
     const uid = req.params.userId;
     const { limit, page, offset: skip } = parsePagination(req.query);
+    const isAdmin = req.authUser?.role === 'admin' || req.authUser?.role === 'super_admin';
 
     const visibilityWhere = buildPostVisibilityWhere(req.authUser);
 
@@ -787,7 +788,7 @@ router.get('/:userId/comments', asyncHandler(async (req: AuthenticatedRequest, r
 
     res.json({
       comments: comments.map((comment) => ({
-        ...toCommentResponse(comment),
+        ...toCommentResponse(comment, { maskDeletedContent: !isAdmin }),
         post: comment.postId && postsMap.has(comment.postId) ? postsMap.get(comment.postId)! : null,
       })),
       total,

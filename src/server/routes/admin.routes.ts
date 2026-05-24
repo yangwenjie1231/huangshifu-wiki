@@ -626,11 +626,18 @@ router.post('/batch-delete-comments', requireAdmin, asyncHandler(async (req: Aut
       return;
     }
 
-    await prisma.postComment.deleteMany({
-      where: { id: { in: commentIds } },
+    const result = await prisma.postComment.updateMany({
+      where: {
+        id: { in: commentIds },
+        deletedAt: null,
+      },
+      data: {
+        deletedAt: new Date(),
+        deletedBy: req.authUser!.uid,
+      },
     });
 
-    res.json({ deleted: commentIds.length });
+    res.json({ deleted: result.count });
   } catch (error) {
     logger.error({ err: error }, 'Batch delete comments error');
     res.status(500).json({ error: '批量删除评论失败' });

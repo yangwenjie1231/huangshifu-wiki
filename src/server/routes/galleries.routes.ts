@@ -1082,6 +1082,7 @@ router.patch('/:id/images/reorder', requireAuth, requireActiveUser, asyncHandler
 
 router.get('/:id/comments', asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
+    const isAdmin = isAdminRole(req.authUser?.role)
     const gallery = await prisma.gallery.findUnique({
       where: { id: req.params.id },
       select: {
@@ -1111,7 +1112,11 @@ router.get('/:id/comments', asyncHandler(async (req: AuthenticatedRequest, res) 
       },
     })
 
-    res.json({ comments: comments.map(toCommentResponse) })
+    res.json({
+      comments: comments.map((comment) =>
+        toCommentResponse(comment, { maskDeletedContent: !isAdmin })
+      ),
+    })
   } catch (error) {
     console.error('Fetch gallery comments error:', error)
     res.status(500).json({ error: '获取图集评论失败' })

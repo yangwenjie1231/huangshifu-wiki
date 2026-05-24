@@ -264,6 +264,8 @@ model PostComment {
   authorUid  String
   content    String
   parentId   String?
+  deletedAt  DateTime?
+  deletedBy  String?
   createdAt  DateTime @default(now())
   post       Post?    @relation("PostComments", fields: [postId], references: [id], onDelete: Cascade)
   gallery    Gallery? @relation("GalleryComments", fields: [galleryId], references: [id], onDelete: Cascade)
@@ -272,6 +274,7 @@ model PostComment {
   @@index([postId, createdAt])
   @@index([galleryId, createdAt])
   @@index([parentId])
+  @@index([deletedAt])
   @@index([authorUid, createdAt])
 }
 

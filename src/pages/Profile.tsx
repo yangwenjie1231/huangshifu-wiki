@@ -32,6 +32,9 @@ type CommentItem = {
   authorPhoto: string | null;
   content: string;
   parentId: string | null;
+  isDeleted: boolean;
+  deletedAt?: string | null;
+  deletedBy?: string | null;
   createdAt: string;
   post: { id: string; title: string; status: string } | null;
 };

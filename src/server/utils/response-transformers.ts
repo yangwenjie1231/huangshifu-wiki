@@ -316,6 +316,8 @@ export function toPostResponse(post: {
   };
 }
 
+const DELETED_COMMENT_PLACEHOLDER = '评论已删除'
+
 export function toCommentResponse(comment: {
   id: string;
   postId?: string | null;
@@ -323,6 +325,8 @@ export function toCommentResponse(comment: {
   authorUid: string;
   content: string;
   parentId: string | null;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
   createdAt: Date;
   // author 关系是可选的——评论查询时如果忘记 include 就回退到 null/匿名，
   // 而不是直接抛 TS 错误。生产路径都应该 include 关系。
@@ -330,7 +334,8 @@ export function toCommentResponse(comment: {
     displayName: string;
     photoURL: string | null;
   } | null;
-}) {
+}, options?: { maskDeletedContent?: boolean }) {
+  const isDeleted = Boolean(comment.deletedAt)
   return {
     id: comment.id,
     postId: comment.postId ?? null,
@@ -338,8 +343,11 @@ export function toCommentResponse(comment: {
     authorUid: comment.authorUid,
     authorName: comment.author?.displayName ?? '匿名用户',
     authorPhoto: comment.author?.photoURL ?? null,
-    content: comment.content,
+    content: options?.maskDeletedContent && isDeleted ? DELETED_COMMENT_PLACEHOLDER : comment.content,
     parentId: comment.parentId,
+    isDeleted,
+    deletedAt: comment.deletedAt ? comment.deletedAt.toISOString() : null,
+    deletedBy: comment.deletedBy ?? null,
     createdAt: comment.createdAt.toISOString(),
   };
 }

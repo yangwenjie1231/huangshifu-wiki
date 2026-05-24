@@ -30,10 +30,11 @@ import {
 	Link2,
 	Tag,
 	MapPin,
+	Trash2,
 } from "lucide-react";
 import { clsx } from "clsx";
 import MarkdownEditor from "../components/MarkdownEditor";
-import { apiGet, apiPost, apiPut } from "../lib/apiClient";
+import { apiDelete, apiGet, apiPost, apiPut } from "../lib/apiClient";
 import { useToast } from "../components/Toast";
 import { copyToClipboard, toAbsoluteInternalUrl } from "../lib/copyLink";
 import { ContentStatus, getStatusText } from "../lib/contentUtils";
@@ -89,6 +90,9 @@ type CommentItem = {
 	authorPhoto: string | null;
 	content: string;
 	parentId: string | null;
+	isDeleted: boolean;
+	deletedAt?: string | null;
+	deletedBy?: string | null;
 	createdAt: string;
 };
 
@@ -389,6 +393,7 @@ const PostDetail = () => {
 	const [replyTo, setReplyTo] = useState<CommentItem | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [submittingComment, setSubmittingComment] = useState(false);
+	const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
 	const [submittingReview, setSubmittingReview] = useState(false);
 	const { user, profile, isBanned } = useAuth();
 	const isAdmin = profile?.role === "admin" || profile?.role === "super_admin";
@@ -481,6 +486,40 @@ const PostDetail = () => {
 		}
 	};
 
+	const handleDeleteComment = async (comment: CommentItem) => {
+		if (!user || deletingCommentId) return;
+		const canDeleteComment = comment.authorUid === user.uid || isAdmin;
+		if (!canDeleteComment || comment.isDeleted) return;
+		if (!window.confirm(t('forum.deleteCommentConfirm'))) return;
+
+		try {
+			setDeletingCommentId(comment.id);
+			await apiDelete(`/api/posts/comments/${comment.id}`);
+			setComments((prev) =>
+				prev.map((item) =>
+					item.id === comment.id
+						? {
+								...item,
+								content: isAdmin ? item.content : t('forum.deletedComment'),
+								isDeleted: true,
+								deletedAt: new Date().toISOString(),
+								deletedBy: user.uid,
+						  }
+						: item,
+				),
+			);
+			if (replyTo?.id === comment.id) {
+				setReplyTo(null);
+			}
+			show(t('forum.commentDeleted'));
+		} catch (error) {
+			console.error("Error deleting comment:", error);
+			show(t('forum.deleteCommentFailed'), { variant: "error" });
+		} finally {
+			setDeletingCommentId(null);
+		}
+	};
+
 	if (loading)
 		return <PageSkeleton variant="forum" />;
 	if (!post)
@@ -510,6 +549,8 @@ const PostDetail = () => {
 	);
 	const canEditPost = Boolean(!isBanned && isOwner);
 	const canComment = post.status === "published";
+	const canDeleteComment = (comment: CommentItem) =>
+		Boolean(user && !comment.isDeleted && (comment.authorUid === user.uid || isAdmin));
 
 	const handleSubmitReview = async () => {
 		if (!post || !postId || !canSubmitReview || submittingReview) return;
@@ -713,24 +754,41 @@ const PostDetail = () => {
 														</span>
 													</div>
 													<p className="text-text-secondary text-sm leading-relaxed mb-2">
-														{comment.content}
+														<span className={comment.isDeleted ? "italic text-text-muted" : undefined}>
+															{comment.content}
+														</span>
 													</p>
-													<button
-														type="button"
-														onClick={() => {
-															setReplyTo(comment);
-															const form = document.querySelector("form");
-															const top = form?.getBoundingClientRect().top
-																? window.scrollY +
-																	form.getBoundingClientRect().top -
-																	200
-																: 0;
-															window.scrollTo({ top, behavior: "smooth" });
-														}}
-														className="text-[11px] font-medium text-brand-gold hover:underline"
-													>
-														{t('forum.reply')}
-													</button>
+													<div className="flex items-center gap-3">
+														{!comment.isDeleted && (
+															<button
+																type="button"
+																onClick={() => {
+																	setReplyTo(comment);
+																	const form = document.querySelector("form");
+																	const top = form?.getBoundingClientRect().top
+																		? window.scrollY +
+																			form.getBoundingClientRect().top -
+																			200
+																		: 0;
+																	window.scrollTo({ top, behavior: "smooth" });
+																}}
+																className="text-[11px] font-medium text-brand-gold hover:underline"
+															>
+																{t('forum.reply')}
+															</button>
+														)}
+														{canDeleteComment(comment) && (
+															<button
+																type="button"
+																onClick={() => void handleDeleteComment(comment)}
+																disabled={deletingCommentId === comment.id}
+																className="text-[11px] font-medium text-text-muted hover:text-red-500 disabled:opacity-50"
+															>
+																<Trash2 size={12} className="inline mr-1" />
+																{t('forum.deleteComment')}
+															</button>
+														)}
+													</div>
 												</div>
 											</div>
 
@@ -760,8 +818,23 @@ const PostDetail = () => {
 																	</span>
 																</div>
 																<p className="text-text-secondary text-xs leading-relaxed">
-																	{reply.content}
+																	<span className={reply.isDeleted ? "italic text-text-muted" : undefined}>
+																		{reply.content}
+																	</span>
 																</p>
+																<div className="mt-1">
+																	{canDeleteComment(reply) && (
+																		<button
+																			type="button"
+																			onClick={() => void handleDeleteComment(reply)}
+																			disabled={deletingCommentId === reply.id}
+																			className="text-[10px] font-medium text-text-muted hover:text-red-500 disabled:opacity-50"
+																		>
+																			<Trash2 size={11} className="inline mr-1" />
+																			{t('forum.deleteComment')}
+																		</button>
+																	)}
+																</div>
 															</div>
 														</div>
 													))}

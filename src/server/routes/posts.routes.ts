@@ -353,7 +353,9 @@ router.get('/:id', async (req: AuthenticatedRequest, res) => {
         favoritedByMe,
         dislikedByMe,
       },
-      comments: comments.map(toCommentResponse),
+      comments: comments.map((comment) =>
+        toCommentResponse(comment, { maskDeletedContent: !isAdminRole(req.authUser?.role) })
+      ),
     });
   } catch (error) {
     console.error('Fetch post detail error:', error);
@@ -514,6 +516,7 @@ router.get('/:postId/comments', async (req: AuthenticatedRequest, res) => {
   try {
     const postId = req.params.postId;
     const { limit, page, offset: skip } = parsePagination(req.query);
+    const isAdmin = isAdminRole(req.authUser?.role);
 
     const post = await prisma.post.findUnique({
       where: { id: postId },
@@ -541,7 +544,9 @@ router.get('/:postId/comments', async (req: AuthenticatedRequest, res) => {
     ]);
 
     res.json({
-      comments: comments.map(toCommentResponse),
+      comments: comments.map((comment) =>
+        toCommentResponse(comment, { maskDeletedContent: !isAdmin })
+      ),
       total,
       page,
       limit,
@@ -591,9 +596,10 @@ router.post('/:postId/comments', postWriteLimiter, requireAuth, requireActiveUse
           id: true,
           postId: true,
           authorUid: true,
+          deletedAt: true,
         },
       });
-      if (!parent || parent.postId !== req.params.postId) {
+      if (!parent || parent.postId !== req.params.postId || parent.deletedAt) {
         res.status(400).json({ error: '回复目标不存在' });
         return;
       }
@@ -643,10 +649,10 @@ router.delete('/comments/:id', requireAuth, requireActiveUser, async (req: Authe
   try {
     const comment = await prisma.postComment.findUnique({
       where: { id: req.params.id },
-      select: { authorUid: true, postId: true },
+      select: { authorUid: true, postId: true, deletedAt: true },
     });
 
-    if (!comment) {
+    if (!comment || !comment.postId) {
       res.status(404).json({ error: '评论未找到' });
       return;
     }
@@ -658,17 +664,15 @@ router.delete('/comments/:id', requireAuth, requireActiveUser, async (req: Authe
       return;
     }
 
-    await prisma.$transaction([
-      prisma.postComment.delete({
+    if (!comment.deletedAt) {
+      await prisma.postComment.update({
         where: { id: req.params.id },
-      }),
-      prisma.post.update({
-        where: { id: comment.postId },
         data: {
-          commentsCount: { decrement: 1 },
+          deletedAt: new Date(),
+          deletedBy: req.authUser!.uid,
         },
-      }),
-    ]);
+      });
+    }
 
     res.json({ success: true });
   } catch (error) {
