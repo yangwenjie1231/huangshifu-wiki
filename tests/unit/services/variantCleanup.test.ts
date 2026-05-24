@@ -38,16 +38,41 @@ vi.mock('../../../src/server/prisma', () => ({
 // Mock fs 模块 - 使用 importOriginal 保留 default export
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs')>();
+  const mockedPromises = {
+    stat: mockStat,
+    unlink: mockUnlink,
+    readdir: mockReaddir,
+    rmdir: mockRmdir,
+    access: mockAccess,
+  };
   return {
     ...actual,
-    promises: {
-      stat: mockStat,
-      unlink: mockUnlink,
-      readdir: mockReaddir,
-      rmdir: mockRmdir,
-      access: mockAccess,
+    default: {
+      ...actual,
+      promises: mockedPromises,
     },
+    promises: mockedPromises,
   };
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
+
+  mockStat.mockResolvedValue({
+    isFile: () => true,
+    size: 1024,
+  });
+  mockUnlink.mockResolvedValue(undefined);
+  mockReaddir.mockResolvedValue([]);
+  mockRmdir.mockResolvedValue(undefined);
+  mockAccess.mockReset();
+  mockAccess
+    .mockResolvedValue(undefined)
+    .mockRejectedValueOnce(new Error('ENOENT: no such file'));
+  mockFindUnique.mockResolvedValue(null);
+  mockFindMany.mockResolvedValue([]);
+  mockCount.mockResolvedValue(0);
+  mockUpdate.mockResolvedValue({});
 });
 
 describe('VariantCleanupService - 清理变体', () => {
@@ -57,21 +82,6 @@ describe('VariantCleanupService - 清理变体', () => {
     const module = await import('../../../src/server/services/variantCleanup.service');
     const VariantCleanupService = module.VariantCleanupService;
     service = new VariantCleanupService();
-
-    // 重新设置默认 mock 值（因为 vi.clearAllMocks 会重置实现）
-    mockStat.mockResolvedValue({
-      isFile: () => true,
-      size: 1024,
-    });
-    mockUnlink.mockResolvedValue(undefined);
-    vi.clearAllMocks();
-
-    // clearAllMocks 后再次设置
-    mockStat.mockResolvedValue({
-      isFile: () => true,
-      size: 1024,
-    });
-    mockUnlink.mockResolvedValue(undefined);
   });
 
   it('cleanupByImageMapId 应该清理指定 ImageMap 的所有变体', async () => {
@@ -144,7 +154,11 @@ describe('VariantCleanupService - 孤儿文件检测', () => {
   });
 
   it('variants 目录不存在时应该正常返回', async () => {
-    mockReaddir.mockRejectedValue(new Error('ENOENT'));
+    mockReaddir.mockImplementationOnce(async () => {
+      const error = new Error('ENOENT') as NodeJS.ErrnoException;
+      error.code = 'ENOENT';
+      throw error;
+    });
 
     const result = await service.cleanupOrphanedVariants();
 
