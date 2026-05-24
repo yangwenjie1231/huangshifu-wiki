@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Trash2, CheckCircle, XCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import { clsx } from 'clsx';
-import { apiDelete, apiGet, apiPost, apiPut } from '../../lib/apiClient';
+import { apiDelete, apiGet, apiPut, invalidateApiCacheByPrefix } from '../../lib/apiClient';
 import { useToast } from '../../components/Toast';
 import { SmartImage } from '../../components/SmartImage';
 import { useAuth } from '../../context/AuthContext';
 import { DEFAULT_AVATAR } from '../../lib/defaultAvatar';
 import { formatAdminRole } from '../../lib/formatUtils';
 import type { AdminDataItem } from '../../types/entities';
+
+const ADMIN_USERS_API_PREFIX = '/api/admin/users'
 
 export const AdminUsers = () => {
   const { user: currentUser, profile } = useAuth();
@@ -16,13 +18,15 @@ export const AdminUsers = () => {
   const [loading, setLoading] = useState(true);
   const { show } = useToast();
 
+  const invalidateAdminUsersCache = () => invalidateApiCacheByPrefix(ADMIN_USERS_API_PREFIX)
+
   const getNextRole = (role?: string) => (role === 'admin' ? 'user' : 'admin')
   const getRoleToggleTitle = (role?: string) => (getNextRole(role) === 'admin' ? '设为管理员' : '设为普通用户')
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const result = await apiGet<{ data: AdminDataItem[] }>('/api/admin/users');
+      const result = await apiGet<{ data: AdminDataItem[] }>(ADMIN_USERS_API_PREFIX);
       setData(result.data || []);
     } catch (e) {
       console.error(e);
@@ -46,8 +50,9 @@ export const AdminUsers = () => {
       return;
     }
     try {
-      const endpoint = shouldUnban ? `/api/admin/users/${target.uid}/unban` : `/api/admin/users/${target.uid}/ban`;
-      const result = await apiPost<{ user: AdminDataItem }>(endpoint, shouldUnban ? { note } : { reason: note, note });
+      const endpoint = shouldUnban ? `/api/users/${target.uid}/unban` : `/api/users/${target.uid}/ban`;
+      const result = await apiPut<{ user: AdminDataItem }>(endpoint, shouldUnban ? { note } : { reason: note, note });
+      invalidateAdminUsersCache();
       setData((prev) => prev.map((item) => (item.uid === target.uid ? { ...item, ...result.user } : item)));
       show(shouldUnban ? '已解封' : '已封禁', { variant: 'success' });
     } catch (e) {
@@ -64,6 +69,7 @@ export const AdminUsers = () => {
     if (!window.confirm(`确定要将 ${target.displayName || target.uid} 的角色更改为 ${formatAdminRole(newRole)} 吗？`)) return;
     try {
       await apiPut(`/api/users/${target.uid}/role`, { role: newRole });
+      invalidateAdminUsersCache();
       setData((prev) => prev.map((item) => (item.uid === target.uid ? { ...item, role: newRole } : item)));
       show('角色已更新', { variant: 'success' });
     } catch (e) {
@@ -134,6 +140,7 @@ export const AdminUsers = () => {
                         <button onClick={() => {
                           if (window.confirm('确定删除此用户吗？')) {
                             apiDelete(`/api/admin/users/${item.uid}`).then(() => {
+                              invalidateAdminUsersCache();
                               setData((prev) => prev.filter((d) => d.uid !== item.uid));
                               show('已删除', { variant: 'success' });
                             }).catch(() => show('删除失败', { variant: 'error' }));
