@@ -1,100 +1,34 @@
-import { useEffect, useRef, useState } from 'react'
-import { Link, NavLink, useNavigate } from 'react-router-dom'
-import { LogOut, Menu, Server, UserRound, X } from 'lucide-react'
-import { useAuth } from '../context/AuthContext'
+import { useState } from 'react'
+import { Link, NavLink } from 'react-router-dom'
+import { Menu, X } from 'lucide-react'
 import { logoutRequest } from '../lib/auth'
 import { useI18n } from '../lib/i18n'
-import { DEFAULT_AVATAR, handleAvatarError } from '../lib/defaultAvatar'
+import { HeaderUserControls } from './HeaderUserControls'
 import { useToast } from './Toast'
 import { AuthModal } from './Navbar/AuthModal'
-import type { AuthMode } from './Navbar/AuthModal'
+import type { AuthMode } from './Navbar/types'
 import { MobileMenu } from './Navbar/MobileMenu'
-import { NotificationPanel } from './Navbar/NotificationPanel'
-import { ThemeToggle } from './ThemeToggle'
 import styles from './Navbar.module.css'
 
 export const Navbar = () => {
-	const { user, profile, isAdmin, isBanned, loading } = useAuth()
 	const { t } = useI18n()
-	const navigate = useNavigate()
 	const [isMenuOpen, setIsMenuOpen] = useState(false)
-	const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
 	const [authModalOpen, setAuthModalOpen] = useState(false)
 	const [authInitialMode, setAuthInitialMode] = useState<AuthMode>('login')
-	const accountMenuRef = useRef<HTMLDivElement | null>(null)
 	const { show } = useToast()
-	const isAuthenticated = Boolean(user)
-	const isAuthResolved = !loading
-	const displayName = profile?.displayName || user?.displayName || '游客'
-	const accountAvatarSrc = profile?.photoURL || user?.photoURL || DEFAULT_AVATAR
 
 	const openAuthModal = (mode: AuthMode) => {
 		setAuthInitialMode(mode)
 		setAuthModalOpen(true)
 	}
 
-	const closeAccountMenu = () => {
-		setIsAccountMenuOpen(false)
-	}
-
-	const handleAccountMenuBlur = (event: React.FocusEvent<HTMLDivElement>) => {
-		if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
-			return
-		}
-
-		closeAccountMenu()
-	}
-
-	useEffect(() => {
-		if (!isAccountMenuOpen) {
-			return
-		}
-
-		const handlePointerDown = (event: PointerEvent) => {
-			if (!accountMenuRef.current?.contains(event.target as Node)) {
-				closeAccountMenu()
-			}
-		}
-
-		const handleKeyDown = (event: KeyboardEvent) => {
-			if (event.key === 'Escape') {
-				closeAccountMenu()
-			}
-		}
-
-		document.addEventListener('pointerdown', handlePointerDown)
-		document.addEventListener('keydown', handleKeyDown)
-
-		return () => {
-			document.removeEventListener('pointerdown', handlePointerDown)
-			document.removeEventListener('keydown', handleKeyDown)
-		}
-	}, [isAccountMenuOpen])
-
 	const handleLogout = async () => {
 		try {
 			await logoutRequest()
 			setIsMenuOpen(false)
-			closeAccountMenu()
 		} catch (error) {
 			console.error('Logout failed:', error)
 			show('退出登录失败，请稍后重试', { variant: 'error' })
-		}
-	}
-
-	const handleNotifNavigate = (link: string) => {
-		closeAccountMenu()
-		navigate(link)
-	}
-
-	const handleAccountMenuMouseDownCapture = (event: React.MouseEvent<HTMLDivElement>) => {
-		const target = event.target as HTMLElement
-		const interactiveElement = target.closest(
-			'button, a, input, select, textarea, [tabindex]:not([tabindex="-1"])'
-		)
-
-		if (!interactiveElement) {
-			event.preventDefault()
 		}
 	}
 
@@ -150,149 +84,8 @@ export const Navbar = () => {
 				</div>
 
 				<div className="flex items-center" style={{ gap: '16px' }}>
-					<div className="hidden md:flex items-center" style={{ gap: '16px' }}>
-						{isAuthenticated ? <NotificationPanel onNavigate={handleNotifNavigate} /> : null}
-
-						<div
-							ref={accountMenuRef}
-							className={styles.accountMenu}
-							data-open={isAccountMenuOpen ? 'true' : 'false'}
-							onBlur={handleAccountMenuBlur}
-						>
-							<button
-								type="button"
-								onClick={() => {
-									if (!isAuthResolved) {
-										return
-									}
-
-									setIsAccountMenuOpen((open) => !open)
-								}}
-								className={`${styles.avatarTrigger} ${
-									loading
-										? styles.avatarTriggerPending
-										: !isAuthenticated
-											? styles.avatarTriggerGuest
-											: ''
-								}`}
-								aria-haspopup="menu"
-								aria-expanded={isAccountMenuOpen}
-								aria-label={
-									loading
-										? '正在确认登录状态'
-										: isAuthenticated
-											? `${displayName}的账户菜单`
-											: '打开账户菜单'
-								}
-								disabled={loading}
-							>
-								{loading ? null : isAuthenticated ? (
-									<img
-										src={accountAvatarSrc}
-										alt=""
-										className={styles.avatarImage}
-										referrerPolicy="no-referrer"
-										onError={handleAvatarError}
-									/>
-								) : (
-									<span className={styles.guestAvatarPlaceholder} aria-hidden="true">
-										<UserRound size={14} strokeWidth={1.75} />
-									</span>
-								)}
-							</button>
-
-							<div
-								className={styles.accountMenuPanel}
-								aria-label="账户菜单"
-								onMouseDownCapture={handleAccountMenuMouseDownCapture}
-							>
-								<div className={styles.menuStack}>
-									{isAuthenticated ? (
-										<>
-											<Link
-												to="/profile"
-												className={styles.profileSummary}
-												onClick={closeAccountMenu}
-											>
-												<img
-													src={accountAvatarSrc}
-													alt=""
-													className={styles.profileSummaryAvatar}
-													referrerPolicy="no-referrer"
-													onError={handleAvatarError}
-												/>
-												<div className={styles.profileSummaryText}>
-													<span className={styles.profileName}>{displayName}</span>
-													<span className={styles.profileMeta}>
-														{isAdmin ? '管理员账户' : '查看个人资料'}
-													</span>
-												</div>
-											</Link>
-
-											{isBanned && (
-												<div className={styles.statusNotice}>
-													账号受限
-													{profile?.banReason ? `：${profile.banReason}` : ''}
-												</div>
-											)}
-
-											{isAdmin && (
-												<Link
-													to="/admin"
-													className={styles.menuAction}
-													onClick={closeAccountMenu}
-												>
-													<Server size={16} />
-													<span>管理后台</span>
-												</Link>
-											)}
-										</>
-									) : (
-										<div className={styles.menuBlock}>
-											<div className={styles.menuLabel}>账号</div>
-											<div className={styles.authActions}>
-												<button
-													type="button"
-													onClick={() => {
-														closeAccountMenu()
-														openAuthModal('login')
-													}}
-													className={styles.menuPrimaryAction}
-												>
-													登录
-												</button>
-												<button
-													type="button"
-													onClick={() => {
-														closeAccountMenu()
-														openAuthModal('register')
-													}}
-													className={styles.menuSecondaryAction}
-												>
-													注册
-												</button>
-											</div>
-										</div>
-									)}
-
-									<div className={styles.menuBlock}>
-										<div className={styles.menuLabel}>主题外观</div>
-										<ThemeToggle fullWidth compact />
-									</div>
-
-									{isAuthenticated ? (
-										<button
-											type="button"
-											onClick={handleLogout}
-											className={styles.menuDangerAction}
-										>
-											<LogOut size={16} />
-											<span>退出登录</span>
-										</button>
-									) : null}
-								</div>
-							</div>
-						</div>
+					<div className="hidden md:block">
+						<HeaderUserControls onLogout={handleLogout} onOpenAuth={openAuthModal} />
 					</div>
 
 					<button
@@ -318,7 +111,7 @@ export const Navbar = () => {
 					open={authModalOpen}
 					onClose={() => setAuthModalOpen(false)}
 					onAuthSuccess={() => setIsMenuOpen(false)}
-					initialMode={authInitialMode as AuthMode | undefined}
+					initialMode={authInitialMode}
 				/>
 			)}
 		</nav>

@@ -18,7 +18,6 @@ import {
   Image,
   ShieldCheck,
   Link as LinkIcon,
-  LogOut,
   Home,
   Menu,
   X,
@@ -30,6 +29,8 @@ import { clsx } from 'clsx';
 import { useAuth } from '../../context/AuthContext';
 import { logoutRequest } from '../../lib/auth';
 import { setAuthErrorCallback } from '../../lib/errorHandler';
+import { HeaderUserControls } from '../HeaderUserControls';
+import { useToast } from '../Toast';
 
 const contentNav = [
   { id: 'wiki', label: '百科管理', path: '/admin/wiki', icon: Book },
@@ -105,9 +106,10 @@ const NavGroup = ({
 );
 
 export const AdminLayout = () => {
-  const { user, isAdmin, loading: authLoading } = useAuth();
+  const { isAdmin, loading: authLoading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const { show } = useToast();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [checked, setChecked] = useState(false);
@@ -123,7 +125,9 @@ export const AdminLayout = () => {
 
   useEffect(() => {
     setAuthErrorCallback(() => {
-      logoutRequest();
+      void logoutRequest().catch((error) => {
+        console.error('Logout failed:', error);
+      });
       navigate('/');
     });
     return () => {
@@ -132,6 +136,16 @@ export const AdminLayout = () => {
   }, [navigate]);
 
   const currentPath = location.pathname;
+
+  const handleLogout = async () => {
+    try {
+      await logoutRequest();
+      navigate('/');
+    } catch (error) {
+      console.error('Logout failed:', error);
+      show('退出登录失败，请稍后重试', { variant: 'error' });
+    }
+  };
 
   if (authLoading || !checked) {
     return (
@@ -174,14 +188,7 @@ export const AdminLayout = () => {
           </Link>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-text-muted hidden sm:inline">{user?.displayName || user?.uid || ''}</span>
-          <button
-            onClick={() => logoutRequest()}
-            className="p-2 hover:bg-surface-alt rounded text-text-muted theme-icon-button-danger transition-colors"
-            title="退出登录"
-          >
-            <LogOut size={18} />
-          </button>
+          <HeaderUserControls onLogout={handleLogout} />
         </div>
       </header>
 

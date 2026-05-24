@@ -5,8 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { login, register, loginWithWeChat } from "../../lib/auth";
 import { useToast } from "../Toast";
 import { useI18n } from '../../lib/i18n';
-
-export type AuthMode = "login" | "register" | "wechat";
+import type { AuthMode } from './types'
 
 interface AuthModalProps {
 	open: boolean;

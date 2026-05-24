@@ -14,7 +14,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../lib/i18n";
 import { DEFAULT_AVATAR, handleAvatarError } from "../../lib/defaultAvatar";
 import { ThemeToggle } from "../ThemeToggle";
-import type { AuthMode } from "./AuthModal";
+import type { AuthMode } from "./types";
 
 interface MobileMenuProps {
 	open: boolean;
