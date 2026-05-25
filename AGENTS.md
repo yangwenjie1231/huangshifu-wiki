@@ -336,6 +336,7 @@
 - 集成测试：`npm run test:integration`
 - 构建：`npm run build`
 - 构建体积检查：`npm run check:build`
+- 排查单元测试日志时使用 `DEBUG_UNIT=1 npm run test:unit`；排查集成测试日志时使用 `DEBUG_INTEGRATION=1 npm run test:integration`
 
 ### 交付前强制执行
 
