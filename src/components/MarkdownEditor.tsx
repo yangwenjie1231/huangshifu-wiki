@@ -48,6 +48,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 				value={processedValue}
 				onChange={(val) => onChange(val || "")}
 				height={parseInt(height)}
+				highlightEnable={resolvedTheme !== 'dark'}
 				preview="live"
 				previewOptions={{
 					rehypePlugins: [rehypeRaw, [rehypeSanitize, customSchema]],
