@@ -15,7 +15,7 @@ const configMap: Record<ListType, { title: string; icon: React.ElementType; apiP
   music: { title: '音乐管理', icon: Music, apiPath: 'music', columns: ['内容详情', '状态', '更新时间', '操作'], hasCreate: false },
   posts: { title: '帖子管理', icon: MessageSquare, apiPath: 'posts', columns: ['内容详情', '版块', '更新时间', '操作'], hasCreate: false },
   galleries: { title: '图集管理', icon: ImageIcon, apiPath: 'galleries', deletePath: (id) => `/api/galleries/${id}`, columns: ['内容详情', '状态', '更新时间', '操作'], hasCreate: false },
-  sections: { title: '版块管理', icon: Layers, apiPath: 'sections', columns: ['名称', '描述', '排序', '操作'], hasCreate: true },
+  sections: { title: '版块管理', icon: Layers, apiPath: 'sections', deletePath: (id) => `/api/sections/${id}`, columns: ['名称', '描述', '排序', '操作'], hasCreate: true },
   announcements: { title: '公告管理', icon: Megaphone, apiPath: 'announcements', columns: ['内容', '链接', '状态', '操作'], hasCreate: true },
 };
 
