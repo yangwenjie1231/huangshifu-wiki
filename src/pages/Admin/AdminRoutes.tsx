@@ -1,19 +1,31 @@
-import React from 'react';
-import { Routes, Route } from 'react-router-dom';
-import { AdminLayout } from '../../components/admin/AdminLayout';
-import AdminDashboard from './AdminDashboard';
-import AdminReviews from './AdminReviews';
-import AdminListPage from './AdminListPage';
-import AdminUsers from './AdminUsers';
-import AdminLocks from './AdminLocks';
-import AdminLogs from './AdminLogs';
-import AdminToolPage from './AdminToolPage';
-import AdminDiskMonitor from './AdminDiskMonitor';
-import AdminVariantManager from './AdminVariantManager';
+import React from 'react'
+import { Routes, Route } from 'react-router-dom'
+import { AdminLayout } from '../../components/admin/AdminLayout'
+import { RouteGuard } from '../../components/RouteGuard'
+import AdminDashboard from './AdminDashboard'
+import AdminReviews from './AdminReviews'
+import AdminListPage from './AdminListPage'
+import AdminUsers from './AdminUsers'
+import AdminLocks from './AdminLocks'
+import AdminLogs from './AdminLogs'
+import AdminToolPage from './AdminToolPage'
+import AdminDiskMonitor from './AdminDiskMonitor'
+import AdminVariantManager from './AdminVariantManager'
 
 export const AdminRoutes = () => (
   <Routes>
-    <Route path="/admin/*" element={<AdminLayout />}>
+    <Route
+      path="/admin/*"
+      element={
+        <RouteGuard
+          requireAdmin
+          title="管理页面需要先登录"
+          description="登录管理员账号后才可以进入后台，处理内容审核、站务配置和系统任务。"
+        >
+          <AdminLayout />
+        </RouteGuard>
+      }
+    >
       <Route index element={<AdminDashboard />} />
       <Route path="reviews" element={<AdminReviews />} />
       <Route path="wiki" element={<AdminListPage type="wiki" />} />
@@ -35,6 +47,6 @@ export const AdminRoutes = () => (
       <Route path="variant-manager" element={<AdminVariantManager />} />
     </Route>
   </Routes>
-);
+)
 
-export default AdminRoutes;
+export default AdminRoutes

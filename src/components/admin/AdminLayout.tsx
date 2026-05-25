@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
+import React, { useState, useEffect } from 'react'
+import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
 import {
   type LucideIcon,
   LayoutDashboard,
@@ -25,31 +25,29 @@ import {
   ChevronRight,
   HardDrive,
   RefreshCw,
-} from 'lucide-react';
-import { clsx } from 'clsx';
-import { useAuth } from '../../context/AuthContext';
-import { logoutRequest } from '../../lib/auth';
-import { setAuthErrorCallback } from '../../lib/errorHandler';
-import { HeaderUserControls } from '../HeaderUserControls';
-import { useToast } from '../Toast';
+} from 'lucide-react'
+import { clsx } from 'clsx'
+import { useAuth } from '../../context/AuthContext'
+import { logoutRequest } from '../../lib/auth'
+import { setAuthErrorCallback } from '../../lib/errorHandler'
+import { HeaderUserControls } from '../HeaderUserControls'
+import { useToast } from '../Toast'
 
 type AdminNavItem = {
-  id: string;
-  label: string;
-  path: string;
-  icon: LucideIcon;
-};
+  id: string
+  label: string
+  path: string
+  icon: LucideIcon
+}
 
 const dashboardNavItem: AdminNavItem = {
   id: 'dashboard',
   label: '仪表盘',
   path: '/admin',
   icon: LayoutDashboard,
-};
+}
 
-const mobileUtilityNav: AdminNavItem[] = [
-  { id: 'home', label: '返回主页', path: '/', icon: Home },
-];
+const mobileUtilityNav: AdminNavItem[] = [{ id: 'home', label: '返回主页', path: '/', icon: Home }]
 
 const contentNav: AdminNavItem[] = [
   { id: 'wiki', label: '百科管理', path: '/admin/wiki', icon: Book },
@@ -58,7 +56,7 @@ const contentNav: AdminNavItem[] = [
   { id: 'galleries', label: '图集管理', path: '/admin/galleries', icon: ImageIcon },
   { id: 'sections', label: '版块管理', path: '/admin/sections', icon: Layers },
   { id: 'announcements', label: '公告管理', path: '/admin/announcements', icon: Megaphone },
-];
+]
 
 const siteNav: AdminNavItem[] = [
   { id: 'reviews', label: '审核队列', path: '/admin/reviews', icon: CheckCircle },
@@ -73,7 +71,7 @@ const siteNav: AdminNavItem[] = [
   { id: 'markdown_links', label: '链接更新', path: '/admin/markdown_links', icon: LinkIcon },
   { id: 'disk-monitor', label: '磁盘监控', path: '/admin/disk-monitor', icon: HardDrive },
   { id: 'variant-manager', label: '变体管理', path: '/admin/variant-manager', icon: RefreshCw },
-];
+]
 
 const SidebarNavLink = ({
   item,
@@ -85,22 +83,22 @@ const SidebarNavLink = ({
   paddingClassName = 'px-3 py-2',
   className,
 }: {
-  item: AdminNavItem;
-  currentPath: string;
-  sidebarCollapsed: boolean;
-  mobileOpen: boolean;
-  onClick: () => void;
-  match?: 'exact' | 'prefix' | 'none';
-  paddingClassName?: string;
-  className?: string;
+  item: AdminNavItem
+  currentPath: string
+  sidebarCollapsed: boolean
+  mobileOpen: boolean
+  onClick: () => void
+  match?: 'exact' | 'prefix' | 'none'
+  paddingClassName?: string
+  className?: string
 }) => {
-  const Icon = item.icon;
+  const Icon = item.icon
   const isActive =
     match === 'exact'
       ? currentPath === item.path
       : match === 'prefix'
         ? currentPath === item.path || currentPath.startsWith(`${item.path}/`)
-        : false;
+        : false
 
   return (
     <Link
@@ -112,7 +110,7 @@ const SidebarNavLink = ({
         isActive
           ? 'bg-surface-alt text-brand-gold font-medium'
           : 'text-text-secondary hover:bg-surface-alt hover:text-brand-gold',
-        className,
+        className
       )}
       title={sidebarCollapsed && !mobileOpen ? item.label : undefined}
     >
@@ -121,8 +119,8 @@ const SidebarNavLink = ({
         <span className="whitespace-nowrap text-sm">{item.label}</span>
       )}
     </Link>
-  );
-};
+  )
+}
 
 const NavGroup = ({
   title,
@@ -132,12 +130,12 @@ const NavGroup = ({
   mobileOpen,
   onClick,
 }: {
-  title: string;
-  items: AdminNavItem[];
-  currentPath: string;
-  sidebarCollapsed: boolean;
-  mobileOpen: boolean;
-  onClick: () => void;
+  title: string
+  items: AdminNavItem[]
+  currentPath: string
+  sidebarCollapsed: boolean
+  mobileOpen: boolean
+  onClick: () => void
 }) => (
   <div className="mb-3">
     {(!sidebarCollapsed || mobileOpen) && (
@@ -156,76 +154,55 @@ const NavGroup = ({
             mobileOpen={mobileOpen}
             onClick={onClick}
           />
-        );
+        )
       })}
     </div>
   </div>
-);
+)
 
 export const AdminLayout = () => {
-  const { isAdmin, loading: authLoading } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { show } = useToast();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [checked, setChecked] = useState(false);
-
-  useEffect(() => {
-    if (!authLoading) {
-      setChecked(true);
-      if (!isAdmin) {
-        navigate('/');
-      }
-    }
-  }, [isAdmin, authLoading, navigate]);
+  const { isAdmin } = useAuth()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const { show } = useToast()
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   useEffect(() => {
     setAuthErrorCallback(() => {
       void logoutRequest().catch((error) => {
-        console.error('Logout failed:', error);
-      });
-      navigate('/');
-    });
+        console.error('Logout failed:', error)
+      })
+    })
     return () => {
-      setAuthErrorCallback(null);
-    };
-  }, [navigate]);
+      setAuthErrorCallback(null)
+    }
+  }, [navigate])
 
-  const currentPath = location.pathname;
-  const closeMobileMenu = () => setMobileOpen(false);
+  const currentPath = location.pathname
+  const closeMobileMenu = () => setMobileOpen(false)
 
   const handleLogout = async () => {
     try {
-      await logoutRequest();
-      navigate('/');
+      await logoutRequest()
+      navigate('/')
     } catch (error) {
-      console.error('Logout failed:', error);
-      show('退出登录失败，请稍后重试', { variant: 'error' });
+      console.error('Logout failed:', error)
+      show('退出登录失败，请稍后重试', { variant: 'error' })
     }
-  };
-
-  if (authLoading || !checked) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-[var(--color-bg-antique)]">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-border border-t-brand-gold rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-sm text-text-muted">加载中...</p>
-        </div>
-      </div>
-    );
   }
 
   if (!isAdmin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg-antique)]">
-        <div className="text-center text-text-muted">访问受限</div>
-      </div>
-    );
+    return null
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif" }}>
+    <div
+      className="h-screen flex flex-col overflow-hidden"
+      style={{
+        fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif",
+      }}
+    >
       {/* Header */}
       <header className="h-14 bg-surface border-b border-border flex items-center justify-between px-4 md:px-6 z-50 shrink-0">
         <div className="flex items-center gap-3">
@@ -235,7 +212,10 @@ export const AdminLayout = () => {
           >
             {mobileOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
-          <Link to="/admin" className="text-lg font-bold text-text-primary hover:text-brand-gold transition-colors">
+          <Link
+            to="/admin"
+            className="text-lg font-bold text-text-primary hover:text-brand-gold transition-colors"
+          >
             管理后台
           </Link>
           <Link
@@ -262,7 +242,7 @@ export const AdminLayout = () => {
             'bg-surface border-r border-border z-40 transition-all duration-300 shrink-0 flex flex-col',
             'fixed top-14 left-0 h-[calc(100vh-3.5rem)] md:static md:h-auto',
             mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
-            sidebarCollapsed ? 'w-16' : 'w-56',
+            sidebarCollapsed ? 'w-16' : 'w-56'
           )}
         >
           <nav className="flex-1 p-2 overflow-y-auto overflow-x-hidden">
@@ -317,7 +297,11 @@ export const AdminLayout = () => {
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
               className="w-full p-2 text-text-muted hover:text-brand-gold hover:bg-surface-alt rounded transition-colors flex items-center justify-center"
             >
-              {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronRight size={16} className="rotate-180" />}
+              {sidebarCollapsed ? (
+                <ChevronRight size={16} />
+              ) : (
+                <ChevronRight size={16} className="rotate-180" />
+              )}
             </button>
           </div>
         </aside>
@@ -330,7 +314,7 @@ export const AdminLayout = () => {
         </main>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default AdminLayout;
+export default AdminLayout
