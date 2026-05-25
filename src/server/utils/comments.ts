@@ -90,7 +90,7 @@ export async function fetchPostCommentsForResponse(postId: string, options: {
 }) {
   const comments = await prisma.postComment.findMany({
     where: { postId },
-    orderBy: { createdAt: 'asc' },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     include: commentInclude,
   })
 
@@ -108,7 +108,7 @@ export async function fetchPostCommentsPageForResponse(postId: string, options: 
     const [comments, total] = await Promise.all([
       prisma.postComment.findMany({
         where: { postId },
-        orderBy: { createdAt: 'asc' },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         take: options.take,
         skip,
         include: commentInclude,
@@ -150,7 +150,7 @@ export async function fetchPostCommentsPageForResponse(postId: string, options: 
       SELECT "id"
       FROM "PostComment"
       WHERE ${visibleWhere}
-      ORDER BY "createdAt" ASC
+      ORDER BY "createdAt" ASC, "id" ASC
       ${limitClause}
       ${offsetClause}
     `),
@@ -186,7 +186,7 @@ export async function fetchGalleryCommentsForResponse(galleryId: string, options
 }) {
   const comments = await prisma.postComment.findMany({
     where: { galleryId },
-    orderBy: { createdAt: 'asc' },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     include: commentInclude,
   })
 
