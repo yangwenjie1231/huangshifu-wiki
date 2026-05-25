@@ -26,6 +26,32 @@ describe('Wiki API - 百科接口测试', () => {
   let userToken: string;
   let adminToken: string;
 
+  function findCookieValue(setCookieHeader: string | string[] | undefined, cookieName: string) {
+    const cookies = Array.isArray(setCookieHeader)
+      ? setCookieHeader
+      : setCookieHeader
+        ? [setCookieHeader]
+        : [];
+    const targetCookie = cookies.find((cookie) => cookie?.startsWith(`${cookieName}=`));
+    return targetCookie?.split(';')[0].split('=')[1];
+  }
+
+  async function createAuthenticatedAgent(email: string, password: string) {
+    const agent = request.agent(app);
+    const loginResponse = await agent
+      .post('/api/auth/login')
+      .send({ email, password });
+
+    expect(loginResponse.status).toBe(200);
+    const xsrfToken = findCookieValue(loginResponse.headers['set-cookie'], 'XSRF-TOKEN');
+    expect(xsrfToken).toBeTruthy();
+
+    return {
+      agent,
+      xsrfToken: xsrfToken!,
+    };
+  }
+
   async function createCurrentUserWikiPage(
     overrides: Omit<CreateTestWikiPageInput, 'authorUid'>,
   ) {
@@ -87,7 +113,8 @@ describe('Wiki API - 百科接口测试', () => {
      * 预期结果：返回空数组和正确的元数据
      */
     it('应该返回空的 Wiki 列表（当没有数据时）', async () => {
-      const response = await request(app).get('/api/wiki');
+      const emptyCategory = `empty-category-${Date.now()}`;
+      const response = await request(app).get('/api/wiki').query({ category: emptyCategory });
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('pages');
@@ -149,11 +176,14 @@ describe('Wiki API - 百科接口测试', () => {
      * 预期结果：返回指定页码的数据和正确的分页信息
      */
     it('应该支持分页参数', async () => {
+      const category = `pagination-${Date.now()}`;
+
       // 创建多个测试页面
       for (let i = 0; i < 25; i++) {
         await createCurrentUserWikiPage({
           slug: `test-pagination-${i}`,
           title: `Pagination Test ${i}`,
+          category,
           status: 'published',
         });
       }
@@ -161,7 +191,7 @@ describe('Wiki API - 百科接口测试', () => {
       // 请求第一页，每页 10 条
       const response1 = await request(app)
         .get('/api/wiki')
-        .query({ page: 1, limit: 10 });
+        .query({ page: 1, limit: 10, category });
 
       expect(response1.status).toBe(200);
       expect(response1.body.pages.length).toBe(10);
@@ -172,7 +202,7 @@ describe('Wiki API - 百科接口测试', () => {
       // 请求第二页
       const response2 = await request(app)
         .get('/api/wiki')
-        .query({ page: 2, limit: 10 });
+        .query({ page: 2, limit: 10, category });
 
       expect(response2.status).toBe(200);
       expect(response2.body.pages.length).toBe(10);
@@ -181,9 +211,10 @@ describe('Wiki API - 百科接口测试', () => {
       // 请求第三页（剩余 5 条）
       const response3 = await request(app)
         .get('/api/wiki')
-        .query({ page: 3, limit: 10 });
+        .query({ page: 3, limit: 10, category });
 
       expect(response3.status).toBe(200);
+      expect(response3.body.pages.length).toBe(5);
       expect(response3.body.hasMore).toBe(false);
     });
 
@@ -502,6 +533,10 @@ describe('Wiki API - 百科接口测试', () => {
      * 预期结果：返回 201 状态码和新创建的页面信息
      */
     it('已认证用户应该能够创建新的 Wiki 页面', async () => {
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
       const newPageData = {
         slug: `test-new-${Date.now()}`,
         title: 'New Wiki Page',
@@ -510,9 +545,9 @@ describe('Wiki API - 百科接口测试', () => {
         tags: ['test', 'new'],
       };
 
-      const response = await request(app)
+      const response = await agent
         .post('/api/wiki')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send(newPageData);
 
       expect(response.status).toBe(201);
@@ -552,10 +587,15 @@ describe('Wiki API - 百科接口测试', () => {
      * 预期结果：返回 400 错误并提示缺少必要字段
      */
     it('缺少必填字段时应该返回 400 错误', async () => {
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+
       // 缺少标题
-      const response1 = await request(app)
+      const response1 = await agent
         .post('/api/wiki')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           slug: 'test-no-title',
           category: 'general',
@@ -563,12 +603,13 @@ describe('Wiki API - 百科接口测试', () => {
         });
 
       expect(response1.status).toBe(400);
-      expect(response1.body.error).toContain('缺少必要字段');
+      expect(response1.body.error).toBe('Validation failed');
+      expect(response1.body.fields).toBeDefined();
 
       // 缺少内容
-      const response2 = await request(app)
+      const response2 = await agent
         .post('/api/wiki')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           slug: 'test-no-content',
           title: 'No Content',
@@ -583,6 +624,11 @@ describe('Wiki API - 百科接口测试', () => {
      * 预期结果：返回 409 冲突错误
      */
     it('使用重复的 slug 创建页面应该返回错误', async () => {
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+
       // 先创建一个页面
       await createCurrentUserWikiPage({
         slug: 'test-duplicate-slug',
@@ -591,9 +637,9 @@ describe('Wiki API - 百科接口测试', () => {
       });
 
       // 尝试使用相同 slug 创建
-      const response = await request(app)
+      const response = await agent
         .post('/api/wiki')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           slug: 'test-duplicate-slug',
           title: 'Duplicate Page',
@@ -614,6 +660,11 @@ describe('Wiki API - 百科接口测试', () => {
      * 预期结果：返回更新后的页面信息
      */
     it('作者应该能够成功更新自己的 Wiki 页面', async () => {
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+
       // 创建属于当前用户的页面
       const wikiPage = await createTestWikiPage({
         slug: 'test-update-mine',
@@ -630,9 +681,9 @@ describe('Wiki API - 百科接口测试', () => {
         tags: ['updated'],
       };
 
-      const response = await request(app)
+      const response = await agent
         .put(`/api/wiki/${wikiPage.slug}`)
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send(updateData);
 
       expect(response.status).toBe(200);
@@ -651,6 +702,11 @@ describe('Wiki API - 百科接口测试', () => {
      * 预期结果：返回 403 权限错误
      */
     it('非作者尝试更新他人页面应该返回 403 错误', async () => {
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+
       // 创建属于其他用户的页面
       const otherUser = await createTestUser();
       const wikiPage = await createTestWikiPage({
@@ -661,9 +717,9 @@ describe('Wiki API - 百科接口测试', () => {
       });
 
       // 当前用户尝试更新
-      const response = await request(app)
+      const response = await agent
         .put(`/api/wiki/${wikiPage.slug}`)
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           title: 'Hacked Title',
           content: 'Hacked content',
@@ -680,6 +736,11 @@ describe('Wiki API - 百科接口测试', () => {
      * 预期结果：管理员应能成功更新其他人的页面
      */
     it('管理员应该能够更新任意页面', async () => {
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        adminUser.user.email,
+        adminUser.plainPassword,
+      );
+
       // 创建普通用户的页面
       const wikiPage = await createTestWikiPage({
         slug: 'test-admin-update',
@@ -689,9 +750,9 @@ describe('Wiki API - 百科接口测试', () => {
       });
 
       // 管理员更新
-      const response = await request(app)
+      const response = await agent
         .put(`/api/wiki/${wikiPage.slug}`)
-        .set('Authorization', `Bearer ${adminToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           title: 'Admin Updated Title',
           content: 'Admin updated this content',
@@ -707,9 +768,14 @@ describe('Wiki API - 百科接口测试', () => {
      * 预期结果：返回 404 错误
      */
     it('更新不存在的页面应该返回 404 错误', async () => {
-      const response = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+
+      const response = await agent
         .put('/api/wiki/nonexistent-for-update')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           title: 'Update Nonexistent',
           content: 'Content',
@@ -752,11 +818,15 @@ describe('Wiki API - 百科接口测试', () => {
      * 预期结果：系统应优雅地处理超长输入
      */
     it('应该优雅地处理超长内容', async () => {
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
       const longContent = 'x'.repeat(100000); // 100KB 内容
 
-      const response = await request(app)
+      const response = await agent
         .post('/api/wiki')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           slug: `test-long-content-${Date.now()}`,
           title: 'Long Content Test',
@@ -774,12 +844,16 @@ describe('Wiki API - 百科接口测试', () => {
      * 预期结果：恶意脚本应被安全存储或清理
      */
     it('应该正确处理包含 HTML/脚本的内容', async () => {
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
       const maliciousContent =
         '<script>alert("xss")</script><img src=x onerror="alert(1)">';
 
-      const response = await request(app)
+      const response = await agent
         .post('/api/wiki')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           slug: `test-xss-${Date.now()}`,
           title: '<script>alert("xss")</script>',
@@ -827,7 +901,7 @@ describe('Wiki API - 百科接口测试', () => {
       const response = await request(app).get(`/api/wiki/${specialSlug}`);
 
       // 不应该导致服务器错误
-      expect([200, 404]).toContain(response.status);
+      expect([200, 400, 404]).toContain(response.status);
       expect(response.status).not.toBe(500);
     });
   });

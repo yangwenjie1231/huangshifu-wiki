@@ -7,6 +7,9 @@ export function requestLoggerMiddleware(
   res: Response,
   next: NextFunction
 ): void {
+  const isTest = process.env.NODE_ENV === 'test';
+  const verboseTestLogging = process.env.DEBUG_INTEGRATION === '1';
+
   const start = Date.now();
 
   res.on('finish', () => {
@@ -18,6 +21,12 @@ export function requestLoggerMiddleware(
 
     const logPrefix = isSlow ? '[API] [SLOW]' : '[API]';
     const logMessage = `${logPrefix} ${method} ${path} ${statusCode} ${duration}ms`;
+
+    if (isTest && !verboseTestLogging) {
+      if (statusCode < 400 && !isSlow) {
+        return;
+      }
+    }
 
     if (isSlow) {
       console.warn(logMessage);

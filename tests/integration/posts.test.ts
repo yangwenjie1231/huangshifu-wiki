@@ -23,14 +23,6 @@ import { prisma, createTestUser, createTestToken, createTestPost } from './setup
 import type { CreateTestPostInput } from './setup';
 
 async function cleanupPostTestData() {
-  await prisma.user.deleteMany({
-    where: {
-      email: {
-        startsWith: 'test_',
-      },
-    },
-  });
-
   // Defensive cleanup for legacy dirty test DBs that still contain orphaned rows
   // from older versions of this suite.
   await prisma.post.deleteMany({
@@ -39,9 +31,74 @@ async function cleanupPostTestData() {
         { title: { startsWith: 'Test' } },
         { title: { startsWith: 'Pagination Test' } },
         { title: { startsWith: 'Sort Test' } },
+        { title: { startsWith: 'General Section Post' } },
+        { title: { startsWith: 'Discussion Section Post' } },
+        { title: { startsWith: 'Personalized Post' } },
+        { title: { startsWith: 'Draft Post Should Not Appear' } },
+        { title: { startsWith: 'Detail Test Post' } },
+        { title: { startsWith: 'View Count Test Post' } },
+        { title: { startsWith: 'Auth Personalized Post' } },
+        { title: { startsWith: 'Draft Post For Auth Test' } },
+        { title: { startsWith: 'My Draft Post' } },
+        { title: { startsWith: 'Comment Order Test' } },
+        { title: { startsWith: 'Top Level Comment Test' } },
+        { title: { startsWith: 'Reply Comment Test' } },
+        { title: { startsWith: 'Reply Nested Comment Test' } },
+        { title: { startsWith: 'Comment Pagination Visibility Test' } },
+        { title: { startsWith: 'Soft Delete Parent Comment Test' } },
+        { title: { startsWith: 'Soft Delete Child Comment Test' } },
+        { title: { startsWith: 'Restore Deleted Comment Test' } },
+        { title: { startsWith: 'Comment Like Test' } },
+        { title: { startsWith: 'Hidden Comment Like Post Test' } },
+        { title: { startsWith: 'Tags Test Post' } },
+        { title: { startsWith: 'No Tags Post' } },
+        { title: { startsWith: 'Original Title' } },
+        { title: { startsWith: "Other User's Post" } },
+        { title: { startsWith: "User's Post" } },
+        { title: { startsWith: 'To Be Deleted By Author' } },
+        { title: { startsWith: 'To Be Deleted By Admin' } },
+        { title: { startsWith: 'Unauth Delete Test' } },
         { title: { startsWith: 'New Test Post ' } },
         { title: { startsWith: 'Long Content Test ' } },
       ],
+    },
+  });
+
+  await prisma.postComment.deleteMany({
+    where: {
+      OR: [
+        { content: { startsWith: 'Top level comment' } },
+        { content: { startsWith: 'Reply comment' } },
+        { content: { startsWith: 'Reply child comment' } },
+        { content: { startsWith: 'Root comment' } },
+        { content: { startsWith: 'Deleted child comment' } },
+        { content: { startsWith: 'Visible child comment' } },
+        { content: { startsWith: 'Parent comment content' } },
+        { content: { startsWith: 'Child comment content' } },
+        { content: { startsWith: 'Reply to deleted parent' } },
+        { content: { startsWith: 'Gallery comment content' } },
+        { content: { startsWith: 'Reply to deleted child' } },
+        { content: { startsWith: 'Restorable comment' } },
+        { content: { startsWith: 'Comment to like' } },
+        { content: { startsWith: 'Draft post comment' } },
+      ],
+    },
+  });
+
+  await prisma.gallery.deleteMany({
+    where: {
+      OR: [
+        { title: { startsWith: 'Gallery For Comment Delete' } },
+        { title: { startsWith: 'Hidden Gallery Comment Like Test' } },
+      ],
+    },
+  });
+
+  await prisma.user.deleteMany({
+    where: {
+      email: {
+        startsWith: 'test_',
+      },
     },
   });
 }
@@ -51,6 +108,32 @@ describe('Posts API - 文章接口测试', () => {
   let adminUser: Awaited<ReturnType<typeof createTestUser>>;
   let userToken: string;
   let adminToken: string;
+
+  function findCookieValue(setCookieHeader: string | string[] | undefined, cookieName: string) {
+    const cookies = Array.isArray(setCookieHeader)
+      ? setCookieHeader
+      : setCookieHeader
+        ? [setCookieHeader]
+        : [];
+    const targetCookie = cookies.find((cookie) => cookie?.startsWith(`${cookieName}=`));
+    return targetCookie?.split(';')[0].split('=')[1];
+  }
+
+  async function createAuthenticatedAgent(email: string, password: string) {
+    const agent = request.agent(app);
+    const loginResponse = await agent
+      .post('/api/auth/login')
+      .send({ email, password });
+
+    expect(loginResponse.status).toBe(200);
+    const xsrfToken = findCookieValue(loginResponse.headers['set-cookie'], 'XSRF-TOKEN');
+    expect(xsrfToken).toBeTruthy();
+
+    return {
+      agent,
+      xsrfToken: xsrfToken!,
+    };
+  }
 
   async function createCurrentUserPost(overrides: Omit<CreateTestPostInput, 'authorUid'>) {
     return createTestPost({
@@ -64,10 +147,19 @@ describe('Posts API - 文章接口测试', () => {
    */
   beforeEach(async () => {
     await cleanupPostTestData();
+    const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     // 创建测试用户
-    testUser = await createTestUser({ role: 'user' });
-    adminUser = await createTestUser({ role: 'admin' });
+    testUser = await createTestUser({
+      role: 'user',
+      email: `test_posts_user_${suffix}@example.com`,
+      displayName: `TestPostsUser_${suffix}`,
+    });
+    adminUser = await createTestUser({
+      role: 'admin',
+      email: `test_posts_admin_${suffix}@example.com`,
+      displayName: `TestPostsAdmin_${suffix}`,
+    });
 
     // 创建认证 token
     userToken = await createTestToken(testUser.user.uid, testUser.user.role);
@@ -90,7 +182,8 @@ describe('Posts API - 文章接口测试', () => {
      * 预期结果：返回空数组和正确的元数据
      */
     it('应该返回空的文章列表（当没有数据时）', async () => {
-      const response = await request(app).get('/api/posts');
+      const emptySection = `empty-section-${Date.now()}`;
+      const response = await request(app).get('/api/posts').query({ section: emptySection });
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('posts');
@@ -547,10 +640,14 @@ describe('Posts API - 文章接口测试', () => {
         title: 'Top Level Comment Test',
         status: 'published',
       });
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
 
-      const response = await request(app)
+      const response = await agent
         .post(`/api/posts/${post.id}/comments`)
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           content: 'Top level comment',
           parentId: null,
@@ -577,6 +674,10 @@ describe('Posts API - 文章接口测试', () => {
         title: 'Reply Comment Test',
         status: 'published',
       });
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
 
       const parent = await prisma.postComment.create({
         data: {
@@ -586,9 +687,9 @@ describe('Posts API - 文章接口测试', () => {
         },
       });
 
-      const response = await request(app)
+      const response = await agent
         .post(`/api/posts/${post.id}/comments`)
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           content: 'Reply comment',
           parentId: parent.id,
@@ -608,6 +709,10 @@ describe('Posts API - 文章接口测试', () => {
         title: 'Reply Nested Comment Test',
         status: 'published',
       });
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
 
       const parent = await prisma.postComment.create({
         data: {
@@ -626,9 +731,9 @@ describe('Posts API - 文章接口测试', () => {
         },
       });
 
-      const response = await request(app)
+      const response = await agent
         .post(`/api/posts/${post.id}/comments`)
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           content: 'Reply child comment',
           parentId: child.id,
@@ -740,9 +845,13 @@ describe('Posts API - 文章接口测试', () => {
         data: { commentsCount: 2 },
       });
 
-      const deleteResponse = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const deleteResponse = await agent
         .delete(`/api/posts/comments/${parent.id}`)
-        .set('Authorization', `Bearer ${userToken}`);
+        .set('X-XSRF-TOKEN', xsrfToken);
 
       expect(deleteResponse.status).toBe(200);
       expect(deleteResponse.body).toEqual({ success: true });
@@ -763,12 +872,22 @@ describe('Posts API - 文章接口测试', () => {
       const publicResponse = await request(app).get(`/api/posts/${post.id}`);
       expect(publicResponse.status).toBe(200);
       expect(publicResponse.body.comments).toHaveLength(2);
-      expect(publicResponse.body.comments[0].id).toBe(parent.id);
-      expect(publicResponse.body.comments[0].content).toBe('评论已删除');
-      expect(publicResponse.body.comments[0].isDeleted).toBe(true);
-      expect(publicResponse.body.comments[0].deletedByName).toBeNull();
-      expect(publicResponse.body.comments[1].id).toBe(child.id);
-      expect(publicResponse.body.comments[1].content).toBe('Child comment content');
+      const publicParent = publicResponse.body.comments.find(
+        (comment: { id: string }) => comment.id === parent.id,
+      );
+      const publicChild = publicResponse.body.comments.find(
+        (comment: { id: string }) => comment.id === child.id,
+      );
+      expect(publicParent).toMatchObject({
+        id: parent.id,
+        content: '评论已删除',
+        isDeleted: true,
+        deletedByName: null,
+      });
+      expect(publicChild).toMatchObject({
+        id: child.id,
+        content: 'Child comment content',
+      });
 
       const adminResponse = await request(app)
         .get(`/api/posts/${post.id}`)
@@ -786,9 +905,9 @@ describe('Posts API - 文章接口测试', () => {
       expect(adminWithDeletedResponse.body.comments[0].deletedBy).toBe(testUser.user.uid);
       expect(adminWithDeletedResponse.body.comments[0].deletedByName).toBe(testUser.user.displayName);
 
-      const replyDeletedParentResponse = await request(app)
+      const replyDeletedParentResponse = await agent
         .post(`/api/posts/${post.id}/comments`)
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           content: 'Reply to deleted parent',
           parentId: parent.id,
@@ -822,12 +941,16 @@ describe('Posts API - 文章接口测试', () => {
         },
       });
 
-      const response = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const responseWithCsrf = await agent
         .delete(`/api/posts/comments/${galleryComment.id}`)
-        .set('Authorization', `Bearer ${userToken}`);
+        .set('X-XSRF-TOKEN', xsrfToken);
 
-      expect(response.status).toBe(200);
-      expect(response.body).toEqual({ success: true });
+      expect(responseWithCsrf.status).toBe(200);
+      expect(responseWithCsrf.body).toEqual({ success: true });
 
       const dbComment = await prisma.postComment.findUnique({
         where: { id: galleryComment.id },
@@ -858,9 +981,13 @@ describe('Posts API - 文章接口测试', () => {
         },
       });
 
-      const deleteResponse = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const deleteResponse = await agent
         .delete(`/api/posts/comments/${child.id}`)
-        .set('Authorization', `Bearer ${userToken}`);
+        .set('X-XSRF-TOKEN', xsrfToken);
       expect(deleteResponse.status).toBe(200);
 
       const publicResponse = await request(app).get(`/api/posts/${post.id}`);
@@ -876,9 +1003,9 @@ describe('Posts API - 文章接口测试', () => {
         child.id,
       ]);
 
-      const replyDeletedChildResponse = await request(app)
+      const replyDeletedChildResponse = await agent
         .post(`/api/posts/${post.id}/comments`)
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           content: 'Reply to deleted child',
           parentId: child.id,
@@ -902,14 +1029,22 @@ describe('Posts API - 文章接口测试', () => {
         },
       });
 
-      const forbiddenResponse = await request(app)
+      const { agent: userAgent, xsrfToken: userXsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const forbiddenResponse = await userAgent
         .post(`/api/posts/comments/${comment.id}/restore`)
-        .set('Authorization', `Bearer ${userToken}`);
+        .set('X-XSRF-TOKEN', userXsrfToken);
       expect(forbiddenResponse.status).toBe(403);
 
-      const response = await request(app)
+      const { agent: adminAgent, xsrfToken: adminXsrfToken } = await createAuthenticatedAgent(
+        adminUser.user.email,
+        adminUser.plainPassword,
+      );
+      const response = await adminAgent
         .post(`/api/posts/comments/${comment.id}/restore`)
-        .set('Authorization', `Bearer ${adminToken}`);
+        .set('X-XSRF-TOKEN', adminXsrfToken);
       expect(response.status).toBe(200);
       expect(response.body).toEqual({ success: true });
 
@@ -935,21 +1070,25 @@ describe('Posts API - 文章接口测试', () => {
         },
       });
 
-      const likeResponse = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const likeResponse = await agent
         .post(`/api/posts/comments/${comment.id}/like`)
-        .set('Authorization', `Bearer ${userToken}`);
+        .set('X-XSRF-TOKEN', xsrfToken);
       expect(likeResponse.status).toBe(200);
       expect(likeResponse.body).toMatchObject({ likedByMe: true, likesCount: 1 });
 
-      const duplicateLikeResponse = await request(app)
+      const duplicateLikeResponse = await agent
         .post(`/api/posts/comments/${comment.id}/like`)
-        .set('Authorization', `Bearer ${userToken}`);
+        .set('X-XSRF-TOKEN', xsrfToken);
       expect(duplicateLikeResponse.status).toBe(200);
       expect(duplicateLikeResponse.body).toMatchObject({ likedByMe: true, likesCount: 1 });
 
-      const detailResponse = await request(app)
+      const detailResponse = await agent
         .get(`/api/posts/${post.id}`)
-        .set('Authorization', `Bearer ${userToken}`);
+
       expect(detailResponse.status).toBe(200);
       expect(detailResponse.body.comments[0]).toMatchObject({
         id: comment.id,
@@ -957,9 +1096,9 @@ describe('Posts API - 文章接口测试', () => {
         likesCount: 1,
       });
 
-      const unlikeResponse = await request(app)
+      const unlikeResponse = await agent
         .delete(`/api/posts/comments/${comment.id}/like`)
-        .set('Authorization', `Bearer ${userToken}`);
+        .set('X-XSRF-TOKEN', xsrfToken);
       expect(unlikeResponse.status).toBe(200);
       expect(unlikeResponse.body).toMatchObject({ likedByMe: false, likesCount: 0 });
     });
@@ -970,6 +1109,14 @@ describe('Posts API - 文章接口测试', () => {
         role: 'user',
       });
       const otherToken = await createTestToken(otherUser.user.uid, otherUser.user.role);
+      const { agent: ownerAgent, xsrfToken: ownerXsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const { agent: otherAgent, xsrfToken: otherXsrfToken } = await createAuthenticatedAgent(
+        otherUser.user.email,
+        otherUser.plainPassword,
+      );
       const draftPost = await createCurrentUserPost({
         title: 'Hidden Comment Like Post Test',
         status: 'draft',
@@ -998,24 +1145,24 @@ describe('Posts API - 文章接口测试', () => {
         },
       });
 
-      const postLikeResponse = await request(app)
+      const postLikeResponse = await otherAgent
         .post(`/api/posts/comments/${postComment.id}/like`)
-        .set('Authorization', `Bearer ${otherToken}`);
+        .set('X-XSRF-TOKEN', otherXsrfToken);
       expect(postLikeResponse.status).toBe(404);
 
-      const postUnlikeResponse = await request(app)
+      const postUnlikeResponse = await otherAgent
         .delete(`/api/posts/comments/${postComment.id}/like`)
-        .set('Authorization', `Bearer ${otherToken}`);
+        .set('X-XSRF-TOKEN', otherXsrfToken);
       expect(postUnlikeResponse.status).toBe(404);
 
-      const galleryLikeResponse = await request(app)
+      const galleryLikeResponse = await otherAgent
         .post(`/api/posts/comments/${galleryComment.id}/like`)
-        .set('Authorization', `Bearer ${otherToken}`);
+        .set('X-XSRF-TOKEN', otherXsrfToken);
       expect(galleryLikeResponse.status).toBe(404);
 
-      const ownerLikeResponse = await request(app)
+      const ownerLikeResponse = await ownerAgent
         .post(`/api/posts/comments/${postComment.id}/like`)
-        .set('Authorization', `Bearer ${userToken}`);
+        .set('X-XSRF-TOKEN', ownerXsrfToken);
       expect(ownerLikeResponse.status).toBe(200);
       expect(ownerLikeResponse.body).toMatchObject({ likedByMe: true, likesCount: 1 });
     });
@@ -1037,9 +1184,13 @@ describe('Posts API - 文章接口测试', () => {
         tags: ['test', 'new'],
       };
 
-      const response = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const response = await agent
         .post('/api/posts')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send(newPostData);
 
       expect(response.status).toBe(201);
@@ -1079,39 +1230,48 @@ describe('Posts API - 文章接口测试', () => {
      * 预期结果：返回 400 错误并提示缺少必要字段
      */
     it('缺少必填字段时应该返回 400 错误', async () => {
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
       // 缺少标题
-      const response1 = await request(app)
+      const response1 = await agent
         .post('/api/posts')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           section: 'general',
           content: 'No title provided',
         });
 
       expect(response1.status).toBe(400);
-      expect(response1.body.error).toContain('缺少必要字段');
+      expect(response1.body.error).toBe('Validation failed');
+      expect(response1.body.fields).toHaveProperty('title');
 
       // 缺少内容
-      const response2 = await request(app)
+      const response2 = await agent
         .post('/api/posts')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           title: 'No Content',
           section: 'general',
         });
 
       expect(response2.status).toBe(400);
+      expect(response2.body.error).toBe('Validation failed');
+      expect(response2.body.fields).toHaveProperty('content');
 
       // 缺少版块
-      const response3 = await request(app)
+      const response3 = await agent
         .post('/api/posts')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           title: 'No Section',
           content: 'Content without section',
         });
 
       expect(response3.status).toBe(400);
+      expect(response3.body.error).toBe('Validation failed');
+      expect(response3.body.fields).toHaveProperty('section');
     });
 
     /**
@@ -1119,9 +1279,13 @@ describe('Posts API - 文章接口测试', () => {
      * 预期结果：标签应被正确存储为数组格式
      */
     it('应该正确处理文章标签', async () => {
-      const response = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const response = await agent
         .post('/api/posts')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           title: 'Tags Test Post',
           section: 'general',
@@ -1143,9 +1307,13 @@ describe('Posts API - 文章接口测试', () => {
      * 预期结果：应能正常处理没有标签的情况
      */
     it('应该能处理没有标签的文章', async () => {
-      const response = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const response = await agent
         .post('/api/posts')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           title: 'No Tags Post',
           section: 'general',
@@ -1181,9 +1349,13 @@ describe('Posts API - 文章接口测试', () => {
         tags: ['updated'],
       };
 
-      const response = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const response = await agent
         .put(`/api/posts/${post.id}`)
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send(updateData);
 
       expect(response.status).toBe(200);
@@ -1211,9 +1383,13 @@ describe('Posts API - 文章接口测试', () => {
       });
 
       // 当前用户尝试更新
-      const response = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const response = await agent
         .put(`/api/posts/${post.id}`)
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           title: 'Hacked Title',
           content: 'Hacked content',
@@ -1238,9 +1414,13 @@ describe('Posts API - 文章接口测试', () => {
       });
 
       // 管理员更新
-      const response = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        adminUser.user.email,
+        adminUser.plainPassword,
+      );
+      const response = await agent
         .put(`/api/posts/${post.id}`)
-        .set('Authorization', `Bearer ${adminToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           title: 'Admin Updated Title',
           content: 'Admin updated this content',
@@ -1256,9 +1436,13 @@ describe('Posts API - 文章接口测试', () => {
      * 预期结果：返回 404 错误
      */
     it('更新不存在的文章应该返回 404 错误', async () => {
-      const response = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const response = await agent
         .put('/api/posts/nonexistent_id_for_update')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           title: 'Update Nonexistent',
           content: 'Content',
@@ -1312,9 +1496,13 @@ describe('Posts API - 文章接口测试', () => {
       expect(dbPost).not.toBeNull();
 
       // 执行删除
-      const response = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const response = await agent
         .delete(`/api/posts/${post.id}`)
-        .set('Authorization', `Bearer ${userToken}`);
+        .set('X-XSRF-TOKEN', xsrfToken);
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('success', true);
@@ -1338,9 +1526,13 @@ describe('Posts API - 文章接口测试', () => {
       });
 
       // 当前用户尝试删除
-      const response = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const response = await agent
         .delete(`/api/posts/${post.id}`)
-        .set('Authorization', `Bearer ${userToken}`);
+        .set('X-XSRF-TOKEN', xsrfToken);
 
       expect(response.status).toBe(403);
       expect(response.body).toHaveProperty('error');
@@ -1359,9 +1551,13 @@ describe('Posts API - 文章接口测试', () => {
       });
 
       // 管理员删除
-      const response = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        adminUser.user.email,
+        adminUser.plainPassword,
+      );
+      const response = await agent
         .delete(`/api/posts/${post.id}`)
-        .set('Authorization', `Bearer ${adminToken}`);
+        .set('X-XSRF-TOKEN', xsrfToken);
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('success', true);
@@ -1376,9 +1572,13 @@ describe('Posts API - 文章接口测试', () => {
      * 预期结果：返回 404 错误
      */
     it('删除不存在的文章应该返回 404 错误', async () => {
-      const response = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const response = await agent
         .delete('/api/posts/nonexistent_id_for_delete')
-        .set('Authorization', `Bearer ${userToken}`);
+        .set('X-XSRF-TOKEN', xsrfToken);
 
       expect(response.status).toBe(404);
       expect(response.body).toHaveProperty('error');
@@ -1411,9 +1611,13 @@ describe('Posts API - 文章接口测试', () => {
     it('应该优雅地处理超长内容', async () => {
       const longContent = 'x'.repeat(100000); // 100KB 内容
 
-      const response = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const response = await agent
         .post('/api/posts')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           title: `Long Content Test ${Date.now()}`,
           section: 'general',
@@ -1433,9 +1637,13 @@ describe('Posts API - 文章接口测试', () => {
       const maliciousContent =
         '<script>alert("xss")</script><img src=x onerror="alert(1)">';
 
-      const response = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const response = await agent
         .post('/api/posts')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           title: '<script>alert("xss")</script>',
           section: 'general',
@@ -1496,9 +1704,13 @@ describe('Posts API - 文章接口测试', () => {
      * 预期结果：返回适当的错误响应
      */
     it('发送空请求体时应该返回 400 错误', async () => {
-      const response = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const response = await agent
         .post('/api/posts')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .set('Content-Type', 'application/json')
         .send('');
 

@@ -19,10 +19,19 @@ function buildDatabaseUrl(): string {
 }
 
 const isDev = process.env.NODE_ENV !== 'production';
+const isTest = process.env.NODE_ENV === 'test';
+const verboseIntegrationLogging = process.env.DEBUG_INTEGRATION === '1';
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({
   datasources: { db: { url: buildDatabaseUrl() } },
-  log: isDev ? ['query', 'error', 'warn'] : ['error'],
+  log:
+    isTest && !verboseIntegrationLogging
+      ? []
+      : isTest
+        ? ['error']
+        : isDev
+          ? ['query', 'error', 'warn']
+          : ['error'],
 });
 
 if (isDev) {

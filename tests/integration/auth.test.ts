@@ -20,26 +20,53 @@ import { app } from '../../server';
 import { prisma, createTestUser, createTestToken } from './setup';
 import { AUTH_DISPLAY_NAME_MAX_LENGTH } from '../../src/server/schemas/auth.schema';
 
+const AUTH_TEST_EMAILS = [
+  'login_test@example.com',
+  'wrong_password@example.com',
+  'nonexistent@example.com',
+  'duplicate@example.com',
+  'new_user@example.com',
+  'short_pwd@example.com',
+  'no_pwd@example.com',
+  'mixedcase@example.com',
+  'blank_name@example.com',
+  'special@example.com',
+  'test_stale_session@example.com',
+];
+
+async function cleanupAuthTestData() {
+  await prisma.user.deleteMany({
+    where: {
+      OR: [
+        { email: { startsWith: 'test_' } },
+        { email: { in: AUTH_TEST_EMAILS } },
+      ],
+    },
+  });
+}
+
+function pickCookie(setCookie: string[] | string | undefined, name: string) {
+  const cookieList = Array.isArray(setCookie)
+    ? setCookie
+    : setCookie
+      ? [setCookie]
+      : [];
+  return cookieList.find((cookie) => cookie.startsWith(`${name}=`));
+}
+
 describe('Auth API - 认证接口测试', () => {
   /**
    * 每个测试前清理用户表，确保测试隔离性
    */
   beforeEach(async () => {
-    // 清理测试数据，避免冲突
-    await prisma.user.deleteMany({
-      where: {
-        email: {
-          startsWith: 'test_',
-        },
-      },
-    });
+    await cleanupAuthTestData();
   });
 
   /**
    * 每个测试后不需要特别清理，因为 beforeEach 会处理
    */
   afterEach(async () => {
-    // 可选：额外的清理逻辑
+    await cleanupAuthTestData();
   });
 
   // ============================================================================
@@ -327,7 +354,8 @@ describe('Auth API - 认证接口测试', () => {
 
       expect(response1.status).toBe(400);
       expect(response1.body).toHaveProperty('error');
-      expect(response1.body.error).toContain('不能为空');
+      expect(response1.body.error).toBe('Validation failed');
+      expect(response1.body.fields).toHaveProperty('password');
 
       // 缺少邮箱
       const response2 = await request(app)
@@ -338,12 +366,15 @@ describe('Auth API - 认证接口测试', () => {
 
       expect(response2.status).toBe(400);
       expect(response2.body).toHaveProperty('error');
+      expect(response2.body.error).toBe('Validation failed');
+      expect(response2.body.fields).toHaveProperty('email');
 
       // 完全为空
       const response3 = await request(app).post('/api/auth/login').send({});
 
       expect(response3.status).toBe(400);
       expect(response3.body).toHaveProperty('error');
+      expect(response3.body.error).toBe('Validation failed');
     });
 
     /**
@@ -439,7 +470,8 @@ describe('Auth API - 认证接口测试', () => {
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('error');
-      expect(response.body.error).toContain('至少8个字符');
+      expect(response.body.error).toBe('Validation failed');
+      expect(response.body.fields).toHaveProperty('password');
     });
 
     /**
@@ -500,7 +532,8 @@ describe('Auth API - 认证接口测试', () => {
     });
 
     it('邮箱前缀超过 50 个字符时应该截断默认昵称', async () => {
-      const longPrefix = 'a'.repeat(AUTH_DISPLAY_NAME_MAX_LENGTH + 10)
+      const longPrefix = `a${Date.now()}${'a'.repeat(AUTH_DISPLAY_NAME_MAX_LENGTH + 10)}`
+      const expectedDisplayName = longPrefix.slice(0, AUTH_DISPLAY_NAME_MAX_LENGTH)
       const response = await request(app)
         .post('/api/auth/register')
         .send({
@@ -509,7 +542,7 @@ describe('Auth API - 认证接口测试', () => {
         });
 
       expect(response.status).toBe(201);
-      expect(response.body.user.displayName).toBe('a'.repeat(AUTH_DISPLAY_NAME_MAX_LENGTH));
+      expect(response.body.user.displayName).toBe(expectedDisplayName);
     });
   });
 
@@ -526,10 +559,18 @@ describe('Auth API - 认证接口测试', () => {
       const { user } = await createTestUser();
       const token = await createTestToken(user.uid, user.role);
 
+      const bootstrap = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${token}`);
+      const xsrfCookie = pickCookie(bootstrap.headers['set-cookie'], 'XSRF-TOKEN');
+      const xsrfToken = xsrfCookie?.split(';')[0].split('=')[1] || '';
+
       // 执行登出操作
       const response = await request(app)
         .post('/api/auth/logout')
-        .set('Authorization', `Bearer ${token}`);
+        .set('Authorization', `Bearer ${token}`)
+        .set('Cookie', xsrfCookie ? [xsrfCookie] : [])
+        .set('x-xsrf-token', xsrfToken);
 
       // 验证登出响应
       expect(response.status).toBe(200);

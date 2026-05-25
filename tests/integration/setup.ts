@@ -15,6 +15,39 @@ import { PrismaClient } from '@prisma/client';
 // 加载测试环境变量
 dotenv.config({ path: '.env.test' });
 
+const verboseIntegrationLogging = process.env.DEBUG_INTEGRATION === '1';
+
+if (!verboseIntegrationLogging) {
+  const originalConsoleLog = console.log.bind(console);
+  const originalConsoleWarn = console.warn.bind(console);
+  const noisyPrefixes = [
+    '[Integration Test]',
+    '[Variant]',
+    '[DiskMonitor]',
+    '[CloudSync]',
+    '[API]',
+    '[SensitiveWord]',
+    '  - ',
+  ];
+
+  const shouldSuppress = (args: unknown[]) =>
+    typeof args[0] === 'string' && noisyPrefixes.some((prefix) => args[0].startsWith(prefix));
+
+  console.log = (...args: Parameters<typeof console.log>) => {
+    if (shouldSuppress(args)) {
+      return;
+    }
+    originalConsoleLog(...args);
+  };
+
+  console.warn = (...args: Parameters<typeof console.warn>) => {
+    if (shouldSuppress(args)) {
+      return;
+    }
+    originalConsoleWarn(...args);
+  };
+}
+
 // 创建 Prisma 客户端实例（用于测试数据库操作）
 export const prisma = new PrismaClient({
   datasources: {
@@ -210,11 +243,24 @@ export interface CreateTestPostInput {
 
 export async function createTestPost(input: CreateTestPostInput) {
   const title = input.title || `Test Post ${Date.now()}`;
+  const section = input.section || 'general';
+
+  await prisma.section.upsert({
+    where: { id: section },
+    update: {
+      name: section,
+    },
+    create: {
+      id: section,
+      name: section,
+      description: '',
+    },
+  });
 
   const post = await prisma.post.create({
     data: {
       title,
-      section: input.section || 'general',
+      section,
       content: input.content || 'This is a test post content.',
       tags: ['test'],
       status: input.status || 'published',

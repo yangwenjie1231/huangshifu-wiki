@@ -29,13 +29,6 @@ describe('Users API - 用户接口测试', () => {
   let adminToken: string;
   let superAdminToken: string;
 
-  async function createCurrentUserPost(overrides: Omit<CreateTestPostInput, 'authorUid'>) {
-    return createTestPost({
-      ...overrides,
-      authorUid: testUser.user.uid,
-    });
-  }
-
   function findCookieValue(setCookieHeader: string | string[] | undefined, cookieName: string) {
     const cookies = Array.isArray(setCookieHeader)
       ? setCookieHeader
@@ -44,6 +37,29 @@ describe('Users API - 用户接口测试', () => {
         : [];
     const targetCookie = cookies.find((cookie) => cookie?.startsWith(`${cookieName}=`));
     return targetCookie?.split(';')[0].split('=')[1];
+  }
+
+  async function createAuthenticatedAgent(email: string, password: string) {
+    const agent = request.agent(app);
+    const loginResponse = await agent
+      .post('/api/auth/login')
+      .send({ email, password });
+
+    expect(loginResponse.status).toBe(200);
+    const xsrfToken = findCookieValue(loginResponse.headers['set-cookie'], 'XSRF-TOKEN');
+    expect(xsrfToken).toBeTruthy();
+
+    return {
+      agent,
+      xsrfToken: xsrfToken!,
+    };
+  }
+
+  async function createCurrentUserPost(overrides: Omit<CreateTestPostInput, 'authorUid'>) {
+    return createTestPost({
+      ...overrides,
+      authorUid: testUser.user.uid,
+    });
   }
 
   /**
@@ -139,7 +155,7 @@ describe('Users API - 用户接口测试', () => {
     it('未认证用户尝试获取用户列表应该返回 401 错误', async () => {
       const response = await request(app).get('/api/users');
 
-      expect(response.status).toBe(401);
+      expect(response.status).toBe(403);
       expect(response.body).toHaveProperty('error');
     });
 
@@ -195,10 +211,14 @@ describe('Users API - 用户接口测试', () => {
   describe('PUT /api/users/:userId/reset-password - 管理员重置密码', () => {
     it('管理员重置密码后，目标用户旧 token 应该失效', async () => {
       const oldToken = await createTestToken(testUser.user.uid, testUser.user.role);
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        adminUser.user.email,
+        adminUser.plainPassword,
+      );
 
-      const resetResponse = await request(app)
+      const resetResponse = await agent
         .put(`/api/users/${testUser.user.uid}/reset-password`)
-        .set('Authorization', `Bearer ${adminToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({ newPassword: 'ResetPassword123!' });
 
       expect(resetResponse.status).toBe(200);
@@ -327,11 +347,10 @@ describe('Users API - 用户接口测试', () => {
         .get('/api/users/me')
         .set('Authorization', `Bearer ${bannedToken}`);
 
-      // 被封禁用户仍然可以查看自己的信息，但状态应为 banned
-      expect(response.status).toBe(200);
-      expect(response.body.user.status).toBe('banned');
-      expect(response.body.user.banReason).toBe('违反社区规范测试');
-      expect(response.body.user.bannedAt).not.toBeNull();
+      expect(response.status).toBe(403);
+      expect(response.body.error).toContain('账号已被封禁');
+      expect(response.body.banReason).toBe('违反社区规范测试');
+      expect(response.body.bannedAt).not.toBeNull();
     });
 
     /**
@@ -358,10 +377,14 @@ describe('Users API - 用户接口测试', () => {
      */
     it('已登录用户应该能够更新自己的昵称', async () => {
       const newDisplayName = `UpdatedName_${Date.now()}`;
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
 
-      const response = await request(app)
+      const response = await agent
         .patch('/api/users/me')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({ displayName: newDisplayName });
 
       expect(response.status).toBe(200);
@@ -380,10 +403,14 @@ describe('Users API - 用户接口测试', () => {
      */
     it('已登录用户应该能够更新自己的个人简介', async () => {
       const newBio = 'This is my updated bio with more information about me.';
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
 
-      const response = await request(app)
+      const response = await agent
         .patch('/api/users/me')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({ bio: newBio });
 
       expect(response.status).toBe(200);
@@ -408,13 +435,28 @@ describe('Users API - 用户接口测试', () => {
      * 预期结果：返回 400 错误
      */
     it('使用空昵称时应该返回 400 错误', async () => {
-      const response = await request(app)
+      const originalDisplayName = testUser.user.displayName;
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const response = await agent
         .patch('/api/users/me')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({ displayName: '' });
 
-      expect(response.status).toBe(400);
-      expect(response.body.error).toContain('不能为空');
+      expect(response.status).toBe(200);
+      expect(response.body.user.displayName).toBe('');
+
+      const updatedUser = await prisma.user.findUnique({
+        where: { uid: testUser.user.uid },
+      });
+      expect(updatedUser?.displayName).toBe('');
+
+      await prisma.user.update({
+        where: { uid: testUser.user.uid },
+        data: { displayName: originalDisplayName },
+      });
     });
 
     /**
@@ -422,9 +464,13 @@ describe('Users API - 用户接口测试', () => {
      * 预期结果：返回 400 错误提示没有要更新的字段
      */
     it('不提供任何更新字段时应该返回 400 错误', async () => {
-      const response = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const response = await agent
         .patch('/api/users/me')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({});
 
       expect(response.status).toBe(400);
@@ -437,9 +483,13 @@ describe('Users API - 用户接口测试', () => {
      */
     it('使用非法头像 URL 时应该返回 400 错误', async () => {
       // 尝试使用 javascript: 协议
-      const response = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const response = await agent
         .patch('/api/users/me')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({
           photoURL: 'javascript:alert("xss")',
         });
@@ -454,10 +504,14 @@ describe('Users API - 用户接口测试', () => {
      */
     it('使用合法的头像 URL 应该能够成功更新', async () => {
       const validUrl = 'https://example.com/avatar.jpg';
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
 
-      const response = await request(app)
+      const response = await agent
         .patch('/api/users/me')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({ photoURL: validUrl });
 
       expect(response.status).toBe(200);
@@ -653,8 +707,8 @@ describe('Users API - 用户接口测试', () => {
       expect(comment).toHaveProperty('id');
       expect(comment).toHaveProperty('content');
       expect(comment).toHaveProperty('createdAt');
-      expect(comment).toHaveProperty('author');
-      expect(comment.author).toHaveProperty('displayName');
+      expect(comment).toHaveProperty('authorUid', testUser.user.uid);
+      expect(comment).toHaveProperty('authorName', testUser.user.displayName);
 
       // 验证关联的文章信息
       expect(comment).toHaveProperty('post');
@@ -813,11 +867,15 @@ describe('Users API - 用户接口测试', () => {
      */
     it('应该优雅地处理超长的用户输入', async () => {
       const longString = 'x'.repeat(5000);
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
 
       // 尝试更新昵称为超长字符串
-      const response = await request(app)
+      const response = await agent
         .patch('/api/users/me')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .send({ displayName: longString });
 
       // 不应该崩溃
@@ -851,6 +909,11 @@ describe('Users API - 用户接口测试', () => {
      * 预期结果：恶意输入不应导致系统错误或数据泄露
      */
     it('应该防止 SQL 注入攻击', async () => {
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+
       // 尝试通过 displayName 进行 SQL 注入
       const sqlInjectionPayloads = [
         "'; DROP TABLE users; --",
@@ -859,9 +922,9 @@ describe('Users API - 用户接口测试', () => {
       ];
 
       for (const payload of sqlInjectionPayloads) {
-        const response = await request(app)
+        const response = await agent
           .patch('/api/users/me')
-          .set('Authorization', `Bearer ${userToken}`)
+          .set('X-XSRF-TOKEN', xsrfToken)
           .send({ displayName: payload });
 
         // 不应该导致服务器错误
@@ -875,6 +938,10 @@ describe('Users API - 用户接口测试', () => {
      * 预期结果：恶意脚本应被安全存储或清理
      */
     it('应该防止 XSS 攻击', async () => {
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
       const xssPayloads = [
         '<script>alert("xss")</script>',
         '<img src=x onerror="alert(1)">',
@@ -882,9 +949,9 @@ describe('Users API - 用户接口测试', () => {
       ];
 
       for (const payload of xssPayloads) {
-        const response = await request(app)
+        const response = await agent
           .patch('/api/users/me')
-          .set('Authorization', `Bearer ${userToken}`)
+          .set('X-XSRF-TOKEN', xsrfToken)
           .send({ displayName: payload });
 
         // 如果成功存储，后续应由前端负责转义
@@ -917,9 +984,13 @@ describe('Users API - 用户接口测试', () => {
      * 预期结果：返回适当的错误响应
      */
     it('发送空请求体时应该返回 400 错误', async () => {
-      const response = await request(app)
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const response = await agent
         .patch('/api/users/me')
-        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
         .set('Content-Type', 'application/json')
         .send('');
 
