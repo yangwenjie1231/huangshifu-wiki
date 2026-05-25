@@ -30,8 +30,10 @@ if (!verboseIntegrationLogging) {
     '  - ',
   ];
 
-  const shouldSuppress = (args: unknown[]) =>
-    typeof args[0] === 'string' && noisyPrefixes.some((prefix) => args[0].startsWith(prefix));
+  const shouldSuppress = (args: unknown[]) => {
+    const [firstArg] = args;
+    return typeof firstArg === 'string' && noisyPrefixes.some((prefix) => firstArg.startsWith(prefix));
+  };
 
   console.log = (...args: Parameters<typeof console.log>) => {
     if (shouldSuppress(args)) {

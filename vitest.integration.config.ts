@@ -1,16 +1,25 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+dotenv.config({ path: path.resolve(__dirname, '.env.test') });
+
 export default defineConfig({
+  define: {
+    'process.env.NODE_ENV': '"test"',
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
     },
   },
   test: {
+    env: {
+      NODE_ENV: 'test',
+    },
     environment: 'node',
     include: ['tests/integration/**/*.test.ts'],
     setupFiles: ['./tests/integration/setup.ts'],

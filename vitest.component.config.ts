@@ -11,12 +11,18 @@ dotenv.config({ path: path.resolve(__dirname, '.env.local') });
 dotenv.config();
 
 export default defineConfig({
+  define: {
+    'process.env.NODE_ENV': '"test"',
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
     },
   },
   test: {
+    env: {
+      NODE_ENV: 'test',
+    },
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./tests/setup/tests-setup.ts'],

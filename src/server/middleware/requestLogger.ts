@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { isTestRuntime } from '../utils/runtimeEnv';
 
 const SLOW_REQUEST_THRESHOLD_MS = 1000;
 
@@ -7,7 +8,7 @@ export function requestLoggerMiddleware(
   res: Response,
   next: NextFunction
 ): void {
-  const isTest = process.env.NODE_ENV === 'test';
+  const isTest = isTestRuntime();
   const verboseTestLogging = process.env.DEBUG_INTEGRATION === '1';
 
   const start = Date.now();

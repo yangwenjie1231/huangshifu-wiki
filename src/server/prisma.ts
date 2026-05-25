@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import os from 'os';
+import { isProductionRuntime, isTestRuntime } from './utils/runtimeEnv';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -18,8 +19,8 @@ function buildDatabaseUrl(): string {
   } catch { return baseUrl; }
 }
 
-const isDev = process.env.NODE_ENV !== 'production';
-const isTest = process.env.NODE_ENV === 'test';
+const isDev = !isProductionRuntime();
+const isTest = isTestRuntime();
 const verboseIntegrationLogging = process.env.DEBUG_INTEGRATION === '1';
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({

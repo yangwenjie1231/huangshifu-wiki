@@ -1,13 +1,14 @@
 import pino from 'pino';
+import { isProductionRuntime, isTestRuntime } from './runtimeEnv';
 
-const isTest = process.env.NODE_ENV === 'test';
+const isTest = isTestRuntime();
 const verboseIntegrationLogging = process.env.DEBUG_INTEGRATION === '1';
 
 export const logger = pino({
   level:
     process.env.LOG_LEVEL ||
     (isTest && !verboseIntegrationLogging ? 'error' : 'info'),
-  transport: process.env.NODE_ENV !== 'production' && !(isTest && !verboseIntegrationLogging)
+  transport: !isProductionRuntime() && !(isTest && !verboseIntegrationLogging)
     ? { target: 'pino-pretty', options: { colorize: true } }
     : undefined,
   formatters: {

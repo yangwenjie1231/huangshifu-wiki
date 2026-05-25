@@ -4,6 +4,7 @@ import rateLimit, {
   type ValueDeterminingMiddleware,
 } from 'express-rate-limit';
 import type { AuthenticatedRequest } from './auth';
+import { isProductionRuntime, isTestRuntime } from '../utils/runtimeEnv';
 
 type RateLimitOptions = Partial<RateLimitLibraryOptions>
 type RateLimitRequest = Parameters<ValueDeterminingMiddleware<string>>[0]
@@ -19,8 +20,8 @@ function extractUidOrIp(req: RateLimitRequest): string {
 
 export function isRateLimitDisabledInDevelopment(): boolean {
   return (
-    process.env.NODE_ENV === 'test' ||
-    (process.env.NODE_ENV !== 'production' && process.env.DEV_DISABLE_RATE_LIMIT === 'true')
+    isTestRuntime() ||
+    (!isProductionRuntime() && process.env.DEV_DISABLE_RATE_LIMIT === 'true')
   );
 }
 

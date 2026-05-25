@@ -11,6 +11,8 @@ vi.mock('express-rate-limit', () => ({
 describe('rateLimiter', () => {
   const originalNodeEnv = process.env.NODE_ENV;
   const originalDevDisableRateLimit = process.env.DEV_DISABLE_RATE_LIMIT;
+  const originalVitest = process.env.VITEST;
+  const originalVitestWorkerId = process.env.VITEST_WORKER_ID;
 
   beforeEach(() => {
     vi.resetModules();
@@ -18,6 +20,8 @@ describe('rateLimiter', () => {
     ipKeyGeneratorMock.mockClear();
     process.env.NODE_ENV = 'development';
     delete process.env.DEV_DISABLE_RATE_LIMIT;
+    delete process.env.VITEST;
+    delete process.env.VITEST_WORKER_ID;
   });
 
   afterEach(() => {
@@ -26,6 +30,18 @@ describe('rateLimiter', () => {
       delete process.env.DEV_DISABLE_RATE_LIMIT;
     } else {
       process.env.DEV_DISABLE_RATE_LIMIT = originalDevDisableRateLimit;
+    }
+
+    if (originalVitest === undefined) {
+      delete process.env.VITEST;
+    } else {
+      process.env.VITEST = originalVitest;
+    }
+
+    if (originalVitestWorkerId === undefined) {
+      delete process.env.VITEST_WORKER_ID;
+    } else {
+      process.env.VITEST_WORKER_ID = originalVitestWorkerId;
     }
   });
 
@@ -85,7 +101,8 @@ describe('rateLimiter', () => {
   });
 
   it('disables rate limiting automatically in test environment', async () => {
-    process.env.NODE_ENV = 'test';
+    process.env.VITEST = 'true';
+    process.env.VITEST_WORKER_ID = '1';
     delete process.env.DEV_DISABLE_RATE_LIMIT;
 
     const { globalLimiter, isRateLimitDisabledInDevelopment } = await import(
