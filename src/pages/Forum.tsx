@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
 	Routes,
 	Route,
@@ -407,6 +407,8 @@ const PostDetail = () => {
 	const [likingCommentId, setLikingCommentId] = useState<string | null>(null);
 	const [showDeletedComments, setShowDeletedComments] = useState(false);
 	const [submittingReview, setSubmittingReview] = useState(false);
+	const commentFormRef = useRef<HTMLFormElement | null>(null);
+	const commentInputRef = useRef<HTMLTextAreaElement | null>(null);
 	const { user, profile, isBanned } = useAuth();
 	const isAdmin = profile?.role === "admin" || profile?.role === "super_admin";
 	const { show } = useToast();
@@ -586,8 +588,15 @@ const PostDetail = () => {
 	const rootComments = comments.filter((c) => !c.parentId);
 	const getReplies = (parentId: string) =>
 		comments.filter((c) => c.parentId === parentId);
+	const focusCommentInput = () => {
+		const input = commentInputRef.current;
+		if (!input) return;
+		input.focus();
+		const cursorPosition = input.value.length;
+		input.setSelectionRange(cursorPosition, cursorPosition);
+	};
 	const scrollToCommentForm = () => {
-		const form = document.querySelector("form");
+		const form = commentFormRef.current;
 		const top = form?.getBoundingClientRect().top
 			? window.scrollY + form.getBoundingClientRect().top - 200
 			: 0;
@@ -639,6 +648,7 @@ const PostDetail = () => {
 					onClick={() => {
 						setReplyTo(comment);
 						scrollToCommentForm();
+						focusCommentInput();
 					}}
 					className="font-medium text-brand-gold hover:underline"
 				>
@@ -786,7 +796,7 @@ const PostDetail = () => {
 								</h3>
 
 								{user ? (
-								<form onSubmit={handleAddComment} className="mb-8">
+								<form ref={commentFormRef} onSubmit={handleAddComment} className="mb-8">
 									{replyTo && (
 										<div className="mb-3 px-3 py-2 bg-surface-alt border border-border rounded flex items-center justify-between">
 											<span className="text-xs text-brand-gold">
@@ -803,6 +813,7 @@ const PostDetail = () => {
 									)}
 									<div className="relative">
 										<textarea
+											ref={commentInputRef}
 											value={newComment}
 											onChange={(e) => setNewComment(e.target.value)}
 											onKeyDown={submitFormOnModifierEnter}

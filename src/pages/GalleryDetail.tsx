@@ -165,6 +165,8 @@ const GalleryDetail = () => {
   const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
 
   const addImagesInputRef = useRef<HTMLInputElement>(null);
+  const commentFormRef = useRef<HTMLFormElement | null>(null);
+  const commentInputRef = useRef<HTMLTextAreaElement | null>(null);
   const draftRef = useRef<GalleryDraft | null>(null);
 
   const applyDraft = (updater: GalleryDraft | null | ((prev: GalleryDraft | null) => GalleryDraft | null)) => {
@@ -239,8 +241,15 @@ const GalleryDetail = () => {
     Boolean(user && !comment.isDeleted && (comment.authorUid === user.uid || isAdmin));
   const canReplyComment = (comment: CommentItem) =>
     Boolean(user && !isBanned && gallery?.published && (!comment.isDeleted || !comment.parentId));
+  const focusCommentInput = () => {
+    const input = commentInputRef.current;
+    if (!input) return;
+    input.focus();
+    const cursorPosition = input.value.length;
+    input.setSelectionRange(cursorPosition, cursorPosition);
+  };
   const scrollToCommentForm = () => {
-    const form = document.querySelector('form');
+    const form = commentFormRef.current;
     const top = form?.getBoundingClientRect().top
       ? window.scrollY + form.getBoundingClientRect().top - 200
       : document.body.scrollHeight;
@@ -274,6 +283,7 @@ const GalleryDetail = () => {
           onClick={() => {
             setReplyTo(comment);
             scrollToCommentForm();
+            focusCommentInput();
           }}
           className="font-medium text-brand-gold hover:underline"
         >
@@ -967,7 +977,7 @@ const GalleryDetail = () => {
             )}
 
             {user && !isBanned && (
-              <form onSubmit={handleAddComment} className="mb-8">
+              <form ref={commentFormRef} onSubmit={handleAddComment} className="mb-8">
                 {replyTo && (
                   <div className="flex items-center gap-2 mb-2 text-xs text-text-muted">
                     <span>{t('gallery.replyTo', { name: getCommentAuthorName(replyTo) })}</span>
@@ -992,6 +1002,7 @@ const GalleryDetail = () => {
                   </div>
                   <div className="flex-grow">
                     <textarea
+                      ref={commentInputRef}
                       value={newComment}
                       onChange={(e) => setNewComment(e.target.value)}
                       onKeyDown={submitFormOnModifierEnter}
