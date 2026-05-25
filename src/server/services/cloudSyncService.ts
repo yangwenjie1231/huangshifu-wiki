@@ -44,6 +44,10 @@ export interface CloudSyncStats {
   averageProcessingTime: number;
 }
 
+interface CloudSyncServiceOptions {
+  autoStart?: boolean
+}
+
 export class CloudSyncService {
   private queue: CloudSyncTask[] = [];
   private processing = new Set<string>();
@@ -52,7 +56,11 @@ export class CloudSyncService {
   private lskyConfig: LskyProConfig | null = null;
   private isProcessing = false;
 
-  constructor() {
+  constructor(options: CloudSyncServiceOptions = {}) {
+    if (options.autoStart === false) {
+      return;
+    }
+
     this.validateLskyConfig();
     this.startQueueProcessor();
     logger.info({ maxConcurrent: this.maxConcurrent }, '[CloudSync] Service initialized');
@@ -377,4 +385,6 @@ export class CloudSyncService {
   }
 }
 
-export const cloudSyncService = new CloudSyncService();
+export const cloudSyncService = new CloudSyncService({
+  autoStart: process.env.NODE_ENV !== 'test',
+});

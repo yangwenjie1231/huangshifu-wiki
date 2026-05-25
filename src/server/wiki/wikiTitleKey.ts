@@ -2,6 +2,15 @@ export function normalizeWikiTitleKey(title: string) {
   return title.trim();
 }
 
+export const WIKI_TITLE_CONFLICT_MESSAGE = '该标题的百科已存在，请修改标题或编辑已有页面'
+
+export function buildLegacyDuplicateWikiTitleKey(
+  title: string,
+  slug: string,
+) {
+  return `${normalizeWikiTitleKey(title)} [${slug}]`
+}
+
 function targetIncludesField(target: unknown, field: 'slug' | 'titleKey') {
   if (Array.isArray(target)) {
     return target.includes(field);
@@ -26,7 +35,7 @@ export function getWikiUniqueConflictMessage(error: unknown) {
 
   const target = maybePrismaError.meta?.target;
   if (targetIncludesField(target, 'titleKey')) {
-    return '该标题的百科已存在，请修改标题或编辑已有页面';
+    return WIKI_TITLE_CONFLICT_MESSAGE;
   }
 
   if (targetIncludesField(target, 'slug')) {

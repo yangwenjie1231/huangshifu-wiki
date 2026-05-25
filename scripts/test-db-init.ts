@@ -17,18 +17,17 @@
  */
 
 import dotenv from 'dotenv';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// 加载测试环境变量（优先级：.env.test > .env.local > .env）
+// 以 .env.test 提供默认值，但保留调用方显式传入的 DATABASE_URL
 dotenv.config({ path: path.resolve(__dirname, '../.env.test') });
-dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
-dotenv.config();
 
 const DATABASE_URL = process.env.DATABASE_URL;
+const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx'
 
 if (!DATABASE_URL) {
   console.error('❌ 错误：未找到 DATABASE_URL 环境变量');
@@ -36,22 +35,34 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-// 解析数据库连接信息
-function parseDatabaseUrl(url: string) {
-  try {
-    const regex = /postgresql:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/;
-    const match = url.match(regex);
+interface DatabaseConfig {
+  user: string
+  password: string
+  host: string
+  port: string
+  database: string
+  adminUrl: string
+}
 
-    if (!match) {
-      throw new Error('无法解析 DATABASE_URL');
+// 解析数据库连接信息
+function parseDatabaseUrl(url: string): DatabaseConfig {
+  try {
+    const parsedUrl = new URL(url);
+    const database = parsedUrl.pathname.replace(/^\/+/, '');
+    if (!database) {
+      throw new Error('DATABASE_URL 缺少数据库名称');
     }
 
+    const adminUrl = new URL(url);
+    adminUrl.pathname = '/postgres';
+
     return {
-      user: match[1],
-      password: match[2],
-      host: match[3],
-      port: match[4],
-      database: match[5],
+      user: decodeURIComponent(parsedUrl.username),
+      password: decodeURIComponent(parsedUrl.password),
+      host: parsedUrl.hostname,
+      port: parsedUrl.port || '5432',
+      database,
+      adminUrl: adminUrl.toString(),
     };
   } catch (error) {
     console.error('❌ 解析 DATABASE_URL 失败:', error);
@@ -60,6 +71,28 @@ function parseDatabaseUrl(url: string) {
 }
 
 const dbConfig = parseDatabaseUrl(DATABASE_URL);
+
+function getExecErrorMessage(error: unknown): string {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'stderr' in error &&
+    Buffer.isBuffer((error as { stderr?: unknown }).stderr)
+  ) {
+    return ((error as { stderr: Buffer }).stderr.toString() || '').trim();
+  }
+
+  return error instanceof Error ? error.message : String(error);
+}
+
+function runPrismaCommand(args: string[], options?: { stdio?: 'inherit' | 'pipe'; input?: string }) {
+  execFileSync(npxCommand, ['prisma', ...args], {
+    cwd: path.resolve(__dirname, '..'),
+    env: process.env,
+    stdio: options?.stdio ?? 'inherit',
+    input: options?.input,
+  });
+}
 
 // 检查数据库名称是否包含 "test"
 if (!dbConfig.database.includes('test')) {
@@ -81,31 +114,26 @@ function createDatabaseIfNotExists() {
   console.log('📦 步骤 1: 检查并创建测试数据库...');
 
   try {
-    // 使用 psql 命令检查数据库是否存在
-    const checkDbCommand = `psql -h ${dbConfig.host} -p ${dbConfig.port} -U ${dbConfig.user} -lqt | cut -d \\| -f 1 | grep -qw ${dbConfig.database}`;
+    const escapedDatabaseName = dbConfig.database.replace(/"/g, '""');
 
-    try {
-      execSync(checkDbCommand, {
-        env: { ...process.env, PGPASSWORD: dbConfig.password },
-        stdio: 'pipe',
-      });
-      console.log(`✅ 数据库 "${dbConfig.database}" 已存在\n`);
-    } catch {
-      // 数据库不存在，创建它
-      console.log(`📝 创建数据库 "${dbConfig.database}"...`);
-      const createDbCommand = `createdb -h ${dbConfig.host} -p ${dbConfig.port} -U ${dbConfig.user} ${dbConfig.database}`;
-      execSync(createDbCommand, {
-        env: { ...process.env, PGPASSWORD: dbConfig.password },
-        stdio: 'inherit',
-      });
-      console.log(`✅ 数据库 "${dbConfig.database}" 创建成功\n`);
-    }
+    console.log(`📝 创建数据库 "${dbConfig.database}"（若不存在）...`);
+    runPrismaCommand(['db', 'execute', '--stdin', '--url', dbConfig.adminUrl], {
+      stdio: 'pipe',
+      input: `CREATE DATABASE "${escapedDatabaseName}";`,
+    });
+    console.log(`✅ 数据库 "${dbConfig.database}" 创建成功\n`);
   } catch (error) {
+    const message = getExecErrorMessage(error);
+    if (message.includes('already exists')) {
+      console.log(`✅ 数据库 "${dbConfig.database}" 已存在\n`);
+      return;
+    }
+
     console.error('❌ 创建数据库失败:', error);
     console.error('\n请确保：');
     console.error('1. PostgreSQL 服务正在运行');
     console.error('2. 数据库用户有创建数据库的权限');
-    console.error('3. psql 和 createdb 命令可用');
+    console.error('3. 能够连接到 postgres 管理库');
     process.exit(1);
   }
 }
@@ -115,12 +143,7 @@ function runMigrations() {
   console.log('📦 步骤 2: 运行数据库迁移...');
 
   try {
-    // 使用 Prisma 迁移
-    execSync('npx prisma migrate deploy', {
-      cwd: path.resolve(__dirname, '..'),
-      env: process.env,
-      stdio: 'inherit',
-    });
+    runPrismaCommand(['migrate', 'deploy']);
     console.log('✅ 数据库迁移完成\n');
   } catch (error) {
     console.error('❌ 数据库迁移失败:', error);
@@ -133,11 +156,7 @@ function generatePrismaClient() {
   console.log('📦 步骤 3: 生成 Prisma Client...');
 
   try {
-    execSync('npx prisma generate', {
-      cwd: path.resolve(__dirname, '..'),
-      env: process.env,
-      stdio: 'inherit',
-    });
+    runPrismaCommand(['generate']);
     console.log('✅ Prisma Client 生成完成\n');
   } catch (error) {
     console.error('❌ Prisma Client 生成失败:', error);
@@ -157,11 +176,7 @@ function runSeed() {
   console.log('📦 步骤 4: 运行种子数据...');
 
   try {
-    execSync('npx prisma db seed', {
-      cwd: path.resolve(__dirname, '..'),
-      env: process.env,
-      stdio: 'inherit',
-    });
+    runPrismaCommand(['db', 'seed']);
     console.log('✅ 种子数据完成\n');
   } catch (error) {
     console.error('❌ 种子数据失败:', error);

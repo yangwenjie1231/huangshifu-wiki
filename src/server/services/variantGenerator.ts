@@ -46,6 +46,10 @@ export interface VariantGeneratorStats {
   timeoutCount: number;
 }
 
+interface VariantGeneratorOptions {
+  autoStart?: boolean
+}
+
 export class VariantGenerator {
   private queue: VariantTask[] = [];
   private processing = new Set<string>();
@@ -74,7 +78,11 @@ export class VariantGenerator {
   private isProcessing = false;
   private processInterval: NodeJS.Timeout | null = null;
 
-  constructor() {
+  constructor(options: VariantGeneratorOptions = {}) {
+    if (options.autoStart === false) {
+      return;
+    }
+
     this.startQueueProcessor();
     this.recoverPendingTasks();
     
@@ -441,4 +449,6 @@ export class VariantGenerator {
   }
 }
 
-export const variantGenerator = new VariantGenerator();
+export const variantGenerator = new VariantGenerator({
+  autoStart: process.env.NODE_ENV !== 'test',
+});

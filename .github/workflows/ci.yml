@@ -13,9 +13,9 @@ concurrency:
 
 env:
   NODE_VERSION: '22'
-  POSTGRES_USER: testuser
-  POSTGRES_PASSWORD: testpass
-  POSTGRES_DB: testdb
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: password
+  POSTGRES_DB: huangshifu_wiki_test
 
 jobs:
   # ============================================================
@@ -180,23 +180,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    env:
+      DATABASE_URL: postgresql://postgres:password@localhost:5432/huangshifu_wiki_test
+
     services:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: testuser
-          POSTGRES_PASSWORD: testpass
-          POSTGRES_DB: testdb
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: huangshifu_wiki_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U testuser"
+          --health-cmd="pg_isready -U postgres"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
-
-    env:
-      DATABASE_URL: postgresql://testuser:testpass@localhost:5432/testdb
 
     steps:
       - name: Checkout repository

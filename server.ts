@@ -1,11 +1,15 @@
 import dotenv from 'dotenv';
 
+const isTestEnv = process.env.NODE_ENV === 'test';
+
 // 立即加载环境变量，确保在导入其他模块之前
 // 其他模块可能依赖于 process.env
-if (process.env.NODE_ENV !== 'production') {
+if (!isTestEnv && process.env.NODE_ENV !== 'production') {
   dotenv.config({ path: '.env.local' });
 }
-dotenv.config();
+if (!isTestEnv) {
+  dotenv.config();
+}
 
 import express, { Request, Response, NextFunction } from 'express';
 import compression from 'compression';
@@ -228,7 +232,7 @@ if (CORS_ORIGIN) {
 
 app.use(globalLimiter);
 
-if (isRateLimitDisabledInDevelopment()) {
+if (!isTestEnv && isRateLimitDisabledInDevelopment()) {
   logger.warn('DEV_DISABLE_RATE_LIMIT=true, request rate limiting is disabled in development');
 }
 
@@ -350,8 +354,6 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 async function startServer() {
-  await initSensitiveWords();
-
   const port = await findAvailablePort(DEFAULT_PORT);
   const hmrPort = await findAvailablePort(DEFAULT_HMR_PORT, '127.0.0.1');
   if (port !== DEFAULT_PORT) {
@@ -489,9 +491,13 @@ async function startServer() {
   });
 }
 
-startServer().catch((error) => {
-  logger.error({ err: error }, 'Failed to start server');
-  process.exit(1);
-});
+await initSensitiveWords();
+
+if (!isTestEnv) {
+  startServer().catch((error) => {
+    logger.error({ err: error }, 'Failed to start server');
+    process.exit(1);
+  });
+}
 
 export { app, prisma, uploadsDir, backupsDir };

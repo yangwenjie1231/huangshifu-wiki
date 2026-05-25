@@ -63,6 +63,10 @@ const DEFAULT_CONFIG: DiskMonitorConfig = {
 
 const CONFIG_KEY = 'disk_monitor_config';
 
+interface DiskMonitorServiceOptions {
+  autoStart?: boolean
+}
+
 export class DiskMonitorService {
   private static instance: DiskMonitorService;
 
@@ -71,15 +75,19 @@ export class DiskMonitorService {
   private checkInterval: ReturnType<typeof setInterval> | null = null;
   private isChecking: boolean = false;
 
-  private constructor() {
+  private constructor(options: DiskMonitorServiceOptions = {}) {
+    if (options.autoStart === false) {
+      return;
+    }
+
     this.loadConfigFromDB().then(() => {
       this.startMonitoring();
     });
   }
 
-  public static getInstance(): DiskMonitorService {
+  public static getInstance(options?: DiskMonitorServiceOptions): DiskMonitorService {
     if (!DiskMonitorService.instance) {
-      DiskMonitorService.instance = new DiskMonitorService();
+      DiskMonitorService.instance = new DiskMonitorService(options);
     }
     return DiskMonitorService.instance;
   }
@@ -446,4 +454,6 @@ export class DiskMonitorService {
   }
 }
 
-export const diskMonitor = DiskMonitorService.getInstance();
+export const diskMonitor = DiskMonitorService.getInstance({
+  autoStart: process.env.NODE_ENV !== 'test',
+});

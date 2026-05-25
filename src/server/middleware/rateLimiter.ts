@@ -18,7 +18,10 @@ function extractUidOrIp(req: RateLimitRequest): string {
 }
 
 export function isRateLimitDisabledInDevelopment(): boolean {
-  return process.env.NODE_ENV !== 'production' && process.env.DEV_DISABLE_RATE_LIMIT === 'true';
+  return (
+    process.env.NODE_ENV === 'test' ||
+    (process.env.NODE_ENV !== 'production' && process.env.DEV_DISABLE_RATE_LIMIT === 'true')
+  );
 }
 
 function createRateLimiter(options: RateLimitOptions) {

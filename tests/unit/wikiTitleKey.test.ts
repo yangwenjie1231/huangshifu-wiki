@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildLegacyDuplicateWikiTitleKey,
   getWikiUniqueConflictMessage,
   normalizeWikiTitleKey,
+  WIKI_TITLE_CONFLICT_MESSAGE,
 } from '../../src/server/wiki/wikiTitleKey';
 
 describe('wikiTitleKey', () => {
@@ -12,13 +14,18 @@ describe('wikiTitleKey', () => {
     expect(normalizeWikiTitleKey('test')).toBe('test');
   });
 
+  it('builds the deterministic legacy duplicate suffix key', () => {
+    expect(buildLegacyDuplicateWikiTitleKey('Same Title', 'beta')).toBe('Same Title [beta]');
+    expect(buildLegacyDuplicateWikiTitleKey(' Same Title ', 'beta')).toBe('Same Title [beta]');
+  });
+
   it('maps title unique constraint errors to a conflict message', () => {
     expect(
       getWikiUniqueConflictMessage({
         code: 'P2002',
         meta: { target: ['titleKey'] },
       }),
-    ).toBe('该标题的百科已存在，请修改标题或编辑已有页面');
+    ).toBe(WIKI_TITLE_CONFLICT_MESSAGE);
   });
 
   it('maps slug unique constraint errors to a conflict message', () => {

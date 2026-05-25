@@ -32,7 +32,11 @@ import type {
 } from '../types';
 import { buildWikiBacklinkSearchTerms } from '../../lib/wikiLinkParser';
 import { normalizeWikiPageSlug } from '../../lib/wikiSlug';
-import { getWikiUniqueConflictMessage, normalizeWikiTitleKey } from '../wiki/wikiTitleKey';
+import {
+  buildLegacyDuplicateWikiTitleKey,
+  getWikiUniqueConflictMessage,
+  normalizeWikiTitleKey,
+} from '../wiki/wikiTitleKey';
 import { canViewWikiBranchContent } from '../wiki/wikiBranchAccess';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { validateWikiSlugParam } from '../middleware/validateWikiSlugParam';
@@ -55,6 +59,88 @@ function sendWikiUniqueConflict(error: unknown, res: Response) {
 function clearWikiPageCache(slug: string) {
   enhancedCache.delete(`${CACHE_KEYS.WIKI_PAGE}:${slug}`);
   clearWikiRelationCache();
+}
+
+function resolveLegacyDuplicateTitleForWrite(input: {
+  title: string;
+  titleKey: string;
+  hasLegacyDuplicateTitleKey: boolean;
+  legacyDuplicateTitle: string | null;
+  pageSlug: string;
+}) {
+  if (!input.hasLegacyDuplicateTitleKey) {
+    return null;
+  }
+
+  const legacyDuplicateTitleKey = buildLegacyDuplicateWikiTitleKey(input.title, input.pageSlug);
+  if (input.titleKey === legacyDuplicateTitleKey) {
+    return normalizeWikiTitleKey(input.title);
+  }
+
+  return input.legacyDuplicateTitle;
+}
+
+async function resolveWikiTitleKeyForWrite(input: {
+  pageSlug: string;
+  title: string;
+  currentTitle: string;
+  currentTitleKey: string;
+  hasLegacyDuplicateTitleKey: boolean;
+  legacyDuplicateTitle: string | null;
+}) {
+  const normalizedTitleKey = normalizeWikiTitleKey(input.title);
+  const normalizedLegacyDuplicateTitle = input.legacyDuplicateTitle
+    ? normalizeWikiTitleKey(input.legacyDuplicateTitle)
+    : '';
+  if (!normalizedTitleKey) {
+    return '';
+  }
+
+  if (normalizedTitleKey === normalizeWikiTitleKey(input.currentTitle)) {
+    return input.currentTitleKey;
+  }
+
+  const canonicalOwner = await prisma.wikiPage.findFirst({
+    where: {
+      titleKey: normalizedTitleKey,
+      slug: { not: input.pageSlug },
+    },
+    select: { slug: true },
+  });
+
+  if (!canonicalOwner) {
+    return normalizedTitleKey;
+  }
+
+  if (!input.hasLegacyDuplicateTitleKey) {
+    return normalizedTitleKey;
+  }
+
+  const historicalTitleMatch =
+    normalizedLegacyDuplicateTitle === normalizedTitleKey
+      ? true
+      : await prisma.wikiRevision.findFirst({
+          where: {
+            pageSlug: input.pageSlug,
+            title: normalizedTitleKey,
+          },
+          select: { id: true },
+        }).then((revision) => Boolean(revision));
+
+  if (!historicalTitleMatch) {
+    return normalizedTitleKey;
+  }
+
+  const legacyDuplicateTitleKey = buildLegacyDuplicateWikiTitleKey(input.title, input.pageSlug);
+  const legacyKeyOwner = await prisma.wikiPage.findFirst({
+    where: {
+      titleKey: legacyDuplicateTitleKey,
+      slug: { not: input.pageSlug },
+    },
+    select: { slug: true },
+  });
+
+  return legacyKeyOwner ? normalizedTitleKey : legacyDuplicateTitleKey;
 }
 
 router.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -1064,9 +1150,7 @@ router.put('/:slug', wikiWriteLimiter, requireAuth, requireActiveUser, validateW
       locationDetail?: string;
     };
 
-    const titleKey = typeof title === 'string' ? normalizeWikiTitleKey(title) : '';
-
-    if (!titleKey || !category || !content) {
+    if (!title || !category || !content) {
       res.status(400).json({ error: '缺少必要字段' });
       return;
     }
@@ -1076,7 +1160,19 @@ router.put('/:slug', wikiWriteLimiter, requireAuth, requireActiveUser, validateW
       return;
     }
 
-    const page = await prisma.wikiPage.findUnique({ where: { slug: req.params.slug } });
+    const page = await prisma.wikiPage.findUnique({
+      where: { slug: req.params.slug },
+      select: {
+        slug: true,
+        title: true,
+        titleKey: true,
+        hasLegacyDuplicateTitleKey: true,
+        legacyDuplicateTitle: true,
+        relations: true,
+        tags: true,
+        lastEditorUid: true,
+      },
+    });
     if (!page) {
       res.status(404).json({ error: '页面未找到' });
       return;
@@ -1084,6 +1180,19 @@ router.put('/:slug', wikiWriteLimiter, requireAuth, requireActiveUser, validateW
 
     if (!isAdminRole(req.authUser!.role) && page.lastEditorUid !== req.authUser!.uid) {
       res.status(403).json({ error: '无权编辑该页面' });
+      return;
+    }
+
+    const titleKey = await resolveWikiTitleKeyForWrite({
+      pageSlug: page.slug,
+      title,
+      currentTitle: page.title,
+      currentTitleKey: page.titleKey,
+      hasLegacyDuplicateTitleKey: page.hasLegacyDuplicateTitleKey,
+      legacyDuplicateTitle: page.legacyDuplicateTitle,
+    });
+    if (!titleKey) {
+      res.status(400).json({ error: '缺少必要字段' });
       return;
     }
 
@@ -1098,6 +1207,13 @@ router.put('/:slug', wikiWriteLimiter, requireAuth, requireActiveUser, validateW
         data: {
           title,
           titleKey,
+          legacyDuplicateTitle: resolveLegacyDuplicateTitleForWrite({
+            title,
+            titleKey,
+            hasLegacyDuplicateTitleKey: page.hasLegacyDuplicateTitleKey,
+            legacyDuplicateTitle: page.legacyDuplicateTitle,
+            pageSlug: page.slug,
+          }),
           category,
           content,
           tags: normalizedTags,
@@ -1739,13 +1855,28 @@ router.post('/pull-requests/:prId/merge', wikiWriteLimiter, requireAuth, require
       },
     });
 
+    const mergedTitleKey = await resolveWikiTitleKeyForWrite({
+      pageSlug: pr.page.slug,
+      title: mergedSnapshot.title,
+      currentTitle: pr.page.title,
+      currentTitleKey: pr.page.titleKey,
+      hasLegacyDuplicateTitleKey: pr.page.hasLegacyDuplicateTitleKey,
+      legacyDuplicateTitle: pr.page.legacyDuplicateTitle,
+    });
     const mergedAt = new Date();
     await prisma.$transaction([
       prisma.wikiPage.update({
         where: { slug: pr.pageSlug },
         data: {
           title: mergedSnapshot.title,
-          titleKey: normalizeWikiTitleKey(mergedSnapshot.title),
+          titleKey: mergedTitleKey,
+          legacyDuplicateTitle: resolveLegacyDuplicateTitleForWrite({
+            title: mergedSnapshot.title,
+            titleKey: mergedTitleKey,
+            hasLegacyDuplicateTitleKey: pr.page.hasLegacyDuplicateTitleKey,
+            legacyDuplicateTitle: pr.page.legacyDuplicateTitle,
+            pageSlug: pr.page.slug,
+          }),
           content: mergedSnapshot.content,
           category: mergedSnapshot.category || pr.page.category,
           tags: mergedSnapshot.tags || [],
@@ -1962,6 +2093,10 @@ router.post('/:slug/rollback/:revisionId', wikiWriteLimiter, requireAuth, requir
       where: { slug: req.params.slug },
       select: {
         slug: true,
+        title: true,
+        titleKey: true,
+        hasLegacyDuplicateTitleKey: true,
+        legacyDuplicateTitle: true,
         lastEditorUid: true,
       },
     });
@@ -1976,11 +2111,27 @@ router.post('/:slug/rollback/:revisionId', wikiWriteLimiter, requireAuth, requir
       return;
     }
 
+    const rollbackTitleKey = await resolveWikiTitleKeyForWrite({
+      pageSlug: currentPage.slug,
+      title: revision.title,
+      currentTitle: currentPage.title,
+      currentTitleKey: currentPage.titleKey,
+      hasLegacyDuplicateTitleKey: currentPage.hasLegacyDuplicateTitleKey,
+      legacyDuplicateTitle: currentPage.legacyDuplicateTitle,
+    });
+
     const page = await prisma.wikiPage.update({
       where: { slug: req.params.slug },
       data: {
         title: revision.title,
-        titleKey: normalizeWikiTitleKey(revision.title),
+        titleKey: rollbackTitleKey,
+        legacyDuplicateTitle: resolveLegacyDuplicateTitleForWrite({
+          title: revision.title,
+          titleKey: rollbackTitleKey,
+          hasLegacyDuplicateTitleKey: currentPage.hasLegacyDuplicateTitleKey,
+          legacyDuplicateTitle: currentPage.legacyDuplicateTitle,
+          pageSlug: currentPage.slug,
+        }),
         content: revision.content,
         category: revision.category || undefined,
         tags: revision.tags || undefined,

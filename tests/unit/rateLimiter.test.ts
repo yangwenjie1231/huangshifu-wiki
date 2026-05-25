@@ -83,4 +83,19 @@ describe('rateLimiter', () => {
     const [{ skip }] = rateLimitMock.mock.calls.at(-1)!;
     expect(skip({}, {})).toBe(false);
   });
+
+  it('disables rate limiting automatically in test environment', async () => {
+    process.env.NODE_ENV = 'test';
+    delete process.env.DEV_DISABLE_RATE_LIMIT;
+
+    const { globalLimiter, isRateLimitDisabledInDevelopment } = await import(
+      '../../src/server/middleware/rateLimiter'
+    );
+
+    expect(globalLimiter).toBeDefined();
+    expect(isRateLimitDisabledInDevelopment()).toBe(true);
+
+    const [{ skip }] = rateLimitMock.mock.calls.at(-1)!;
+    expect(skip({}, {})).toBe(true);
+  });
 });

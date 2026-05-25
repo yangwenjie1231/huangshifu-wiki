@@ -302,6 +302,8 @@ model WikiPage {
   slug          String         @unique
   title         String
   titleKey      String         @unique
+  hasLegacyDuplicateTitleKey Boolean @default(false)
+  legacyDuplicateTitle String?
   category      String
   content       String
   tags          Json?
@@ -829,7 +831,7 @@ model ImageMap {
 }
 
 model SiteConfig {
-  id        String   @id @default("image_preference")
+  id        String   @id @default(cuid())
   key       String   @unique
   value     Json
   updatedAt DateTime @updatedAt
