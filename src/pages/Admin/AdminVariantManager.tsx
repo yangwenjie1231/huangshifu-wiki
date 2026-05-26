@@ -50,7 +50,7 @@ export const AdminVariantManager: React.FC = () => {
       setError(null);
       const [statsData, cleanupData] = await Promise.all([
         apiGet<{ success: boolean; data: VariantStats }>('/api/admin/variants/stats'),
-        apiGet<{ success: boolean; data: CleanupStats }>('/api/admin/variants/cleanup/stats').catch(() => ({ success: false, data: null as any })),
+        apiGet<{ success: boolean; data: CleanupStats }>('/api/admin/cleanup/stats').catch(() => ({ success: false, data: null as any })),
       ]);
       if (statsData.success) setVariantStats(statsData.data);
       if (cleanupData.success) setCleanupStats(cleanupData.data);
@@ -73,7 +73,7 @@ export const AdminVariantManager: React.FC = () => {
     try {
       setRebuilding(true);
       setRebuildResult(null);
-      const result = await apiPost<RebuildResponse>('/api/admin/images/rebuild-all-variants', { scope, batchSize: 100, dryRun: false });
+      const result = await apiPost<RebuildResponse>('/api/admin/rebuild-all-variants', { scope, batchSize: 100, dryRun: false });
       if (result.success) {
         setRebuildResult(result);
         setTimeout(() => fetchStats(), 2000);
@@ -92,7 +92,7 @@ export const AdminVariantManager: React.FC = () => {
     try {
       setCleaning(true);
       setCleanupResult(null);
-      const data = await apiPost<{ success: boolean; data: { freedSpace: number; deletedCount: number; errorsCount: number } }>('/api/admin/variants/cleanup/orphaned');
+      const data = await apiPost<{ success: boolean; data: { freedSpace: number; deletedCount: number; errorsCount: number } }>('/api/admin/cleanup/orphaned');
       if (data.success) {
         setCleanupResult({ type: 'orphaned', freedSpace: data.data.freedSpace, deletedCount: data.data.deletedCount, errorsCount: data.data.errorsCount });
         setTimeout(() => fetchStats(), 1000);
@@ -109,7 +109,7 @@ export const AdminVariantManager: React.FC = () => {
     try {
       setCleaning(true);
       setCleanupResult(null);
-      const data = await apiPost<{ success: boolean; data: { freedSpace: number; deletedCount: number; errorsCount: number } }>('/api/admin/variants/cleanup/failed');
+      const data = await apiPost<{ success: boolean; data: { freedSpace: number; deletedCount: number; errorsCount: number } }>('/api/admin/cleanup/failed');
       if (data.success) {
         setCleanupResult({ type: 'failed', freedSpace: data.data.freedSpace, deletedCount: data.data.deletedCount, errorsCount: data.data.errorsCount });
         setTimeout(() => fetchStats(), 1000);
@@ -126,7 +126,7 @@ export const AdminVariantManager: React.FC = () => {
     try {
       setCleaning(true);
       setCleanupResult(null);
-      const data = await apiPost<{ success: boolean; data: { totalFreedBytes: number; totalDeletedFiles: number; totalErrors: number } }>('/api/admin/variants/cleanup/all');
+      const data = await apiPost<{ success: boolean; data: { totalFreedBytes: number; totalDeletedFiles: number; totalErrors: number } }>('/api/admin/cleanup/all');
       if (data.success) {
         setCleanupResult({ type: 'all', freedSpace: data.data.totalFreedBytes, deletedCount: data.data.totalDeletedFiles, errorsCount: data.data.totalErrors });
         setTimeout(() => fetchStats(), 1500);
