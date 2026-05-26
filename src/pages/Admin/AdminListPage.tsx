@@ -151,7 +151,7 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
                           {type === 'galleries' ? (
-                            <SmartImage src={(Array.isArray(item.images) && item.images[0]?.url) || ''} alt="" className="w-10 h-10 rounded object-cover bg-surface-alt" />
+                            <SmartImage src={(Array.isArray(item.images) && item.images[0]?.thumbnailUrl) || ''} alt="" className="w-10 h-10 rounded object-cover bg-surface-alt" />
                           ) : type === 'music' ? (
                             <SmartImage src={item.cover || ''} alt="" className="w-10 h-10 rounded object-cover bg-surface-alt" />
                           ) : (

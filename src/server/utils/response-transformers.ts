@@ -411,7 +411,7 @@ type GalleryInput = {
 
 function resolveImageUrl(
   image: GalleryInput['images'][number],
-  imageMapByLocalUrl: Map<string, { localUrl: string; externalUrl: string | null; s3Url: string | null }>,
+  imageMapByLocalUrl: Map<string, { localUrl: string; externalUrl: string | null; s3Url: string | null; thumbnailUrl: string | null }>,
   storageStrategy: 'local' | 's3' | 'external',
 ) {
   let url = image.asset?.publicUrl || image.url;
@@ -437,6 +437,22 @@ function resolveImageUrl(
   }
 
   return url;
+}
+
+function resolveThumbnailUrl(
+  image: GalleryInput['images'][number],
+  imageMapByLocalUrl: Map<string, { localUrl: string; externalUrl: string | null; s3Url: string | null; thumbnailUrl: string | null }>,
+): string | null {
+  if (image.asset?.storageKey) {
+    const localUrl = `/uploads/${image.asset.storageKey}`;
+    const imageMap = imageMapByLocalUrl.get(localUrl);
+
+    if (imageMap?.thumbnailUrl) {
+      return imageMap.thumbnailUrl;
+    }
+  }
+
+  return null;
 }
 
 export async function toGalleryResponse(gallery: GalleryInput, storageStrategy?: string) {
@@ -473,6 +489,7 @@ export async function toGalleryResponse(gallery: GalleryInput, storageStrategy?:
           localUrl: true,
           externalUrl: true,
           s3Url: true,
+          thumbnailUrl: true,
         },
       })
     : [];
@@ -499,7 +516,9 @@ export async function toGalleryResponse(gallery: GalleryInput, storageStrategy?:
       .map((image) => ({
         id: image.id,
         assetId: image.assetId || image.asset?.id || null,
-        url: resolveImageUrl(image, imageMapByLocalUrl, resolvedStorageStrategy),
+        url: resolveThumbnailUrl(image, imageMapByLocalUrl) || '',
+        originalUrl: resolveImageUrl(image, imageMapByLocalUrl, resolvedStorageStrategy),
+        thumbnailUrl: resolveThumbnailUrl(image, imageMapByLocalUrl),
         name: image.asset?.fileName || image.name,
         mimeType: image.asset?.mimeType || null,
         sizeBytes: image.asset?.sizeBytes || null,
@@ -545,6 +564,7 @@ export async function toGalleryListResponse(galleries: GalleryInput[], storageSt
           localUrl: true,
           externalUrl: true,
           s3Url: true,
+          thumbnailUrl: true,
         },
       })
     : [];
@@ -571,7 +591,9 @@ export async function toGalleryListResponse(galleries: GalleryInput[], storageSt
       .map((image) => ({
         id: image.id,
         assetId: image.assetId || image.asset?.id || null,
-        url: resolveImageUrl(image, imageMapByLocalUrl, resolvedStorageStrategy),
+        url: resolveThumbnailUrl(image, imageMapByLocalUrl) || '',
+        originalUrl: resolveImageUrl(image, imageMapByLocalUrl, resolvedStorageStrategy),
+        thumbnailUrl: resolveThumbnailUrl(image, imageMapByLocalUrl),
         name: image.asset?.fileName || image.name,
         mimeType: image.asset?.mimeType || null,
         sizeBytes: image.asset?.sizeBytes || null,

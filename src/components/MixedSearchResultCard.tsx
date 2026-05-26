@@ -58,6 +58,10 @@ export const MixedSearchResultCard = React.memo(
     const { sourceType, data, imageUrl, similarity } = result;
     const SourceIcon = getSourceTypeIcon(sourceType);
     const link = getResultLink(result);
+    const galleryThumb = sourceType === "gallery"
+      ? (Array.isArray((data as GalleryItem).images) && (data as GalleryItem).images[0]?.thumbnailUrl) || ""
+      : "";
+    const displayImageUrl = galleryThumb;
 
     if (viewMode === "list") {
       return (
@@ -66,7 +70,7 @@ export const MixedSearchResultCard = React.memo(
           className={clsx(CARD.base, CARD.listLayout)}
         >
           <div className={CARD.imageWrapperList}>
-            <SmartImage src={imageUrl || ""} alt="" className={CARD.imageFill} />
+            <SmartImage src={displayImageUrl} alt="" className={CARD.imageFill} />
           </div>
           <div className="flex-1 min-w-0 flex flex-col justify-center">
             <div className="flex items-center gap-2 mb-1">
@@ -106,7 +110,7 @@ export const MixedSearchResultCard = React.memo(
           className={clsx(CARD.base, CARD.compactLayout)}
         >
           <div className={CARD.imageWrapperCompact}>
-            <SmartImage src={imageUrl || ""} alt="" className={CARD.imageFill} />
+            <SmartImage src={displayImageUrl} alt="" className={CARD.imageFill} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -135,7 +139,7 @@ export const MixedSearchResultCard = React.memo(
       >
         <div className="h-36 overflow-hidden relative flex-shrink-0">
           <SmartImage
-            src={imageUrl || ""}
+            src={displayImageUrl}
             alt=""
             className={clsx(CARD.imageFill, CARD.imageHoverZoom)}
           />

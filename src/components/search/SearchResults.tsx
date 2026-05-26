@@ -37,7 +37,7 @@ function galleryToConfig(gallery: GalleryItem): import("./SearchResultCard").Sea
     title: gallery.title,
     description: gallery.description || undefined,
     link: `/gallery/${gallery.id}`,
-    image: (Array.isArray(gallery.images) && gallery.images[0]?.url) || undefined,
+    image: (Array.isArray(gallery.images) && gallery.images[0]?.thumbnailUrl) || undefined,
     meta: `${Array.isArray(gallery.images) ? gallery.images.length : 0} 张图片`,
     type: "gallery",
   };

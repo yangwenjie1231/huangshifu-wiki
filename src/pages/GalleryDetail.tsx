@@ -911,6 +911,7 @@ const GalleryDetail = () => {
                     src={image.url}
                     alt={image.name || ''}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                    useOriginal={!editing}
                   />
                 </button>
 
@@ -1109,7 +1110,12 @@ const GalleryDetail = () => {
 
       {lightboxOpen && (
         <Lightbox
-          images={images.map((img) => ({ id: img.clientId || img.id, url: img.url, name: img.name }))}
+          images={images.map((img) => ({
+            id: img.clientId || img.id,
+            url: img.thumbnailUrl || img.url,
+            originalUrl: img.originalUrl || img.url,
+            name: img.name,
+          }))}
           initialIndex={lightboxIndex}
           onClose={() => setLightboxOpen(false)}
         />

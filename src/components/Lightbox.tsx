@@ -5,6 +5,7 @@ import { getFitScale as getFitScaleUtil, computeNextScale } from '../utils/light
 interface LightboxImage {
   id: string;
   url: string;
+  originalUrl?: string | null;
   name?: string | null;
 }
 
@@ -53,7 +54,7 @@ export const Lightbox = ({ images, initialIndex, onClose }: LightboxProps) => {
   const initialPinchScale = useRef(1);
 
   const activeImage = images[activeIndex];
-  const currentImageUrl = activeImage?.url || '';
+  const currentImageUrl = activeImage?.originalUrl || activeImage?.url || '';
 
   useEffect(() => {
     setActiveIndex(initialIndex);

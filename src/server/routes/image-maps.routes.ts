@@ -36,6 +36,7 @@ function normalizeImageMap(item: {
   localUrl: string;
   externalUrl: string | null;
   s3Url: string | null;
+  thumbnailUrl: string | null;
   storageType: string;
   blurhash: string | null;
   thumbhash: string | null;

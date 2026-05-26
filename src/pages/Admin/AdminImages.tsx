@@ -13,6 +13,7 @@ interface ImageMap {
   localUrl: string;
   externalUrl?: string;
   s3Url?: string;
+  thumbnailUrl?: string;
   storageType?: 'local' | 's3' | 'external';
   blurhash?: string;
   thumbhash?: string;
@@ -217,7 +218,7 @@ const AdminImages: React.FC = () => {
         ) : (
           <div className="space-y-3">
             {images.map((image) => {
-              const imageUrl = image.s3Url || image.externalUrl || image.localUrl;
+              const imageUrl = image.thumbnailUrl || '';
               return (
                 <div key={image.id} className="border border-border rounded p-4 hover:bg-surface-alt transition-colors">
                   <div className="flex items-start justify-between gap-4">

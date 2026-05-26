@@ -58,13 +58,13 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = React.memo(({ c
         isList ? CARD.listLayout : clsx(CARD.gridLayout, "block", cardHeight)
       )}
     >
-      {isList ? (
-        <>
-          {config.image ? (
-            <div className={CARD.imageWrapperList}>
-              <SmartImage src={config.image} alt="" className={CARD.imageFill} />
-            </div>
-          ) : (
+          {isList ? (
+            <>
+              {config.image ? (
+                <div className={CARD.imageWrapperList}>
+                  <SmartImage src={config.image} alt="" className={CARD.imageFill} />
+                </div>
+              ) : (
             <div className={clsx(CARD.imageWrapperList, "flex items-center justify-center")}>
               {typeIconMap[config.type]}
             </div>

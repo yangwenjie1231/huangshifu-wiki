@@ -152,6 +152,8 @@ export interface GalleryImageItem {
   id: string;
   assetId: string | null;
   url: string;
+  originalUrl?: string | null;
+  thumbnailUrl?: string | null;
   name: string;
   mimeType: string | null;
   sizeBytes: number | null;
@@ -215,6 +217,7 @@ export interface ImageMap {
   externalUrl?: string;
   s3Url?: string;
   storageType?: 'local' | 's3' | 'external';
+  thumbnailUrl?: string;
   blurhash?: string;
   thumbhash?: string;
   createdAt: string;

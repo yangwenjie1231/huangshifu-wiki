@@ -177,6 +177,10 @@ const getUrlByPreference = (map: ImageMap, preference: ImagePreference): string 
   return null;
 };
 
+export const getDisplayImageUrl = (map: ImageMap, preference: ImagePreference): string | null => {
+  return map.thumbnailUrl || getUrlByPreference(map, preference);
+};
+
 export const resolveImageUrl = async (
   map: ImageMap,
   preference: ImagePreference,

@@ -69,6 +69,10 @@ export interface SmartImageProps {
    * 是否启用模糊过渡效果
    */
   enableBlurTransition?: boolean;
+  /**
+   * 是否强制使用原图，不走缩略图
+   */
+  useOriginal?: boolean;
 }
 
 // 全局格式支持缓存
@@ -112,6 +116,7 @@ export const SmartImage: React.FC<SmartImageProps> = ({
   transitionDuration = 300,
   placeholderColor = 'var(--color-surface-error)',
   enableBlurTransition = true,
+  useOriginal = false,
 }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -208,12 +213,17 @@ export const SmartImage: React.FC<SmartImageProps> = ({
       }
 
       try {
-        const preference = await getImagePreference();
-        const result = await resolveImageUrl(imageInput, preference);
-        setResolvedUrl(result.url);
+        if (useOriginal) {
+          const preference = await getImagePreference();
+          const result = await resolveImageUrl(imageInput, preference);
+          setResolvedUrl(result.url);
+          return;
+        }
+
+        setResolvedUrl(imageInput.thumbnailUrl || '');
       } catch (error) {
         console.error('Failed to resolve image URL:', error);
-        setResolvedUrl(imageInput.localUrl || imageInput.s3Url || imageInput.externalUrl || '');
+        setResolvedUrl(useOriginal ? imageInput.localUrl || imageInput.s3Url || imageInput.externalUrl || '' : '');
       }
     };
 
