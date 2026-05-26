@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Mail, Edit3, Save, X, Camera, Bookmark, FileText, MessageSquare, History, Loader2 } from 'lucide-react';
 import { apiGet, apiPatch } from '../lib/apiClient';
-import { Link } from 'react-router-dom';
+import { Link, Navigate, useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import { AvatarCropModal } from '../components/AvatarCropModal';
@@ -42,10 +42,28 @@ type CommentItem = {
 
 type ActiveTab = 'profile' | 'favorites' | 'posts' | 'comments' | 'history';
 
+const PROFILE_TAB_SET = new Set<ActiveTab>(['profile', 'favorites', 'posts', 'comments', 'history']);
+
+function resolveProfileTab(tab?: string): ActiveTab | null {
+  if (!tab || tab === 'profile') {
+    return 'profile';
+  }
+
+  return PROFILE_TAB_SET.has(tab as ActiveTab) ? (tab as ActiveTab) : null;
+}
+
+const PROFILE_TABS: Array<{ id: ActiveTab; label: string; icon: React.ReactNode }> = [
+  { id: 'profile', label: '个人资料', icon: <FileText size={14} /> },
+  { id: 'posts', label: '我的帖子', icon: <FileText size={14} /> },
+  { id: 'comments', label: '我的评论', icon: <MessageSquare size={14} /> },
+  { id: 'history', label: '浏览历史', icon: <History size={14} /> },
+  { id: 'favorites', label: '我的收藏', icon: <Bookmark size={14} /> },
+];
+
 const Profile = () => {
   const { user, profile, refreshAuth } = useAuth();
+  const { tab } = useParams<{ tab?: string }>();
   const [isEditing, setIsEditing] = useState(false);
-  const [activeTab, setActiveTab] = useState<ActiveTab>('profile');
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
   const [favoriteFilter, setFavoriteFilter] = useState<'all' | FavoriteTargetType>('all');
@@ -63,6 +81,7 @@ const Profile = () => {
   const [loading, setLoading] = useState(false);
   const [avatarModalOpen, setAvatarModalOpen] = useState(false);
   const { show } = useToast();
+  const activeTab = resolveProfileTab(tab)
 
   useEffect(() => {
     if (!user) return;
@@ -166,6 +185,10 @@ const Profile = () => {
     });
   }, [favorites]);
 
+  if (!activeTab) {
+    return <Navigate to="/profile" replace />
+  }
+
   if (!user) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center bg-bg-primary">
@@ -204,14 +227,6 @@ const Profile = () => {
     }
     setLoading(false);
   };
-
-  const tabs: Array<{ id: ActiveTab; label: string; icon: React.ReactNode }> = [
-    { id: 'profile', label: '个人资料', icon: <FileText size={14} /> },
-    { id: 'posts', label: '我的帖子', icon: <FileText size={14} /> },
-    { id: 'comments', label: '我的评论', icon: <MessageSquare size={14} /> },
-    { id: 'history', label: '浏览历史', icon: <History size={14} /> },
-    { id: 'favorites', label: '我的收藏', icon: <Bookmark size={14} /> },
-  ];
 
   return (
     <div
@@ -342,10 +357,10 @@ const Profile = () => {
 
         {/* Tabs */}
         <div className="flex items-center gap-1 border-b border-border mb-6 overflow-x-auto">
-          {tabs.map((tab) => (
-            <button
+          {PROFILE_TABS.map((tab) => (
+            <Link
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              to={tab.id === 'profile' ? '/profile' : `/profile/${tab.id}`}
               className={clsx(
                 'px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-1.5 relative',
                 activeTab === tab.id
@@ -358,7 +373,7 @@ const Profile = () => {
               {activeTab === tab.id && (
                 <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[var(--color-theme-accent)] rounded-[1px]" />
               )}
-            </button>
+            </Link>
           ))}
         </div>
 

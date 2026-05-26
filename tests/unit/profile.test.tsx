@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Profile from '../../src/pages/Profile'
 
@@ -81,12 +81,14 @@ describe('Profile posts status', () => {
     })
 
     const view = render(
-      <MemoryRouter>
-        <Profile />
+      <MemoryRouter initialEntries={['/profile']}>
+        <Routes>
+          <Route path="/profile/:tab?" element={<Profile />} />
+        </Routes>
       </MemoryRouter>
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '我的帖子' }))
+    fireEvent.click(screen.getByRole('link', { name: '我的帖子' }))
 
     const statusBadge = await screen.findByText('已驳回')
     await screen.findByText('被驳回的帖子')

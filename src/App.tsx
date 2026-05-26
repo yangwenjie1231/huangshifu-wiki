@@ -86,7 +86,7 @@ const MainLayout = () => {
               <Route path="/search" element={<Search />} />
               <Route path="/login" element={<Login />} />
               <Route
-                path="/profile"
+                path="/profile/:tab?"
                 element={
                   <RouteGuard
                     title="个人资料页需要先登录"
