@@ -26,6 +26,7 @@ import {
   logger,
 } from '../utils';
 import { prisma } from '../prisma';
+import { UPLOAD_MAX_FILE_SIZE_BYTES } from '../../lib/uploadLimits';
 import { getEmbeddingModelName, getEmbeddingVectorSize, generateImageEmbedding, generateTextEmbedding, isTextModelLoaded } from '../vector/clipEmbedding';
 import { getQdrantCollectionName, searchImageEmbeddingPoints, searchTextEmbeddingPoints, toEmbeddingPayload, type ImageSourceType, type ImageEmbeddingPayload } from '../vector/qdrantService';
 import { createUploadStorageInfo } from '../uploadPath';
@@ -79,7 +80,7 @@ const searchImageUpload = multer({
     },
   }),
   limits: {
-    fileSize: 10 * 1024 * 1024,
+    fileSize: UPLOAD_MAX_FILE_SIZE_BYTES,
   },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();

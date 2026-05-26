@@ -52,6 +52,7 @@ import { registerConfigRoutes } from './src/server/routes/config.routes';
 import { registerS3Routes } from './src/server/routes/s3.routes';
 import { registerMusicSongRoutes } from './src/server/routes/music-song.routes';
 import { registerUploadRoutes } from './src/server/routes/uploads.routes';
+import { UPLOAD_MAX_FILE_SIZE_MB } from './src/lib/uploadLimits';
 import { registerAdminSystemRoutes } from './src/server/routes/admin.system.routes';
 import { registerAdminVariantsRoutes } from './src/server/routes/admin.variants.routes';
 import { warmup as clipWarmup } from './src/server/vector/clipEmbedding';
@@ -338,7 +339,7 @@ registerUploadRoutes(app);
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
-      res.status(413).json({ error: '单张图片不能超过 20MB' });
+      res.status(413).json({ error: `上传文件不能超过 ${UPLOAD_MAX_FILE_SIZE_MB}MB` });
       return;
     }
     res.status(400).json({ error: err.message || '上传参数不合法' });

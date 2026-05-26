@@ -38,6 +38,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { UPLOAD_MAX_FILE_SIZE_BYTES } from '../../lib/uploadLimits';
 import archiver from 'archiver';
 import { scanAllWikiLinks, getWikiPageLinks, previewLinkUpdate, batchUpdateWikiLinks, switchWikiStorage } from '../wiki/markdownLinkUpdater';
 import { isSensitiveWord, containsSensitive } from '../../lib/sensitiveWordFilter';
@@ -123,6 +124,9 @@ const uploadBackup = multer({
       cb(null, `restore_${Date.now()}_${file.originalname}`);
     },
   }),
+  limits: {
+    fileSize: UPLOAD_MAX_FILE_SIZE_BYTES,
+  },
 });
 
 async function handleReviewAction(

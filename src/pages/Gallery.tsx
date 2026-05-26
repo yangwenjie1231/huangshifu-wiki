@@ -12,6 +12,7 @@ import { SmartImage } from '../components/SmartImage';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { apiDelete, apiGet, apiPost, apiUpload } from '../lib/apiClient';
+import { UPLOAD_MAX_FILE_SIZE_BYTES } from '../lib/uploadLimits';
 import { getImagePreference } from '../services/imageService';
 import { toDateValue } from '../lib/dateUtils';
 import { LocationTagInput } from '../components/LocationTagInput';
@@ -391,7 +392,7 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-      const maxSize = 10 * 1024 * 1024;
+      const maxSize = UPLOAD_MAX_FILE_SIZE_BYTES;
 
       const validFiles: { file: File; previewUrl: string }[] = [];
       const invalidFiles: string[] = [];
@@ -400,7 +401,7 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
         if (!allowedTypes.includes(file.type)) {
           invalidFiles.push(`${file.name} (不支持的文件类型)`);
         } else if (file.size > maxSize) {
-          invalidFiles.push(`${file.name} (文件过大，最大 10MB)`);
+          invalidFiles.push(`${file.name} (文件过大，最大 100MB)`);
         } else {
           validFiles.push({
             file,

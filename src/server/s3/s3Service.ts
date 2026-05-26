@@ -7,6 +7,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 import { S3_ENV_VAR_NAMES } from '@/config/s3.config.example';
+import { UPLOAD_MAX_FILE_SIZE_BYTES } from '../../lib/uploadLimits';
 
 export interface S3PublicConfig {
   enabled: boolean;
@@ -22,7 +23,7 @@ export interface S3PublicConfig {
 
 const DEFAULT_EXPIRES_IN = 3600;
 const DEFAULT_PUBLIC_DOMAIN = '';
-const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024;
+const DEFAULT_MAX_FILE_SIZE = UPLOAD_MAX_FILE_SIZE_BYTES;
 const DEFAULT_ALLOWED_CONTENT_TYPES = [
   'image/jpeg',
   'image/png',
