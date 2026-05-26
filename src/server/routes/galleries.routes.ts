@@ -24,6 +24,7 @@ import {
   enhancedCache,
   fetchGalleryCommentsForResponse,
   resolveCommentReplyTarget,
+  GALLERY_ADMIN_ONLY,
 } from '../utils'
 import { enqueueGalleryImageEmbeddings } from '../vector/embeddingSync'
 import { prisma } from '../prisma'
@@ -39,7 +40,14 @@ function canViewGallery(gallery: { published: boolean; authorUid: string }, auth
 function canManageGallery(gallery: { authorUid: string }, authUser?: ApiUser) {
   if (!authUser) return false
   if (isAdminRole(authUser.role)) return true
+  if (GALLERY_ADMIN_ONLY) return false
   return gallery.authorUid === authUser.uid
+}
+
+function canCreateGallery(authUser?: ApiUser) {
+  if (!authUser) return false
+  if (isAdminRole(authUser.role)) return true
+  return !GALLERY_ADMIN_ONLY
 }
 
 const router = Router()
@@ -138,6 +146,11 @@ router.get('/:id', asyncHandler(async (req: AuthenticatedRequest, res) => {
 }))
 
 router.post('/upload', galleryWriteLimiter, requireAuth, requireActiveUser, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  if (!canCreateGallery(req.authUser)) {
+    res.status(403).json({ error: '当前图集已临时限制为仅管理员可操作' })
+    return
+  }
+
   const files = req.files as Express.Multer.File[]
   const createdAssetIds: string[] = []
   try {
@@ -244,6 +257,11 @@ router.post('/upload', galleryWriteLimiter, requireAuth, requireActiveUser, asyn
 
 router.post('/', galleryWriteLimiter, requireAuth, requireActiveUser, asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
+    if (!canCreateGallery(req.authUser)) {
+      res.status(403).json({ error: '当前图集已临时限制为仅管理员可操作' })
+      return
+    }
+
     const { title, description, tags, images, assetIds, uploadSessionId, locationCode, locationDetail } = req.body as {
       title?: string
       description?: string
@@ -471,6 +489,11 @@ router.post('/', galleryWriteLimiter, requireAuth, requireActiveUser, asyncHandl
 
 router.patch('/:id', requireAuth, requireActiveUser, asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
+    if (GALLERY_ADMIN_ONLY && !isAdminRole(req.authUser?.role)) {
+      res.status(403).json({ error: '当前图集已临时限制为仅管理员可操作' })
+      return
+    }
+
     const gallery = await prisma.gallery.findUnique({
       where: { id: req.params.id },
       select: {
@@ -724,6 +747,11 @@ router.patch('/:id', requireAuth, requireActiveUser, asyncHandler(async (req: Au
 
 router.patch('/:id/publish', requireAuth, requireActiveUser, asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
+    if (GALLERY_ADMIN_ONLY && !isAdminRole(req.authUser?.role)) {
+      res.status(403).json({ error: '当前图集已临时限制为仅管理员可操作' })
+      return
+    }
+
     const gallery = await prisma.gallery.findUnique({
       where: { id: req.params.id },
       select: {
@@ -769,6 +797,11 @@ router.patch('/:id/publish', requireAuth, requireActiveUser, asyncHandler(async 
 
 router.post('/:id/images', requireAuth, requireActiveUser, asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
+    if (GALLERY_ADMIN_ONLY && !isAdminRole(req.authUser?.role)) {
+      res.status(403).json({ error: '当前图集已临时限制为仅管理员可操作' })
+      return
+    }
+
     const gallery = await prisma.gallery.findUnique({
       where: { id: req.params.id },
       include: {
@@ -907,6 +940,11 @@ router.post('/:id/images', requireAuth, requireActiveUser, asyncHandler(async (r
 
 router.delete('/:id/images/:imageId', requireAuth, requireActiveUser, asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
+    if (GALLERY_ADMIN_ONLY && !isAdminRole(req.authUser?.role)) {
+      res.status(403).json({ error: '当前图集已临时限制为仅管理员可操作' })
+      return
+    }
+
     const gallery = await prisma.gallery.findUnique({
       where: { id: req.params.id },
       select: {
@@ -1005,6 +1043,11 @@ router.delete('/:id/images/:imageId', requireAuth, requireActiveUser, asyncHandl
 
 router.patch('/:id/images/reorder', requireAuth, requireActiveUser, asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
+    if (GALLERY_ADMIN_ONLY && !isAdminRole(req.authUser?.role)) {
+      res.status(403).json({ error: '当前图集已临时限制为仅管理员可操作' })
+      return
+    }
+
     const gallery = await prisma.gallery.findUnique({
       where: { id: req.params.id },
       select: {

@@ -162,6 +162,7 @@ const GalleryDetail = () => {
   const [restoringCommentId, setRestoringCommentId] = useState<string | null>(null);
   const [likingCommentId, setLikingCommentId] = useState<string | null>(null);
   const [showDeletedComments, setShowDeletedComments] = useState(false);
+  const [isGalleryAdminOnly, setIsGalleryAdminOnly] = useState(false);
   const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
 
   const addImagesInputRef = useRef<HTMLInputElement>(null);
@@ -203,6 +204,20 @@ const GalleryDetail = () => {
     fetchGallery();
   }, [galleryId]);
 
+  useEffect(() => {
+    const fetchGalleryAccess = async () => {
+      try {
+        const data = await apiGet<{ adminOnly: boolean }>('/api/config/gallery-access');
+        setIsGalleryAdminOnly(Boolean(data.adminOnly));
+      } catch (error) {
+        console.error('Fetch gallery access error:', error);
+        setIsGalleryAdminOnly(false);
+      }
+    };
+
+    fetchGalleryAccess();
+  }, []);
+
   const fetchComments = async () => {
     if (!galleryId) return;
     try {
@@ -232,7 +247,12 @@ const GalleryDetail = () => {
     [draft?.images, editing, gallery?.images],
   );
 
-  const canManage = Boolean(user && gallery && !isBanned && (gallery.authorUid === user.uid || isAdmin));
+  const canManage = Boolean(
+    user &&
+    gallery &&
+    !isBanned &&
+    (isAdmin || (!isGalleryAdminOnly && gallery.authorUid === user.uid)),
+  );
   const rootComments = comments.filter((comment) => !comment.parentId);
   const getReplies = (parentId: string) => comments.filter((comment) => comment.parentId === parentId);
   const getCommentAuthorName = (comment: CommentItem) =>

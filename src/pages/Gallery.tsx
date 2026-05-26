@@ -129,6 +129,8 @@ const GalleryList = () => {
   const [galleries, setGalleries] = useState<GalleryItem[]>([]);
   const { user, isAdmin, isBanned } = useAuth();
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isGalleryAdminOnly, setIsGalleryAdminOnly] = useState(false);
+  const [galleryAccessLoaded, setGalleryAccessLoaded] = useState(false);
   const [galleryToDelete, setGalleryToDelete] = useState<{ id: string; title: string } | null>(null);
   const [deletingGalleryId, setDeletingGalleryId] = useState<string | null>(null);
   const [totalGalleries, setTotalGalleries] = useState(0);
@@ -159,6 +161,22 @@ const GalleryList = () => {
 
     fetchGalleries();
   }, [galleryPagination.page, galleryPagination.pageSize]);
+
+  useEffect(() => {
+    const fetchGalleryAccess = async () => {
+      try {
+        const data = await apiGet<{ adminOnly: boolean }>('/api/config/gallery-access');
+        setIsGalleryAdminOnly(Boolean(data.adminOnly));
+      } catch (error) {
+        console.error('Fetch gallery access error:', error);
+        setIsGalleryAdminOnly(false);
+      } finally {
+        setGalleryAccessLoaded(true);
+      }
+    };
+
+    fetchGalleryAccess();
+  }, []);
 
   const handleCopyGalleryLink = async (event: React.MouseEvent<HTMLButtonElement>, galleryId: string) => {
     event.preventDefault();
@@ -223,7 +241,7 @@ const GalleryList = () => {
             <h1 className="text-[1.75rem] font-bold text-text-primary tracking-[0.12em]">图集馆</h1>
             <div className="flex items-center gap-3">
               <ViewModeSelector value={viewMode} onChange={setViewMode} size="sm" />
-              {user && !isBanned && (
+              {user && !isBanned && galleryAccessLoaded && (!isGalleryAdminOnly || isAdmin) && (
                 <button
                   onClick={() => setIsUploadModalOpen(true)}
                   className="px-5 py-2 theme-button-primary text-sm rounded active:scale-[0.98] transition-all flex items-center gap-2"
@@ -279,8 +297,11 @@ const GalleryList = () => {
 
         {/* Upload Modal */}
         <AnimatePresence>
-          {isUploadModalOpen && (
-            <UploadModal onClose={() => setIsUploadModalOpen(false)} />
+          {isUploadModalOpen && galleryAccessLoaded && (!isGalleryAdminOnly || isAdmin) && (
+            <UploadModal
+              onClose={() => setIsUploadModalOpen(false)}
+              isGalleryAdminOnly={isGalleryAdminOnly}
+            />
           )}
         </AnimatePresence>
 
@@ -323,7 +344,13 @@ const GalleryList = () => {
   );
 };
 
-const UploadModal = ({ onClose }: { onClose: () => void }) => {
+const UploadModal = ({
+  onClose,
+  isGalleryAdminOnly,
+}: {
+  onClose: () => void;
+  isGalleryAdminOnly: boolean;
+}) => {
   const { user, isAdmin, isBanned } = useAuth();
   const navigate = useNavigate();
   const [title, setTitle] = useState('');
@@ -457,6 +484,7 @@ const UploadModal = ({ onClose }: { onClose: () => void }) => {
   const handleUpload = async () => {
     if (!user || files.length === 0) return show('请选择图片', { variant: 'error' });
     if (isBanned) return show('账号已被封禁，无法上传图集', { variant: 'error' });
+    if (isGalleryAdminOnly && !isAdmin) return show('当前图集已临时限制为仅管理员可操作', { variant: 'error' });
 
     const groups: { [key: string]: File[] } = {};
     files.forEach((entry) => {

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth, requireAdmin, requireActiveUser } from '../middleware/auth';
-import { prisma } from '../utils';
+import { prisma, GALLERY_ADMIN_ONLY } from '../utils';
 import { enhancedCache, CACHE_KEYS } from '../utils/cache';
 import {
   getPresignedUploadUrl,
@@ -17,6 +17,16 @@ import {
 } from '../services/imageSyncService';
 
 const router = Router();
+
+// GET /api/config/gallery-access - Get gallery write access mode
+router.get('/gallery-access', async (_req, res) => {
+  try {
+    res.json({ adminOnly: GALLERY_ADMIN_ONLY });
+  } catch (error) {
+    console.error('Get gallery access mode error:', error);
+    res.status(500).json({ error: '获取图集权限配置失败' });
+  }
+});
 
 // GET /api/config/image-preference - Get image preference
 router.get('/image-preference', async (_req, res) => {
