@@ -10,10 +10,10 @@ export interface ImageMap {
   s3Url?: string;
   storageType?: 'local' | 's3' | 'external';
   
-  // WebP 变体 URL (新增)
-  thumbnailUrl?: string;   // 缩略图 (400px)
-  mediumUrl?: string;      // 中图 (800px)
-  largeUrl?: string;       // 大图 (1200px)
+  // WebP 变体 URL
+  thumbnailUrl?: string;   // 1080px 变体
+  mediumUrl?: string;      // 兼容字段，当前不再生成
+  largeUrl?: string;       // 兼容字段，当前不再生成
   
   blurhash?: string;
   thumbhash?: string;

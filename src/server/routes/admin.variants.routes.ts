@@ -199,8 +199,6 @@ router.post('/rebuild-all-variants', requireAuth, requireAdmin, async (
       case 'missing':
         whereClause.OR = [
           { thumbnailUrl: null },
-          { mediumUrl: null },
-          { largeUrl: null },
           { variantStatus: 'pending' },
         ];
         break;

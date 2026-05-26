@@ -2,7 +2,7 @@
  * 变体生成器 - v2.1 增强版（带超时保护）
  * 
  * 功能：
- * 1. 异步生成 WebP 变体 (thumbnail/medium/large)
+ * 1. 异步生成单一 WebP 变体 (1080px)
  * 2. 任务超时保护（防止单个任务卡死）
  * 3. 队列等待时间限制
  * 4. Sharp 内存限制（防止 OOM）
@@ -62,9 +62,7 @@ export class VariantGenerator {
   };
 
   private variantSpecs = [
-    { name: 'thumbnail', maxWidth: 400, maxHeight: 300, quality: 80 },
-    { name: 'medium', maxWidth: 800, maxHeight: 600, quality: 85 },
-    { name: 'large', maxWidth: 1200, maxHeight: 900, quality: 85 },
+    { name: '1080', maxWidth: 1080, maxHeight: 1080, quality: 85 },
   ];
 
   private stats = {
@@ -374,16 +372,14 @@ export class VariantGenerator {
     imageMapId: string,
     variants: Map<string, VariantMetadata>
   ): Promise<void> {
-    const thumbnail = variants.get('thumbnail');
-    const medium = variants.get('medium');
-    const large = variants.get('large');
+    const variant = variants.get('1080');
 
     await prisma.imageMap.update({
       where: { id: imageMapId },
       data: {
-        thumbnailUrl: thumbnail?.path || null,
-        mediumUrl: medium?.path || null,
-        largeUrl: large?.path || null,
+        thumbnailUrl: variant?.path || null,
+        mediumUrl: null,
+        largeUrl: null,
         variantStatus: 'completed',
       },
     });
