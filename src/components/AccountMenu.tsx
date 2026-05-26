@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FocusEvent, type MouseEvent } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { LogOut, Server, UserRound } from 'lucide-react'
+import { Bookmark, FileText, History, LogOut, MessageSquare, Server, UserRound } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { DEFAULT_AVATAR, handleAvatarError } from '../lib/defaultAvatar'
 import { ThemeToggle } from './ThemeToggle'
@@ -143,6 +143,25 @@ export const AccountMenu = ({ onLogout, onOpenAuth }: AccountMenuProps) => {
                   </span>
                 </div>
               </Link>
+
+              <div className={styles.quickLinksGrid}>
+                <Link to="/profile/posts" className={styles.menuAction} onClick={closeAccountMenu}>
+                  <FileText size={16} />
+                  <span>我的帖子</span>
+                </Link>
+                <Link to="/profile/comments" className={styles.menuAction} onClick={closeAccountMenu}>
+                  <MessageSquare size={16} />
+                  <span>我的评论</span>
+                </Link>
+                <Link to="/profile/history" className={styles.menuAction} onClick={closeAccountMenu}>
+                  <History size={16} />
+                  <span>浏览历史</span>
+                </Link>
+                <Link to="/profile/favorites" className={styles.menuAction} onClick={closeAccountMenu}>
+                  <Bookmark size={16} />
+                  <span>我的收藏</span>
+                </Link>
+              </div>
 
               {isBanned && (
                 <div className={styles.statusNotice}>

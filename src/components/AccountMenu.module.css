@@ -150,6 +150,17 @@
 	line-height: 1.4;
 }
 
+.quickLinksGrid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.45rem;
+	margin-top: 0.2rem;
+}
+
+.quickLinksGrid .menuAction {
+	justify-content: flex-start;
+}
+
 .statusNotice {
 	padding: 0.5rem 0.65rem;
 	border-radius: 0.55rem;

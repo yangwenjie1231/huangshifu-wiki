@@ -1,7 +1,10 @@
 import { Link, NavLink } from "react-router-dom";
 import {
+	Bookmark,
 	Music,
 	Book,
+	FileText,
+	History,
 	MessageSquare,
 	Image as ImageIcon,
 	LogIn,
@@ -14,6 +17,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../lib/i18n";
 import { DEFAULT_AVATAR, handleAvatarError } from "../../lib/defaultAvatar";
 import { ThemeToggle } from "../ThemeToggle";
+import accountMenuStyles from "../AccountMenu.module.css";
 import type { AuthMode } from "./types";
 
 interface MobileMenuProps {
@@ -109,6 +113,40 @@ export const MobileMenu = ({
 											<p className="text-xs text-text-muted">查看个人资料</p>
 										</div>
 									</Link>
+									<div className={accountMenuStyles.quickLinksGrid}>
+										<NavLink
+											to="/profile/posts"
+											onClick={onClose}
+											className={accountMenuStyles.menuAction}
+										>
+											<FileText size={16} />
+											<span>我的帖子</span>
+										</NavLink>
+										<NavLink
+											to="/profile/comments"
+											onClick={onClose}
+											className={accountMenuStyles.menuAction}
+										>
+											<MessageSquare size={16} />
+											<span>我的评论</span>
+										</NavLink>
+										<NavLink
+											to="/profile/history"
+											onClick={onClose}
+											className={accountMenuStyles.menuAction}
+										>
+											<History size={16} />
+											<span>浏览历史</span>
+										</NavLink>
+										<NavLink
+											to="/profile/favorites"
+											onClick={onClose}
+											className={accountMenuStyles.menuAction}
+										>
+											<Bookmark size={16} />
+											<span>我的收藏</span>
+										</NavLink>
+									</div>
 									{isAdmin && (
 										<Link
 											to="/admin"
