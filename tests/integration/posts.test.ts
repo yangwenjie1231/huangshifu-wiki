@@ -422,6 +422,37 @@ describe('Posts API - 文章接口测试', () => {
       );
       expect(draftPost).toBeUndefined();
     });
+
+    /**
+     * 测试目的：验证非已发布状态的文章不应出现在论坛列表中
+     * 预期结果：列表只显示已通过审核的文章
+     */
+    it('已登录作者不应该在列表中看到待审核或被驳回的文章', async () => {
+      await createCurrentUserPost({
+        title: 'Pending Post Should Not Appear',
+        status: 'pending',
+      });
+      await createCurrentUserPost({
+        title: 'Rejected Post Should Not Appear',
+        status: 'rejected',
+      });
+
+      const response = await request(app)
+        .get('/api/posts')
+        .set('Authorization', `Bearer ${userToken}`);
+
+      expect(response.status).toBe(200);
+
+      const pendingPost = response.body.posts.find(
+        (post: { title: string }) => post.title === 'Pending Post Should Not Appear',
+      );
+      const rejectedPost = response.body.posts.find(
+        (post: { title: string }) =>
+          post.title === 'Rejected Post Should Not Appear',
+      );
+      expect(pendingPost).toBeUndefined();
+      expect(rejectedPost).toBeUndefined();
+    });
   });
 
   // ============================================================================

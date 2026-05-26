@@ -37,6 +37,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     const where = {
       ...(section !== 'all' ? { section } : {}),
       ...visibilityWhere,
+      status: 'published' as ContentStatus,
     };
 
     if (!req.authUser && sort === 'latest') {
