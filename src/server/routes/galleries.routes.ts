@@ -531,11 +531,20 @@ router.patch('/:id', requireAuth, requireActiveUser, asyncHandler(async (req: Au
       const assetId = typeof parsed.assetId === 'string'
         ? parsed.assetId.trim()
         : ''
+      const url = typeof parsed.url === 'string'
+        ? parsed.url.trim()
+        : ''
+      const name = typeof parsed.name === 'string' && parsed.name.trim()
+        ? parsed.name.trim()
+        : ''
       if (imageId && !assetId) {
         return { kind: 'existing' as const, imageId }
       }
       if (assetId && !imageId) {
         return { kind: 'asset' as const, assetId }
+      }
+      if (url && !imageId && !assetId && url.startsWith('/uploads/')) {
+        return { kind: 'url' as const, url, name }
       }
       return null
     }) ?? undefined
@@ -599,7 +608,10 @@ router.patch('/:id', requireAuth, requireActiveUser, asyncHandler(async (req: Au
 
       if (imageInstructions !== undefined) {
         const validatedInstructions = imageInstructions.filter(
-          (item): item is { kind: 'existing'; imageId: string } | { kind: 'asset'; assetId: string } => Boolean(item),
+          (item): item is
+            | { kind: 'existing'; imageId: string }
+            | { kind: 'asset'; assetId: string }
+            | { kind: 'url'; url: string; name: string } => Boolean(item),
         )
         if (validatedInstructions.length !== imageInstructions.length) {
           throw new Error('图片保存数据无效')
@@ -651,9 +663,34 @@ router.patch('/:id', requireAuth, requireActiveUser, asyncHandler(async (req: Au
         }
         const assetMap = new Map(assets.map((asset) => [asset.id, asset]))
 
+        const urlsInPayload = validatedInstructions
+          .filter((item): item is { kind: 'url'; url: string; name: string } => item?.kind === 'url')
+          .map((item) => item.url)
+        const urlAssets: Array<{ id: string; publicUrl: string; fileName: string | null }> = urlsInPayload.length
+          ? await tx.mediaAsset.findMany({
+              select: {
+                id: true,
+                publicUrl: true,
+                fileName: true,
+              },
+              where: {
+                ownerUid: req.authUser!.uid,
+                status: 'ready',
+                publicUrl: {
+                  in: urlsInPayload,
+                },
+              },
+            })
+          : []
+        const assetByUrl = new Map(urlAssets.map((asset) => [asset.publicUrl, asset]))
+
         const keptIds = new Set(existingIdsInPayload)
         removedImages.push(...existingImages.filter((item) => !keptIds.has(item.id)))
-        if (removedImages.length === existingImages.length && assetIdsInPayload.length === 0) {
+        if (
+          removedImages.length === existingImages.length
+          && assetIdsInPayload.length === 0
+          && urlsInPayload.length === 0
+        ) {
           throw new Error('图集至少需要保留一张图片')
         }
 
@@ -669,6 +706,22 @@ router.patch('/:id', requireAuth, requireActiveUser, asyncHandler(async (req: Au
               where: { id: instruction.imageId },
               data: { sortOrder: index },
             })
+            continue
+          }
+
+          if (instruction.kind === 'url') {
+            const asset = assetByUrl.get(instruction.url) || null
+            const created = await tx.galleryImage.create({
+              data: {
+                galleryId: req.params.id,
+                assetId: asset?.id || null,
+                url: instruction.url,
+                name: instruction.name || asset?.fileName || `image-${index + 1}`,
+                sortOrder: index,
+              },
+              select: { id: true },
+            })
+            newImageIds.push(created.id)
             continue
           }
 

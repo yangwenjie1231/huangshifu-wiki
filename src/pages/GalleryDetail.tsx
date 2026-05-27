@@ -24,9 +24,10 @@ import { useI18n } from '../lib/i18n';
 import { formatDateTime, toDateValue } from '../lib/dateUtils';
 import { DEFAULT_AVATAR, handleAvatarError } from '../lib/defaultAvatar';
 import { UPLOAD_MAX_FILE_SIZE_BYTES, formatUploadLimitWithSize } from '../lib/uploadLimits';
-import { getImagePreference } from '../services/imageService';
+import { findExistingImageMapByMd5, getImagePreference } from '../services/imageService';
 import { submitFormOnModifierEnter } from '../lib/formShortcuts';
 import { markCommentDeleted, restoreComment, updateCommentLike } from '../utils/commentState';
+import { calculateFileMd5Hex } from '../utils/fileMd5';
 import type { GalleryDetailResponse } from '../types/api';
 import type { GalleryImageItem, GalleryItem } from '../types/entities';
 
@@ -54,6 +55,9 @@ type UploadSessionResponse = {
 type UploadFileResponse = {
   asset: {
     id: string;
+    url: string;
+    publicUrl?: string;
+    fileName: string;
   };
 };
 
@@ -363,20 +367,52 @@ const GalleryDetail = () => {
       setSaving(true);
       const pendingImages = currentDraft.images.filter((image) => image.isPending && image.pendingFile);
       let assetIdByClientId = new Map<string, string>();
+      let imageUrlByClientId = new Map<string, { url: string; name: string }>();
 
       if (pendingImages.length) {
         setUploading(true);
-        const sessionData = await apiPost<UploadSessionResponse>('/api/uploads/sessions', {
-          maxFiles: pendingImages.length,
-        });
-        const sessionId = sessionData.session.id;
+        const imageUrlByMd5 = new Map<string, { url: string; name: string }>();
+        let sessionId: string | null = null;
+
+        const ensureSession = async () => {
+          if (sessionId) {
+            return sessionId;
+          }
+          const sessionData = await apiPost<UploadSessionResponse>('/api/uploads/sessions', {
+            maxFiles: pendingImages.length,
+          });
+          sessionId = sessionData.session.id;
+          return sessionId;
+        };
 
         for (const image of pendingImages) {
-          const uploadResult = await uploadFileToSession(sessionId, image.pendingFile!);
+          const md5 = await calculateFileMd5Hex(image.pendingFile!);
+          const reusedImage = imageUrlByMd5.get(md5);
+          if (reusedImage) {
+            imageUrlByClientId.set(image.clientId, reusedImage);
+            continue;
+          }
+
+          const existing = await findExistingImageMapByMd5(md5);
+          if (existing) {
+            const imageRef = { url: existing.localUrl, name: image.name || image.pendingFile!.name };
+            imageUrlByMd5.set(md5, imageRef);
+            imageUrlByClientId.set(image.clientId, imageRef);
+            continue;
+          }
+
+          const uploadResult = await uploadFileToSession(await ensureSession(), image.pendingFile!);
           assetIdByClientId.set(image.clientId, uploadResult.asset.id);
+          const uploadedImageRef = {
+            url: uploadResult.asset.publicUrl || uploadResult.asset.url,
+            name: uploadResult.asset.fileName || image.name || image.pendingFile!.name,
+          };
+          imageUrlByMd5.set(md5, uploadedImageRef);
         }
 
-        await apiPost(`/api/uploads/sessions/${sessionId}/finalize`);
+        if (sessionId) {
+          await apiPost(`/api/uploads/sessions/${sessionId}/finalize`);
+        }
       }
 
       const result = await apiPatch<GalleryDetailResponse>(`/api/galleries/${gallery.id}`, {
@@ -385,11 +421,17 @@ const GalleryDetail = () => {
         tags: splitTagsInput(currentDraft.tagsText),
         copyright: currentDraft.copyrightText.trim() || null,
         published: currentDraft.published,
-        images: currentDraft.images.map((image) => (
-          image.isPending
-            ? { assetId: assetIdByClientId.get(image.clientId) }
-            : { imageId: image.id }
-        )),
+        images: currentDraft.images
+          .map((image) => (
+            image.isPending
+              ? (
+                  assetIdByClientId.has(image.clientId)
+                    ? { assetId: assetIdByClientId.get(image.clientId) }
+                    : imageUrlByClientId.get(image.clientId)
+                )
+              : { imageId: image.id }
+          ))
+          .filter((image) => image && ('imageId' in image || 'assetId' in image || 'url' in image)),
       });
       releasePendingImageUrls(currentDraft.images);
       setGallery(result.gallery);

@@ -13,12 +13,13 @@ import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { apiDelete, apiGet, apiPost, apiUpload } from '../lib/apiClient';
 import { UPLOAD_MAX_FILE_SIZE_BYTES, formatUploadLimit, formatUploadLimitWithSize } from '../lib/uploadLimits';
-import { getImagePreference } from '../services/imageService';
+import { findExistingImageMapByMd5, getImagePreference } from '../services/imageService';
 import { toDateValue } from '../lib/dateUtils';
 import { LocationTagInput } from '../components/LocationTagInput';
 import Pagination from '../components/Pagination';
 import { extractGpsFromMultipleFiles, findMostFrequentGpsCoordinates } from '../services/exifService';
 import { usePagination } from '../hooks/usePagination';
+import { calculateFileMd5Hex } from '../utils/fileMd5';
 import type { GalleryItem } from '../types/entities';
 import type { GalleryCreateResponse, GalleryListResponse, UploadFileResponse, UploadSessionResponse } from '../types/api';
 
@@ -519,7 +520,7 @@ const UploadModal = ({
     }
 
     const data = await apiUpload<UploadFileResponse>(url.toString(), formData);
-    return data;
+    return { uploadData: data };
   };
 
   const handleUpload = async () => {
@@ -541,25 +542,72 @@ const UploadModal = ({
     const MAX_CONCURRENT = 3;
 
     const uploadFilesWithConcurrency = async (
-      sessionId: string,
       fileList: File[],
       onFileComplete: () => void
-    ): Promise<string[]> => {
-      const results: string[] = [];
+    ): Promise<{ url: string; name: string }[]> => {
+      const images: { url: string; name: string }[] = [];
+      const seenMd5 = new Set<string>();
+      let sessionId: string | null = null;
+      let sessionPromise: Promise<string> | null = null;
+
+      const ensureSession = async () => {
+        if (sessionId) {
+          return sessionId;
+        }
+        sessionPromise ||= apiPost<UploadSessionResponse>('/api/uploads/sessions', {
+          maxFiles: fileList.length,
+        }).then((sessionData) => sessionData.session.id);
+        sessionId = await sessionPromise;
+        return sessionId;
+      };
 
       for (let i = 0; i < fileList.length; i += MAX_CONCURRENT) {
         const batch = fileList.slice(i, i + MAX_CONCURRENT);
         const batchResults = await Promise.all(
           batch.map(async (file) => {
-            const uploadData = await uploadFileToSession(sessionId, file);
+            const md5 = await calculateFileMd5Hex(file);
+            if (seenMd5.has(md5)) {
+              onFileComplete();
+              return null;
+            }
+            seenMd5.add(md5);
+
+            const existing = await findExistingImageMapByMd5(md5);
+            if (existing) {
+              onFileComplete();
+              return {
+                existingImage: {
+                  url: existing.localUrl,
+                  name: file.name,
+                },
+              };
+            }
+
+            const result = await uploadFileToSession(await ensureSession(), file);
             onFileComplete();
-            return uploadData.asset.id;
+            return result;
           })
         );
-        results.push(...batchResults);
+        batchResults.forEach((result) => {
+          if (!result) {
+            return;
+          }
+          if ('existingImage' in result) {
+            images.push(result.existingImage);
+          } else {
+            images.push({
+              url: result.uploadData.asset.publicUrl || result.uploadData.asset.url,
+              name: result.uploadData.asset.fileName,
+            });
+          }
+        });
       }
 
-      return results;
+      if (sessionId) {
+        await apiPost(`/api/uploads/sessions/${sessionId}/finalize`);
+      }
+
+      return images;
     };
 
     try {
@@ -569,15 +617,9 @@ const UploadModal = ({
 
       for (const groupName of groupNames) {
         const groupFiles = groups[groupName];
-        const sessionData = await apiPost<UploadSessionResponse>('/api/uploads/sessions', {
-          maxFiles: groupFiles.length,
-        });
-        const sessionId = sessionData.session.id;
-
         const galleryTitle = groupNames.length === 1 && title ? title : groupName;
 
-        const uploadedAssetIds = await uploadFilesWithConcurrency(
-          sessionId,
+        const uploadedImages = await uploadFilesWithConcurrency(
           groupFiles,
           () => {
             uploadedCount++;
@@ -585,13 +627,10 @@ const UploadModal = ({
           }
         );
 
-        await apiPost(`/api/uploads/sessions/${sessionId}/finalize`);
-
         const galleryResponse = await apiPost<GalleryCreateResponse>('/api/galleries', {
           title: galleryTitle,
           description: description || `来自 ${groupName} 的图集`,
-          uploadSessionId: sessionId,
-          assetIds: uploadedAssetIds,
+          images: uploadedImages,
           tags: tags.split(',').map(t => t.trim()).filter(t => t),
           locationCode: locationCode,
           locationDetail: locationName,

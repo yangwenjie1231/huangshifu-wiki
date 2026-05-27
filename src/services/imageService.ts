@@ -73,6 +73,7 @@ export interface UploadImageOptions {
   type?: 'general' | 'avatar' | 'cover' | 'gallery' | 'markdown';
   onProgress?: (progress: number) => void;
   signal?: AbortSignal;
+  reuseExisting?: boolean;
 }
 
 export interface UploadImageResult {
@@ -85,6 +86,16 @@ export interface UploadImageResult {
   md5?: string;
   blurhash?: string;
 }
+
+export const findExistingImageMapByMd5 = async (md5: string): Promise<ImageMap | null> => {
+  const listResponse = await apiGet<{ items: ImageMap[] }>('/api/image-maps', { md5 });
+  return listResponse.items?.[0] || null;
+};
+
+export const findExistingImageMapForFile = async (file: File): Promise<ImageMap | null> => {
+  const md5 = await calculateFileMd5Hex(file);
+  return findExistingImageMapByMd5(md5);
+};
 
 let cachedPreference: ImagePreference | null = null;
 
@@ -516,10 +527,27 @@ export const uploadImageWithStrategy = async (
   file: File,
   options: UploadImageOptions = {}
 ): Promise<UploadImageResult> => {
-  const { type = 'general', onProgress, signal } = options;
+  const { type = 'general', onProgress, signal, reuseExisting = true } = options;
   
   // 获取当前存储策略
   const preference = await getImagePreference();
+
+  if (reuseExisting) {
+    const existing = await findExistingImageMapForFile(file);
+    if (existing) {
+      const resolved = await resolveImageUrl(existing, preference);
+      return {
+        assetId: '',
+        url: resolved.url || existing.localUrl,
+        localUrl: existing.localUrl,
+        s3Url: existing.s3Url,
+        externalUrl: existing.externalUrl,
+        storageType: resolved.storageType || existing.storageType || 'local',
+        md5: existing.md5,
+        blurhash: existing.blurhash,
+      };
+    }
+  }
   
   // 根据策略决定是否启用三重存储
   const useTripleStorage = preference.strategy === 's3' || preference.strategy === 'external';

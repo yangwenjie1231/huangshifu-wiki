@@ -82,7 +82,10 @@ export const CoverManager = ({
 
     setUploading(true);
     try {
-      const result: UploadImageResult = await uploadImageWithStrategy(file, { type: 'cover' });
+      const result: UploadImageResult = await uploadImageWithStrategy(file, {
+        type: 'cover',
+        reuseExisting: false,
+      });
       if (!result.assetId) throw new Error('上传失败');
       await apiPost(`${config.apiPrefix}/${resourceId}/covers`, { assetId: result.assetId });
       show('封面上传成功');
