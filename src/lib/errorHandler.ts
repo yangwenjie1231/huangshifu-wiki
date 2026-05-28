@@ -282,7 +282,7 @@ export function logApiError(error: Error, context: ApiErrorContext): void {
 
 /**
  * 全局认证错误回调
- * 当 API 返回 401/403 时调用，可用于触发全局登出或跳转
+ * 当 API 返回 401 或认证状态相关 403 时调用，可用于刷新认证状态或跳转
  */
 type AuthErrorCallback = (error: AppError) => void;
 let globalAuthErrorCallback: AuthErrorCallback | null = null;

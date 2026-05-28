@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
 import {
   type LucideIcon,
@@ -29,7 +29,6 @@ import {
 import { clsx } from 'clsx'
 import { useAuth } from '../../context/AuthContext'
 import { logoutRequest } from '../../lib/auth'
-import { setAuthErrorCallback } from '../../lib/errorHandler'
 import { HeaderUserControls } from '../HeaderUserControls'
 import { useToast } from '../Toast'
 
@@ -167,17 +166,6 @@ export const AdminLayout = () => {
   const { show } = useToast()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
-
-  useEffect(() => {
-    setAuthErrorCallback(() => {
-      void logoutRequest().catch((error) => {
-        console.error('Logout failed:', error)
-      })
-    })
-    return () => {
-      setAuthErrorCallback(null)
-    }
-  }, [navigate])
 
   const currentPath = location.pathname
   const closeMobileMenu = () => setMobileOpen(false)

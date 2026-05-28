@@ -55,6 +55,28 @@ function buildUrl(path: string, query?: RequestOptions['query']) {
   return qs ? `${path}?${qs}` : path;
 }
 
+function getResponseErrorMessage(data: unknown) {
+  if (!data || typeof data !== 'object' || !('error' in data)) return '';
+  return String((data as Record<string, unknown>).error);
+}
+
+function shouldRefreshAuthState(status: number, data: unknown) {
+  if (status === 401) return true;
+  if (status !== 403) return false;
+
+  const code = data && typeof data === 'object' && 'code' in data
+    ? String((data as Record<string, unknown>).code)
+    : '';
+  if (code === 'USER_BANNED') return true;
+
+  const message = getResponseErrorMessage(data);
+  return (
+    message.includes('账号已被封禁') ||
+    message === '需要管理员权限' ||
+    message === '需要超级管理员权限'
+  );
+}
+
 async function parseResponse<T>(response: Response, context?: Omit<ApiErrorContext, 'statusCode' | 'responseData'>): Promise<T> {
   const data = await response.json().catch(() => ({}));
 
@@ -76,7 +98,7 @@ async function parseResponse<T>(response: Response, context?: Omit<ApiErrorConte
     }
 
     const authErrorCallback = getAuthErrorCallback();
-    if (authErrorCallback && (response.status === 401 || response.status === 403)) {
+    if (authErrorCallback && shouldRefreshAuthState(response.status, data)) {
       authErrorCallback(error);
     }
 

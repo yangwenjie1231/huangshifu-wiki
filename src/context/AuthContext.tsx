@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import type { User } from '../lib/auth';
 import { UserPreferencesProvider } from './UserPreferencesContext';
 import type { UserProfile } from '../types/entities';
+import { setAuthErrorCallback, type AppError } from '../lib/errorHandler';
 
 // 延迟加载 auth 模块，避免首屏阻塞
 // 使用动态导入实现真正的懒加载
@@ -39,6 +40,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const authModuleRef = useRef<AuthModule | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const isInitializedRef = useRef(false);
+  const latestUserRef = useRef<User | null>(null);
+  const refreshInFlightRef = useRef(false);
 
   // 清理订阅
   const cleanupSubscription = useCallback(() => {
@@ -65,12 +68,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // 设置新的订阅
       unsubscribeRef.current = onAuthStateChanged(auth, async (user) => {
+        latestUserRef.current = user;
         setUser(user);
         setLoading(false);
         isInitializedRef.current = true;
       });
     } catch (error) {
       console.error('Failed to initialize auth:', error);
+      latestUserRef.current = null;
       setUser(null);
       setLoading(false);
       isInitializedRef.current = true;
@@ -118,7 +123,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // 刷新认证状态
   const refreshAuth = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+
     try {
+      refreshInFlightRef.current = true;
       setLoading(true);
       if (!authModuleRef.current) {
         authModuleRef.current = await import('../lib/auth');
@@ -127,9 +135,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Failed to refresh auth:', error);
     } finally {
+      refreshInFlightRef.current = false;
       setLoading(false);
     }
   }, []);
+
+  const shouldRefreshAuthForError = useCallback((error: AppError) => {
+    if (error.statusCode !== 403) return true;
+
+    const currentUser = latestUserRef.current;
+    if (error.message.includes('账号已被封禁')) {
+      return currentUser?.status !== 'banned';
+    }
+
+    if (error.message === '需要管理员权限') {
+      return currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+    }
+
+    if (error.message === '需要超级管理员权限') {
+      return currentUser?.role === 'super_admin';
+    }
+
+    return true;
+  }, []);
+
+  useEffect(() => {
+    setAuthErrorCallback((error) => {
+      if (!shouldRefreshAuthForError(error)) return;
+      void refreshAuth();
+    });
+
+    return () => {
+      setAuthErrorCallback(null);
+    };
+  }, [refreshAuth, shouldRefreshAuthForError]);
 
   // 构建用户资料
   const profile = user

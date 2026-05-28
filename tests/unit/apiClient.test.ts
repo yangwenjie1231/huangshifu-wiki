@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut, apiUpload } from '../../src/lib/apiClient';
+import { setAuthErrorCallback } from '../../src/lib/errorHandler';
 
 describe('apiClient', () => {
   const fetchMock = vi.fn<typeof fetch>();
@@ -11,6 +12,7 @@ describe('apiClient', () => {
 
   afterEach(() => {
     fetchMock.mockReset();
+    setAuthErrorCallback(null);
     vi.unstubAllGlobals();
   });
 
@@ -112,6 +114,69 @@ describe('apiClient', () => {
     );
 
     await expect(apiGet('/api/secret')).rejects.toThrow('forbidden');
+  });
+
+  it('does not invoke auth error callback for business permission errors', async () => {
+    const authErrorCallback = vi.fn();
+    setAuthErrorCallback(authErrorCallback);
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: '无权编辑该页面' }), {
+        status: 403,
+      }),
+    );
+
+    await expect(apiPost('/api/wiki/restricted', {})).rejects.toThrow('无权编辑该页面');
+    expect(authErrorCallback).not.toHaveBeenCalled();
+  });
+
+  it('invokes auth error callback for ban-related permission errors', async () => {
+    const authErrorCallback = vi.fn();
+    setAuthErrorCallback(authErrorCallback);
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: '账号已被封禁，无法执行管理操作',
+        }),
+        {
+          status: 403,
+        },
+      ),
+    );
+
+    await expect(apiPost('/api/admin/restricted', {})).rejects.toThrow(
+      '账号已被封禁，无法执行管理操作'
+    );
+    expect(authErrorCallback).toHaveBeenCalledTimes(1);
+  });
+
+  it('invokes auth error callback for admin permission state changes', async () => {
+    const authErrorCallback = vi.fn();
+    setAuthErrorCallback(authErrorCallback);
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: '需要管理员权限' }), {
+        status: 403,
+      }),
+    );
+
+    await expect(apiPost('/api/admin/restricted', {})).rejects.toThrow('需要管理员权限');
+    expect(authErrorCallback).toHaveBeenCalledTimes(1);
+  });
+
+  it('invokes auth error callback for authentication errors', async () => {
+    const authErrorCallback = vi.fn();
+    setAuthErrorCallback(authErrorCallback);
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: '请先登录' }), {
+        status: 401,
+      }),
+    );
+
+    await expect(apiPost('/api/admin/restricted', {})).rejects.toThrow('请先登录');
+    expect(authErrorCallback).toHaveBeenCalledTimes(1);
   });
 
   it('uploads multipart form data without JSON headers', async () => {

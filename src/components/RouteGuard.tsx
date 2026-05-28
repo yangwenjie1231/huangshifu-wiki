@@ -35,7 +35,7 @@ export const RouteGuard = ({
   description,
   forbiddenFallback,
 }: RouteGuardProps) => {
-  const { user, isAdmin, loading, ensureInitialized } = useAuth()
+  const { user, isAdmin, isBanned, loading, ensureInitialized } = useAuth()
   const location = useLocation()
 
   useEffect(() => {
@@ -51,7 +51,7 @@ export const RouteGuard = ({
     return <Navigate to={`/login?redirect=${redirect}`} replace />
   }
 
-  if (requireAdmin && !isAdmin) {
+  if (requireAdmin && (!isAdmin || isBanned)) {
     return forbiddenFallback ?? <DefaultForbiddenFallback />
   }
 
