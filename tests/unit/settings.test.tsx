@@ -172,6 +172,21 @@ describe('Settings', () => {
     expect(mockShow).toHaveBeenCalledWith('当前密码不能为空', { variant: 'error' })
   })
 
+  it('shows a chinese validation message when new email is empty', async () => {
+    const user = userEvent.setup()
+    renderSettings('/settings/account')
+
+    await user.click(screen.getByRole('button', { name: /修改邮箱/ }))
+    fireEvent.change(await screen.findByLabelText('当前密码'), {
+      target: { value: 'CurrentPassword123!' },
+    })
+    const newEmailInput = screen.getByLabelText('新邮箱')
+    await user.clear(newEmailInput)
+    await user.click(screen.getByRole('button', { name: /保存邮箱/ }))
+
+    expect(mockShow).toHaveBeenCalledWith('新邮箱不能为空', { variant: 'error' })
+  })
+
   it('shows theme controls in appearance section', async () => {
     renderSettings('/settings/appearance')
 

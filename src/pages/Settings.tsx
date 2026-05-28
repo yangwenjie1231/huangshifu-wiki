@@ -174,6 +174,11 @@ const Settings = () => {
       return
     }
 
+    if (!emailForm.newEmail.trim()) {
+      show('新邮箱不能为空', { variant: 'error' })
+      return
+    }
+
     setSavingEmail(true)
     try {
       await apiPut('/api/users/email', {
