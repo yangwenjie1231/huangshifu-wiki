@@ -93,10 +93,6 @@ const Settings = () => {
       bio: profile?.bio || '',
       photoURL: profile?.photoURL || user.photoURL || '',
     })
-    setEmailForm((current) => ({
-      ...current,
-      newEmail: user.email || '',
-    }))
   }, [
     profile?.bio,
     profile?.displayName,
@@ -152,7 +148,7 @@ const Settings = () => {
 
   const openEmailEditor = () => {
     setEmailForm({
-      newEmail: user.email || '',
+      newEmail: '',
       currentPassword: '',
     })
     setIsEmailEditorOpen(true)
