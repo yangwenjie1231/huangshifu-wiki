@@ -447,38 +447,6 @@ const MusicDetail = () => {
                 </div>
               </div>
             </div>
-
-            <div className="py-5">
-              <h3 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-3.5">操作</h3>
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={handlePlay}
-                  className="flex items-center gap-2 text-sm text-text-secondary hover:text-brand-gold hover:pl-1 transition-all"
-                >
-                  <Play size={14} /> 播放歌曲
-                </button>
-                <button
-                  onClick={toggleFavorite}
-                  className="flex items-center gap-2 text-sm text-text-secondary hover:text-brand-gold hover:pl-1 transition-all"
-                >
-                  <Heart size={14} /> {song.favoritedByMe ? '取消收藏' : '收藏歌曲'}
-                </button>
-                <button
-                  onClick={handleCopyLink}
-                  className="flex items-center gap-2 text-sm text-text-secondary hover:text-brand-gold hover:pl-1 transition-all"
-                >
-                  <Link2 size={14} /> 复制内链
-                </button>
-                <a
-                  href={getSongExternalUrl(song)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-sm text-text-secondary hover:text-brand-gold hover:pl-1 transition-all"
-                >
-                  <ExternalLink size={14} /> 原始链接
-                </a>
-              </div>
-            </div>
           </aside>
         </div>
       </div>
