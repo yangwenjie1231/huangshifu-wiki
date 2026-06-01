@@ -1,18 +1,11 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Heart, ExternalLink, MessageSquare, Link2, Trash2 } from 'lucide-react';
+import { Play, Heart } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useI18n } from '../../lib/i18n';
-import { getPlatformExternalUrl } from '../../lib/musicPlatformUrls';
 import { SmartImage } from '../SmartImage';
 import type { SongItem } from '../../types/entities';
 import type { ViewMode } from '../../types/userPreferences';
-
-const getSongExternalUrl = (song: SongItem) => {
-	const id = (song.id || '').trim();
-	if (!id) return '#';
-	return getPlatformExternalUrl(song.primaryPlatform || 'netease', id) || '#';
-};
 
 interface SongCardProps {
 	song: SongItem;
@@ -20,15 +13,10 @@ interface SongCardProps {
 	isSelected: boolean;
 	isCurrentSong: boolean;
 	isFavoriting: boolean;
-	isAdmin: boolean;
-	isPostsSelected: boolean;
 	viewMode?: ViewMode;
 	onPlay: (song: SongItem) => void;
 	onToggleSelect: (docId: string) => void;
 	onToggleFavorite: (song: SongItem) => void;
-	onCopyLink: (event: React.MouseEvent<HTMLButtonElement>, song: SongItem) => void;
-	onDelete: (docId: string) => void;
-	onShowPosts: (song: SongItem) => void;
 }
 
 const SongCard = React.memo(function SongCard({
@@ -37,15 +25,10 @@ const SongCard = React.memo(function SongCard({
 	isSelected,
 	isCurrentSong,
 	isFavoriting,
-	isAdmin,
-	isPostsSelected,
 	viewMode = 'list',
 	onPlay,
 	onToggleSelect,
 	onToggleFavorite,
-	onCopyLink,
-	onDelete,
-	onShowPosts,
 }: SongCardProps) {
 	const { t } = useI18n();
 	const navigate = useNavigate();
@@ -75,83 +58,43 @@ const SongCard = React.memo(function SongCard({
 		</button>
 	);
 
-	const renderActionButtons = (compact = false) => (
-		<>
-			<button
-				onClick={(e) => { e.stopPropagation(); onPlay(song); }}
-				className={clsx(
-					"rounded text-text-muted hover:text-brand-gold transition-colors",
-					compact ? "p-1.5" : "p-2"
-				)}
-				title={t('music.play')}
-				aria-label={`播放 ${song.title}`}
-			>
-				<Play size={compact ? 14 : 15} />
-			</button>
-			<button
-				onClick={(e) => { e.stopPropagation(); onToggleFavorite(song); }}
-				disabled={isFavoriting}
-				className={clsx(
-					"rounded transition-colors",
-					compact ? "p-1.5" : "p-2",
-					song.favoritedByMe ? "theme-text-error" : "text-text-muted theme-icon-button-danger"
-				)}
-				title={t('music.favorite')}
-				aria-label={`${t('music.favorite')} ${song.title}`}
-			>
-				<Heart size={compact ? 14 : 15} />
-			</button>
-			<a
-				href={getSongExternalUrl(song)}
-				target="_blank"
-				rel="noopener noreferrer"
-				onClick={(e) => e.stopPropagation()}
-				className={clsx(
-					"text-text-muted hover:text-brand-gold transition-colors",
-					compact ? "p-1.5" : "p-2"
-				)}
-				title={t('music.openOriginalLink')}
-				aria-label={`${t('music.openOriginalLink')} ${song.title}`}
-			>
-				<ExternalLink size={compact ? 14 : 15} />
-			</a>
-			<button
-				onClick={(event) => { event.stopPropagation(); onCopyLink(event, song); }}
-				className={clsx(
-					"text-text-muted hover:text-brand-gold transition-colors",
-					compact ? "p-1.5" : "p-2"
-				)}
-				title={t('music.copyInternalLink')}
-				aria-label={`${t('music.copyInternalLink')} ${song.title}`}
-			>
-				<Link2 size={compact ? 14 : 15} />
-			</button>
-			<button
-				onClick={(e) => { e.stopPropagation(); onShowPosts(song); }}
-				className={clsx(
-					"transition-colors",
-					compact ? "p-1.5" : "p-2",
-					isPostsSelected ? "text-brand-gold" : "text-text-muted hover:text-brand-gold"
-				)}
-				title={t('music.viewPosts')}
-				aria-label={`${t('music.viewPosts')} ${song.title}`}
-			>
-				<MessageSquare size={compact ? 14 : 15} />
-			</button>
-			{isAdmin && (
-				<button
-					onClick={(e) => { e.stopPropagation(); onDelete(song.docId); }}
-					className={clsx(
-						"text-text-muted theme-icon-button-danger transition-colors",
-						compact ? "p-1.5" : "p-2"
-					)}
-					title={t('music.deleteSong')}
-					aria-label={`删除 ${song.title}`}
-				>
-					<Trash2 size={compact ? 14 : 15} />
-				</button>
+	const renderFavoriteButton = (compact = false) => (
+		<button
+			onClick={(e) => { e.stopPropagation(); onToggleFavorite(song); }}
+			disabled={isFavoriting}
+			className={clsx(
+				"rounded transition-colors",
+				compact ? "p-1.5" : "p-2",
+				song.favoritedByMe ? "theme-text-error" : "text-text-muted theme-icon-button-danger"
 			)}
-		</>
+			title={t('music.favorite')}
+			aria-label={`${t('music.favorite')} ${song.title}`}
+		>
+			<Heart size={compact ? 14 : 15} />
+		</button>
+	);
+
+	const renderCoverPlayButton = (compact = false) => (
+		<button
+			type="button"
+			onClick={(e) => { e.stopPropagation(); onPlay(song); }}
+			className={clsx(
+				"absolute inset-0 flex items-center justify-center bg-black/35 text-white opacity-0 transition-opacity",
+				"hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-theme-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary",
+				isCurrentSong && !isBatchMode && "opacity-100 bg-black/25"
+			)}
+			title={t('music.play')}
+			aria-label={`播放 ${song.title}`}
+		>
+			<span
+				className={clsx(
+					"flex items-center justify-center rounded-full bg-black/55 backdrop-blur-sm",
+					compact ? "h-8 w-8" : "h-10 w-10"
+				)}
+			>
+				<Play size={compact ? 16 : 20} fill="currentColor" />
+			</span>
+		</button>
 	);
 
 	if (!isList) {
@@ -176,6 +119,7 @@ const SongCard = React.memo(function SongCard({
 						className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
 						lazy={false}
 					/>
+					{!isBatchMode && renderCoverPlayButton(isSmallGrid)}
 					{isCurrentSong && !isBatchMode && (
 						<div className="absolute left-2 top-2 rounded bg-[var(--color-theme-accent)] px-2 py-0.5 text-[10px] font-semibold text-white">
 							{t('music.playing')}
@@ -206,9 +150,7 @@ const SongCard = React.memo(function SongCard({
 					{isBatchMode ? (
 						renderBatchButton(true)
 					) : (
-						<div className="flex flex-wrap items-center gap-0.5">
-							{renderActionButtons(isSmallGrid)}
-						</div>
+						renderFavoriteButton(isSmallGrid)
 					)}
 				</div>
 			</div>
@@ -229,13 +171,14 @@ const SongCard = React.memo(function SongCard({
 			aria-label={`${song.title} - ${song.artist || '未知歌手'}`}
 		>
 			{/* Cover */}
-			<div className="relative w-14 h-14 flex-shrink-0 pointer-events-none">
+			<div className="relative w-14 h-14 flex-shrink-0 overflow-hidden rounded">
 				<SmartImage
 					src={song.cover}
 					alt={song.title + ' 封面'}
 					className="w-full h-full object-cover rounded"
 					lazy={false}
 				/>
+				{!isBatchMode && renderCoverPlayButton(true)}
 			</div>
 
 			{/* Info */}
@@ -261,21 +204,12 @@ const SongCard = React.memo(function SongCard({
 					<>
 						{/* Desktop actions: hidden by default, show on hover */}
 						<div className="hidden md:flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-							{renderActionButtons()}
+							{renderFavoriteButton()}
 						</div>
 
 						{/* Mobile actions: always visible but compact */}
 						<div className="flex md:hidden items-center gap-0.5">
-							<button
-								onClick={(e) => { e.stopPropagation(); onToggleFavorite(song); }}
-								disabled={isFavoriting}
-								className={clsx(
-									"p-2 rounded transition-colors",
-									song.favoritedByMe ? "theme-text-error" : "text-text-muted"
-								)}
-							>
-								<Heart size={15} />
-							</button>
+							{renderFavoriteButton()}
 						</div>
 					</>
 				)}

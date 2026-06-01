@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useUserPreferences } from '../context/UserPreferencesContext';
 import { useMusic } from '../context/MusicContext';
-import { Search, Plus, List, Sparkles, X, Heart, MessageSquare, Link2 } from 'lucide-react';
+import { Search, Plus, List, Sparkles, X, Heart, Link2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'motion/react';
 import { MusicPlayer } from '../components/MusicPlayer';
@@ -24,7 +24,7 @@ import { MusicFilters } from '../components/Music/MusicFilters';
 import { BatchActions } from '../components/Music/BatchActions';
 import { ViewModeSelector } from '../components/ViewModeSelector';
 import { VIEW_MODE_CONFIG } from '../lib/viewModes';
-import type { SongItem, AlbumItem, PostItem } from '../types/entities';
+import type { SongItem, AlbumItem } from '../types/entities';
 
 const DEFAULT_PAGE_SIZE = 40;
 
@@ -89,11 +89,8 @@ const Music = () => {
   const [isAlbumModalOpen, setIsAlbumModalOpen] = useState(false);
   const [selectedSongs, setSelectedSongs] = useState<Set<string>>(new Set());
   const [isBatchMode, setIsBatchMode] = useState(false);
-  const [confirmModal, setConfirmModal] = useState<{ show: boolean, type: 'single' | 'batch', id?: string }>({ show: false, type: 'single' });
+  const [confirmModal, setConfirmModal] = useState<{ show: boolean }>({ show: false });
   const [favoriting, setFavoriting] = useState<string | null>(null);
-  const [selectedSongForPosts, setSelectedSongForPosts] = useState<SongItem | null>(null);
-  const [songPosts, setSongPosts] = useState<PostItem[]>([]);
-  const [loadingPosts, setLoadingPosts] = useState(false);
   const [albums, setAlbums] = useState<AlbumItem[]>([]);
   const [loadingAlbums, setLoadingAlbums] = useState(false);
   const [activeTab, setActiveTab] = useState<'music' | 'albums'>('music');
@@ -195,28 +192,6 @@ const Music = () => {
     fetchAlbums();
   }, []);
 
-  const fetchSongPosts = async (song: SongItem) => {
-    setLoadingPosts(true);
-    try {
-      const data = await apiGet<{ posts: PostItem[] }>(`/api/music/${song.docId}/posts`);
-      setSongPosts(data.posts || []);
-    } catch (error) {
-      console.error('Fetch song posts error:', error);
-      setSongPosts([]);
-    }
-    setLoadingPosts(false);
-  };
-
-  const handleShowPosts = (song: SongItem) => {
-    if (selectedSongForPosts?.docId === song.docId) {
-      setSelectedSongForPosts(null);
-      setSongPosts([]);
-    } else {
-      setSelectedSongForPosts(song);
-      fetchSongPosts(song);
-    }
-  };
-
   const handleAddSong = async () => {
     if (!searchId) return;
     if (isBanned) {
@@ -281,16 +256,6 @@ const Music = () => {
     setIsPlaying(true);
   };
 
-  const handleCopySongLink = async (event: React.MouseEvent<HTMLButtonElement>, song: SongItem) => {
-    event.stopPropagation();
-    const copied = await copyToClipboard(toAbsoluteInternalUrl(`/music/${song.docId}`));
-    if (copied) {
-      show('歌曲内链已复制');
-      return;
-    }
-    show('复制链接失败，请稍后重试', { variant: 'error' });
-  };
-
   const handleCopyAlbumLink = async (event: React.MouseEvent<HTMLButtonElement>, albumId: string) => {
     event.stopPropagation();
     const copied = await copyToClipboard(toAbsoluteInternalUrl(`/album/${albumId}`));
@@ -299,20 +264,6 @@ const Music = () => {
       return;
     }
     show('复制链接失败，请稍后重试', { variant: 'error' });
-  };
-
-  const handleDeleteSong = async (songId: string) => {
-    try {
-      if (currentSong?.docId === songId) {
-        setCurrentSong(null);
-      }
-      await apiDelete(`/api/music/${songId}`);
-      fetchSongs();
-      setConfirmModal({ show: false, type: 'single' });
-    } catch (e) {
-      console.error("Delete error:", e);
-      show("删除失败，请检查权限", { variant: 'error' });
-    }
   };
 
   const handleToggleFavorite = async (song: SongItem) => {
@@ -375,7 +326,7 @@ const Music = () => {
 
     setSelectedSongs(new Set());
     setIsBatchMode(false);
-    setConfirmModal({ show: false, type: 'single' });
+    setConfirmModal({ show: false });
     fetchSongs();
     setLoading(false);
   };
@@ -513,7 +464,7 @@ const Music = () => {
           <BatchActions
             selectedCount={selectedSongs.size}
             onCancelSelect={() => setSelectedSongs(new Set())}
-            onBatchDelete={() => setConfirmModal({ show: true, type: 'batch' })}
+            onBatchDelete={() => setConfirmModal({ show: true })}
           />
         )}
 
@@ -528,19 +479,17 @@ const Music = () => {
               >
                 <h3 className="text-xl font-semibold text-text-primary mb-4 tracking-wide">{t('music.confirmDelete')}</h3>
                 <p className="text-text-secondary mb-8 text-[0.9375rem]">
-                  {confirmModal.type === 'single'
-                    ? t('music.confirmDeleteSingle')
-                    : t('music.confirmDeleteBatch', { count: selectedSongs.size })}
+                  {t('music.confirmDeleteBatch', { count: selectedSongs.size })}
                 </p>
                 <div className="flex gap-4">
                   <button
-                    onClick={() => setConfirmModal({ show: false, type: 'single' })}
+                    onClick={() => setConfirmModal({ show: false })}
                     className="flex-1 px-6 py-3 bg-surface-alt text-text-secondary rounded font-semibold hover:bg-bg-tertiary transition-all"
                   >
                     {t('music.cancel')}
                   </button>
                   <button
-                    onClick={() => confirmModal.type === 'single' ? handleDeleteSong(confirmModal.id!) : handleBatchDelete()}
+                    onClick={handleBatchDelete}
                     className="flex-1 px-6 py-3 theme-button-primary rounded font-semibold transition-all"
                   >
                     {t('music.confirmDeleteButton')}
@@ -596,64 +545,12 @@ const Music = () => {
                           isSelected={selectedSongs.has(song.docId)}
                           isCurrentSong={currentSong?.docId === song.docId}
                           isFavoriting={favoriting === song.docId}
-                          isAdmin={isAdmin}
-                          isPostsSelected={selectedSongForPosts?.docId === song.docId}
                           onPlay={playSong}
                           onToggleSelect={toggleSelect}
                           onToggleFavorite={handleToggleFavorite}
-                          onCopyLink={handleCopySongLink}
-                          onDelete={(docId) => setConfirmModal({ show: true, type: 'single', id: docId })}
-                          onShowPosts={handleShowPosts}
                         />
                       ))}
                     </div>
-
-                    <AnimatePresence>
-                      {selectedSongForPosts && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 12 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: 12 }}
-                          className="border border-border rounded overflow-hidden mt-6 bg-surface"
-                        >
-                          <div className="p-5 bg-surface-alt">
-                            <div className="flex items-center justify-between mb-3">
-                              <h3 className="font-semibold text-text-primary flex items-center gap-2 text-[0.9375rem]">
-                                <MessageSquare size={16} />
-                                {t('music.relatedPosts')}
-                              </h3>
-                              <button
-                                onClick={() => setSelectedSongForPosts(null)}
-                                className="p-1.5 hover:bg-bg-tertiary rounded transition-colors"
-                              >
-                                <X size={16} className="text-text-muted" />
-                              </button>
-                            </div>
-                          </div>
-                          <div className="divide-y divide-border">
-                            {loadingPosts ? (
-                              <div className="p-8 text-center text-text-muted italic">{t('music.loading')}</div>
-                            ) : songPosts.length > 0 ? (
-                              songPosts.map((post) => (
-                                <div key={post.id} className="p-5 hover:bg-surface-alt transition-colors">
-                                  <div className="flex items-center gap-3 mb-1.5">
-                                    <span className="font-semibold text-sm text-text-primary">{post.title}</span>
-                                    <span className="text-xs text-text-muted">by {post.authorUid?.substring(0, 6)}</span>
-                                  </div>
-                                  <p className="text-sm text-text-secondary line-clamp-2">{post.content}</p>
-                                  <div className="flex items-center gap-4 mt-2 text-xs text-text-muted">
-                                    <span className="flex items-center gap-1"><Heart size={12} /> {post.likesCount}</span>
-                                    <span className="flex items-center gap-1"><MessageSquare size={12} /> {post.commentsCount}</span>
-                                  </div>
-                                </div>
-                              ))
-                            ) : (
-                              <div className="p-8 text-center text-text-muted italic">{t('music.noPosts')}</div>
-                            )}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
 
                     {musicPagination.totalPages > 1 && (
                       <div className="mt-8">

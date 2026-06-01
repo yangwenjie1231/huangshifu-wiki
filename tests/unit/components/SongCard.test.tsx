@@ -70,14 +70,9 @@ const defaultProps = {
   isSelected: false,
   isCurrentSong: false,
   isFavoriting: false,
-  isAdmin: false,
-  isPostsSelected: false,
   onPlay: vi.fn(),
   onToggleSelect: vi.fn(),
   onToggleFavorite: vi.fn(),
-  onCopyLink: vi.fn(),
-  onDelete: vi.fn(),
-  onShowPosts: vi.fn(),
 };
 
 function renderWithRouter(ui: React.ReactElement) {
@@ -105,21 +100,29 @@ describe('SongCard', () => {
     expect(button).toHaveAttribute('aria-label', '测试歌曲名 - 测试歌手');
   });
 
-  it('shows play button with correct aria-label (desktop)', () => {
+  it('shows cover play button with correct aria-label', () => {
     renderWithRouter(<SongCard {...defaultProps} />);
-    // 组件同时渲染了desktop和mobile的按钮，所以会有多个"播放"按钮
     const playButtons = screen.getAllByLabelText(/播放/);
     expect(playButtons.length).toBeGreaterThanOrEqual(1);
     expect(playButtons[0]).toHaveAttribute('aria-label', '播放 测试歌曲名');
   });
 
-  it('calls onPlay when play button clicked', async () => {
+  it('calls onPlay when cover play button clicked', async () => {
     const user = userEvent.setup();
     renderWithRouter(<SongCard {...defaultProps} />);
-    // 点击第一个播放按钮（desktop版本）
     const playButtons = screen.getAllByLabelText(/播放/);
     await user.click(playButtons[0]);
     expect(defaultProps.onPlay).toHaveBeenCalledWith(mockSong);
+  });
+
+  it('keeps only favorite as the card action button', () => {
+    renderWithRouter(<SongCard {...defaultProps} />);
+
+    expect(screen.getAllByLabelText(/收藏/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByLabelText(/打开原链接/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/复制内链/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/查看帖子/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/删除/)).not.toBeInTheDocument();
   });
 
   it('in batch mode renders a select-style button', () => {
@@ -138,13 +141,6 @@ describe('SongCard', () => {
     );
     const row = container.firstElementChild;
     expect(row?.className).toContain('bg-brand-gold/10');
-  });
-
-  it('shows delete button when isAdmin is true', () => {
-    renderWithRouter(<SongCard {...defaultProps} isAdmin={true} />);
-    const deleteButtons = screen.getAllByLabelText(/删除/);
-    expect(deleteButtons.length).toBeGreaterThanOrEqual(1);
-    expect(deleteButtons[0]).toHaveAttribute('aria-label', '删除 测试歌曲名');
   });
 
   it('renders grid card layout when viewMode is not list', () => {
