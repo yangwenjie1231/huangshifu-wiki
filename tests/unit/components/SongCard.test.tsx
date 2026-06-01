@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SongCard } from '../../../src/components/Music/SongCard';
@@ -18,6 +18,10 @@ beforeAll(() => {
 
 afterAll(() => {
   delete (global as any).IntersectionObserver;
+});
+
+afterEach(() => {
+  cleanup();
 });
 
 vi.mock('../../../src/components/SmartImage', async (importOriginal) => {
@@ -141,5 +145,20 @@ describe('SongCard', () => {
     const deleteButtons = screen.getAllByLabelText(/删除/);
     expect(deleteButtons.length).toBeGreaterThanOrEqual(1);
     expect(deleteButtons[0]).toHaveAttribute('aria-label', '删除 测试歌曲名');
+  });
+
+  it('renders grid card layout when viewMode is not list', () => {
+    const { container } = renderWithRouter(<SongCard {...defaultProps} viewMode="medium" />);
+    const card = container.firstElementChild;
+
+    expect(card?.className).toContain('rounded');
+    expect(container.querySelector('.aspect-square')).toBeInTheDocument();
+  });
+
+  it('keeps compact grid cards from rendering album metadata', () => {
+    renderWithRouter(<SongCard {...defaultProps} viewMode="small" />);
+
+    expect(screen.queryByText('测试专辑')).not.toBeInTheDocument();
+    expect(screen.getByText('测试歌手')).toBeInTheDocument();
   });
 });

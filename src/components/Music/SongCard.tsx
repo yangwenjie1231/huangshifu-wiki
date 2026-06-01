@@ -6,6 +6,7 @@ import { useI18n } from '../../lib/i18n';
 import { getPlatformExternalUrl } from '../../lib/musicPlatformUrls';
 import { SmartImage } from '../SmartImage';
 import type { SongItem } from '../../types/entities';
+import type { ViewMode } from '../../types/userPreferences';
 
 const getSongExternalUrl = (song: SongItem) => {
 	const id = (song.id || '').trim();
@@ -21,6 +22,7 @@ interface SongCardProps {
 	isFavoriting: boolean;
 	isAdmin: boolean;
 	isPostsSelected: boolean;
+	viewMode?: ViewMode;
 	onPlay: (song: SongItem) => void;
 	onToggleSelect: (docId: string) => void;
 	onToggleFavorite: (song: SongItem) => void;
@@ -37,6 +39,7 @@ const SongCard = React.memo(function SongCard({
 	isFavoriting,
 	isAdmin,
 	isPostsSelected,
+	viewMode = 'list',
 	onPlay,
 	onToggleSelect,
 	onToggleFavorite,
@@ -46,6 +49,8 @@ const SongCard = React.memo(function SongCard({
 }: SongCardProps) {
 	const { t } = useI18n();
 	const navigate = useNavigate();
+	const isList = viewMode === 'list';
+	const isSmallGrid = viewMode === 'small';
 
 	const handleRowClick = () => {
 		if (isBatchMode) {
@@ -54,6 +59,161 @@ const SongCard = React.memo(function SongCard({
 			navigate(`/music/${song.docId}`);
 		}
 	};
+
+	const renderBatchButton = (compact = false) => (
+		<button
+			onClick={(e) => { e.stopPropagation(); onToggleSelect(song.docId); }}
+			className={clsx(
+				"rounded text-xs font-semibold transition-all",
+				compact ? "px-2 py-1.5" : "px-3 py-1.5",
+				isSelected
+					? "bg-[var(--color-theme-accent)] text-white"
+					: "bg-surface-alt text-text-secondary hover:text-brand-gold"
+			)}
+		>
+			{isSelected ? t('music.selected') : t('music.select')}
+		</button>
+	);
+
+	const renderActionButtons = (compact = false) => (
+		<>
+			<button
+				onClick={(e) => { e.stopPropagation(); onPlay(song); }}
+				className={clsx(
+					"rounded text-text-muted hover:text-brand-gold transition-colors",
+					compact ? "p-1.5" : "p-2"
+				)}
+				title={t('music.play')}
+				aria-label={`播放 ${song.title}`}
+			>
+				<Play size={compact ? 14 : 15} />
+			</button>
+			<button
+				onClick={(e) => { e.stopPropagation(); onToggleFavorite(song); }}
+				disabled={isFavoriting}
+				className={clsx(
+					"rounded transition-colors",
+					compact ? "p-1.5" : "p-2",
+					song.favoritedByMe ? "theme-text-error" : "text-text-muted theme-icon-button-danger"
+				)}
+				title={t('music.favorite')}
+				aria-label={`${t('music.favorite')} ${song.title}`}
+			>
+				<Heart size={compact ? 14 : 15} />
+			</button>
+			<a
+				href={getSongExternalUrl(song)}
+				target="_blank"
+				rel="noopener noreferrer"
+				onClick={(e) => e.stopPropagation()}
+				className={clsx(
+					"text-text-muted hover:text-brand-gold transition-colors",
+					compact ? "p-1.5" : "p-2"
+				)}
+				title={t('music.openOriginalLink')}
+				aria-label={`${t('music.openOriginalLink')} ${song.title}`}
+			>
+				<ExternalLink size={compact ? 14 : 15} />
+			</a>
+			<button
+				onClick={(event) => { event.stopPropagation(); onCopyLink(event, song); }}
+				className={clsx(
+					"text-text-muted hover:text-brand-gold transition-colors",
+					compact ? "p-1.5" : "p-2"
+				)}
+				title={t('music.copyInternalLink')}
+				aria-label={`${t('music.copyInternalLink')} ${song.title}`}
+			>
+				<Link2 size={compact ? 14 : 15} />
+			</button>
+			<button
+				onClick={(e) => { e.stopPropagation(); onShowPosts(song); }}
+				className={clsx(
+					"transition-colors",
+					compact ? "p-1.5" : "p-2",
+					isPostsSelected ? "text-brand-gold" : "text-text-muted hover:text-brand-gold"
+				)}
+				title={t('music.viewPosts')}
+				aria-label={`${t('music.viewPosts')} ${song.title}`}
+			>
+				<MessageSquare size={compact ? 14 : 15} />
+			</button>
+			{isAdmin && (
+				<button
+					onClick={(e) => { e.stopPropagation(); onDelete(song.docId); }}
+					className={clsx(
+						"text-text-muted theme-icon-button-danger transition-colors",
+						compact ? "p-1.5" : "p-2"
+					)}
+					title={t('music.deleteSong')}
+					aria-label={`删除 ${song.title}`}
+				>
+					<Trash2 size={compact ? 14 : 15} />
+				</button>
+			)}
+		</>
+	);
+
+	if (!isList) {
+		return (
+			<div
+				onClick={handleRowClick}
+				onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRowClick(); } }}
+				className={clsx(
+					"gufeng-song-item group cursor-pointer rounded transition-all",
+					"focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-theme-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary",
+					isCurrentSong && !isBatchMode && "bg-brand-gold/10",
+					isBatchMode && isSelected && "bg-brand-gold/15"
+				)}
+				role="button"
+				tabIndex={0}
+				aria-label={`${song.title} - ${song.artist || '未知歌手'}`}
+			>
+				<div className="relative aspect-square overflow-hidden bg-surface-alt rounded mb-2.5">
+					<SmartImage
+						src={song.cover}
+						alt={song.title + ' 封面'}
+						className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+						lazy={false}
+					/>
+					{isCurrentSong && !isBatchMode && (
+						<div className="absolute left-2 top-2 rounded bg-[var(--color-theme-accent)] px-2 py-0.5 text-[10px] font-semibold text-white">
+							{t('music.playing')}
+						</div>
+					)}
+				</div>
+
+				<div className={clsx(isSmallGrid ? "space-y-1" : "space-y-1.5")}>
+					<p className={clsx(
+						"font-semibold truncate tracking-[0.02em] transition-colors",
+						isSmallGrid ? "text-[0.875rem]" : "text-[0.9375rem]",
+						isCurrentSong ? "text-brand-gold" : "text-text-primary group-hover:text-brand-gold"
+					)}>
+						{song.title}
+					</p>
+					<p className={clsx(
+						"text-text-muted truncate",
+						isSmallGrid ? "text-[0.6875rem]" : "text-xs"
+					)}>
+						{song.artist}
+					</p>
+					{!isSmallGrid && (
+						<p className="text-xs text-text-muted/80 truncate">{song.album}</p>
+					)}
+				</div>
+
+				<div className="mt-2 flex min-h-8 items-center justify-between gap-2">
+					{isBatchMode ? (
+						renderBatchButton(true)
+					) : (
+						<div className="flex flex-wrap items-center gap-0.5">
+							{renderActionButtons(isSmallGrid)}
+						</div>
+					)}
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div
@@ -96,77 +256,12 @@ const SongCard = React.memo(function SongCard({
 			{/* Actions */}
 			<div className="flex items-center gap-1 flex-shrink-0">
 				{isBatchMode ? (
-					<button
-						onClick={(e) => { e.stopPropagation(); onToggleSelect(song.docId); }}
-						className={clsx(
-							"px-3 py-1.5 rounded text-xs font-semibold transition-all",
-							isSelected
-								? "bg-[var(--color-theme-accent)] text-white"
-								: "bg-surface-alt text-text-secondary hover:text-brand-gold"
-						)}
-					>
-						{isSelected ? t('music.selected') : t('music.select')}
-					</button>
+					renderBatchButton()
 				) : (
 					<>
 						{/* Desktop actions: hidden by default, show on hover */}
 						<div className="hidden md:flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-							<button
-							onClick={(e) => { e.stopPropagation(); onPlay(song); }}
-							className="p-2 rounded text-text-muted hover:text-brand-gold transition-colors"
-							title={t('music.play')}
-							aria-label={`播放 ${song.title}`}
-						>
-								<Play size={15} />
-							</button>
-							<button
-								onClick={(e) => { e.stopPropagation(); onToggleFavorite(song); }}
-								disabled={isFavoriting}
-								className={clsx(
-									"p-2 rounded transition-colors",
-									song.favoritedByMe ? "theme-text-error" : "text-text-muted theme-icon-button-danger"
-								)}
-								title={t('music.favorite')}
-							>
-								<Heart size={15} />
-							</button>
-							<a
-								href={getSongExternalUrl(song)}
-								target="_blank"
-								rel="noopener noreferrer"
-								onClick={(e) => e.stopPropagation()}
-								className="p-2 text-text-muted hover:text-brand-gold transition-colors"
-								title={t('music.openOriginalLink')}
-							>
-								<ExternalLink size={15} />
-							</a>
-							<button
-								onClick={(event) => { event.stopPropagation(); onCopyLink(event, song); }}
-								className="p-2 text-text-muted hover:text-brand-gold transition-colors"
-								title={t('music.copyInternalLink')}
-							>
-								<Link2 size={15} />
-							</button>
-							<button
-								onClick={(e) => { e.stopPropagation(); onShowPosts(song); }}
-								className={clsx(
-									"p-2 transition-colors",
-									isPostsSelected ? "text-brand-gold" : "text-text-muted hover:text-brand-gold"
-								)}
-								title={t('music.viewPosts')}
-							>
-								<MessageSquare size={15} />
-							</button>
-							{isAdmin && (
-								<button
-								onClick={(e) => { e.stopPropagation(); onDelete(song.docId); }}
-								className="p-2 text-text-muted theme-icon-button-danger transition-colors"
-								title={t('music.deleteSong')}
-								aria-label={`删除 ${song.title}`}
-							>
-									<Trash2 size={15} />
-								</button>
-							)}
+							{renderActionButtons()}
 						</div>
 
 						{/* Mobile actions: always visible but compact */}

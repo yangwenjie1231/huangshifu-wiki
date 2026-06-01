@@ -580,11 +580,18 @@ const Music = () => {
               <div className="flex flex-col mt-6">
                 {paginatedSongs.length > 0 ? (
                   <>
-                    <div className="divide-y divide-border">
+                    <div
+                      className={clsx(
+                        viewMode === 'list'
+                          ? 'divide-y divide-border'
+                          : clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)
+                      )}
+                    >
                       {paginatedSongs.map((song) => (
                         <SongCard
                           key={song.docId}
                           song={song}
+                          viewMode={viewMode}
                           isBatchMode={isBatchMode}
                           isSelected={selectedSongs.has(song.docId)}
                           isCurrentSong={currentSong?.docId === song.docId}
