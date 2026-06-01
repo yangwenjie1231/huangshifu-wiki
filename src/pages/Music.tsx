@@ -7,7 +7,6 @@ import { useMusic } from '../context/MusicContext';
 import { Search, Plus, List, Sparkles, X, Heart, Link2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'motion/react';
-import { MusicPlayer } from '../components/MusicPlayer';
 import { MusicImportModal } from '../components/MusicImportModal';
 import { AlbumEditModal } from '../components/AlbumEditModal';
 import { useToast } from '../components/Toast';
@@ -614,34 +613,6 @@ const Music = () => {
 
           {/* Sidebar */}
           <aside className="lg:sticky lg:top-20">
-            {/* Now Playing */}
-            <div className="py-5 border-b border-border">
-              <h3 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-3.5">
-                {t('music.playing')}
-              </h3>
-              {currentSong ? (
-                <div>
-                  <div className="flex items-center gap-3 mb-4">
-                    <img
-                      src={currentSong.cover}
-                      alt=""
-                      className="w-10 h-10 rounded object-cover bg-surface-alt flex-shrink-0"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-[0.875rem] text-text-primary truncate font-medium">{currentSong.title}</p>
-                      <p className="text-xs text-text-muted truncate">{currentSong.artist}</p>
-                    </div>
-                  </div>
-                  <MusicPlayer songId={currentSong.id} />
-                </div>
-              ) : (
-                <div className="py-5 text-center">
-                  <p className="text-sm text-text-muted">{t('music.selectSongToPlay')}</p>
-                </div>
-              )}
-            </div>
-
             {/* Stats */}
             <div className="py-5">
               <h3 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-3.5">
