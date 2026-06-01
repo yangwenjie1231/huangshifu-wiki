@@ -65,12 +65,12 @@ const SongCard = React.memo(function SongCard({
 			className={clsx(
 				"rounded transition-colors",
 				compact ? "p-1.5" : "p-2",
-				song.favoritedByMe ? "theme-text-error" : "text-text-muted theme-icon-button-danger"
+				song.favoritedByMe ? "theme-text-error" : "text-text-muted hover:text-text-secondary"
 			)}
 			title={t('music.favorite')}
 			aria-label={`${t('music.favorite')} ${song.title}`}
 		>
-			<Heart size={compact ? 14 : 15} />
+			<Heart size={compact ? 14 : 15} fill={song.favoritedByMe ? 'currentColor' : 'none'} />
 		</button>
 	);
 
