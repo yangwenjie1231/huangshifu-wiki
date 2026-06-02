@@ -10,6 +10,7 @@ export interface UserProfile {
   banReason: string | null;
   bannedAt: string | null;
   level: number;
+  signature: string;
   bio: string;
 }
 

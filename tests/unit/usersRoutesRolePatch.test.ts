@@ -65,6 +65,7 @@ describe('users routes role update compatibility', () => {
       banReason: null,
       bannedAt: null,
       level: 1,
+      signature: '',
       bio: null,
       createdAt: new Date('2024-01-01T00:00:00.000Z'),
       updatedAt: new Date('2024-01-02T00:00:00.000Z'),

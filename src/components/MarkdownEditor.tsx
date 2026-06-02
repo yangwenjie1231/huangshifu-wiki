@@ -12,6 +12,7 @@ interface MarkdownEditorProps {
 	onChange: (value: string) => void;
 	height?: string;
 	placeholder?: string;
+	ariaLabel?: string;
 	enableWikiLinks?: boolean;
 }
 
@@ -20,6 +21,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 	onChange,
 	height = "400px",
 	placeholder = "输入内容...",
+	ariaLabel,
 	enableWikiLinks = false,
 }) => {
 	const { resolvedTheme } = useUserPreferences();
@@ -55,6 +57,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 				}}
 				textareaProps={{
 					placeholder,
+					'aria-label': ariaLabel,
 				}}
 				visibleDragbar={false}
 			/>

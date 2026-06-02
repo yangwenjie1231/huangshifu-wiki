@@ -30,6 +30,7 @@ type SessionUser = {
   banReason: string | null;
   bannedAt: Date | null;
   level: number;
+  signature: string;
   bio: string;
   passwordHash: string;
 }
@@ -52,6 +53,7 @@ function userToApiUser(user: {
   banReason: string | null;
   bannedAt: Date | null;
   level: number;
+  signature: string;
   bio: string;
 }): ApiUser {
   return {
@@ -65,6 +67,7 @@ function userToApiUser(user: {
     banReason: user.banReason,
     bannedAt: user.bannedAt ? user.bannedAt.toISOString() : null,
     level: user.level,
+    signature: user.signature,
     bio: user.bio,
   };
 }

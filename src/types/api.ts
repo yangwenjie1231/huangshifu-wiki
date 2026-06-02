@@ -164,8 +164,10 @@ export interface AuthLoginRequest {
 // ============================================================================
 
 export interface UserUpdateRequest {
-  nickname?: string;
-  avatarUrl?: string;
+  displayName?: string;
+  signature?: string;
+  bio?: string;
+  photoURL?: string | null;
   preferences?: Record<string, unknown>;
 }
 

@@ -182,6 +182,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         banReason: user.banReason,
         bannedAt: user.bannedAt,
         level: user.level,
+        signature: user.signature,
         bio: user.bio,
       }
     : null;

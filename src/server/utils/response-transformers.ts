@@ -676,6 +676,7 @@ export function toUserResponse(user: {
   banReason: string | null;
   bannedAt: Date | null;
   level: number;
+  signature: string;
   bio: string;
   createdAt: Date;
   updatedAt: Date;

@@ -87,6 +87,7 @@ describe('users routes password update', () => {
       banReason: null,
       bannedAt: null,
       level: 1,
+      signature: '',
       bio: '',
     })
   })
@@ -133,6 +134,7 @@ describe('users routes password update', () => {
         banReason: true,
         bannedAt: true,
         level: true,
+        signature: true,
         bio: true,
       },
     })

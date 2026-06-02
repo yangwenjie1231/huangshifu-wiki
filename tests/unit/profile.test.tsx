@@ -25,6 +25,7 @@ vi.mock('../../src/context/AuthContext', () => ({
     },
     profile: {
       displayName: '测试用户',
+      signature: '',
       bio: '',
       photoURL: '',
       level: 1,

@@ -14,6 +14,7 @@ import {
 import { Link, Navigate, useParams } from 'react-router-dom'
 
 import { AvatarCropModal } from '../components/AvatarCropModal'
+import MarkdownEditor from '../components/MarkdownEditor'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../context/AuthContext'
@@ -22,6 +23,7 @@ import { DEFAULT_AVATAR, handleAvatarError } from '../lib/defaultAvatar'
 
 type PublicProfileForm = {
   displayName: string
+  signature: string
   bio: string
   photoURL: string
 }
@@ -66,6 +68,7 @@ const Settings = () => {
   const activeSection = resolveSettingsSection(section)
   const [profileForm, setProfileForm] = useState<PublicProfileForm>({
     displayName: '',
+    signature: '',
     bio: '',
     photoURL: '',
   })
@@ -90,6 +93,7 @@ const Settings = () => {
 
     setProfileForm({
       displayName: profile?.displayName || user.displayName || '',
+      signature: profile?.signature || '',
       bio: profile?.bio || '',
       photoURL: profile?.photoURL || user.photoURL || '',
     })
@@ -97,6 +101,7 @@ const Settings = () => {
     profile?.bio,
     profile?.displayName,
     profile?.photoURL,
+    profile?.signature,
     user?.displayName,
     user?.email,
     user?.photoURL,
@@ -133,6 +138,7 @@ const Settings = () => {
     try {
       await apiPatch('/api/users/me', {
         displayName: profileForm.displayName,
+        signature: profileForm.signature,
         bio: profileForm.bio,
         photoURL: profileForm.photoURL,
       })
@@ -330,20 +336,38 @@ const Settings = () => {
                       </label>
 
                       <label className="block">
-                        <span className="mb-1 block text-sm font-medium text-text-secondary">个人简介</span>
+                        <span className="mb-1 block text-sm font-medium text-text-secondary">签名</span>
                         <textarea
-                          value={profileForm.bio}
+                          value={profileForm.signature}
                           onChange={(event) =>
                             setProfileForm((current) => ({
                               ...current,
-                              bio: event.target.value,
+                              signature: event.target.value,
                             }))
                           }
-                          rows={4}
-                          maxLength={500}
+                          rows={2}
+                          maxLength={120}
                           className="theme-input w-full resize-none rounded px-4 py-3 text-sm"
                         />
                       </label>
+
+                      <div className="block">
+                        <span className="mb-1 block text-sm font-medium text-text-secondary">
+                          个人简介（支持 Markdown）
+                        </span>
+                        <MarkdownEditor
+                          value={profileForm.bio}
+                          onChange={(bio) =>
+                            setProfileForm((current) => ({
+                              ...current,
+                              bio,
+                            }))
+                          }
+                          height="260px"
+                          placeholder="写下更完整的个人介绍..."
+                          ariaLabel="个人简介（支持 Markdown）"
+                        />
+                      </div>
                     </div>
                   </div>
 

@@ -26,6 +26,7 @@ async function main() {
       displayName: superAdminName,
       role: UserRole.super_admin,
       passwordHash,
+      signature: '',
       bio: '',
     },
   });

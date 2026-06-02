@@ -102,6 +102,7 @@ router.post('/register', authRateLimiter, validateBody(registerSchema), asyncHan
         passwordHash,
         displayName: name,
         role,
+        signature: '',
         bio: '',
       },
     })
@@ -218,6 +219,7 @@ router.post('/wechat/login', authRateLimiter, asyncHandler(async (req, res) => {
           passwordHash,
           displayName: fallbackName,
           photoURL: photoURLRaw || null,
+          signature: '',
           bio: '',
           wechatOpenId: openId,
           wechatUnionId: unionId,

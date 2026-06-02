@@ -61,6 +61,7 @@ describe('auth middleware', () => {
       banReason: null,
       bannedAt: null,
       level: 1,
+      signature: '',
       bio: '',
       passwordHash: 'new-password-hash',
     })
@@ -112,6 +113,7 @@ describe('auth middleware', () => {
         banReason: null,
         bannedAt: null,
         level: 1,
+        signature: '',
         bio: '',
       },
       sessionVersion: createSessionVersion('new-password-hash'),

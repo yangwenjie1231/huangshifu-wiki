@@ -146,6 +146,7 @@ model User {
   banReason     String?
   bannedAt      DateTime?
   level         Int            @default(1)
+  signature     String         @default("")
   bio           String
   preferences   Json?          @default("{}")
   createdAt     DateTime       @default(now())

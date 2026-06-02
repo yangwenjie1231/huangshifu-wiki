@@ -36,6 +36,7 @@ const ADMIN_USER_SELECT = {
   banReason: true,
   bannedAt: true,
   level: true,
+  signature: true,
   bio: true,
   createdAt: true,
   updatedAt: true,
@@ -95,6 +96,7 @@ router.get('/status', requireAuth, asyncHandler(async (req: AuthenticatedRequest
         banReason: true,
         bannedAt: true,
         level: true,
+        signature: true,
         bio: true,
         preferences: true,
         createdAt: true,
@@ -156,6 +158,7 @@ router.put('/:userId/status', requireSuperAdmin, asyncHandler(async (req: Authen
         banReason: true,
         bannedAt: true,
         level: true,
+        signature: true,
         bio: true,
         createdAt: true,
         updatedAt: true,
@@ -202,6 +205,7 @@ router.put('/name', requireAuth, requireActiveUser, asyncHandler(async (req: Aut
         banReason: true,
         bannedAt: true,
         level: true,
+        signature: true,
         bio: true,
         createdAt: true,
         updatedAt: true,
@@ -282,6 +286,7 @@ router.put('/password', requireAuth, requireActiveUser, asyncHandler(async (req:
         banReason: true,
         bannedAt: true,
         level: true,
+        signature: true,
         bio: true,
       },
     });
@@ -316,6 +321,7 @@ router.get('/me', requireAuth, requireActiveUser, asyncHandler(async (req: Authe
         uid: true,
         email: true,
         displayName: true,
+        signature: true,
         bio: true,
         photoURL: true,
         role: true,
@@ -343,7 +349,7 @@ router.get('/me', requireAuth, requireActiveUser, asyncHandler(async (req: Authe
 
 router.patch('/me', profileLimiter, requireAuth, requireActiveUser, asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
-    const { displayName, bio, preferences, photoURL } = req.body;
+    const { displayName, signature, bio, preferences, photoURL } = req.body;
     const updateData: Record<string, unknown> = {};
 
     if (displayName !== undefined) {
@@ -353,9 +359,16 @@ router.patch('/me', profileLimiter, requireAuth, requireActiveUser, asyncHandler
       }
       updateData.displayName = displayName;
     }
+    if (signature !== undefined) {
+      if (typeof signature === 'string' && signature.length > 120) {
+        res.status(400).json({ error: '签名不能超过120个字符' });
+        return;
+      }
+      updateData.signature = signature;
+    }
     if (bio !== undefined) {
-      if (typeof bio === 'string' && bio.length > 500) {
-        res.status(400).json({ error: '个人简介不能超过500个字符' });
+      if (typeof bio === 'string' && bio.length > 2000) {
+        res.status(400).json({ error: '个人简介不能超过2000个字符' });
         return;
       }
       updateData.bio = bio;
@@ -429,6 +442,7 @@ router.delete('/account', requireAuth, requireActiveUser, asyncHandler(async (re
       data: {
         displayName: '已注销用户',
         photoURL: null,
+        signature: '',
         bio: '',
         status: 'banned',
         banReason: '用户主动注销',
@@ -468,6 +482,7 @@ router.get('/', requireAdmin, asyncHandler(async (_req, res) => {
         banReason: true,
         bannedAt: true,
         level: true,
+        signature: true,
         bio: true,
         createdAt: true,
         updatedAt: true,
@@ -501,6 +516,7 @@ const updateUserRoleHandler = asyncHandler(async (req: AuthenticatedRequest, res
         banReason: true,
         bannedAt: true,
         level: true,
+        signature: true,
         bio: true,
         createdAt: true,
         updatedAt: true,

@@ -36,6 +36,7 @@ vi.mock('../../src/context/AuthContext', () => ({
     },
     profile: {
       displayName: '测试用户',
+      signature: '旧签名',
       bio: '旧简介',
       photoURL: '',
       level: 1,
@@ -97,15 +98,20 @@ describe('Settings', () => {
     await user.clear(displayNameInput)
     await user.type(displayNameInput, '新昵称')
 
-    const bioInput = screen.getByLabelText('个人简介')
+    const bioInput = screen.getByLabelText('个人简介（支持 Markdown）')
     await user.clear(bioInput)
     await user.type(bioInput, '新简介')
+
+    const signatureInput = screen.getByLabelText('签名')
+    await user.clear(signatureInput)
+    await user.type(signatureInput, '新签名')
 
     await user.click(screen.getByRole('button', { name: /保存公开资料/ }))
 
     await waitFor(() => {
       expect(mockApiPatch).toHaveBeenCalledWith('/api/users/me', {
         displayName: '新昵称',
+        signature: '新签名',
         bio: '新简介',
         photoURL: '',
       })

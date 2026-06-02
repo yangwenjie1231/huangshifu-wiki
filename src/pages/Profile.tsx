@@ -13,7 +13,12 @@ import { apiGet } from '../lib/apiClient';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
+import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
+import remarkGfm from 'remark-gfm';
 import { DEFAULT_AVATAR, handleAvatarError } from '../lib/defaultAvatar';
+import { customSchema } from '../lib/htmlSanitizer';
 import { getStatusClassName, getStatusText } from '../lib/contentUtils';
 import type { FavoriteItem, HistoryItem } from '../types/entities';
 
@@ -90,6 +95,7 @@ const Profile = () => {
   const activeTab = resolveProfileTab(tab);
   const displayName = profile?.displayName || user.displayName;
   const avatarSrc = profile?.photoURL || user.photoURL || DEFAULT_AVATAR;
+  const signature = profile?.signature?.trim() || '';
   const bio = profile?.bio?.trim() || '';
   const isBanned = profile?.status === 'banned';
 
@@ -248,7 +254,7 @@ const Profile = () => {
           </div>
 
           <p className="mt-4 max-w-[68ch] text-sm leading-7 text-text-secondary">
-            {bio || '这位粉丝很神秘，还没有写下任何简介...'}
+            {signature || '这位粉丝很神秘，还没有写下任何签名...'}
           </p>
         </section>
 
@@ -278,9 +284,20 @@ const Profile = () => {
             <div className="pt-2">
               {activeTab === 'profile' ? (
                 <section className={TAB_PANEL_CLASS}>
-                  <p className="max-w-[72ch] text-sm leading-8 text-text-secondary">
-                    {bio || '这位粉丝很神秘，还没有写下任何简介...'}
-                  </p>
+                  {bio ? (
+                    <div className="prose max-w-none text-sm leading-8 text-text-secondary">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        rehypePlugins={[rehypeRaw, [rehypeSanitize, customSchema]]}
+                      >
+                        {bio}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p className="max-w-[72ch] text-sm leading-8 text-text-secondary">
+                      这位粉丝很神秘，还没有写下任何简介...
+                    </p>
+                  )}
                 </section>
               ) : activeTab === 'posts' ? (
                 <section className={TAB_PANEL_CLASS}>

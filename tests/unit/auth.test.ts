@@ -14,6 +14,7 @@ function createMockUser(overrides?: Partial<User>): User {
     banReason: null,
     bannedAt: null,
     level: 1,
+    signature: '',
     bio: '',
     emailVerified: true,
     isAnonymous: false,

@@ -152,6 +152,7 @@ interface ApiUser {
   banReason: string | null;
   bannedAt: string | null;
   level: number;
+  signature: string;
   bio: string;
 }
 

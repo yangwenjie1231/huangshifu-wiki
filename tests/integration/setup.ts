@@ -162,6 +162,7 @@ export async function createTestUser(overrides?: {
       passwordHash,
       displayName,
       role,
+      signature: '',
       bio: '',
       status: 'active',
     },

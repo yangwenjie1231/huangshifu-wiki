@@ -38,6 +38,7 @@ describe('parsers', () => {
     banReason: null as string | null,
     bannedAt: null as string | null,
     level: 1,
+    signature: '',
     bio: '',
   });
 
