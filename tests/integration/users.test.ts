@@ -20,6 +20,7 @@ import request from 'supertest';
 import { app } from '../../server';
 import { prisma, createTestUser, createTestToken, createTestPost } from './setup';
 import type { CreateTestPostInput } from './setup';
+import { WIKI_MAX_CONTENT_SIZE } from '../../src/lib/contentLimits';
 
 describe('Users API - 用户接口测试', () => {
   let testUser: Awaited<ReturnType<typeof createTestUser>>;
@@ -415,6 +416,38 @@ describe('Users API - 用户接口测试', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.user.bio).toBe(newBio);
+    });
+
+    it('个人简介应该允许和 Wiki 内容相同的上限', async () => {
+      const newBio = 'a'.repeat(WIKI_MAX_CONTENT_SIZE);
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+
+      const response = await agent
+        .patch('/api/users/me')
+        .set('X-XSRF-TOKEN', xsrfToken)
+        .send({ bio: newBio });
+
+      expect(response.status).toBe(200);
+      expect(response.body.user.bio).toBe(newBio);
+    });
+
+    it('个人简介超过 Wiki 内容上限时应该返回 400 错误', async () => {
+      const tooLongBio = 'a'.repeat(WIKI_MAX_CONTENT_SIZE + 1);
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+
+      const response = await agent
+        .patch('/api/users/me')
+        .set('X-XSRF-TOKEN', xsrfToken)
+        .send({ bio: tooLongBio });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: '个人简介不能超过500KB' });
     });
 
     /**

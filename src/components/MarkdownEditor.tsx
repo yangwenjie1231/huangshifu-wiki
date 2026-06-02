@@ -14,6 +14,7 @@ interface MarkdownEditorProps {
 	placeholder?: string;
 	ariaLabel?: string;
 	enableWikiLinks?: boolean;
+	maxLength?: number;
 }
 
 const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
@@ -23,6 +24,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 	placeholder = "输入内容...",
 	ariaLabel,
 	enableWikiLinks = false,
+	maxLength,
 }) => {
 	const { resolvedTheme } = useUserPreferences();
 	const processPreviewText = (text: string): string => {
@@ -55,12 +57,13 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 				previewOptions={{
 					rehypePlugins: [rehypeRaw, [rehypeSanitize, customSchema]],
 				}}
-				textareaProps={{
-					placeholder,
-					'aria-label': ariaLabel,
-				}}
-				visibleDragbar={false}
-			/>
+					textareaProps={{
+						placeholder,
+						'aria-label': ariaLabel,
+						maxLength,
+					}}
+					visibleDragbar={false}
+				/>
 		</div>
 	);
 };

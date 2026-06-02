@@ -5,6 +5,7 @@ import { requireAuth, requireActiveUser, requireAdmin, requireSuperAdmin, userTo
 import { asyncHandler } from '../middleware/asyncHandler';
 import { profileLimiter } from '../middleware/rateLimiter';
 import { validateBody, adminResetUserPasswordSchema, passwordSchema } from '../schemas';
+import { WIKI_MAX_CONTENT_SIZE } from '../../lib/contentLimits';
 import {
   prisma,
   toUserResponse,
@@ -367,8 +368,8 @@ router.patch('/me', profileLimiter, requireAuth, requireActiveUser, asyncHandler
       updateData.signature = signature;
     }
     if (bio !== undefined) {
-      if (typeof bio === 'string' && bio.length > 2000) {
-        res.status(400).json({ error: '个人简介不能超过2000个字符' });
+      if (typeof bio === 'string' && bio.length > WIKI_MAX_CONTENT_SIZE) {
+        res.status(400).json({ error: '个人简介不能超过500KB' });
         return;
       }
       updateData.bio = bio;

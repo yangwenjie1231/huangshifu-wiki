@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import Settings from '../../src/pages/Settings'
+import { WIKI_MAX_CONTENT_SIZE } from '../../src/lib/contentLimits'
 
 const {
   mockApiPatch,
@@ -99,6 +100,7 @@ describe('Settings', () => {
     await user.type(displayNameInput, '新昵称')
 
     const bioInput = screen.getByLabelText('个人简介（支持 Markdown）')
+    expect(bioInput).toHaveAttribute('maxlength', String(WIKI_MAX_CONTENT_SIZE))
     await user.clear(bioInput)
     await user.type(bioInput, '新简介')
 

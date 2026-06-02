@@ -18,6 +18,7 @@ import MarkdownEditor from '../components/MarkdownEditor'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../context/AuthContext'
+import { WIKI_MAX_CONTENT_SIZE } from '../lib/contentLimits'
 import { apiPatch, apiPut } from '../lib/apiClient'
 import { DEFAULT_AVATAR, handleAvatarError } from '../lib/defaultAvatar'
 
@@ -366,6 +367,7 @@ const Settings = () => {
                           height="260px"
                           placeholder="写下更完整的个人介绍..."
                           ariaLabel="个人简介（支持 Markdown）"
+                          maxLength={WIKI_MAX_CONTENT_SIZE}
                         />
                       </div>
                     </div>

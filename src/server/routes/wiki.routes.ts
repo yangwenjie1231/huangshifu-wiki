@@ -21,6 +21,7 @@ import {
   logger,
   parsePagination,
 } from '../utils';
+import { WIKI_MAX_CONTENT_SIZE } from '../../lib/contentLimits';
 import { enhancedCache, CACHE_KEYS } from '../utils/cache';
 import type {
   AuthenticatedRequest,
@@ -43,8 +44,6 @@ import { validateWikiSlugParam } from '../middleware/validateWikiSlugParam';
 import { wikiWriteLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
-
-export const WIKI_MAX_CONTENT_SIZE = 500 * 1024;
 
 function sendWikiUniqueConflict(error: unknown, res: Response) {
   const message = getWikiUniqueConflictMessage(error);

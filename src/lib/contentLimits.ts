@@ -1,0 +1,1 @@
+export const WIKI_MAX_CONTENT_SIZE = 500 * 1024
