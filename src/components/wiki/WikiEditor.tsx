@@ -171,16 +171,22 @@ const WikiEditor = () => {
 	};
 
 	return (
-		<div className="max-w-5xl mx-auto px-4 py-12">
-			<div className="bg-surface rounded p-8 sm:p-12 border border-border">
-				<div className="flex justify-between items-center mb-12">
+		<div
+			className="min-h-[calc(100vh-60px)] bg-bg-primary"
+			style={{
+				fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif",
+				lineHeight: 1.8,
+			}}
+		>
+			<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
+				<div className="flex justify-between items-center mb-8">
 					<h1 className="text-[1.75rem] font-bold text-text-primary tracking-[0.12em]">
 						{isNew ? "创建新百科" : "编辑百科"}
 					</h1>
 					<button
 						type="button"
 						onClick={() => navigate(-1)}
-						className="p-2 text-text-muted theme-icon-button-danger"
+						className="p-2 text-text-muted theme-icon-button-danger transition-colors"
 					>
 						<X size={24} />
 					</button>
@@ -191,7 +197,7 @@ const WikiEditor = () => {
 						e.preventDefault();
 						handleSubmit("pending");
 					}}
-					className="space-y-8"
+					className="space-y-6"
 				>
 					<WikiEditorForm
 						formData={formData}

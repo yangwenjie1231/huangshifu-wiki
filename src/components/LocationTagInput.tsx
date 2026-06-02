@@ -172,7 +172,7 @@ export const LocationTagInput = ({
     <div className="relative">
       <div className="flex items-center gap-1">
         <div className="relative flex-1">
-          <MapPin size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+          <MapPin size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
           <input
             ref={inputRef}
             type="text"
@@ -182,15 +182,15 @@ export const LocationTagInput = ({
             onFocus={handleFocus}
             onBlur={handleBlur}
             placeholder="输入或选择地点..."
-            className="theme-input w-full pl-8 pr-8 py-1.5 text-sm rounded"
+            className="theme-input w-full pl-9 pr-9 py-2.5 text-base rounded"
           />
           {loading && (
-            <Loader2 size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted animate-spin" />
+            <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted animate-spin" />
           )}
           {!loading && inputValue && (
             <button
               onClick={handleClear}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-surface-alt"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-surface-alt"
               type="button"
             >
               <X size={13} className="text-text-muted" />
@@ -199,7 +199,7 @@ export const LocationTagInput = ({
         </div>
         <button
           onClick={() => setMapPickerOpen(true)}
-          className="p-1.5 border border-border rounded hover:border-brand-gold hover:text-brand-gold transition-all"
+          className="p-2 border border-border rounded hover:border-brand-gold hover:text-brand-gold transition-all"
           type="button"
           title="在地图上选择"
         >
@@ -210,14 +210,14 @@ export const LocationTagInput = ({
       {showDropdown && suggestions.length > 0 && (
         <div
           ref={dropdownRef}
-          className="absolute top-full left-0 right-0 mt-1 bg-surface rounded border border-border z-20 max-h-60 overflow-y-auto"
+          className="absolute top-full left-0 right-0 mt-1 bg-surface rounded border border-border z-20 max-h-60 overflow-y-auto shadow-lg"
         >
           {suggestions.map((region, index) => (
             <button
               key={region.code}
               type="button"
               onClick={() => handleSelect(region)}
-              className={`w-full px-3 py-2 text-left border-b border-border last:border-b-0 transition-colors ${
+              className={`w-full px-4 py-3 text-left border-b border-border last:border-b-0 transition-colors ${
                 index === selectedIndex ? 'bg-surface-alt' : 'hover:bg-surface-alt'
               }`}
             >

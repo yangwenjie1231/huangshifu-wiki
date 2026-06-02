@@ -38,9 +38,12 @@ const WikiEditorForm = React.memo(({
 
 	return (
 		<>
-			<div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+			<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 				<div className="space-y-2">
-					<label htmlFor="wiki-title" className="text-xs font-medium text-text-muted">
+					<label
+						htmlFor="wiki-title"
+						className="text-xs font-bold uppercase tracking-widest text-text-muted"
+					>
 						标题
 					</label>
 					<input
@@ -52,11 +55,14 @@ const WikiEditorForm = React.memo(({
 							onFormDataChange({ title: e.target.value })
 						}
 						placeholder="例如：黄诗扶"
-						className="theme-input w-full px-4 py-3 rounded font-serif text-base"
+						className="theme-input w-full px-4 py-3 rounded text-base"
 					/>
 				</div>
 				<div className="space-y-2">
-					<label htmlFor="wiki-category" className="text-xs font-medium text-text-muted">
+					<label
+						htmlFor="wiki-category"
+						className="text-xs font-bold uppercase tracking-widest text-text-muted"
+					>
 						分类
 					</label>
 					<select
@@ -65,7 +71,7 @@ const WikiEditorForm = React.memo(({
 						onChange={(e) =>
 							onFormDataChange({ category: e.target.value })
 						}
-						className="theme-input w-full px-4 py-3 rounded font-serif text-base appearance-none"
+						className="theme-input w-full px-4 py-3 rounded text-base appearance-none"
 					>
 						<option value="biography">人物介绍</option>
 						<option value="music">音乐作品</option>
@@ -75,7 +81,10 @@ const WikiEditorForm = React.memo(({
 					</select>
 				</div>
 				<div className="space-y-2">
-					<label htmlFor="wiki-event-date" className="text-xs font-medium text-text-muted">
+					<label
+						htmlFor="wiki-event-date"
+						className="text-xs font-bold uppercase tracking-widest text-text-muted"
+					>
 						事件日期 (可选)
 					</label>
 					<input
@@ -85,21 +94,24 @@ const WikiEditorForm = React.memo(({
 						onChange={(e) =>
 							onFormDataChange({ eventDate: e.target.value })
 						}
-						className="theme-input w-full px-4 py-3 rounded font-serif text-base"
+						className="theme-input w-full px-4 py-3 rounded text-base"
 					/>
 				</div>
 			</div>
 
 			<div className="space-y-2">
 				<div className="flex items-center justify-between gap-3">
-					<label htmlFor="wiki-content" className="text-xs font-medium text-text-muted">
+					<label
+						htmlFor="wiki-content"
+						className="text-xs font-bold uppercase tracking-widest text-text-muted"
+					>
 						内容 (Markdown) <span className="theme-text-error">*</span>
 					</label>
 					<CharacterCount current={formData.content.length} max={WIKI_MAX_CONTENT_SIZE} />
 				</div>
 				<div
 					id="wiki-content"
-					className="border border-border rounded overflow-hidden"
+					className="border border-border rounded overflow-hidden bg-surface"
 				>
 					<MarkdownEditor
 						value={formData.content}
@@ -120,7 +132,10 @@ const WikiEditorForm = React.memo(({
 			</div>
 
 			<div className="space-y-2">
-				<label htmlFor="wiki-tags" className="text-xs font-medium text-text-muted">
+				<label
+					htmlFor="wiki-tags"
+					className="text-xs font-bold uppercase tracking-widest text-text-muted"
+				>
 					标签 (逗号分隔)
 				</label>
 				<input
@@ -131,12 +146,12 @@ const WikiEditorForm = React.memo(({
 						onFormDataChange({ tags: e.target.value })
 					}
 					placeholder="例如：古风, 原创, 歌手"
-					className="theme-input w-full px-4 py-3 rounded"
+					className="theme-input w-full px-4 py-3 rounded text-base"
 				/>
 			</div>
 
 			<div className="space-y-2">
-				<label className="text-xs font-medium text-text-muted">
+				<label className="text-xs font-bold uppercase tracking-widest text-text-muted">
 					地点
 				</label>
 				<LocationTagInput

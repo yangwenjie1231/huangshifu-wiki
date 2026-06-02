@@ -43,19 +43,19 @@ const WikiEditorRelationPanel = React.memo(({
 			/>
 
 			{/* 图谱预览面板 */}
-			<div className="space-y-3">
+			<div className="space-y-2">
 				<button
 					type="button"
 					onClick={() => setShowGraphPreview(!showGraphPreview)}
-					className={`w-full px-4 py-2.5 rounded text-sm font-medium transition-all flex items-center justify-between ${
+					className={`w-full px-4 py-3 rounded text-sm font-medium transition-all flex items-center justify-between border ${
 						showGraphPreview
-							? "bg-[var(--color-theme-accent)] text-white"
-							: "bg-surface-alt text-text-secondary hover:bg-bg-tertiary"
+							? "bg-[var(--color-theme-accent)] text-white border-transparent"
+							: "bg-surface-alt text-text-secondary border-border hover:border-brand-gold hover:text-brand-gold"
 					}`}
 				>
 					<div className="flex items-center gap-2">
-						<BarChart3 size={18} />
-						<span>📊 图谱预览</span>
+						<BarChart3 size={16} />
+						<span>图谱预览</span>
 					</div>
 					<div className="flex items-center gap-1">
 						<span className="text-xs opacity-75">
@@ -77,7 +77,7 @@ const WikiEditorRelationPanel = React.memo(({
 							exit={{ height: 0, opacity: 0 }}
 							className="overflow-hidden"
 						>
-							<div className="p-4 bg-surface-alt rounded border border-border">
+							<div className="p-4 bg-surface rounded border border-border">
 								<div className="flex items-center justify-between mb-3">
 									<h3 className="text-sm font-semibold text-text-primary">
 										关联图谱
@@ -104,7 +104,7 @@ const WikiEditorRelationPanel = React.memo(({
 											height={360}
 										/>
 										<div className="mt-3 flex items-center justify-center gap-4 text-xs text-text-muted">
-											<span>💡 提示：拖动图谱查看，滚轮缩放</span>
+											<span>提示：拖动图谱查看，滚轮缩放</span>
 										</div>
 									</>
 								)}
