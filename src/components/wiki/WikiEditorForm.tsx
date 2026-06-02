@@ -44,7 +44,7 @@ const WikiEditorForm = React.memo(({
 						htmlFor="wiki-title"
 						className="text-xs font-bold uppercase tracking-widest text-text-muted"
 					>
-						标题
+						标题 <span className="theme-text-error">*</span>
 					</label>
 					<input
 						id="wiki-title"
