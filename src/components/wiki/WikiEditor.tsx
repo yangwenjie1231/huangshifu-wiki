@@ -81,6 +81,19 @@ const WikiEditor = () => {
 		setFormData({ ...formData, relations });
 	};
 
+	const handleFormDataChange = useCallback(
+		(
+			partial:
+				| Partial<typeof formData>
+				| ((prev: typeof formData) => typeof formData),
+		) => {
+			setFormData((prev) =>
+				typeof partial === "function" ? partial(prev) : { ...prev, ...partial },
+			);
+		},
+		[],
+	);
+
 	const handleSubmit = async (status: "draft" | "pending") => {
 		if (!user) return;
 		if (isBanned) {
@@ -180,9 +193,7 @@ const WikiEditor = () => {
 				>
 					<WikiEditorForm
 						formData={formData}
-						onFormDataChange={(partial) =>
-							setFormData((prev) => ({ ...prev, ...partial }))
-						}
+						onFormDataChange={handleFormDataChange}
 					/>
 
 					<WikiEditorRelationPanel
