@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
-  Mail,
   Settings,
   Bookmark,
   FileText,
@@ -221,7 +220,7 @@ const Profile = () => {
 
         <section className="pb-4">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex min-w-0 items-start gap-4">
+            <div className="flex min-w-0 flex-1 items-start gap-4">
               <img
                 src={avatarSrc}
                 alt=""
@@ -233,25 +232,20 @@ const Profile = () => {
                 <h1 className="truncate text-3xl font-semibold text-text-primary">
                   {displayName}
                 </h1>
-                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-text-muted">
-                  <span className="inline-flex items-center gap-1.5">
-                    <Mail size={13} /> {user.email}
-                  </span>
-                </div>
+                <p className="mt-3 max-w-[68ch] whitespace-pre-wrap break-words text-sm leading-7 text-text-muted">
+                  {signature || '这位粉丝很神秘，还没有写下任何签名...'}
+                </p>
               </div>
             </div>
 
             <Link
               to="/settings/profile"
-              className="theme-button-secondary inline-flex items-center gap-1.5 self-start px-3 py-1.5 text-sm transition-all"
+              className="theme-button-secondary inline-flex shrink-0 items-center gap-1.5 self-start px-3 py-1.5 text-sm transition-all"
             >
               <Settings size={14} /> 设置
             </Link>
           </div>
 
-          <p className="mt-4 max-w-[68ch] text-sm leading-7 text-text-secondary">
-            {signature || '这位粉丝很神秘，还没有写下任何签名...'}
-          </p>
         </section>
 
         <div className="mt-4">
