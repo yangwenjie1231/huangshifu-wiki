@@ -108,6 +108,8 @@
     "play": "播放",
     "favorite": "收藏",
     "detail": "详情",
+    "select": "选择",
+    "selected": "已选",
     "selectSong": "选择歌曲",
     "playSong": "播放歌曲",
     "viewSongDetail": "查看歌曲详情",
