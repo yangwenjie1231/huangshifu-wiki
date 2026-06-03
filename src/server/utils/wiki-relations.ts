@@ -1,6 +1,7 @@
 // Wiki 关系引擎 — 构建、解析、图算法
 
 import { RELATION_TYPE_LABELS } from '../../lib/relationConstants';
+import { CONTENT_LIMITS } from '../../lib/contentLimits';
 import type {
   WikiRelationType,
   WikiRelationRecord,
@@ -53,7 +54,7 @@ export function normalizeWikiRelationLabel(value: unknown) {
   if (!normalized) {
     return undefined;
   }
-  return normalized.slice(0, 60);
+  return normalized.slice(0, CONTENT_LIMITS.wiki.relationLabel);
 }
 
 export function normalizeWikiRelationList(value: unknown, sourceSlug?: string): WikiRelationRecord[] {
@@ -110,7 +111,7 @@ function doNormalizeArray(value: unknown[], sourceSlug: string | undefined): Wik
     });
   });
 
-  return relations.slice(0, 80);
+  return relations.slice(0, CONTENT_LIMITS.wiki.relations);
 }
 
 export async function normalizeWikiRelationListForWrite(value: unknown, sourceSlug?: string) {

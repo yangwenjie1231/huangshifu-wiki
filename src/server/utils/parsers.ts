@@ -12,6 +12,7 @@ import type {
   ApiUser,
 } from '../types';
 import { isAdminRole } from '../middleware/auth';
+import { CONTENT_LIMITS } from '../../lib/contentLimits';
 
 export function parseDate(date: string | Date | null | undefined) {
   if (!date) return null;
@@ -111,7 +112,8 @@ export function normalizeTagList(value: unknown): string[] {
   return value
     .map((item) => (typeof item === 'string' ? item.trim() : ''))
     .filter(Boolean)
-    .slice(0, 30);
+    .map((item) => item.slice(0, CONTENT_LIMITS.gallery.tag))
+    .slice(0, CONTENT_LIMITS.gallery.tags);
 }
 
 export function serializeTags(value: unknown) {

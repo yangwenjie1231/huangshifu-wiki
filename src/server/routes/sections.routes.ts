@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { prisma } from '../prisma';
 import { requireAdmin } from '../middleware/auth';
+import { ensureTextLimit } from '../utils';
+import { CONTENT_LIMITS } from '../../lib/contentLimits';
 
 const router = Router();
 
@@ -27,6 +29,12 @@ router.post('/', requireAdmin, async (req, res) => {
 
     if (!name) {
       res.status(400).json({ error: '版块名称不能为空' });
+      return;
+    }
+    if (
+      !ensureTextLimit(res, name, '版块名称', CONTENT_LIMITS.section.name) ||
+      !ensureTextLimit(res, description, '版块描述', CONTENT_LIMITS.section.description)
+    ) {
       return;
     }
 

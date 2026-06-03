@@ -29,6 +29,7 @@ import {
   decryptBuffer,
   validateSqlContent,
   logger,
+  ensureTextLimit,
 } from '../utils';
 import {
   cleanupUnusedMediaAssetById,
@@ -41,6 +42,7 @@ import { fileURLToPath } from 'url';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { UPLOAD_MAX_FILE_SIZE_BYTES } from '../../lib/uploadLimits';
+import { CONTENT_LIMITS } from '../../lib/contentLimits';
 import archiver from 'archiver';
 import { scanAllWikiLinks, getWikiPageLinks, previewLinkUpdate, batchUpdateWikiLinks, switchWikiStorage } from '../wiki/markdownLinkUpdater';
 import { isSensitiveWord, containsSensitive } from '../../lib/sensitiveWordFilter';
@@ -236,6 +238,9 @@ router.put('/review-queue/:id/approve', requireAdmin, asyncHandler(async (req: A
     const targetId = req.params.id;
     const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
     const reqAuthUser = req.authUser!;
+    if (!ensureTextLimit(res, note, '审核备注', CONTENT_LIMITS.post.reviewNote)) {
+      return;
+    }
 
     if (!targetType) {
       res.status(400).json({ error: '无效审核类型' });
@@ -257,6 +262,9 @@ router.put('/review-queue/:id/reject', requireAdmin, asyncHandler(async (req: Au
     const targetId = req.params.id;
     const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
     const reqAuthUser = req.authUser!;
+    if (!ensureTextLimit(res, note, '审核备注', CONTENT_LIMITS.post.reviewNote)) {
+      return;
+    }
 
     if (!targetType) {
       res.status(400).json({ error: '无效审核类型' });
@@ -277,6 +285,9 @@ router.post('/review/:type/:id/:action', requireAdmin, asyncHandler(async (req: 
   try {
     const { type, id, action } = req.params;
     const { note } = req.body;
+    if (!ensureTextLimit(res, note, '审核备注', CONTENT_LIMITS.post.reviewNote)) {
+      return;
+    }
 
     if (action !== 'approve' && action !== 'reject') {
       res.status(400).json({ error: '无效的操作' });
@@ -325,6 +336,9 @@ router.post('/sensitive-words', requireSuperAdmin, asyncHandler(async (req: Auth
     const { word } = req.body as { word?: string };
     if (!word || typeof word !== 'string') {
       res.status(400).json({ error: '请提供要添加的敏感词' });
+      return;
+    }
+    if (!ensureTextLimit(res, word, '敏感词', CONTENT_LIMITS.admin.sensitiveWord)) {
       return;
     }
     

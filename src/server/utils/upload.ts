@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { uploadsDir, UPLOAD_SESSION_TTL_MINUTES } from './config';
 import { parseInteger } from './parsers';
+import { CONTENT_LIMITS } from '../../lib/contentLimits';
 import type {
   EDIT_LOCK_COLLECTION_ALLOWLIST,
   ALLOWED_IMAGE_EXTENSIONS,
@@ -41,7 +42,7 @@ export function normalizeTrackDiscPayload(rawTracks: unknown): Array<{
       const record = item as Record<string, unknown>;
       const disc = parseInteger(record.disc, index + 1, { min: 1, max: 20 });
       const nameRaw = typeof record.name === 'string' ? record.name.trim() : '';
-      const name = nameRaw || `Disc ${disc}`;
+      const name = (nameRaw || `Disc ${disc}`).slice(0, CONTENT_LIMITS.album.discName);
       const songsRaw = Array.isArray(record.songs) ? record.songs : [];
 
       const songs = songsRaw

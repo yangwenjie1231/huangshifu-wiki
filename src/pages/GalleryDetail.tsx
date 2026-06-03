@@ -16,6 +16,7 @@ import { clsx } from 'clsx';
 import { useAuth } from '../context/AuthContext';
 import { SmartImage } from '../components/SmartImage';
 import { Lightbox } from '../components/Lightbox';
+import { CharacterCount } from '../components/CharacterCount';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { apiDelete, apiGet, apiPatch, apiPost, apiUpload } from '../lib/apiClient';
@@ -30,6 +31,7 @@ import { markCommentDeleted, restoreComment, updateCommentLike } from '../utils/
 import { calculateFileMd5Hex } from '../utils/fileMd5';
 import type { GalleryDetailResponse } from '../types/api';
 import type { GalleryImageItem, GalleryItem } from '../types/entities';
+import { CONTENT_LIMITS } from '../lib/contentLimits';
 
 type EditableGalleryImage = GalleryImageItem & {
   clientId: string;
@@ -810,26 +812,34 @@ const GalleryDetail = () => {
           {editing && draft ? (
             <div className="space-y-4 max-w-2xl">
               <div className="space-y-1.5">
-                <label htmlFor="gallery-title" className="block text-sm font-medium text-text-secondary">
-                  {t('gallery.titleLabel')}
-                </label>
+                <div className="flex items-center justify-between gap-3">
+                  <label htmlFor="gallery-title" className="block text-sm font-medium text-text-secondary">
+                    {t('gallery.titleLabel')}
+                  </label>
+                  <CharacterCount current={draft.title.length} max={CONTENT_LIMITS.gallery.title} />
+                </div>
                 <input
                   id="gallery-title"
                   type="text"
                   value={draft.title}
                   onChange={(event) => applyDraft((prev) => prev ? { ...prev, title: event.target.value } : prev)}
+                  maxLength={CONTENT_LIMITS.gallery.title}
                   className="theme-input w-full px-4 py-2.5 rounded text-base"
                   placeholder={t('gallery.titlePlaceholder')}
                 />
               </div>
               <div className="space-y-1.5">
-                <label htmlFor="gallery-description" className="block text-sm font-medium text-text-secondary">
-                  {t('gallery.descriptionLabel')}
-                </label>
+                <div className="flex items-center justify-between gap-3">
+                  <label htmlFor="gallery-description" className="block text-sm font-medium text-text-secondary">
+                    {t('gallery.descriptionLabel')}
+                  </label>
+                  <CharacterCount current={draft.description.length} max={CONTENT_LIMITS.gallery.description} />
+                </div>
                 <textarea
                   id="gallery-description"
                   value={draft.description}
                   onChange={(event) => applyDraft((prev) => prev ? { ...prev, description: event.target.value } : prev)}
+                  maxLength={CONTENT_LIMITS.gallery.description}
                   className="theme-input w-full px-4 py-2.5 rounded resize-none text-base"
                   rows={3}
                   placeholder={t('gallery.descriptionPlaceholder')}
@@ -837,14 +847,21 @@ const GalleryDetail = () => {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label htmlFor="gallery-tags" className="block text-sm font-medium text-text-secondary">
-                    {t('gallery.tagsLabel')}
-                  </label>
+                  <div className="flex items-center justify-between gap-3">
+                    <label htmlFor="gallery-tags" className="block text-sm font-medium text-text-secondary">
+                      {t('gallery.tagsLabel')}
+                    </label>
+                    <CharacterCount
+                      current={draft.tagsText.length}
+                      max={CONTENT_LIMITS.gallery.tag * CONTENT_LIMITS.gallery.tags}
+                    />
+                  </div>
                   <input
                     id="gallery-tags"
                     type="text"
                     value={draft.tagsText}
                     onChange={(event) => applyDraft((prev) => prev ? { ...prev, tagsText: event.target.value } : prev)}
+                    maxLength={CONTENT_LIMITS.gallery.tag * CONTENT_LIMITS.gallery.tags}
                     className="theme-input w-full px-4 py-2.5 rounded text-base"
                     placeholder={t('gallery.tagsPlaceholder')}
                   />
@@ -1046,6 +1063,7 @@ const GalleryDetail = () => {
                       ref={commentInputRef}
                       value={newComment}
                       onChange={(e) => setNewComment(e.target.value)}
+                      maxLength={CONTENT_LIMITS.gallery.comment}
                       onKeyDown={submitFormOnModifierEnter}
                       placeholder={t('gallery.commentPlaceholder')}
                       className="theme-input w-full px-4 py-3 rounded resize-none text-base"
@@ -1053,6 +1071,7 @@ const GalleryDetail = () => {
                     />
                     <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                       <p className="text-xs text-text-muted">{t('gallery.commentShortcutHint')}</p>
+                      <CharacterCount current={newComment.length} max={CONTENT_LIMITS.gallery.comment} />
                       <button
                         type="submit"
                         disabled={!newComment.trim() || submittingComment}

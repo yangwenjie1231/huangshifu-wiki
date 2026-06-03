@@ -9,6 +9,7 @@ import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { SmartImage } from '../components/SmartImage';
+import { CharacterCount } from '../components/CharacterCount';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { apiDelete, apiGet, apiPost, apiUpload } from '../lib/apiClient';
@@ -22,6 +23,7 @@ import { usePagination } from '../hooks/usePagination';
 import { calculateFileMd5Hex } from '../utils/fileMd5';
 import type { GalleryItem } from '../types/entities';
 import type { GalleryCreateResponse, GalleryListResponse, UploadFileResponse, UploadSessionResponse } from '../types/api';
+import { CONTENT_LIMITS } from '../lib/contentLimits';
 
 const DEFAULT_PAGE_SIZE = 24;
 const GALLERY_UPLOAD_ACCEPT = 'image/jpeg,image/png,image/gif,image/webp,image/bmp';
@@ -687,11 +689,15 @@ const UploadModal = ({
 
         <div className="flex-grow overflow-y-auto p-6 space-y-6">
           <div className="space-y-2">
-            <label className="text-xs font-medium text-text-muted">图集标题 <span className="theme-text-error">*</span></label>
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-xs font-medium text-text-muted">图集标题 <span className="theme-text-error">*</span></label>
+              <CharacterCount current={title.length} max={CONTENT_LIMITS.gallery.title} />
+            </div>
             <input
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
+              maxLength={CONTENT_LIMITS.gallery.title}
               placeholder="例如：2024 Live 现场返图"
               className="theme-input w-full px-4 py-3 rounded text-base"
             />
@@ -699,11 +705,15 @@ const UploadModal = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-xs font-medium text-text-muted">标签 (逗号分隔)</label>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-xs font-medium text-text-muted">标签 (逗号分隔)</label>
+                <CharacterCount current={tags.length} max={CONTENT_LIMITS.gallery.tag * CONTENT_LIMITS.gallery.tags} />
+              </div>
               <input
                 type="text"
                 value={tags}
                 onChange={e => setTags(e.target.value)}
+                maxLength={CONTENT_LIMITS.gallery.tag * CONTENT_LIMITS.gallery.tags}
                 placeholder="例如：Live, 绝色, 2024"
                 className="theme-input w-full px-4 py-3 rounded text-base"
               />
@@ -726,10 +736,14 @@ const UploadModal = ({
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-medium text-text-muted">描述 (可选)</label>
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-xs font-medium text-text-muted">描述 (可选)</label>
+              <CharacterCount current={description.length} max={CONTENT_LIMITS.gallery.description} />
+            </div>
             <textarea
               value={description}
               onChange={e => setDescription(e.target.value)}
+              maxLength={CONTENT_LIMITS.gallery.description}
               placeholder="简单介绍一下这个图集..."
               rows={3}
               className="theme-input w-full px-4 py-3 rounded resize-none text-base"

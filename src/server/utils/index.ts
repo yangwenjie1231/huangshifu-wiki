@@ -49,6 +49,15 @@ export {
   parsePagination,
 } from './parsers';
 
+export {
+  limitedString,
+  optionalLimitedString,
+  nullableLimitedString,
+  limitedStringArray,
+  ensureTextLimit,
+  trimText,
+} from './textLimits';
+
 // === Wiki 关系引擎 ===
 export {
   RELATION_LABEL_TO_TYPE,

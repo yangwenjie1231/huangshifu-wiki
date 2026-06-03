@@ -8,6 +8,7 @@ import {
 } from './config';
 import { enhancedCache, CACHE_KEYS } from './cache';
 import { parseInteger } from './parsers';
+import { CONTENT_LIMITS } from '../../lib/contentLimits';
 import type {
   MusicPlatform,
   MusicTrackWithRelations,
@@ -135,11 +136,13 @@ export function normalizeSongCustomPlatformLinks(input: unknown): SongCustomPlat
     const rawLabel = typeof (item as { label?: unknown }).label === 'string'
       ? (item as { label: string }).label.trim()
       : '';
-    const normalizedLabel = rawLabel.slice(0, 30);
+    const normalizedLabel = rawLabel.slice(0, CONTENT_LIMITS.music.customPlatformLabel);
     const rawUrl = typeof (item as { url?: unknown }).url === 'string'
       ? (item as { url: string }).url
       : '';
-    const normalizedUrl = normalizeSongCustomPlatformLinkUrl(rawUrl);
+    const normalizedUrl = normalizeSongCustomPlatformLinkUrl(
+      rawUrl.slice(0, CONTENT_LIMITS.music.customPlatformUrl)
+    );
 
     if (!normalizedLabel || !normalizedUrl) {
       continue;
@@ -156,7 +159,7 @@ export function normalizeSongCustomPlatformLinks(input: unknown): SongCustomPlat
       url: normalizedUrl,
     });
 
-    if (links.length >= 10) {
+    if (links.length >= CONTENT_LIMITS.music.customPlatformLinks) {
       break;
     }
   }

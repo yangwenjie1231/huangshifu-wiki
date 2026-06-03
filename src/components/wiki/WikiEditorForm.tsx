@@ -2,7 +2,7 @@ import React from "react";
 import { CharacterCount } from "../../components/CharacterCount";
 import MarkdownEditor from "../../components/MarkdownEditor";
 import { LocationTagInput } from "../../components/LocationTagInput";
-import { WIKI_MAX_CONTENT_SIZE } from "../../lib/contentLimits";
+import { CONTENT_LIMITS, WIKI_MAX_CONTENT_SIZE } from "../../lib/contentLimits";
 import type { WikiRelationRecord } from "./types";
 
 type FormData = {
@@ -40,12 +40,15 @@ const WikiEditorForm = React.memo(({
 		<>
 			<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 				<div className="space-y-2">
-					<label
-						htmlFor="wiki-title"
-						className="text-xs font-bold uppercase tracking-widest text-text-muted"
-					>
-						标题 <span className="theme-text-error">*</span>
-					</label>
+					<div className="flex items-center justify-between gap-3">
+						<label
+							htmlFor="wiki-title"
+							className="text-xs font-bold uppercase tracking-widest text-text-muted"
+						>
+							标题 <span className="theme-text-error">*</span>
+						</label>
+						<CharacterCount current={formData.title.length} max={CONTENT_LIMITS.wiki.title} />
+					</div>
 					<input
 						id="wiki-title"
 						type="text"
@@ -54,6 +57,7 @@ const WikiEditorForm = React.memo(({
 						onChange={(e) =>
 							onFormDataChange({ title: e.target.value })
 						}
+						maxLength={CONTENT_LIMITS.wiki.title}
 						placeholder="例如：黄诗扶"
 						className="theme-input w-full px-4 py-3 rounded text-base"
 					/>
@@ -81,12 +85,15 @@ const WikiEditorForm = React.memo(({
 					</select>
 				</div>
 				<div className="space-y-2">
-					<label
-						htmlFor="wiki-event-date"
-						className="text-xs font-bold uppercase tracking-widest text-text-muted"
-					>
-						事件日期 (可选)
-					</label>
+					<div className="flex items-center justify-between gap-3">
+						<label
+							htmlFor="wiki-event-date"
+							className="text-xs font-bold uppercase tracking-widest text-text-muted"
+						>
+							事件日期 (可选)
+						</label>
+						<CharacterCount current={formData.eventDate.length} max={CONTENT_LIMITS.wiki.eventDate} />
+					</div>
 					<input
 						id="wiki-event-date"
 						type="date"
@@ -94,6 +101,7 @@ const WikiEditorForm = React.memo(({
 						onChange={(e) =>
 							onFormDataChange({ eventDate: e.target.value })
 						}
+						maxLength={CONTENT_LIMITS.wiki.eventDate}
 						className="theme-input w-full px-4 py-3 rounded text-base"
 					/>
 				</div>
@@ -127,17 +135,24 @@ const WikiEditorForm = React.memo(({
 						placeholder="在这里输入百科内容，支持 Markdown 语法..."
 						ariaLabel="内容 (Markdown)"
 						enableWikiLinks={true}
+						maxLength={WIKI_MAX_CONTENT_SIZE}
 					/>
 				</div>
 			</div>
 
 			<div className="space-y-2">
-				<label
-					htmlFor="wiki-tags"
-					className="text-xs font-bold uppercase tracking-widest text-text-muted"
-				>
-					标签 (逗号分隔)
-				</label>
+				<div className="flex items-center justify-between gap-3">
+					<label
+						htmlFor="wiki-tags"
+						className="text-xs font-bold uppercase tracking-widest text-text-muted"
+					>
+						标签 (逗号分隔)
+					</label>
+					<CharacterCount
+						current={formData.tags.length}
+						max={CONTENT_LIMITS.wiki.tag * CONTENT_LIMITS.wiki.tags}
+					/>
+				</div>
 				<input
 					id="wiki-tags"
 					type="text"
@@ -145,6 +160,7 @@ const WikiEditorForm = React.memo(({
 					onChange={(e) =>
 						onFormDataChange({ tags: e.target.value })
 					}
+					maxLength={CONTENT_LIMITS.wiki.tag * CONTENT_LIMITS.wiki.tags}
 					placeholder="例如：古风, 原创, 歌手"
 					className="theme-input w-full px-4 py-3 rounded text-base"
 				/>

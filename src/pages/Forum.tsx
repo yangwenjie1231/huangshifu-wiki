@@ -29,6 +29,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import MarkdownEditor from '../components/MarkdownEditor'
+import { CharacterCount } from '../components/CharacterCount'
 import { apiDelete, apiGet, apiPost, apiPut, invalidateApiCacheByPrefix } from '../lib/apiClient'
 import { useToast } from '../components/Toast'
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink'
@@ -44,6 +45,7 @@ import { useI18n } from '../lib/i18n'
 import { useToggleInteraction } from '../hooks/useToggleInteraction'
 import { submitFormOnModifierEnter } from '../lib/formShortcuts'
 import { markCommentDeleted, restoreComment, updateCommentLike } from '../utils/commentState'
+import { CONTENT_LIMITS } from '../lib/contentLimits'
 
 type PostItem = {
   id: string
@@ -793,6 +795,7 @@ const PostDetail = () => {
                       ref={commentInputRef}
                       value={newComment}
                       onChange={(e) => setNewComment(e.target.value)}
+                      maxLength={CONTENT_LIMITS.post.comment}
                       onKeyDown={submitFormOnModifierEnter}
                       placeholder={
                         replyTo
@@ -811,7 +814,10 @@ const PostDetail = () => {
                       <Send size={14} />
                     </button>
                   </div>
-                  <p className="mt-2 text-xs text-text-muted">{t('forum.commentShortcutHint')}</p>
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs text-text-muted">{t('forum.commentShortcutHint')}</p>
+                    <CharacterCount current={newComment.length} max={CONTENT_LIMITS.post.comment} />
+                  </div>
                   {isBanned ? (
                     <p className="mt-2 text-xs theme-text-error">
                       {t('forum.bannedCannotComment')}
@@ -1268,14 +1274,18 @@ const PostEditor = () => {
           className="space-y-6"
         >
           <div className="space-y-2">
-            <label className="text-xs font-bold uppercase tracking-widest text-text-muted">
-              {t('forum.titleLabel')} <span className="theme-text-error">*</span>
-            </label>
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-xs font-bold uppercase tracking-widest text-text-muted">
+                {t('forum.titleLabel')} <span className="theme-text-error">*</span>
+              </label>
+              <CharacterCount current={formData.title.length} max={CONTENT_LIMITS.post.title} />
+            </div>
             <input
               type="text"
               required
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              maxLength={CONTENT_LIMITS.post.title}
               placeholder={t('forum.titlePlaceholder')}
               className="theme-input w-full px-4 py-3 rounded text-base"
             />
@@ -1299,13 +1309,20 @@ const PostEditor = () => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-bold uppercase tracking-widest text-text-muted">
-              {t('forum.tagsLabel')}
-            </label>
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-xs font-bold uppercase tracking-widest text-text-muted">
+                {t('forum.tagsLabel')}
+              </label>
+              <CharacterCount
+                current={formData.tags.length}
+                max={CONTENT_LIMITS.post.tag * CONTENT_LIMITS.post.tags}
+              />
+            </div>
             <input
               type="text"
               value={formData.tags}
               onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+              maxLength={CONTENT_LIMITS.post.tag * CONTENT_LIMITS.post.tags}
               placeholder={t('forum.tagsPlaceholder')}
               className="theme-input w-full px-4 py-3 rounded text-base"
             />
@@ -1336,9 +1353,12 @@ const PostEditor = () => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-bold uppercase tracking-widest text-text-muted">
-              {t('forum.contentLabel')} <span className="theme-text-error">*</span>
-            </label>
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-xs font-bold uppercase tracking-widest text-text-muted">
+                {t('forum.contentLabel')} <span className="theme-text-error">*</span>
+              </label>
+              <CharacterCount current={formData.content.length} max={CONTENT_LIMITS.post.content} />
+            </div>
             <div className="border border-border rounded overflow-hidden bg-surface">
               <MarkdownEditor
                 value={formData.content}
@@ -1347,6 +1367,7 @@ const PostEditor = () => {
                 }
                 height="400px"
                 placeholder={t('forum.contentPlaceholder')}
+                maxLength={CONTENT_LIMITS.post.content}
               />
             </div>
           </div>

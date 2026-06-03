@@ -26,13 +26,35 @@ import {
   canViewPost,
   applyAlbumTracksToRelations,
   enhancedCache,
+  ensureTextLimit,
 } from '../utils';
 import { parseMusicUrl } from '../music/musicUrlParser';
 import { getMusicResourcePreview, searchMusicResources, type MusicResourcePreview } from '../music/metingService';
 import type { AuthenticatedRequest, MusicPlatform, ContentStatus } from '../types';
 import { Prisma } from '@prisma/client';
+import { CONTENT_LIMITS } from '../../lib/contentLimits';
 
 const router = Router();
+
+function ensureMusicTextLimits(res: Parameters<typeof ensureTextLimit>[0], input: Record<string, unknown>) {
+  return (
+    ensureTextLimit(res, input.id, '歌曲 ID', CONTENT_LIMITS.music.id) &&
+    ensureTextLimit(res, input.title, '歌曲标题', CONTENT_LIMITS.music.title) &&
+    ensureTextLimit(res, input.artist, '歌手', CONTENT_LIMITS.music.artist) &&
+    ensureTextLimit(res, input.album, '专辑名', CONTENT_LIMITS.music.album) &&
+    ensureTextLimit(res, input.description, '歌曲描述', CONTENT_LIMITS.music.description) &&
+    ensureTextLimit(res, input.cover, '封面链接', CONTENT_LIMITS.music.cover) &&
+    ensureTextLimit(res, input.audioUrl, '音频链接', CONTENT_LIMITS.music.audioUrl) &&
+    ensureTextLimit(res, input.lyric, '歌词', CONTENT_LIMITS.music.lyric) &&
+    ensureTextLimit(res, input.manualAlbumName, '手动专辑名', CONTENT_LIMITS.music.manualAlbumName) &&
+    ensureTextLimit(res, input.defaultCoverSource, '默认封面来源', CONTENT_LIMITS.music.defaultCoverSource) &&
+    ensureTextLimit(res, input.neteaseId, '网易云 ID', CONTENT_LIMITS.music.platformId) &&
+    ensureTextLimit(res, input.tencentId, '腾讯音乐 ID', CONTENT_LIMITS.music.platformId) &&
+    ensureTextLimit(res, input.kugouId, '酷狗 ID', CONTENT_LIMITS.music.platformId) &&
+    ensureTextLimit(res, input.baiduId, '百度音乐 ID', CONTENT_LIMITS.music.platformId) &&
+    ensureTextLimit(res, input.kuwoId, '酷我 ID', CONTENT_LIMITS.music.platformId)
+  )
+}
 
 // Music list
 router.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -124,6 +146,9 @@ router.post('/', requireAdmin, asyncHandler(async (req: AuthenticatedRequest, re
     const lyric = typeof body.lyric === 'string' ? body.lyric : null;
     const primaryPlatform = parseMusicPlatform(body.primaryPlatform || body.platform) || 'netease';
     const enabledPlatform = parseMusicPlatform(body.enabledPlatform) || primaryPlatform;
+    if (!ensureMusicTextLimits(res, body)) {
+      return;
+    }
 
     if (!id || !title || !artist) {
       res.status(400).json({ error: '缺少歌曲信息' });
@@ -607,6 +632,9 @@ router.patch('/:docId', requireAdmin, asyncHandler(async (req: AuthenticatedRequ
     if (typeof body.cover === 'string') updateData.cover = body.cover.trim();
     if (typeof body.audioUrl === 'string') updateData.audioUrl = body.audioUrl.trim();
     if (typeof body.lyric === 'string' || body.lyric === null) updateData.lyric = body.lyric;
+    if (!ensureMusicTextLimits(res, body)) {
+      return;
+    }
 
     const primaryPlatform = parseMusicPlatform(body.primaryPlatform);
     if (primaryPlatform) updateData.primaryPlatform = primaryPlatform;

@@ -16,11 +16,27 @@ import {
   parseBoolean,
   applyAlbumTracksToRelations,
   enhancedCache,
+  ensureTextLimit,
 } from '../utils';
 import type { AuthenticatedRequest } from '../types';
 import type { AlbumCover } from '@prisma/client';
+import { CONTENT_LIMITS } from '../../lib/contentLimits';
 
 const router = Router();
+
+function ensureAlbumTextLimits(res: Parameters<typeof ensureTextLimit>[0], input: Record<string, unknown>) {
+  return (
+    ensureTextLimit(res, input.id, '专辑 ID', CONTENT_LIMITS.album.id) &&
+    ensureTextLimit(res, input.sourceId, '来源 ID', CONTENT_LIMITS.album.sourceId) &&
+    ensureTextLimit(res, input.title, '专辑标题', CONTENT_LIMITS.album.title) &&
+    ensureTextLimit(res, input.artist, '艺人', CONTENT_LIMITS.album.artist) &&
+    ensureTextLimit(res, input.description, '专辑描述', CONTENT_LIMITS.album.description) &&
+    ensureTextLimit(res, input.platformUrl, '平台链接', CONTENT_LIMITS.album.platformUrl) &&
+    ensureTextLimit(res, input.cover, '封面链接', CONTENT_LIMITS.album.cover) &&
+    ensureTextLimit(res, input.defaultCoverSource, '默认封面来源', CONTENT_LIMITS.album.defaultCoverSource) &&
+    ensureTextLimit(res, input.name, 'Disc 名称', CONTENT_LIMITS.album.discName)
+  )
+}
 
 // Albums list
 router.get('/', async (req: AuthenticatedRequest, res) => {
@@ -308,6 +324,9 @@ router.post('/', requireAdmin, async (req, res) => {
     const platformUrl = typeof body.platformUrl === 'string' ? body.platformUrl.trim() : null;
     const cover = typeof body.cover === 'string' ? body.cover.trim() : '';
     const tracks = normalizeTrackDiscPayload(body.tracks);
+    if (!ensureAlbumTextLimits(res, body)) {
+      return;
+    }
 
     if (!title || !artist) {
       res.status(400).json({ error: '缺少专辑信息' });
@@ -396,6 +415,9 @@ router.patch('/:docId', requireAdmin, async (req, res) => {
     if (typeof body.sourceId === 'string') updateData.sourceId = body.sourceId.trim();
     if (typeof body.defaultCoverSource === 'string' || body.defaultCoverSource === null) {
       updateData.defaultCoverSource = body.defaultCoverSource;
+    }
+    if (!ensureAlbumTextLimits(res, body)) {
+      return;
     }
 
     if (body.tracks !== undefined) {
@@ -806,6 +828,9 @@ router.post('/:docId/discs', requireAdmin, async (req, res) => {
     const discName = typeof req.body?.name === 'string' && req.body.name.trim()
       ? req.body.name.trim()
       : `Disc ${nextDisc}`;
+    if (!ensureTextLimit(res, discName, 'Disc 名称', CONTENT_LIMITS.album.discName)) {
+      return;
+    }
     tracks.push({
       disc: nextDisc,
       name: discName,

@@ -6,6 +6,7 @@ import { asyncHandler } from '../middleware/asyncHandler';
 import { profileLimiter } from '../middleware/rateLimiter';
 import { validateBody, adminResetUserPasswordSchema, passwordSchema } from '../schemas';
 import {
+  CONTENT_LIMITS,
   PROFILE_DISPLAY_NAME_MAX_LENGTH,
   PROFILE_SIGNATURE_MAX_LENGTH,
   WIKI_MAX_CONTENT_SIZE,
@@ -20,6 +21,7 @@ import {
   parsePagination,
   logger,
   getPasswordSaltRounds,
+  ensureTextLimit,
 } from '../utils';
 import type { AuthenticatedRequest, UserStatus } from '../types';
 
@@ -137,6 +139,9 @@ router.put('/:userId/status', requireSuperAdmin, asyncHandler(async (req: Authen
 
     if (!status || !['active', 'banned'].includes(status)) {
       res.status(400).json({ error: '无效状态' });
+      return;
+    }
+    if (!ensureTextLimit(res, banReason, '封禁原因', CONTENT_LIMITS.userModeration.banReason)) {
       return;
     }
 
@@ -380,7 +385,7 @@ router.patch('/me', profileLimiter, requireAuth, requireActiveUser, asyncHandler
     }
     if (preferences !== undefined) {
       const prefSize = typeof preferences === 'string' ? preferences.length : JSON.stringify(preferences).length;
-      if (prefSize > 2048) {
+      if (prefSize > CONTENT_LIMITS.profile.preferences) {
         res.status(400).json({ error: '偏好设置不能超过2KB' });
         return;
       }
@@ -391,6 +396,9 @@ router.patch('/me', profileLimiter, requireAuth, requireActiveUser, asyncHandler
     let normalizedPhotoUrl: string | null | undefined;
     let oldPhotoURL: string | null = null;
     if (photoURL !== undefined) {
+      if (!ensureTextLimit(res, photoURL, '头像地址', CONTENT_LIMITS.profile.photoURL)) {
+        return;
+      }
       normalizedPhotoUrl = normalizePhotoUrl(photoURL);
       if (photoURL && photoURL !== '' && normalizedPhotoUrl === null) {
         res.status(400).json({ error: '头像地址不合法' });
@@ -602,6 +610,12 @@ router.put('/:userId/ban', requireAdmin, asyncHandler(async (req: AuthenticatedR
 
     const noteRaw = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
     const reasonRaw = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+    if (
+      !ensureTextLimit(res, noteRaw, '操作备注', CONTENT_LIMITS.userModeration.note) ||
+      !ensureTextLimit(res, reasonRaw, '封禁原因', CONTENT_LIMITS.userModeration.banReason)
+    ) {
+      return;
+    }
     const finalReason = reasonRaw || noteRaw || '违反社区规范';
 
     const targetUser = await prisma.user.findUnique({
@@ -655,6 +669,9 @@ router.put('/:userId/unban', requireAdmin, asyncHandler(async (req: Authenticate
     }
 
     const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
+    if (!ensureTextLimit(res, note, '操作备注', CONTENT_LIMITS.userModeration.note)) {
+      return;
+    }
 
     const targetUser = await prisma.user.findUnique({
       where: { uid: targetUid },

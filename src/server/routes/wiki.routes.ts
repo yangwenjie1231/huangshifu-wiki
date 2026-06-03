@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { Router, type Response, json } from 'express';
 import { requireAuth, requireActiveUser, requireAdmin, isAdminRole } from '../middleware/auth';
-import { validateBody, wikiCreateSchema, wikiUpdateSchema } from '../schemas';
+import { validateBody, wikiCreateSchema, wikiUpdateSchema, wikiRevisionSchema } from '../schemas';
 import {
   prisma,
   toWikiResponse,
@@ -20,8 +20,9 @@ import {
   clearWikiRelationCache,
   logger,
   parsePagination,
+  ensureTextLimit,
 } from '../utils';
-import { WIKI_MAX_CONTENT_SIZE } from '../../lib/contentLimits';
+import { CONTENT_LIMITS, WIKI_MAX_CONTENT_SIZE } from '../../lib/contentLimits';
 import { enhancedCache, CACHE_KEYS } from '../utils/cache';
 import type {
   AuthenticatedRequest,
@@ -1477,7 +1478,7 @@ router.get('/branches/:branchId/revisions', requireAuth, asyncHandler(async (req
   }
 }));
 
-router.post('/branches/:branchId/revisions', wikiWriteLimiter, requireAuth, requireActiveUser, asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.post('/branches/:branchId/revisions', wikiWriteLimiter, requireAuth, requireActiveUser, validateBody(wikiRevisionSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const branch = await prisma.wikiBranch.findUnique({
       where: { id: req.params.branchId },
@@ -1626,6 +1627,12 @@ router.post('/branches/:branchId/pull-request', wikiWriteLimiter, requireAuth, r
     });
 
     const payload = req.body as { title?: string; description?: string };
+    if (
+      !ensureTextLimit(res, payload.title, 'PR 标题', CONTENT_LIMITS.wiki.prTitle) ||
+      !ensureTextLimit(res, payload.description, 'PR 描述', CONTENT_LIMITS.wiki.prDescription)
+    ) {
+      return;
+    }
     const pr = await prisma.wikiPullRequest.create({
       data: {
         branchId: branch.id,
@@ -1806,6 +1813,9 @@ router.post('/pull-requests/:prId/comments', wikiWriteLimiter, requireAuth, requ
       res.status(400).json({ error: '评论内容不能为空' });
       return;
     }
+    if (!ensureTextLimit(res, content, '评论内容', CONTENT_LIMITS.wiki.prComment)) {
+      return;
+    }
 
     const comment = await prisma.wikiPullRequestComment.create({
       data: {
@@ -1975,6 +1985,9 @@ router.post('/pull-requests/:prId/reject', wikiWriteLimiter, requireAuth, requir
     }
 
     const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
+    if (!ensureTextLimit(res, note, '审核备注', CONTENT_LIMITS.wiki.reviewNote)) {
+      return;
+    }
     const reviewedAt = new Date();
     await prisma.$transaction([
       prisma.wikiPullRequest.update({
@@ -2008,7 +2021,7 @@ router.post('/pull-requests/:prId/reject', wikiWriteLimiter, requireAuth, requir
   }
 }));
 
-router.post('/branches/:branchId/resolve-conflict', wikiWriteLimiter, requireAuth, requireActiveUser, asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.post('/branches/:branchId/resolve-conflict', wikiWriteLimiter, requireAuth, requireActiveUser, validateBody(wikiRevisionSchema.omit({ slug: true, isAutoSave: true })), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const branch = await prisma.wikiBranch.findUnique({ where: { id: req.params.branchId } });
     if (!branch) {
@@ -2199,7 +2212,7 @@ router.post('/:slug/rollback/:revisionId', wikiWriteLimiter, requireAuth, requir
   }
 }));
 
-router.post('/:slug/revisions', wikiWriteLimiter, requireAuth, requireActiveUser, validateWikiSlugParam, asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.post('/:slug/revisions', wikiWriteLimiter, requireAuth, requireActiveUser, validateWikiSlugParam, validateBody(wikiRevisionSchema.pick({ title: true, content: true })), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const { title, content } = req.body as {
       title?: string;

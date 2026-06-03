@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { Router } from 'express';
 import { requireAuth, requireAdmin, requireActiveUser, isAdminRole } from '../middleware/auth';
 import { postWriteLimiter } from '../middleware/rateLimiter';
-import { validateBody, postCreateSchema, postCommentSchema } from '../schemas';
+import { validateBody, postCreateSchema, postUpdateSchema, postCommentSchema } from '../schemas';
 import {
   prisma,
   toPostResponse,
@@ -366,7 +366,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res) => {
 });
 
 // Update post
-router.put('/:id', postWriteLimiter, requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
+router.put('/:id', postWriteLimiter, requireAuth, requireActiveUser, validateBody(postUpdateSchema), async (req: AuthenticatedRequest, res) => {
   try {
     const { title, section, content, tags, status, musicDocId, albumDocId, locationCode, locationDetail } = req.body as {
       title?: string;

@@ -25,7 +25,9 @@ import {
   resolveCommentReplyTarget,
   notifyCommentReply,
   GALLERY_ADMIN_ONLY,
+  ensureTextLimit,
 } from '../utils'
+import { CONTENT_LIMITS } from '../../lib/contentLimits'
 import { enqueueGalleryImageEmbeddings } from '../vector/embeddingSync'
 import { prisma } from '../prisma'
 import { syncGalleryImageToImageMap, syncGalleryImageToImageMapWithVariant } from '../services/galleryImageSyncService'
@@ -39,6 +41,25 @@ function canViewGallery(gallery: { published: boolean; authorUid: string }, auth
   if (!authUser) return false
   if (isAdminRole(authUser.role)) return true
   return gallery.authorUid === authUser.uid
+}
+
+function ensureGalleryTextLimits(
+  res: Parameters<typeof ensureTextLimit>[0],
+  input: {
+    title?: unknown
+    description?: unknown
+    locationCode?: unknown
+    locationDetail?: unknown
+    copyright?: unknown
+  }
+) {
+  return (
+    ensureTextLimit(res, input.title, '图集标题', CONTENT_LIMITS.gallery.title) &&
+    ensureTextLimit(res, input.description, '图集描述', CONTENT_LIMITS.gallery.description) &&
+    ensureTextLimit(res, input.locationCode, '地点编码', CONTENT_LIMITS.gallery.locationCode) &&
+    ensureTextLimit(res, input.locationDetail, '地点详情', CONTENT_LIMITS.gallery.locationDetail) &&
+    ensureTextLimit(res, input.copyright, '版权信息', CONTENT_LIMITS.gallery.copyright)
+  )
 }
 
 function canManageGallery(gallery: { authorUid: string }, authUser?: ApiUser) {
@@ -165,6 +186,9 @@ router.post('/upload', galleryWriteLimiter, requireAuth, requireActiveUser, asyn
     const title = typeof req.body.title === 'string' ? req.body.title : ''
     const description = typeof req.body.description === 'string' ? req.body.description : ''
     const tagsRaw = typeof req.body.tags === 'string' ? req.body.tags : ''
+    if (!ensureGalleryTextLimits(res, { title, description })) {
+      return
+    }
     const tags = tagsRaw
       .split(',')
       .map((tag) => tag.trim())
@@ -282,6 +306,9 @@ router.post('/', galleryWriteLimiter, requireAuth, requireActiveUser, asyncHandl
     }
 
     const normalizedAssetIds = parseAssetIdList(assetIds)
+    if (!ensureGalleryTextLimits(res, { title, description, locationCode, locationDetail })) {
+      return
+    }
 
     if (normalizedAssetIds.length > 0) {
       const finalTitle = typeof title === 'string' && title.trim() ? title.trim() : '默认图集'
@@ -411,6 +438,12 @@ router.post('/', galleryWriteLimiter, requireAuth, requireActiveUser, asyncHandl
         }
         const fallbackName = `image-${index + 1}`
         const name = typeof image.name === 'string' && image.name.trim() ? image.name.trim() : fallbackName
+        if (
+          url.length > CONTENT_LIMITS.gallery.imageUrl ||
+          name.length > CONTENT_LIMITS.gallery.imageName
+        ) {
+          return null
+        }
         return {
           url,
           name,
@@ -526,6 +559,9 @@ router.patch('/:id', requireAuth, requireActiveUser, asyncHandler(async (req: Au
     const locationCode = req.body?.locationCode !== undefined ? (typeof req.body.locationCode === 'string' && req.body.locationCode.length > 0 ? req.body.locationCode : null) : undefined
     const locationDetail = req.body?.locationDetail !== undefined ? (typeof req.body.locationDetail === 'string' && req.body.locationDetail.length > 0 ? req.body.locationDetail : null) : undefined
     const copyright = req.body?.copyright !== undefined ? (typeof req.body.copyright === 'string' ? req.body.copyright.trim() : null) : undefined
+    if (!ensureGalleryTextLimits(res, { title, description, locationCode, locationDetail, copyright })) {
+      return
+    }
     const published = req.body?.published !== undefined ? parseBoolean(req.body.published, false) : undefined
     const imagesRaw = Array.isArray(req.body?.images) ? req.body.images : undefined
     const imageInstructions = imagesRaw?.map((item) => {
@@ -545,6 +581,12 @@ router.patch('/:id', requireAuth, requireActiveUser, asyncHandler(async (req: Au
       const name = typeof parsed.name === 'string' && parsed.name.trim()
         ? parsed.name.trim()
         : ''
+      if (
+        url.length > CONTENT_LIMITS.gallery.imageUrl ||
+        name.length > CONTENT_LIMITS.gallery.imageName
+      ) {
+        return null
+      }
       if (imageId && !assetId) {
         return { kind: 'existing' as const, imageId }
       }
@@ -1212,6 +1254,9 @@ router.post('/:id/comments', galleryWriteLimiter, requireAuth, requireActiveUser
 
     if (!content || !content.trim()) {
       res.status(400).json({ error: '评论内容不能为空' })
+      return
+    }
+    if (!ensureTextLimit(res, content, '评论内容', CONTENT_LIMITS.gallery.comment)) {
       return
     }
 

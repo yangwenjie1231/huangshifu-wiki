@@ -3,6 +3,8 @@ import { prisma } from '../prisma'
 import { requireAdmin } from '../middleware/auth'
 import { asyncHandler } from '../middleware/asyncHandler'
 import { enhancedCache, CACHE_KEYS, CACHE_TTL_SEC } from '../utils/cache'
+import { ensureTextLimit } from '../utils'
+import { CONTENT_LIMITS } from '../../lib/contentLimits'
 import type { AuthenticatedRequest } from '../types'
 
 const router = Router()
@@ -49,6 +51,12 @@ router.post('/', requireAdmin, asyncHandler(async (req: AuthenticatedRequest, re
     res.status(400).json({ error: '公告内容不能为空' })
     return
   }
+  if (
+    !ensureTextLimit(res, content, '公告内容', CONTENT_LIMITS.announcement.content) ||
+    !ensureTextLimit(res, link, '公告链接', CONTENT_LIMITS.announcement.link)
+  ) {
+    return
+  }
 
   const announcement = await prisma.announcement.create({
     data: {
@@ -68,6 +76,13 @@ router.patch('/:id', requireAdmin, asyncHandler(async (req: AuthenticatedRequest
     active?: boolean
     content?: string
     link?: string
+  }
+
+  if (
+    !ensureTextLimit(res, content, '公告内容', CONTENT_LIMITS.announcement.content) ||
+    !ensureTextLimit(res, link, '公告链接', CONTENT_LIMITS.announcement.link)
+  ) {
+    return
   }
 
   const announcement = await prisma.announcement.update({

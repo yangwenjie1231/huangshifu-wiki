@@ -1,3 +1,101 @@
-export const PROFILE_DISPLAY_NAME_MAX_LENGTH = 50
-export const PROFILE_SIGNATURE_MAX_LENGTH = 120
-export const WIKI_MAX_CONTENT_SIZE = 500 * 1024
+export const CONTENT_LIMITS = {
+  auth: {
+    displayName: 50,
+  },
+  profile: {
+    displayName: 50,
+    signature: 120,
+    bio: 500 * 1024,
+    photoURL: 2048,
+    preferences: 2048,
+  },
+  post: {
+    title: 200,
+    section: 80,
+    content: 500 * 1024,
+    comment: 5000,
+    tag: 50,
+    tags: 30,
+    locationCode: 64,
+    locationDetail: 200,
+    reviewNote: 1000,
+  },
+  wiki: {
+    title: 200,
+    slug: 200,
+    category: 80,
+    content: 500 * 1024,
+    tag: 50,
+    tags: 30,
+    eventDate: 32,
+    locationCode: 64,
+    locationDetail: 200,
+    relationLabel: 60,
+    relations: 80,
+    prTitle: 200,
+    prDescription: 2000,
+    prComment: 5000,
+    reviewNote: 1000,
+  },
+  gallery: {
+    title: 200,
+    description: 5000,
+    comment: 5000,
+    tag: 50,
+    tags: 30,
+    locationCode: 64,
+    locationDetail: 200,
+    copyright: 200,
+    imageName: 255,
+    imageUrl: 2048,
+  },
+  announcement: {
+    content: 5000,
+    link: 2048,
+  },
+  section: {
+    name: 80,
+    description: 500,
+  },
+  music: {
+    id: 100,
+    title: 200,
+    artist: 200,
+    album: 200,
+    description: 5000,
+    cover: 2048,
+    audioUrl: 2048,
+    lyric: 500 * 1024,
+    platformId: 100,
+    manualAlbumName: 200,
+    defaultCoverSource: 120,
+    customPlatformLabel: 30,
+    customPlatformUrl: 2048,
+    customPlatformLinks: 10,
+  },
+  album: {
+    id: 120,
+    sourceId: 100,
+    title: 200,
+    artist: 200,
+    description: 5000,
+    platformUrl: 2048,
+    cover: 2048,
+    defaultCoverSource: 120,
+    discName: 120,
+  },
+  userModeration: {
+    banReason: 1000,
+    note: 1000,
+  },
+  admin: {
+    sensitiveWord: 100,
+    backupPassword: 128,
+    editLockRecordId: 191,
+  },
+  url: 2048,
+} as const
+
+export const PROFILE_DISPLAY_NAME_MAX_LENGTH = CONTENT_LIMITS.profile.displayName
+export const PROFILE_SIGNATURE_MAX_LENGTH = CONTENT_LIMITS.profile.signature
+export const WIKI_MAX_CONTENT_SIZE = CONTENT_LIMITS.wiki.content

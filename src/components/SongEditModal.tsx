@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { ChevronDown, ChevronUp, ExternalLink, Plus, Search, Trash2 } from 'lucide-react';
 
 import { apiGet, apiPatch } from '../lib/apiClient';
+import { CONTENT_LIMITS } from '../lib/contentLimits';
 import { getPlatformExternalUrl } from '../lib/musicPlatformUrls';
 import { Platform, PlatformIds } from '../types/PlatformIds';
 import { useToast } from './Toast';
 import { MatchSuggestionModal } from './MatchSuggestionModal';
 import { FormModal } from './Modal/FormModal';
+import { CharacterCount } from './CharacterCount';
 
 type CustomPlatformConfig = {
   key: string;
@@ -220,50 +222,73 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
         maxWidth="max-w-lg"
       >
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-text-primary">歌曲标题 <span className="theme-text-error">*</span></label>
+          <div className="flex items-center justify-between gap-3">
+            <label className="text-sm font-medium text-text-primary">歌曲标题 <span className="theme-text-error">*</span></label>
+            <CharacterCount current={formData.title.length} max={CONTENT_LIMITS.music.title} />
+          </div>
           <input
             type="text"
             value={formData.title}
             onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
+            maxLength={CONTENT_LIMITS.music.title}
             placeholder="歌曲名称"
             className="theme-input w-full px-3 py-2 text-sm rounded"
           />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-text-primary">艺术家 <span className="theme-text-error">*</span></label>
+          <div className="flex items-center justify-between gap-3">
+            <label className="text-sm font-medium text-text-primary">艺术家 <span className="theme-text-error">*</span></label>
+            <CharacterCount current={formData.artist.length} max={CONTENT_LIMITS.music.artist} />
+          </div>
           <input
             type="text"
             value={formData.artist}
             onChange={(e) => setFormData((prev) => ({ ...prev, artist: e.target.value }))}
+            maxLength={CONTENT_LIMITS.music.artist}
             placeholder="歌手名称"
             className="theme-input w-full px-3 py-2 text-sm rounded"
           />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-text-primary">专辑</label>
+          <div className="flex items-center justify-between gap-3">
+            <label className="text-sm font-medium text-text-primary">专辑</label>
+            <CharacterCount current={formData.album.length} max={CONTENT_LIMITS.music.album} />
+          </div>
           <input
             type="text"
             value={formData.album}
             onChange={(e) => setFormData((prev) => ({ ...prev, album: e.target.value }))}
+            maxLength={CONTENT_LIMITS.music.album}
             placeholder="所属专辑（可选）"
             className="theme-input w-full px-3 py-2 text-sm rounded"
           />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-text-primary">歌词</label>
+          <div className="flex items-center justify-between gap-3">
+            <label className="text-sm font-medium text-text-primary">歌词</label>
+            <CharacterCount current={(formData.lyric || '').length} max={CONTENT_LIMITS.music.lyric} />
+          </div>
           <textarea
             value={formData.lyric || ''}
             onChange={(e) => setFormData((prev) => ({ ...prev, lyric: e.target.value }))}
+            maxLength={CONTENT_LIMITS.music.lyric}
             placeholder="歌词内容（可选，每行一句）"
             rows={6}
             className="theme-input w-full px-3 py-2 text-sm rounded resize-none"
           />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-text-primary">歌曲描述</label>
+          <div className="flex items-center justify-between gap-3">
+            <label className="text-sm font-medium text-text-primary">歌曲描述</label>
+            <CharacterCount
+              current={(formData.description || '').length}
+              max={CONTENT_LIMITS.music.description}
+            />
+          </div>
           <textarea
             value={formData.description || ''}
             onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+            maxLength={CONTENT_LIMITS.music.description}
             placeholder="创作者的话、创作背景等（可选，支持 Markdown）"
             rows={3}
             className="theme-input w-full px-3 py-2 text-sm rounded resize-none"
@@ -298,6 +323,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
                     type="text"
                     value={currentId}
                     onChange={(e) => handlePlatformIdChange(platform.key, e.target.value)}
+                    maxLength={CONTENT_LIMITS.music.platformId}
                     placeholder={isLinked ? '已关联' : '输入平台歌曲ID'}
                     className="theme-input flex-1 px-3 py-2 text-sm rounded"
                   />
@@ -361,6 +387,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
                           ...prev,
                           [platform.key]: e.target.value,
                         }))}
+                        maxLength={CONTENT_LIMITS.music.platformId}
                         placeholder={isLinked ? '已添加' : '输入平台ID'}
                         className="theme-input flex-1 px-3 py-2 text-sm rounded"
                       />
@@ -422,6 +449,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
                         type="text"
                         value={link.label}
                         onChange={(e) => handleCustomPlatformLinkChange(index, 'label', e.target.value)}
+                        maxLength={CONTENT_LIMITS.music.customPlatformLabel}
                         placeholder="平台名称，例如 Bilibili"
                         className="theme-input w-36 px-3 py-2 text-sm rounded"
                       />
@@ -429,6 +457,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
                         type="text"
                         value={link.url}
                         onChange={(e) => handleCustomPlatformLinkChange(index, 'url', e.target.value)}
+                        maxLength={CONTENT_LIMITS.music.customPlatformUrl}
                         placeholder="链接地址"
                         className="theme-input flex-1 px-3 py-2 text-sm rounded"
                       />
