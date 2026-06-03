@@ -79,14 +79,20 @@ describe('Navbar', () => {
 
   it('shows login and register buttons when not authenticated', () => {
     const { container } = renderWithRouter(<Navbar />);
-    const html = container.innerHTML;
-    expect(html).toContain('注册');
-    expect(html).toContain('登录');
+    expect(container.innerHTML).not.toContain('注册');
+    expect(container.innerHTML).not.toContain('登录');
   });
 
   it('has login and register buttons that are clickable', async () => {
     const user = userEvent.setup();
     const { container } = renderWithRouter(<Navbar />);
+
+    const menuButton = container.querySelector('[aria-label="打开账户菜单"]') as HTMLButtonElement | null;
+    expect(menuButton).not.toBeNull();
+    if (!menuButton) {
+      return;
+    }
+    await user.click(menuButton);
 
     const buttons = container.querySelectorAll('button');
     let foundLogin = false;

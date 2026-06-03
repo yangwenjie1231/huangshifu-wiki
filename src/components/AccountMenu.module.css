@@ -82,22 +82,7 @@
 	background: color-mix(in srgb, var(--color-surface) 94%, transparent);
 	box-shadow: 0 20px 45px rgba(0, 0, 0, 0.14);
 	backdrop-filter: blur(18px);
-	opacity: 0;
-	visibility: hidden;
-	transform: translateY(-6px);
-	transition:
-		opacity 0.18s ease,
-		transform 0.18s ease,
-		visibility 0.18s ease;
-	pointer-events: none;
 	z-index: 120;
-}
-
-.accountMenu[data-open='true'] .accountMenuPanel {
-	opacity: 1;
-	visibility: visible;
-	transform: translateY(0);
-	pointer-events: auto;
 }
 
 .menuStack {

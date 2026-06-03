@@ -3,6 +3,8 @@ import { Link, useLocation } from 'react-router-dom'
 import { Bookmark, FileText, History, LogOut, MessageSquare, Server, Settings, UserRound } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { DEFAULT_AVATAR, handleAvatarError } from '../lib/defaultAvatar'
+import { DropdownPanel } from './DropdownPanel'
+import { useDismissableLayer } from '../hooks/useClickOutside'
 import { ThemeToggle } from './ThemeToggle'
 import type { AuthMode } from './Navbar/types'
 import styles from './AccountMenu.module.css'
@@ -38,31 +40,7 @@ export const AccountMenu = ({ onLogout, onOpenAuth }: AccountMenuProps) => {
     closeAccountMenu()
   }, [location.hash, location.pathname, location.search])
 
-  useEffect(() => {
-    if (!isAccountMenuOpen) {
-      return
-    }
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!accountMenuRef.current?.contains(event.target as Node)) {
-        closeAccountMenu()
-      }
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        closeAccountMenu()
-      }
-    }
-
-    document.addEventListener('pointerdown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isAccountMenuOpen])
+  useDismissableLayer(accountMenuRef, closeAccountMenu, isAccountMenuOpen)
 
   const handleAccountMenuMouseDownCapture = (event: MouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement
@@ -120,116 +98,120 @@ export const AccountMenu = ({ onLogout, onOpenAuth }: AccountMenuProps) => {
         )}
       </button>
 
-      <div
+      <DropdownPanel
+        open={isAccountMenuOpen}
         className={styles.accountMenuPanel}
-        aria-label="账户菜单"
-        onMouseDownCapture={handleAccountMenuMouseDownCapture}
       >
-        <div className={styles.menuStack}>
-          {isAuthenticated ? (
-            <>
-              <Link to="/profile" className={styles.profileSummary} onClick={closeAccountMenu}>
-                <img
-                  src={accountAvatarSrc}
-                  alt=""
-                  className={styles.profileSummaryAvatar}
-                  referrerPolicy="no-referrer"
-                  onError={handleAvatarError}
-                />
-                <div className={styles.profileSummaryText}>
-                  <span className={styles.profileName}>{displayName}</span>
-                  <span className={styles.profileMeta}>
-                    {isAdmin ? '管理员账户' : '查看个人资料'}
-                  </span>
-                </div>
-              </Link>
+        <div
+          aria-label="账户菜单"
+          onMouseDownCapture={handleAccountMenuMouseDownCapture}
+        >
+          <div className={styles.menuStack}>
+            {isAuthenticated ? (
+              <>
+                <Link to="/profile" className={styles.profileSummary} onClick={closeAccountMenu}>
+                  <img
+                    src={accountAvatarSrc}
+                    alt=""
+                    className={styles.profileSummaryAvatar}
+                    referrerPolicy="no-referrer"
+                    onError={handleAvatarError}
+                  />
+                  <div className={styles.profileSummaryText}>
+                    <span className={styles.profileName}>{displayName}</span>
+                    <span className={styles.profileMeta}>
+                      {isAdmin ? '管理员账户' : '查看个人资料'}
+                    </span>
+                  </div>
+                </Link>
 
-              <div className={styles.quickLinksGrid}>
-                <Link to="/profile/posts" className={styles.menuAction} onClick={closeAccountMenu}>
-                  <FileText size={16} />
-                  <span>我的帖子</span>
+                <div className={styles.quickLinksGrid}>
+                  <Link to="/profile/posts" className={styles.menuAction} onClick={closeAccountMenu}>
+                    <FileText size={16} />
+                    <span>我的帖子</span>
+                  </Link>
+                  <Link to="/profile/comments" className={styles.menuAction} onClick={closeAccountMenu}>
+                    <MessageSquare size={16} />
+                    <span>我的评论</span>
+                  </Link>
+                  <Link to="/profile/history" className={styles.menuAction} onClick={closeAccountMenu}>
+                    <History size={16} />
+                    <span>浏览历史</span>
+                  </Link>
+                  <Link to="/profile/favorites" className={styles.menuAction} onClick={closeAccountMenu}>
+                    <Bookmark size={16} />
+                    <span>我的收藏</span>
+                  </Link>
+                </div>
+
+                <Link to="/settings/profile" className={styles.menuAction} onClick={closeAccountMenu}>
+                  <Settings size={16} />
+                  <span>设置</span>
                 </Link>
-                <Link to="/profile/comments" className={styles.menuAction} onClick={closeAccountMenu}>
-                  <MessageSquare size={16} />
-                  <span>我的评论</span>
-                </Link>
-                <Link to="/profile/history" className={styles.menuAction} onClick={closeAccountMenu}>
-                  <History size={16} />
-                  <span>浏览历史</span>
-                </Link>
-                <Link to="/profile/favorites" className={styles.menuAction} onClick={closeAccountMenu}>
-                  <Bookmark size={16} />
-                  <span>我的收藏</span>
-                </Link>
+
+                {isBanned && (
+                  <div className={styles.statusNotice}>
+                    账号受限
+                    {profile?.banReason ? `：${profile.banReason}` : ''}
+                  </div>
+                )}
+
+                {isAdmin && (
+                  <Link to="/admin" className={styles.menuAction} onClick={closeAccountMenu}>
+                    <Server size={16} />
+                    <span>管理后台</span>
+                  </Link>
+                )}
+              </>
+            ) : onOpenAuth ? (
+              <div className={styles.menuBlock}>
+                <div className={styles.menuLabel}>账号</div>
+                <div className={styles.authActions}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeAccountMenu()
+                      onOpenAuth('login')
+                    }}
+                    className={styles.menuPrimaryAction}
+                  >
+                    登录
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeAccountMenu()
+                      onOpenAuth('register')
+                    }}
+                    className={styles.menuSecondaryAction}
+                  >
+                    注册
+                  </button>
+                </div>
               </div>
+            ) : null}
 
-              <Link to="/settings/profile" className={styles.menuAction} onClick={closeAccountMenu}>
-                <Settings size={16} />
-                <span>设置</span>
-              </Link>
-
-              {isBanned && (
-                <div className={styles.statusNotice}>
-                  账号受限
-                  {profile?.banReason ? `：${profile.banReason}` : ''}
-                </div>
-              )}
-
-              {isAdmin && (
-                <Link to="/admin" className={styles.menuAction} onClick={closeAccountMenu}>
-                  <Server size={16} />
-                  <span>管理后台</span>
-                </Link>
-              )}
-            </>
-          ) : onOpenAuth ? (
             <div className={styles.menuBlock}>
-              <div className={styles.menuLabel}>账号</div>
-              <div className={styles.authActions}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    closeAccountMenu()
-                    onOpenAuth('login')
-                  }}
-                  className={styles.menuPrimaryAction}
-                >
-                  登录
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    closeAccountMenu()
-                    onOpenAuth('register')
-                  }}
-                  className={styles.menuSecondaryAction}
-                >
-                  注册
-                </button>
-              </div>
+              <div className={styles.menuLabel}>主题外观</div>
+              <ThemeToggle fullWidth compact />
             </div>
-          ) : null}
 
-          <div className={styles.menuBlock}>
-            <div className={styles.menuLabel}>主题外观</div>
-            <ThemeToggle fullWidth compact />
+            {isAuthenticated ? (
+              <button
+                type="button"
+                onClick={() => {
+                  closeAccountMenu()
+                  void onLogout()
+                }}
+                className={styles.menuDangerAction}
+              >
+                <LogOut size={16} />
+                <span>退出登录</span>
+              </button>
+            ) : null}
           </div>
-
-          {isAuthenticated ? (
-            <button
-              type="button"
-              onClick={() => {
-                closeAccountMenu()
-                void onLogout()
-              }}
-              className={styles.menuDangerAction}
-            >
-              <LogOut size={16} />
-              <span>退出登录</span>
-            </button>
-          ) : null}
         </div>
-      </div>
+      </DropdownPanel>
     </div>
   )
 }

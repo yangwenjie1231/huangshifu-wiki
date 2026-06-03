@@ -1,8 +1,9 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { Bell } from 'lucide-react'
 import { clsx } from 'clsx'
-import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../../context/AuthContext'
+import { DropdownPanel } from '../DropdownPanel'
+import { useDismissableLayer } from '../../hooks/useClickOutside'
 import { apiGet, apiPost } from '../../lib/apiClient'
 import { getNotificationLink, getNotificationText } from '../../lib/notifications'
 import type { NotificationsResponse } from '../../types/api'
@@ -57,6 +58,7 @@ export const NotificationPanel = React.memo(({
 	const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 	const [unreadCount, setUnreadCount] = useState(0);
 	const [notifLoading, setNotifLoading] = useState(false);
+	const panelRef = useRef<HTMLDivElement | null>(null);
 
 	const fetchNotifications = useCallback(async () => {
 		if (!user) return;
@@ -117,10 +119,12 @@ export const NotificationPanel = React.memo(({
 		}
 	}, [markNotificationRead, onNavigate]);
 
+	useDismissableLayer(panelRef, () => setNotifPanelOpen(false), notifPanelOpen);
+
 	if (!user) return null;
 
 	return (
-		<div className="relative">
+		<div ref={panelRef} className="relative">
 			<button
 				type="button"
 				onClick={() => setNotifPanelOpen(!notifPanelOpen)}
@@ -137,60 +141,43 @@ export const NotificationPanel = React.memo(({
 					</span>
 				)}
 			</button>
-			<AnimatePresence>
-				{notifPanelOpen && (
-					<>
+			<DropdownPanel
+				open={notifPanelOpen}
+				className="absolute right-0 top-full mt-2 w-80 bg-surface rounded border border-border z-50 overflow-hidden"
+			>
+				<div className="flex items-center justify-between px-4 py-3 border-b border-border">
+					<span className="font-bold text-text-primary">通知</span>
+					{unreadCount > 0 && (
 						<button
 							type="button"
-							className="fixed inset-0 z-40"
-							onClick={() => setNotifPanelOpen(false)}
-							aria-label="关闭通知"
-						/>
-						<motion.div
-							initial={{ opacity: 0, y: -8, scale: 0.95 }}
-							animate={{ opacity: 1, y: 0, scale: 1 }}
-							exit={{ opacity: 0, y: -8, scale: 0.95 }}
-							transition={{ duration: 0.15 }}
-							className="absolute right-0 top-full mt-2 w-80 bg-surface rounded border border-border z-50 overflow-hidden"
+							onClick={markAllNotificationsRead}
+							className="text-xs text-brand-gold hover:underline"
 						>
-							<div className="flex items-center justify-between px-4 py-3 border-b border-border">
-								<span className="font-bold text-text-primary">
-									通知
-								</span>
-								{unreadCount > 0 && (
-									<button
-										type="button"
-										onClick={markAllNotificationsRead}
-										className="text-xs text-brand-gold hover:underline"
-									>
-										全部已读
-									</button>
-								)}
-							</div>
-							<div className="max-h-80 overflow-y-auto">
-								{notifLoading ? (
-									<div className="py-8 text-center text-sm text-text-muted">
-										加载中...
-									</div>
-								) : notifications.length === 0 ? (
-									<div className="py-8 text-center text-sm text-text-muted">
-										暂无通知
-									</div>
-								) : (
-									notifications.map((notif) => (
-										<NotificationItem
-											key={notif.id}
-											notif={notif}
-											isRead={notif.isRead}
-											onClick={() => handleItemClick(notif)}
-										/>
-									))
-								)}
-							</div>
-						</motion.div>
-					</>
-				)}
-			</AnimatePresence>
+							全部已读
+						</button>
+					)}
+				</div>
+				<div className="max-h-80 overflow-y-auto">
+					{notifLoading ? (
+						<div className="py-8 text-center text-sm text-text-muted">
+							加载中...
+						</div>
+					) : notifications.length === 0 ? (
+						<div className="py-8 text-center text-sm text-text-muted">
+							暂无通知
+						</div>
+					) : (
+						notifications.map((notif) => (
+							<NotificationItem
+								key={notif.id}
+								notif={notif}
+								isRead={notif.isRead}
+								onClick={() => handleItemClick(notif)}
+							/>
+						))
+					)}
+				</div>
+			</DropdownPanel>
 		</div>
 	);
 });
