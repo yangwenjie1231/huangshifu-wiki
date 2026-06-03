@@ -25,6 +25,11 @@ import {
   normalizeModerationTargetType,
   parsePostSort,
 } from '../../src/server/utils/parsers';
+import {
+  getWikiDraftButtonText,
+  getWikiSaveResultText,
+  getWikiSubmitButtonText,
+} from '../../src/lib/wikiWriteText';
 
 describe('parsers', () => {
   const makeUser = (role: 'admin' | 'user') => ({
@@ -360,9 +365,13 @@ describe('parsers', () => {
     const adminUser = makeUser('admin');
     const normalUser = makeUser('user');
 
-    it('admin always gets published regardless of input', () => {
-      expect(normalizeWikiWriteStatus('draft', adminUser)).toBe('published');
+    it('admin keeps draft when explicitly saving draft', () => {
+      expect(normalizeWikiWriteStatus('draft', adminUser)).toBe('draft');
+    });
+
+    it('admin gets published for non-draft statuses', () => {
       expect(normalizeWikiWriteStatus('pending', adminUser)).toBe('published');
+      expect(normalizeWikiWriteStatus('published', adminUser)).toBe('published');
       expect(normalizeWikiWriteStatus(null, adminUser)).toBe('published');
     });
 
@@ -400,6 +409,23 @@ describe('parsers', () => {
     it('normal user defaults to draft', () => {
       expect(normalizePostWriteStatus('draft', postNormal)).toBe('draft');
       expect(normalizePostWriteStatus(null, postNormal)).toBe('draft');
+    });
+  });
+
+  describe('wikiWriteText', () => {
+    const t = (key: string) => key;
+
+    it('returns shared button labels', () => {
+      expect(getWikiDraftButtonText(t, 'draft')).toBe('wiki.saving');
+      expect(getWikiDraftButtonText(t, 'pending')).toBe('wiki.saveDraft');
+      expect(getWikiSubmitButtonText(t, true, false)).toBe('wiki.publishWiki');
+      expect(getWikiSubmitButtonText(t, false, true)).toBe('wiki.submitting');
+    });
+
+    it('returns shared save result labels', () => {
+      expect(getWikiSaveResultText(t, 'draft')).toBe('wiki.draftSaved');
+      expect(getWikiSaveResultText(t, 'pending')).toBe('wiki.reviewSubmitted');
+      expect(getWikiSaveResultText(t, 'published')).toBe('wiki.pagePublished');
     });
   });
 

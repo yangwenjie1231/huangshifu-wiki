@@ -2,9 +2,11 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/Toast";
+import { useI18n } from "../../lib/i18n";
 import { apiGet, apiPost, apiPut, invalidateApiCache } from "../../lib/apiClient";
 import { normalizeWikiPageSlug } from "../../lib/wikiSlug";
 import { metadataCache } from "../../lib/metadataCache";
+import { getWikiSaveResultText } from "../../lib/wikiWriteText";
 import { X } from "lucide-react";
 import WikiEditorForm from "./WikiEditorForm";
 import WikiEditorRelationPanel from "./WikiEditorRelationPanel";
@@ -17,6 +19,7 @@ const WikiEditor = () => {
 	const isNew = !slug || slug === "new";
 	const navigate = useNavigate();
 	const { user, isAdmin, isBanned } = useAuth();
+	const { t } = useI18n();
 
 	const [formData, setFormData] = useState({
 		title: "",
@@ -97,25 +100,25 @@ const WikiEditor = () => {
 	const handleSubmit = async (status: "draft" | "pending") => {
 		if (!user) return;
 		if (isBanned) {
-			show("账号已被封禁，无法编辑百科", { variant: "error" });
+			show(t('wiki.bannedCannotEdit'), { variant: "error" });
 			return;
 		}
 
 		if (formData.category === "music" && !isAdmin) {
-			show("只有管理员可以修改音乐分类的内容", { variant: "error" });
+			show(t('wiki.musicCategoryAdminOnly'), { variant: "error" });
 			return;
 		}
 
 		if (!formData.title.trim()) {
-			show("请填写标题（*为必填项）", { variant: "error" });
+			show(t('wiki.titleRequired'), { variant: "error" });
 			return;
 		}
 		if (!formData.category) {
-			show("请选择分类（*为必填项）", { variant: "error" });
+			show(t('wiki.categoryRequired'), { variant: "error" });
 			return;
 		}
 		if (!formData.content.trim()) {
-			show("请填写内容（*为必填项）", { variant: "error" });
+			show(t('wiki.contentRequired'), { variant: "error" });
 			return;
 		}
 
@@ -124,7 +127,7 @@ const WikiEditor = () => {
 		);
 
 		if (!pageSlug) {
-			show("请先填写标题以生成页面标识", { variant: "error" });
+			show(t('wiki.slugRequired'), { variant: "error" });
 			return;
 		}
 
@@ -148,26 +151,29 @@ const WikiEditor = () => {
 
 		try {
 			if (isNew) {
-				await apiPost("/api/wiki", pageData);
-			} else {
-				await apiPut(`/api/wiki/${pageSlug}`, pageData);
-			}
-
-			if (isNew) {
-				show("页面创建成功", { variant: "success" });
+				const data = await apiPost<{ page: { status: string } }>("/api/wiki", pageData);
+				show(
+					getWikiSaveResultText(t, data.page.status as "draft" | "pending" | "published"),
+					{ variant: "success" },
+				);
 				navigate(`/wiki/${pageSlug}`);
 				return;
-			} else {
-				invalidateApiCache(`GET|/api/wiki/${pageSlug}|`);
-				show("页面保存成功", { variant: "success" });
-				navigate(`/wiki/${pageSlug}`);
 			}
 
+			const data = await apiPut<{ page: { status: string } }>(`/api/wiki/${pageSlug}`, pageData);
+			show(
+				getWikiSaveResultText(t, data.page.status as "draft" | "pending" | "published"),
+				{ variant: "success" },
+			);
+			invalidateApiCache(`GET|/api/wiki/${pageSlug}|`);
+			navigate(`/wiki/${pageSlug}`);
+			return;
 		} catch (e) {
 			console.error("Error saving wiki page:", e);
-			show(e instanceof Error ? e.message : "保存失败，请检查网络或权限", { variant: "error" });
+			show(e instanceof Error ? e.message : t('wiki.saveFailed'), { variant: "error" });
+		} finally {
+			setSavingMode(null);
 		}
-		setSavingMode(null);
 	};
 
 	return (
@@ -181,7 +187,7 @@ const WikiEditor = () => {
 			<div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
 				<div className="flex justify-between items-center mb-8">
 					<h1 className="text-[1.75rem] font-bold text-text-primary tracking-[0.12em]">
-						{isNew ? "创建新百科" : "编辑百科"}
+						{isNew ? t('wiki.createWiki') : t('wiki.editWiki')}
 					</h1>
 					<button
 						type="button"
@@ -229,6 +235,7 @@ const WikiEditor = () => {
 
 					<WikiEditorMetaSidebar
 						savingMode={savingMode}
+						isAdmin={isAdmin}
 						onSubmit={handleSubmit}
 					/>
 				</form>

@@ -564,6 +564,42 @@ describe('Wiki API - 百科接口测试', () => {
       expect(dbPage).not.toBeNull();
     });
 
+    it('管理员创建时应直接发布，普通用户创建时应进入草稿', async () => {
+      const { agent: userAgent, xsrfToken: userXsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const { agent: adminAgent, xsrfToken: adminXsrfToken } = await createAuthenticatedAgent(
+        adminUser.user.email,
+        adminUser.plainPassword,
+      );
+
+      const userResponse = await userAgent
+        .post('/api/wiki')
+        .set('X-XSRF-TOKEN', userXsrfToken)
+        .send({
+          slug: `test-user-wiki-${Date.now()}`,
+          title: 'User Wiki',
+          category: 'general',
+          content: 'User content',
+        });
+
+      const adminResponse = await adminAgent
+        .post('/api/wiki')
+        .set('X-XSRF-TOKEN', adminXsrfToken)
+        .send({
+          slug: `test-admin-wiki-${Date.now()}`,
+          title: 'Admin Wiki',
+          category: 'general',
+          content: 'Admin content',
+        });
+
+      expect(userResponse.status).toBe(201);
+      expect(adminResponse.status).toBe(201);
+      expect(userResponse.body.page.status).toBe('draft');
+      expect(adminResponse.body.page.status).toBe('published');
+    });
+
     /**
      * 测试目的：验证未认证用户无法创建页面
      * 预期结果：返回 401 认证错误
@@ -761,6 +797,84 @@ describe('Wiki API - 百科接口测试', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.page.title).toBe('Admin Updated Title');
+    });
+
+    it('管理员更新页面时应保留发布状态，普通用户提交已发布页面应回到待审', async () => {
+      const { agent: userAgent, xsrfToken: userXsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const { agent: adminAgent, xsrfToken: adminXsrfToken } = await createAuthenticatedAgent(
+        adminUser.user.email,
+        adminUser.plainPassword,
+      );
+
+      const userPage = await createTestWikiPage({
+        slug: 'test-user-update-status',
+        title: 'User Update Status',
+        authorUid: testUser.user.uid,
+        status: 'published',
+      });
+      const adminPage = await createTestWikiPage({
+        slug: 'test-admin-update-status',
+        title: 'Admin Update Status',
+        authorUid: adminUser.user.uid,
+        status: 'draft',
+      });
+
+      const userResponse = await userAgent
+        .put(`/api/wiki/${userPage.slug}`)
+        .set('X-XSRF-TOKEN', userXsrfToken)
+        .send({
+          title: 'User Updated Title',
+          content: 'User updated content',
+          category: 'general',
+        });
+
+      const adminResponse = await adminAgent
+        .put(`/api/wiki/${adminPage.slug}`)
+        .set('X-XSRF-TOKEN', adminXsrfToken)
+        .send({
+          title: 'Admin Updated Draft',
+          content: 'Admin updated content',
+          category: 'general',
+        });
+
+      expect(userResponse.status).toBe(200);
+      expect(adminResponse.status).toBe(200);
+      expect(userResponse.body.page.status).toBe('pending');
+      expect(adminResponse.body.page.status).toBe('draft');
+    });
+
+    it('普通用户更新已发布页面时应允许显式保存草稿', async () => {
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const wikiPage = await createTestWikiPage({
+        slug: 'test-user-save-published-draft',
+        title: 'User Save Published Draft',
+        authorUid: testUser.user.uid,
+        status: 'published',
+      });
+
+      const response = await agent
+        .put(`/api/wiki/${wikiPage.slug}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
+        .send({
+          title: 'User Saved Draft Title',
+          content: 'User saved a private draft from a published wiki page.',
+          category: 'general',
+          status: 'draft',
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.page.status).toBe('draft');
+
+      const dbPage = await prisma.wikiPage.findUnique({
+        where: { slug: wikiPage.slug },
+      });
+      expect(dbPage?.status).toBe('draft');
     });
 
     /**

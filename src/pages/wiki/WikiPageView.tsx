@@ -27,6 +27,7 @@ import { apiGet, apiPost } from "../../lib/apiClient";
 import { getStatusClassName, getStatusText } from "../../lib/contentUtils";
 import { formatDate } from "../../lib/dateUtils";
 import { getWikiRelationDisplayTitle } from "../../lib/wikiRelationDisplay";
+import { getWikiSubmitButtonText } from "../../lib/wikiWriteText";
 import WikiMarkdown from "./WikiMarkdown";
 import RelationGraph from "../../components/wiki/RelationGraph";
 import type { RelationGraphData } from "../../components/wiki/RelationGraph";
@@ -117,6 +118,7 @@ const WikiPageView = () => {
 			page &&
 			(page.status === "draft" || page.status === "rejected"),
 	);
+	const submitButtonText = getWikiSubmitButtonText(t, isAdmin, submittingReview);
 
 	const handleCopyPageLink = async () => {
 		if (!slug) return;
@@ -138,7 +140,11 @@ const WikiPageView = () => {
 				`/api/wiki/${slug}/submit`,
 			);
 			setPage((prev) => (prev ? { ...prev, ...data.page } : prev));
-			show(t('wiki.reviewSubmitted'));
+			if (data.page.status === 'published') {
+				show(t('wiki.pagePublished'));
+			} else {
+				show(t('wiki.reviewSubmitted'));
+			}
 		} catch (error) {
 			console.error("Submit wiki review failed:", error);
 			show(t('wiki.reviewSubmitFailed'), { variant: "error" });
@@ -224,7 +230,7 @@ const WikiPageView = () => {
 								disabled={submittingReview}
 								className="px-3 py-1 text-[0.8125rem] rounded theme-status-warning hover:opacity-90 disabled:opacity-50 transition-all self-center mb-1"
 							>
-								{submittingReview ? t('wiki.submitting') : t('wiki.submitReview')}
+								{submitButtonText}
 							</button>
 						)}
 						{page.status === "rejected" && page.reviewNote ? (

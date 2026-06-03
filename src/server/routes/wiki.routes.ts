@@ -60,6 +60,33 @@ function clearWikiPageCache(slug: string) {
   clearWikiRelationCache();
 }
 
+function clearWikiListCaches() {
+  enhancedCache.invalidateByPrefix(`${CACHE_KEYS.WIKI_LIST}:`);
+  enhancedCache.invalidateByPrefix(`${CACHE_KEYS.WIKI_RECOMMENDED}:`);
+  enhancedCache.invalidateByPrefix(`${CACHE_KEYS.WIKI_TIMELINE}:`);
+}
+
+function resolveWikiUpdateStatus(input: {
+  currentStatus: ContentStatus;
+  requestedStatus: ContentStatus | undefined;
+  authUser: NonNullable<AuthenticatedRequest['authUser']>;
+}) {
+  const { currentStatus, requestedStatus, authUser } = input;
+
+  if (isAdminRole(authUser.role)) {
+    return requestedStatus === undefined
+      ? currentStatus
+      : normalizeWikiWriteStatus(requestedStatus, authUser);
+  }
+
+  if (currentStatus === 'published') {
+    return requestedStatus === 'draft' ? 'draft' : 'pending';
+  }
+
+  const normalized = normalizeWikiWriteStatus(requestedStatus ?? currentStatus, authUser);
+  return currentStatus === 'pending' && normalized === 'draft' ? 'pending' : normalized;
+}
+
 function resolveLegacyDuplicateTitleForWrite(input: {
   title: string;
   titleKey: string;
@@ -960,6 +987,7 @@ router.post('/:slug/submit', wikiWriteLimiter, requireAuth, requireActiveUser, v
       ]);
 
       clearWikiPageCache(slug);
+      clearWikiListCaches();
       res.json({ page: toWikiResponse(published) });
       return;
     }
@@ -986,6 +1014,7 @@ router.post('/:slug/submit', wikiWriteLimiter, requireAuth, requireActiveUser, v
     ]);
 
     clearWikiPageCache(slug);
+    clearWikiListCaches();
     res.json({ page: toWikiResponse(updated) });
   } catch (error) {
     logger.error({ err: error }, 'Submit wiki review error');
@@ -1115,6 +1144,7 @@ router.post('/', wikiWriteLimiter, requireAuth, requireActiveUser, json({ limit:
     });
 
     clearWikiPageCache(pageSlug);
+    clearWikiListCaches();
     res.status(201).json({ page: toWikiResponse(page) });
   } catch (error) {
     if (sendWikiUniqueConflict(error, res)) return;
@@ -1164,6 +1194,7 @@ router.put('/:slug', wikiWriteLimiter, requireAuth, requireActiveUser, validateW
       select: {
         slug: true,
         title: true,
+        status: true,
         titleKey: true,
         hasLegacyDuplicateTitleKey: true,
         legacyDuplicateTitle: true,
@@ -1195,7 +1226,11 @@ router.put('/:slug', wikiWriteLimiter, requireAuth, requireActiveUser, validateW
       return;
     }
 
-    const nextStatus = normalizeWikiWriteStatus(status, req.authUser!);
+    const nextStatus = resolveWikiUpdateStatus({
+      currentStatus: page.status as ContentStatus,
+      requestedStatus: status,
+      authUser: req.authUser!,
+    });
     const normalizedRelations = hasRelationsInPayload
       ? await normalizeWikiRelationListForWrite(relations, req.params.slug)
       : serializeRelations(page.relations, page.slug);
@@ -1247,6 +1282,7 @@ router.put('/:slug', wikiWriteLimiter, requireAuth, requireActiveUser, validateW
     });
 
     clearWikiPageCache(req.params.slug);
+    clearWikiListCaches();
     res.json({ page: toWikiResponse(updated) });
   } catch (error) {
     if (sendWikiUniqueConflict(error, res)) return;
