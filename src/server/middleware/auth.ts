@@ -32,6 +32,7 @@ type SessionUser = {
   level: number;
   signature: string;
   bio: string;
+  deletedAt?: Date | null;
   passwordHash: string;
 }
 
@@ -183,6 +184,13 @@ async function authMiddleware(req: AuthenticatedRequest, res: Response, next: Ne
       const user = await prisma.user.findUnique({
         where: { uid: payload.uid },
       });
+
+      if (user?.deletedAt) {
+        logger.info({ uid: user.uid }, 'Rejecting token for soft-deleted user');
+        clearAuthCookie(req, res);
+        next();
+        return;
+      }
 
       if (user) {
         const currentSessionVersion = createSessionVersion(user.passwordHash);

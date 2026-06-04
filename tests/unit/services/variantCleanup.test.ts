@@ -198,7 +198,10 @@ describe('VariantCleanupService - 孤儿文件检测', () => {
 
     expect(result.trigger).toBe('scheduled');
     expect(mockUnlink).toHaveBeenCalled();
-    expect(mockDelete).toHaveBeenCalledWith({ where: { id: 'deleted-source-id' } });
+    expect(mockUpdate).toHaveBeenCalledWith({
+      where: { id: 'deleted-source-id' },
+      data: { deletedAt: expect.any(Date), deletedBy: null },
+    });
   });
 
   it('cleanupOrphanedVariants 应该跳过正在生成的孤儿目录', async () => {

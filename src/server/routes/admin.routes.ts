@@ -5,6 +5,7 @@ import {
   requireAuth,
   requireActiveUser,
   isAdminRole,
+  clearUserCache,
 } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { validateBody, backupRestoreSchema } from '../schemas';
@@ -30,6 +31,12 @@ import {
   validateSqlContent,
   logger,
   ensureTextLimit,
+  includeDeletedFromQuery,
+  deletedAtFilter,
+  softDeleteData,
+  restoreDeleteData,
+  enhancedCache,
+  CACHE_KEYS,
 } from '../utils';
 import {
   cleanupUnusedMediaAssetById,
@@ -46,6 +53,11 @@ import { CONTENT_LIMITS } from '../../lib/contentLimits';
 import archiver from 'archiver';
 import { scanAllWikiLinks, getWikiPageLinks, previewLinkUpdate, batchUpdateWikiLinks, switchWikiStorage } from '../wiki/markdownLinkUpdater';
 import { isSensitiveWord, containsSensitive } from '../../lib/sensitiveWordFilter';
+import { variantCleanup, CleanupTrigger } from '../services/variantCleanup.service';
+import {
+  deleteImageEmbeddingPointsBySource,
+  deleteTextEmbeddingPointsBySource,
+} from '../vector/qdrantService';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -132,6 +144,166 @@ async function handleBackupDelete(req: AuthenticatedRequest, res: Response) {
 }
 const BACKUP_RETAIN_COUNT = Math.max(1, Number(process.env.BACKUP_RETAIN_COUNT || 20));
 
+async function permanentlyDeleteWikiById(id: string) {
+  const page = await prisma.wikiPage.findUnique({
+    where: { id },
+    select: { slug: true },
+  });
+  if (!page) return false;
+
+  await prisma.$transaction(async (tx) => {
+    await Promise.all([
+      tx.favorite.deleteMany({ where: { targetType: 'wiki', targetId: page.slug } }),
+      tx.browsingHistory.deleteMany({ where: { targetType: 'wiki', targetId: page.slug } }),
+      tx.wikiImageEmbedding.deleteMany({ where: { wikiPageSlug: page.slug } }),
+      tx.textEmbeddingChunk.deleteMany({ where: { sourceType: 'wiki', sourceId: page.slug } }),
+    ]);
+    await tx.wikiPage.delete({ where: { id } });
+  });
+
+  void Promise.allSettled([
+    deleteImageEmbeddingPointsBySource('wiki', page.slug),
+    deleteTextEmbeddingPointsBySource('wiki', page.slug),
+  ]).then((results) => {
+    results.forEach((result) => {
+      if (result.status === 'rejected') {
+        logger.warn({ err: result.reason, slug: page.slug }, 'Delete wiki embedding points failed');
+      }
+    });
+  });
+
+  return page.slug;
+}
+
+async function permanentlyDeleteGalleryById(id: string) {
+  const gallery = await prisma.gallery.findUnique({
+    where: { id },
+    include: { images: true },
+  });
+  if (!gallery) return false;
+
+  const assetIds = [...new Set(gallery.images.map((image) => image.assetId).filter(isString))];
+  const imagesWithoutAsset = gallery.images.filter((image) => !image.assetId);
+
+  await prisma.gallery.delete({ where: { id } });
+
+  await Promise.all(assetIds.map((assetId) => cleanupUnusedMediaAssetById(assetId)));
+  await Promise.all(imagesWithoutAsset.map((image) => cleanupUntrackedUploadImageByUrl(image.url)));
+
+  return true;
+}
+
+function invalidateSoftDeleteCaches(
+  tab: string,
+  identifiers: { id?: string; slug?: string; docId?: string } = {}
+) {
+  enhancedCache.invalidateByPrefix('search:');
+
+  if (tab === 'wiki') {
+    if (identifiers.slug) {
+      enhancedCache.delete(`${CACHE_KEYS.WIKI_PAGE}:${identifiers.slug}`);
+    }
+    enhancedCache.invalidateByPrefix(`${CACHE_KEYS.WIKI_LIST}:`);
+    enhancedCache.invalidateByPrefix(`${CACHE_KEYS.WIKI_RECOMMENDED}:`);
+    enhancedCache.invalidateByPrefix(`${CACHE_KEYS.WIKI_TIMELINE}:`);
+    enhancedCache.delete('wiki_relation_bundle');
+    return;
+  }
+
+  if (tab === 'posts' || tab === 'sections') {
+    enhancedCache.invalidateByPrefix('post_list:');
+    return;
+  }
+
+  if (tab === 'galleries') {
+    enhancedCache.invalidateByPrefix('gallery_list_public:');
+    return;
+  }
+
+  if (tab === 'music') {
+    enhancedCache.invalidateByPrefix('music_list:');
+    return;
+  }
+
+  if (tab === 'albums') {
+    enhancedCache.invalidateByPrefix('album_list:');
+    enhancedCache.invalidateByPrefix('music_list:');
+    return;
+  }
+
+  if (tab === 'announcements') {
+    enhancedCache.delete(CACHE_KEYS.ANNOUNCEMENT_LATEST);
+  }
+}
+
+async function permanentlyDeleteMusicTrackByDocId(docId: string) {
+  const song = await prisma.musicTrack.findUnique({
+    where: { docId },
+    include: { covers: true },
+  });
+  if (!song) return false;
+
+  const assetIds = [...new Set(song.covers.map((cover) => cover.assetId).filter(isString))];
+  const coversWithoutAsset = song.covers.filter((cover) => !cover.assetId);
+
+  await prisma.$transaction([
+    prisma.favorite.deleteMany({ where: { targetType: 'music', targetId: docId } }),
+    prisma.browsingHistory.deleteMany({ where: { targetType: 'music', targetId: docId } }),
+    prisma.musicTrack.delete({ where: { docId } }),
+  ]);
+
+  await Promise.all(assetIds.map((assetId) => cleanupUnusedMediaAssetById(assetId)));
+  await Promise.all(coversWithoutAsset.map((cover) => cleanupUntrackedUploadImageByUrl(cover.publicUrl)));
+
+  return true;
+}
+
+async function permanentlyDeleteAlbumByDocId(docId: string) {
+  const album = await prisma.album.findUnique({
+    where: { docId },
+    include: { covers: true },
+  });
+  if (!album) return false;
+
+  const coverIds = album.covers.map((cover) => cover.id);
+  const assetIds = [...new Set(album.covers.map((cover) => cover.assetId).filter(isString))];
+  const coversWithoutAsset = album.covers.filter((cover) => !cover.assetId);
+
+  await prisma.$transaction(async (tx) => {
+    if (coverIds.length) {
+      await tx.musicTrack.updateMany({
+        where: {
+          defaultCoverSource: { in: coverIds.map((coverId) => `album_cover:${coverId}`) },
+        },
+        data: {
+          defaultCoverSource: null,
+          cover: '',
+        },
+      });
+    }
+
+    await tx.songAlbumRelation.deleteMany({ where: { albumDocId: docId } });
+    await tx.album.delete({ where: { docId } });
+  });
+
+  await Promise.all(assetIds.map((assetId) => cleanupUnusedMediaAssetById(assetId)));
+  await Promise.all(coversWithoutAsset.map((cover) => cleanupUntrackedUploadImageByUrl(cover.publicUrl)));
+
+  return true;
+}
+
+async function permanentlyDeleteImageMapById(id: string) {
+  const existing = await prisma.imageMap.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+  if (!existing) return false;
+
+  await variantCleanup.cleanupByImageMapId(id, CleanupTrigger.ON_DELETE);
+  await prisma.imageMap.delete({ where: { id } });
+  return true;
+}
+
 const uploadBackup = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => {
@@ -215,7 +387,7 @@ router.get('/review-queue', requireAdmin, asyncHandler(async (req: Authenticated
 
     if (type === 'wiki') {
       const items = await prisma.wikiPage.findMany({
-        where: { status },
+        where: { status, deletedAt: null },
         orderBy: { updatedAt: 'desc' },
         take: 200,
       });
@@ -224,7 +396,7 @@ router.get('/review-queue', requireAdmin, asyncHandler(async (req: Authenticated
     }
 
     const items = await prisma.post.findMany({
-      where: { status },
+      where: { status, deletedAt: null },
       orderBy: { updatedAt: 'desc' },
       take: 200,
     });
@@ -595,11 +767,12 @@ router.post('/batch-delete-posts', requireAdmin, asyncHandler(async (req: Authen
       return;
     }
 
-    await prisma.post.deleteMany({
-      where: { id: { in: postIds } },
+    const result = await prisma.post.updateMany({
+      where: { id: { in: postIds }, deletedAt: null },
+      data: softDeleteData(req.authUser!.uid),
     });
 
-    res.json({ deleted: postIds.length });
+    res.json({ deleted: result.count });
   } catch (error) {
     logger.error({ err: error }, 'Batch delete posts error');
     res.status(500).json({ error: '批量删除帖子失败' });
@@ -621,19 +794,12 @@ router.post('/batch-delete-galleries', requireAdmin, asyncHandler(async (req: Au
         where: { id: galleryId },
         include: { images: true },
       });
-      if (!gallery) continue;
+      if (!gallery || gallery.deletedAt) continue;
 
-      const assetIds = [...new Set(gallery.images.map((image) => image.assetId).filter(isString))];
-      const imagesWithoutAsset = gallery.images.filter((image) => !image.assetId);
-
-      await prisma.gallery.delete({ where: { id: galleryId } });
-
-      await Promise.all(
-        assetIds.map((assetId) => cleanupUnusedMediaAssetById(assetId)),
-      );
-      await Promise.all(
-        imagesWithoutAsset.map((image) => cleanupUntrackedUploadImageByUrl(image.url)),
-      );
+      await prisma.gallery.update({
+        where: { id: galleryId },
+        data: softDeleteData(req.authUser!.uid),
+      });
       deleted++;
     }
 
@@ -1235,11 +1401,11 @@ router.get('/stats', requireAdmin, asyncHandler(async (_req, res) => {
       userCount,
       musicCount,
     ] = await Promise.all([
-      prisma.wikiPage.count(),
-      prisma.post.count(),
-      prisma.gallery.count(),
-      prisma.user.count(),
-      prisma.musicTrack.count(),
+      prisma.wikiPage.count({ where: { deletedAt: null } }),
+      prisma.post.count({ where: { deletedAt: null } }),
+      prisma.gallery.count({ where: { deletedAt: null } }),
+      prisma.user.count({ where: { deletedAt: null } }),
+      prisma.musicTrack.count({ where: { deletedAt: null } }),
     ]);
 
     res.json({
@@ -1261,9 +1427,12 @@ router.get('/stats', requireAdmin, asyncHandler(async (_req, res) => {
 router.get('/:tab', requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const tab = req.params.tab;
+    const includeDeleted = includeDeletedFromQuery(req.query);
+    const activeWhere = deletedAtFilter(includeDeleted);
 
     if (tab === 'wiki') {
       const data = await prisma.wikiPage.findMany({
+        where: activeWhere,
         orderBy: { updatedAt: 'desc' },
         take: 100,
       });
@@ -1273,6 +1442,7 @@ router.get('/:tab', requireAdmin, asyncHandler(async (req: AuthenticatedRequest,
 
     if (tab === 'posts') {
       const data = await prisma.post.findMany({
+        where: activeWhere,
         orderBy: { updatedAt: 'desc' },
         take: 100,
       });
@@ -1282,6 +1452,7 @@ router.get('/:tab', requireAdmin, asyncHandler(async (req: AuthenticatedRequest,
 
     if (tab === 'galleries') {
       const data = await prisma.gallery.findMany({
+        where: activeWhere,
         include: {
           images: {
             include: {
@@ -1299,6 +1470,7 @@ router.get('/:tab', requireAdmin, asyncHandler(async (req: AuthenticatedRequest,
 
     if (tab === 'users') {
       const data = await prisma.user.findMany({
+        where: activeWhere,
         orderBy: { createdAt: 'desc' },
         take: 100,
         select: {
@@ -1313,6 +1485,8 @@ router.get('/:tab', requireAdmin, asyncHandler(async (req: AuthenticatedRequest,
           level: true,
           signature: true,
           bio: true,
+          deletedAt: true,
+          deletedBy: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -1340,6 +1514,7 @@ router.get('/:tab', requireAdmin, asyncHandler(async (req: AuthenticatedRequest,
 
     if (tab === 'music') {
       const data = await prisma.musicTrack.findMany({
+        where: activeWhere,
         orderBy: { updatedAt: 'desc' },
         take: 100,
       });
@@ -1349,6 +1524,7 @@ router.get('/:tab', requireAdmin, asyncHandler(async (req: AuthenticatedRequest,
 
     if (tab === 'announcements') {
       const data = await prisma.announcement.findMany({
+        where: activeWhere,
         orderBy: { createdAt: 'desc' },
         take: 100,
       });
@@ -1358,6 +1534,7 @@ router.get('/:tab', requireAdmin, asyncHandler(async (req: AuthenticatedRequest,
 
     if (tab === 'sections') {
       const data = await prisma.section.findMany({
+        where: activeWhere,
         orderBy: { order: 'asc' },
         take: 100,
       });
@@ -1439,6 +1616,8 @@ router.get('/:tab/:id', requireAdmin, asyncHandler(async (req: AuthenticatedRequ
           level: true,
           signature: true,
           bio: true,
+          deletedAt: true,
+          deletedBy: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -1475,12 +1654,18 @@ router.delete('/:tab/:id', requireAdmin, asyncHandler(async (req: AuthenticatedR
     const id = req.params.id;
 
     if (tab === 'wiki') {
-      await prisma.wikiPage.delete({ where: { id } });
+      const page = await prisma.wikiPage.update({
+        where: { id },
+        data: softDeleteData(req.authUser!.uid),
+        select: { slug: true },
+      });
+      invalidateSoftDeleteCaches(tab, { slug: page.slug });
       res.json({ success: true });
       return;
     }
     if (tab === 'posts') {
-      await prisma.post.delete({ where: { id } });
+      await prisma.post.update({ where: { id }, data: softDeleteData(req.authUser!.uid) });
+      invalidateSoftDeleteCaches(tab);
       res.json({ success: true });
       return;
     }
@@ -1489,21 +1674,42 @@ router.delete('/:tab/:id', requireAdmin, asyncHandler(async (req: AuthenticatedR
         where: { id },
         include: { images: true },
       });
-      if (!gallery) {
+      if (!gallery || gallery.deletedAt) {
         res.status(404).json({ error: '图集不存在' });
         return;
       }
-      const assetIds = [...new Set(gallery.images.map((image) => image.assetId).filter(isString))];
-      const imagesWithoutAsset = gallery.images.filter((image) => !image.assetId);
-
-      await prisma.gallery.delete({ where: { id } });
-
-      await Promise.all(
-        assetIds.map((assetId) => cleanupUnusedMediaAssetById(assetId)),
-      );
-      await Promise.all(
-        imagesWithoutAsset.map((image) => cleanupUntrackedUploadImageByUrl(image.url)),
-      );
+      await prisma.gallery.update({ where: { id }, data: softDeleteData(req.authUser!.uid) });
+      invalidateSoftDeleteCaches(tab);
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'music') {
+      await prisma.musicTrack.update({ where: { docId: id }, data: softDeleteData(req.authUser!.uid) });
+      invalidateSoftDeleteCaches(tab);
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'albums') {
+      await prisma.album.update({ where: { docId: id }, data: softDeleteData(req.authUser!.uid) });
+      invalidateSoftDeleteCaches(tab);
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'announcements') {
+      await prisma.announcement.update({ where: { id }, data: softDeleteData(req.authUser!.uid) });
+      invalidateSoftDeleteCaches(tab);
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'sections') {
+      await prisma.section.update({ where: { id }, data: softDeleteData(req.authUser!.uid) });
+      invalidateSoftDeleteCaches(tab);
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'image-maps') {
+      await prisma.imageMap.update({ where: { id }, data: softDeleteData(req.authUser!.uid) });
+      invalidateSoftDeleteCaches(tab);
       res.json({ success: true });
       return;
     }
@@ -1516,10 +1722,10 @@ router.delete('/:tab/:id', requireAdmin, asyncHandler(async (req: AuthenticatedR
 
       const targetUser = await prisma.user.findUnique({
         where: { uid: id },
-        select: { uid: true, role: true },
+        select: { uid: true, role: true, deletedAt: true },
       });
 
-      if (!targetUser) {
+      if (!targetUser || targetUser.deletedAt) {
         res.status(404).json({ error: '用户不存在' });
         return;
       }
@@ -1529,7 +1735,8 @@ router.delete('/:tab/:id', requireAdmin, asyncHandler(async (req: AuthenticatedR
         return;
       }
 
-      await prisma.user.delete({ where: { uid: id } });
+      await prisma.user.update({ where: { uid: id }, data: softDeleteData(req.authUser!.uid) });
+      clearUserCache(id);
       res.json({ success: true });
       return;
     }
@@ -1543,6 +1750,194 @@ router.delete('/:tab/:id', requireAdmin, asyncHandler(async (req: AuthenticatedR
   } catch (error) {
     logger.error({ err: error }, 'Delete admin data error');
     res.status(500).json({ error: '删除失败' });
+  }
+}));
+
+// POST /api/admin/:tab/:id/restore - Restore soft-deleted admin item
+router.post('/:tab/:id/restore', requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  try {
+    const tab = req.params.tab;
+    const id = req.params.id;
+
+    if (tab === 'wiki') {
+      const page = await prisma.wikiPage.update({
+        where: { id },
+        data: restoreDeleteData,
+        select: { slug: true },
+      });
+      invalidateSoftDeleteCaches(tab, { slug: page.slug });
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'posts') {
+      await prisma.post.update({ where: { id }, data: restoreDeleteData });
+      invalidateSoftDeleteCaches(tab);
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'galleries') {
+      await prisma.gallery.update({ where: { id }, data: restoreDeleteData });
+      invalidateSoftDeleteCaches(tab);
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'music') {
+      await prisma.musicTrack.update({ where: { docId: id }, data: restoreDeleteData });
+      invalidateSoftDeleteCaches(tab);
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'albums') {
+      await prisma.album.update({ where: { docId: id }, data: restoreDeleteData });
+      invalidateSoftDeleteCaches(tab);
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'announcements') {
+      await prisma.announcement.update({ where: { id }, data: restoreDeleteData });
+      invalidateSoftDeleteCaches(tab);
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'sections') {
+      await prisma.section.update({ where: { id }, data: restoreDeleteData });
+      invalidateSoftDeleteCaches(tab);
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'image-maps') {
+      await prisma.imageMap.update({ where: { id }, data: restoreDeleteData });
+      invalidateSoftDeleteCaches(tab);
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'users') {
+      const targetUser = await prisma.user.findUnique({
+        where: { uid: id },
+        select: { uid: true, role: true },
+      });
+      if (!targetUser) {
+        res.status(404).json({ error: '用户不存在' });
+        return;
+      }
+      if (!canManageTargetUserRole(req.authUser?.role, targetUser.role)) {
+        res.status(403).json({ error: '无权恢复该用户' });
+        return;
+      }
+      await prisma.user.update({ where: { uid: id }, data: restoreDeleteData });
+      clearUserCache(id);
+      res.json({ success: true });
+      return;
+    }
+
+    res.status(400).json({ error: '未知恢复类型' });
+  } catch (error) {
+    logger.error({ err: error }, 'Restore admin data error');
+    res.status(500).json({ error: '恢复失败' });
+  }
+}));
+
+// DELETE /api/admin/:tab/:id/permanent - Permanently delete admin item
+router.delete('/:tab/:id/permanent', requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  try {
+    const tab = req.params.tab;
+    const id = req.params.id;
+
+    if (tab === 'wiki') {
+      const deletedSlug = await permanentlyDeleteWikiById(id);
+      if (!deletedSlug) {
+        res.status(404).json({ error: '记录不存在' });
+        return;
+      }
+      invalidateSoftDeleteCaches(tab, { slug: deletedSlug });
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'posts') {
+      await prisma.post.delete({ where: { id } });
+      invalidateSoftDeleteCaches(tab);
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'galleries') {
+      const deleted = await permanentlyDeleteGalleryById(id);
+      if (!deleted) {
+        res.status(404).json({ error: '图集不存在' });
+        return;
+      }
+      invalidateSoftDeleteCaches(tab);
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'music') {
+      const deleted = await permanentlyDeleteMusicTrackByDocId(id);
+      if (!deleted) {
+        res.status(404).json({ error: '歌曲不存在' });
+        return;
+      }
+      invalidateSoftDeleteCaches(tab);
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'albums') {
+      const deleted = await permanentlyDeleteAlbumByDocId(id);
+      if (!deleted) {
+        res.status(404).json({ error: '专辑不存在' });
+        return;
+      }
+      invalidateSoftDeleteCaches(tab);
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'announcements') {
+      await prisma.announcement.delete({ where: { id } });
+      invalidateSoftDeleteCaches(tab);
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'sections') {
+      await prisma.section.delete({ where: { id } });
+      invalidateSoftDeleteCaches(tab);
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'image-maps') {
+      const deleted = await permanentlyDeleteImageMapById(id);
+      if (!deleted) {
+        res.status(404).json({ error: '图片映射不存在' });
+        return;
+      }
+      invalidateSoftDeleteCaches(tab);
+      res.json({ success: true });
+      return;
+    }
+    if (tab === 'users') {
+      if (req.authUser?.uid === id) {
+        res.status(400).json({ error: '不能删除自己' });
+        return;
+      }
+      const targetUser = await prisma.user.findUnique({
+        where: { uid: id },
+        select: { uid: true, role: true },
+      });
+      if (!targetUser) {
+        res.status(404).json({ error: '用户不存在' });
+        return;
+      }
+      if (!canManageTargetUserRole(req.authUser?.role, targetUser.role)) {
+        res.status(403).json({ error: '无权彻底删除该用户' });
+        return;
+      }
+      await prisma.user.delete({ where: { uid: id } });
+      clearUserCache(id);
+      res.json({ success: true });
+      return;
+    }
+
+    res.status(400).json({ error: '未知彻底删除类型' });
+  } catch (error) {
+    logger.error({ err: error }, 'Permanent delete admin data error');
+    res.status(500).json({ error: '彻底删除失败' });
   }
 }));
 

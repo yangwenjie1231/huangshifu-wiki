@@ -124,6 +124,7 @@ export async function normalizeWikiRelationListForWrite(value: unknown, sourceSl
   const uniqueTargets = [...new Set(relations.map((item) => item.targetSlug))];
   const existingTargets = await prisma.wikiPage.findMany({
     where: {
+      deletedAt: null,
       slug: {
         in: uniqueTargets,
       },
@@ -359,8 +360,8 @@ export function buildWikiRelationGraph(
 }
 
 export async function findWikiRelationCenterPage(slug: string, authUser?: ApiUser) {
-  const centerPage = await prisma.wikiPage.findUnique({
-    where: { slug },
+  const centerPage = await prisma.wikiPage.findFirst({
+    where: { slug, deletedAt: null },
     select: {
       slug: true,
       title: true,

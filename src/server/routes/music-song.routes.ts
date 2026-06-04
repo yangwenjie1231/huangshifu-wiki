@@ -15,6 +15,7 @@ router.get('/song/:id', async (req, res) => {
   try {
     const existing = await prisma.musicTrack.findFirst({
       where: {
+        deletedAt: null,
         OR: [
           { id },
           { neteaseId: id },

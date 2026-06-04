@@ -37,7 +37,7 @@ router.get('/', requireAuth, async (req: AuthenticatedRequest, res) => {
     const [wikiPages, posts, songs] = await Promise.all([
       wikiIds.length
         ? prisma.wikiPage.findMany({
-            where: { slug: { in: wikiIds } },
+            where: { slug: { in: wikiIds }, deletedAt: null },
             include: {
               lastEditor: { select: { displayName: true } },
               location: true,
@@ -45,10 +45,10 @@ router.get('/', requireAuth, async (req: AuthenticatedRequest, res) => {
           })
         : Promise.resolve([]),
       postIds.length
-        ? prisma.post.findMany({ where: { id: { in: postIds } } })
+        ? prisma.post.findMany({ where: { id: { in: postIds }, deletedAt: null } })
         : Promise.resolve([]),
       musicIds.length
-        ? prisma.musicTrack.findMany({ where: { docId: { in: musicIds } } })
+        ? prisma.musicTrack.findMany({ where: { docId: { in: musicIds }, deletedAt: null } })
         : Promise.resolve([]),
     ]);
 
@@ -125,6 +125,7 @@ router.post('/', requireAuth, requireActiveUser, async (req: AuthenticatedReques
           slug: true,
           status: true,
           lastEditorUid: true,
+          deletedAt: true,
         },
       });
       if (!page || !canViewWikiPage(page, req.authUser)) {
@@ -140,6 +141,7 @@ router.post('/', requireAuth, requireActiveUser, async (req: AuthenticatedReques
           id: true,
           status: true,
           authorUid: true,
+          deletedAt: true,
         },
       });
       if (!post || !canViewPost(post, req.authUser)) {
@@ -151,9 +153,9 @@ router.post('/', requireAuth, requireActiveUser, async (req: AuthenticatedReques
     if (targetType === 'music') {
       const song = await prisma.musicTrack.findUnique({
         where: { docId: targetId },
-        select: { docId: true },
+        select: { docId: true, deletedAt: true },
       });
-      if (!song) {
+      if (!song || song.deletedAt) {
         res.status(404).json({ error: '目标不存在' });
         return;
       }

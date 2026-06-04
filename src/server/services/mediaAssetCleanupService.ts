@@ -49,7 +49,7 @@ async function cleanupImageMapsByLocalUrls(localUrls: string[], assetId?: string
   }
 
   const imageMaps = await prisma.imageMap.findMany({
-    where: { localUrl: { in: localUrls } },
+    where: { localUrl: { in: localUrls }, deletedAt: null },
     select: { id: true, localUrl: true },
   });
 
@@ -82,7 +82,10 @@ async function cleanupImageMapsByLocalUrls(localUrls: string[], assetId?: string
         continue;
       }
 
-      await prisma.imageMap.delete({ where: { id: imageMap.id } });
+      await prisma.imageMap.update({
+        where: { id: imageMap.id },
+        data: { deletedAt: new Date(), deletedBy: null },
+      });
       deletedImageMapIds.push(imageMap.id);
     } catch (error) {
       logger.error({ err: error, imageMapId: imageMap.id }, 'ImageMap cleanup failed');

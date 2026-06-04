@@ -21,6 +21,7 @@ import {
   resolveCommentReplyTarget,
   createCommentLike,
   deleteCommentLike,
+  softDeleteData,
 } from '../utils';
 import type { AuthenticatedRequest, ContentStatus } from '../types';
 
@@ -488,10 +489,10 @@ router.delete('/:id', requireAuth, requireActiveUser, async (req: AuthenticatedR
   try {
     const post = await prisma.post.findUnique({
       where: { id: req.params.id },
-      select: { authorUid: true, status: true },
+      select: { authorUid: true, status: true, deletedAt: true },
     });
 
-    if (!post) {
+    if (!post || post.deletedAt) {
       res.status(404).json({ error: '帖子未找到' });
       return;
     }
@@ -503,8 +504,9 @@ router.delete('/:id', requireAuth, requireActiveUser, async (req: AuthenticatedR
       return;
     }
 
-    await prisma.post.delete({
+    await prisma.post.update({
       where: { id: req.params.id },
+      data: softDeleteData(req.authUser!.uid),
     });
 
     res.json({ success: true });

@@ -28,6 +28,7 @@ import {
   parsePagination,
   ensureTextLimit,
   createNotification,
+  softDeleteData,
 } from '../utils'
 import { CONTENT_LIMITS, WIKI_MAX_CONTENT_SIZE } from '../../lib/contentLimits'
 import { enhancedCache, CACHE_KEYS } from '../utils/cache'
@@ -1423,43 +1424,19 @@ router.delete(
           slug: true,
           title: true,
           lastEditorUid: true,
+          deletedAt: true,
         },
       })
 
-      if (!page) {
+      if (!page || page.deletedAt) {
         res.status(404).json({ error: '页面未找到' })
         return
       }
 
       await prisma.$transaction(async (tx) => {
-        await Promise.all([
-          tx.favorite.deleteMany({
-            where: {
-              targetType: 'wiki',
-              targetId: slug,
-            },
-          }),
-          tx.browsingHistory.deleteMany({
-            where: {
-              targetType: 'wiki',
-              targetId: slug,
-            },
-          }),
-          tx.wikiImageEmbedding.deleteMany({
-            where: {
-              wikiPageSlug: slug,
-            },
-          }),
-          tx.textEmbeddingChunk.deleteMany({
-            where: {
-              sourceType: 'wiki',
-              sourceId: slug,
-            },
-          }),
-        ])
-
-        await tx.wikiPage.delete({
+        await tx.wikiPage.update({
           where: { slug },
+          data: softDeleteData(req.authUser!.uid),
         })
 
         await tx.moderationLog.create({
@@ -1470,17 +1447,6 @@ router.delete(
             operatorUid: req.authUser!.uid,
             note: reason,
           },
-        })
-      })
-
-      void Promise.allSettled([
-        deleteImageEmbeddingPointsBySource('wiki', slug),
-        deleteTextEmbeddingPointsBySource('wiki', slug),
-      ]).then((results) => {
-        results.forEach((result) => {
-          if (result.status === 'rejected') {
-            logger.warn({ err: result.reason, slug }, 'Delete wiki embedding points failed')
-          }
         })
       })
 

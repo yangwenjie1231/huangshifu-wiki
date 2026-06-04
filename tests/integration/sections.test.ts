@@ -105,7 +105,8 @@ describe('Sections API - 版块接口测试', () => {
     const deletedSection = await prisma.section.findUnique({
       where: { id: 'test-section-100' },
     })
-    expect(deletedSection).toBeNull()
+    expect(deletedSection?.deletedAt).not.toBeNull()
+    expect(deletedSection?.deletedBy).toBe(adminUser.user.uid)
   })
 
   it('普通用户不应能删除版块', async () => {

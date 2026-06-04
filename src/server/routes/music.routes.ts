@@ -27,6 +27,8 @@ import {
   applyAlbumTracksToRelations,
   enhancedCache,
   ensureTextLimit,
+  deletedAtFilter,
+  softDeleteData,
 } from '../utils';
 import { parseMusicUrl } from '../music/musicUrlParser';
 import { getMusicResourcePreview, searchMusicResources, type MusicResourcePreview } from '../music/metingService';
@@ -85,6 +87,7 @@ router.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
 
     const where = albumDocId
       ? {
+          deletedAt: null,
           albumRelations: {
             some: {
               albumDocId,
@@ -92,8 +95,8 @@ router.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
           },
         }
       : instrumentalDocIds.length > 0
-        ? { docId: { notIn: instrumentalDocIds } }
-        : undefined;
+        ? { deletedAt: null, docId: { notIn: instrumentalDocIds } }
+        : { deletedAt: null };
 
     const [songs, total] = await Promise.all([
       fetchSongsWithRelations(where, { take: limit, skip }),
@@ -565,44 +568,14 @@ router.delete('/:docId', requireAdmin, asyncHandler(async (req: AuthenticatedReq
       },
     });
 
-    if (!song) {
+    if (!song || song.deletedAt) {
       res.status(404).json({ error: '歌曲不存在' });
       return;
     }
 
-    await prisma.$transaction(async (tx) => {
-      await tx.songInstrumentalRelation.deleteMany({
-        where: {
-          OR: [{ songDocId: docId }, { targetSongDocId: docId }],
-        },
-      });
-
-      await tx.songAlbumRelation.deleteMany({ where: { songDocId: docId } });
-
-      for (const cover of song.covers || []) {
-        if (cover.assetId) {
-          const [songLinked, albumLinked, galleryLinked] = await Promise.all([
-            tx.songCover.count({ where: { assetId: cover.assetId, id: { not: cover.id } } }),
-            tx.albumCover.count({ where: { assetId: cover.assetId } }),
-            tx.galleryImage.count({ where: { assetId: cover.assetId } }),
-          ]);
-          if (songLinked + albumLinked + galleryLinked === 0) {
-            const asset = await tx.mediaAsset.findUnique({ where: { id: cover.assetId } });
-            if (asset) {
-              await safeDeleteUploadFileByStorageKey(asset.storageKey);
-              await tx.mediaAsset.update({
-                where: { id: asset.id },
-                data: { status: 'deleted' },
-              });
-            }
-          }
-        } else {
-          await safeDeleteUploadFileByUrl(cover.publicUrl);
-        }
-      }
-
-      await tx.songCover.deleteMany({ where: { songDocId: docId } });
-      await tx.musicTrack.delete({ where: { docId } });
+    await prisma.musicTrack.update({
+      where: { docId },
+      data: softDeleteData(req.authUser!.uid),
     });
 
     res.json({ success: true });

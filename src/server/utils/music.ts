@@ -559,6 +559,7 @@ export async function createOrUpdateImportedSong(params: {
 
   const existingByPlatformId = await prisma.musicTrack.findFirst({
     where: {
+      deletedAt: null,
       OR: [
         { [sourceField]: platformId },
         { id: track.sourceId },
@@ -606,6 +607,7 @@ export async function createOrUpdateImportedSong(params: {
   const existingByTitleArtist = await prisma.musicTrack.findFirst({
     where: {
       AND: [
+        { deletedAt: null },
         { title: { equals: title } },
         { artist: { equals: artist } },
         {
@@ -737,6 +739,7 @@ export async function autoLinkInstrumental(
 
   const originalSong = await prisma.musicTrack.findFirst({
     where: {
+      deletedAt: null,
       title: originalTitle,
       artist: artist,
       docId: { not: songDocId },
@@ -765,7 +768,10 @@ export async function fetchSongsWithRelations(
   pagination?: { take?: number; skip?: number },
 ) {
   const songs = await prisma.musicTrack.findMany({
-    where,
+    where: {
+      deletedAt: null,
+      ...(where || {}),
+    },
     include: {
       covers: {
         orderBy: { sortOrder: 'asc' },
@@ -801,8 +807,8 @@ export async function fetchSongsWithRelations(
 }
 
 export async function fetchSongWithRelationsByDocId(songDocId: string) {
-  const song = await prisma.musicTrack.findUnique({
-    where: { docId: songDocId },
+  const song = await prisma.musicTrack.findFirst({
+    where: { docId: songDocId, deletedAt: null },
     include: {
       covers: {
         orderBy: { sortOrder: 'asc' },

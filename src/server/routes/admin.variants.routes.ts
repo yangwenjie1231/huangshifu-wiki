@@ -183,7 +183,7 @@ router.post('/rebuild-all-variants', requireAuth, requireAdmin, async (
     );
 
     // 构建查询条件
-    let whereClause: any = {};
+    let whereClause: any = { deletedAt: null };
     
     switch (scope) {
       case 'all':
@@ -341,9 +341,9 @@ router.get('/rebuild-status/:jobId', requireAuth, requireAdmin, (req, res) => {
 router.get('/cleanup/stats', requireAuth, requireAdmin, async (_req, res) => {
   try {
     const [totalImages, failedImages, completedImages] = await Promise.all([
-      prisma.imageMap.count(),
-      prisma.imageMap.count({ where: { variantStatus: 'failed' }}),
-      prisma.imageMap.count({ where: { variantStatus: 'completed' }}),
+      prisma.imageMap.count({ where: { deletedAt: null } }),
+      prisma.imageMap.count({ where: { deletedAt: null, variantStatus: 'failed' }}),
+      prisma.imageMap.count({ where: { deletedAt: null, variantStatus: 'completed' }}),
     ]);
 
     let orphanedCount = 0;

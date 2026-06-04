@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { prisma } from '../prisma';
 import { requireAdmin } from '../middleware/auth';
-import { ensureTextLimit } from '../utils';
+import { ensureTextLimit, softDeleteData } from '../utils';
+import type { AuthenticatedRequest } from '../types';
 import { CONTENT_LIMITS } from '../../lib/contentLimits';
 
 const router = Router();
@@ -9,6 +10,7 @@ const router = Router();
 router.get('/', async (_req, res) => {
   try {
     const sections = await prisma.section.findMany({
+      where: { deletedAt: null },
       orderBy: [{ order: 'asc' }, { createdAt: 'desc' }],
       take: 200,
     });
@@ -61,15 +63,15 @@ router.post('/', requireAdmin, async (req, res) => {
   }
 });
 
-router.delete('/:id', requireAdmin, async (req, res) => {
+router.delete('/:id', requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
     const sectionId = req.params.id;
     const section = await prisma.section.findUnique({
       where: { id: sectionId },
-      select: { id: true },
+      select: { id: true, deletedAt: true },
     });
 
-    if (!section) {
+    if (!section || section.deletedAt) {
       res.status(404).json({ error: '版块不存在' });
       return;
     }
@@ -83,8 +85,9 @@ router.delete('/:id', requireAdmin, async (req, res) => {
       return;
     }
 
-    await prisma.section.delete({
+    await prisma.section.update({
       where: { id: sectionId },
+      data: softDeleteData(req.authUser!.uid),
     });
     res.json({ success: true });
   } catch (error) {

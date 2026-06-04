@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mockPrisma = vi.hoisted(() => ({
   imageMap: {
     findUnique: vi.fn(),
-    delete: vi.fn(),
+    update: vi.fn(),
   },
 }))
 
@@ -27,6 +27,7 @@ vi.mock('../../src/server/utils', () => ({
   prisma: mockPrisma,
   uploadsDir: '/tmp/uploads',
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
+  softDeleteData: (deletedBy: string) => ({ deletedAt: new Date(), deletedBy }),
 }))
 
 vi.mock('../../src/server/services/variantCleanup.service', () => ({
@@ -55,8 +56,8 @@ vi.mock('../../src/server/s3/s3Service', () => ({
 describe('image maps delete route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockPrisma.imageMap.findUnique.mockResolvedValue({ id: 'img-1' })
-    mockPrisma.imageMap.delete.mockResolvedValue({ id: 'img-1' })
+    mockPrisma.imageMap.findUnique.mockResolvedValue({ id: 'img-1', deletedAt: null })
+    mockPrisma.imageMap.update.mockResolvedValue({ id: 'img-1' })
     mockCleanupByImageMapId.mockResolvedValue({
       success: true,
       trigger: 'on_delete',
@@ -86,7 +87,7 @@ describe('image maps delete route', () => {
     return app
   }
 
-  it('deletes variants before removing the image map', async () => {
+  it('soft deletes the image map', async () => {
     const app = await createApp()
 
     const response = await request(app).delete('/api/image-maps/img-1')
@@ -95,11 +96,12 @@ describe('image maps delete route', () => {
     expect(response.body).toEqual({ success: true })
     expect(mockPrisma.imageMap.findUnique).toHaveBeenCalledWith({
       where: { id: 'img-1' },
-      select: { id: true },
+      select: { id: true, deletedAt: true },
     })
-    expect(mockCleanupByImageMapId).toHaveBeenCalledWith('img-1', 'on_delete')
-    expect(mockPrisma.imageMap.delete).toHaveBeenCalledWith({
+    expect(mockCleanupByImageMapId).not.toHaveBeenCalled()
+    expect(mockPrisma.imageMap.update).toHaveBeenCalledWith({
       where: { id: 'img-1' },
+      data: { deletedAt: expect.any(Date), deletedBy: 'admin-1' },
     })
   })
 
@@ -112,6 +114,6 @@ describe('image maps delete route', () => {
     expect(response.status).toBe(404)
     expect(response.body).toEqual({ error: '图片映射不存在' })
     expect(mockCleanupByImageMapId).not.toHaveBeenCalled()
-    expect(mockPrisma.imageMap.delete).not.toHaveBeenCalled()
+    expect(mockPrisma.imageMap.update).not.toHaveBeenCalled()
   })
 })

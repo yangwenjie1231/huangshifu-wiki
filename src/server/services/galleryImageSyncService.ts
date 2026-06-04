@@ -105,14 +105,14 @@ export async function syncGalleryImageToImageMap(
       where: { md5 },
     });
 
-    if (existing) {
+    if (existing && !existing.deletedAt) {
       console.log('[GalleryImageSync] ImageMap 记录已存在 (MD5 匹配):', existing.id);
       return existing.id;
     }
 
     // 检查是否已存在相同的 localUrl
     const existingByUrl = await prisma.imageMap.findFirst({
-      where: { localUrl },
+      where: { localUrl, deletedAt: null },
     });
 
     if (existingByUrl) {

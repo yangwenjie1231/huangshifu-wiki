@@ -51,7 +51,7 @@ describe('AdminListPage', () => {
     mockApiDelete.mockResolvedValue({ success: true })
   })
 
-  it('删除版块时应调用 /api/sections/:id', async () => {
+  it('删除版块时应调用后台软删除接口', async () => {
     const user = userEvent.setup()
 
     render(
@@ -66,7 +66,7 @@ describe('AdminListPage', () => {
     await user.click(deleteButton)
 
     await waitFor(() => {
-      expect(mockApiDelete).toHaveBeenCalledWith('/api/sections/discussion')
+      expect(mockApiDelete).toHaveBeenCalledWith('/api/admin/sections/discussion')
     })
   })
 })

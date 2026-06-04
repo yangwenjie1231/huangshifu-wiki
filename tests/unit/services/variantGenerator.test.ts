@@ -92,6 +92,7 @@ describe('VariantGenerator - 初始化与配置', () => {
 
     expect(prisma.imageMap.findMany).toHaveBeenCalledWith({
       where: {
+        deletedAt: null,
         variantStatus: { in: ['pending', 'processing'] },
       },
       take: 100,

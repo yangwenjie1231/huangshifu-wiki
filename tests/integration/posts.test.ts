@@ -1613,9 +1613,10 @@ describe('Posts API - 文章接口测试', () => {
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('success', true);
 
-      // 验证文章已被删除
+      // 验证文章已被软删除
       dbPost = await prisma.post.findUnique({ where: { id: post.id } });
-      expect(dbPost).toBeNull();
+      expect(dbPost?.deletedAt).not.toBeNull();
+      expect(dbPost?.deletedBy).toBe(testUser.user.uid);
     });
 
     /**
@@ -1668,9 +1669,10 @@ describe('Posts API - 文章接口测试', () => {
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('success', true);
 
-      // 验证文章已被删除
+      // 验证文章已被软删除
       const dbPost = await prisma.post.findUnique({ where: { id: post.id } });
-      expect(dbPost).toBeNull();
+      expect(dbPost?.deletedAt).not.toBeNull();
+      expect(dbPost?.deletedBy).toBe(adminUser.user.uid);
     });
 
     /**

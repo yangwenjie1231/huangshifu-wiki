@@ -393,10 +393,10 @@ async function processTextSearchResults(
       ? prisma.post.findMany({ where: { id: { in: postIds }, ...buildPostVisibilityWhere(authUser) }, include: { location: true } })
       : Promise.resolve([]),
     musicDocIds.length
-      ? prisma.musicTrack.findMany({ where: { docId: { in: musicDocIds } } }) // MusicTrack model has no visibility field — all tracks are publicly searchable
+      ? prisma.musicTrack.findMany({ where: { docId: { in: musicDocIds }, deletedAt: null } })
       : Promise.resolve([]),
     albumDocIds.length
-      ? prisma.album.findMany({ where: { docId: { in: albumDocIds } } }) // Album model has no visibility field — all albums are publicly searchable
+      ? prisma.album.findMany({ where: { docId: { in: albumDocIds }, deletedAt: null } })
       : Promise.resolve([]),
   ])
 
@@ -711,7 +711,7 @@ router.get('/', searchLimiter, async (req: AuthenticatedRequest, res) => {
     const musicPromise = wantsMusic
       ? prisma.musicTrack.findMany({
           where: {
-            // MusicTrack model has no visibility field — all tracks are publicly searchable
+            deletedAt: null,
             ...(q
               ? {
                   OR: [
@@ -776,7 +776,7 @@ router.get('/', searchLimiter, async (req: AuthenticatedRequest, res) => {
     const albumsPromise = wantsAlbums
       ? prisma.album.findMany({
           where: {
-            // Album model has no visibility field — all albums are publicly searchable
+            deletedAt: null,
             ...(q
               ? {
                   OR: [
@@ -1065,6 +1065,7 @@ router.get('/suggest', searchLimiter, async (req: AuthenticatedRequest, res) => 
       prisma.post.findMany({
         where: {
           status: 'published',
+          deletedAt: null,
           OR: [
             { title: { contains: q } },
           ],
@@ -1075,6 +1076,7 @@ router.get('/suggest', searchLimiter, async (req: AuthenticatedRequest, res) => 
       }),
       prisma.musicTrack.findMany({
         where: {
+          deletedAt: null,
           OR: [
             { title: { contains: q } },
             { artist: { contains: q } },
@@ -1086,6 +1088,7 @@ router.get('/suggest', searchLimiter, async (req: AuthenticatedRequest, res) => 
       }),
       prisma.album.findMany({
         where: {
+          deletedAt: null,
           OR: [
             { title: { contains: q } },
             { artist: { contains: q } },

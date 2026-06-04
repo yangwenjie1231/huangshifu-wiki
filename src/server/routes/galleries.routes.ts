@@ -26,6 +26,7 @@ import {
   notifyCommentReply,
   GALLERY_ADMIN_ONLY,
   ensureTextLimit,
+  softDeleteData,
 } from '../utils'
 import { CONTENT_LIMITS } from '../../lib/contentLimits'
 import { enqueueGalleryImageEmbeddings } from '../vector/embeddingSync'
@@ -87,14 +88,15 @@ router.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
 
     const visibilityWhere = req.authUser
       ? (isAdminRole(req.authUser.role)
-          ? {}
+          ? { deletedAt: null }
           : {
+              deletedAt: null,
               OR: [
                 { published: true },
                 { authorUid: req.authUser.uid },
               ],
             })
-      : { published: true }
+      : { published: true, deletedAt: null }
 
     if (!req.authUser) {
       const cacheKey = `gallery_list_public:${page}:${limit}`
@@ -157,7 +159,7 @@ router.get('/:id', asyncHandler(async (req: AuthenticatedRequest, res) => {
       },
     })
 
-    if (!gallery) {
+    if (!gallery || gallery.deletedAt) {
       res.status(404).json({ error: '图集不存在' })
       return
     }
@@ -1346,27 +1348,15 @@ router.delete('/:id', requireAdmin, asyncHandler(async (req: AuthenticatedReques
       },
     })
 
-    if (!gallery) {
+    if (!gallery || gallery.deletedAt) {
       res.status(404).json({ error: '图集不存在' })
       return
     }
 
-    const assetIds = [...new Set(gallery.images.map((img) => img.assetId).filter(isString))]
-    const imagesWithoutAsset = gallery.images.filter((img) => !img.assetId)
-
-    await prisma.gallery.delete({
+    await prisma.gallery.update({
       where: { id: req.params.id },
+      data: softDeleteData(req.authUser!.uid),
     })
-
-    if (assetIds.length > 0) {
-      await Promise.all(assetIds.map((assetId) => cleanupUnusedMediaAssetById(assetId)))
-    }
-
-    if (imagesWithoutAsset.length > 0) {
-      await Promise.all(
-        imagesWithoutAsset.map((image) => cleanupUntrackedUploadImageByUrl(image.url)),
-      )
-    }
 
     res.json({ success: true })
   } catch (error) {

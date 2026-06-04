@@ -144,7 +144,7 @@ router.post('/login', authRateLimiter, validateBody(loginSchema), asyncHandler(a
       where: { email: normalizedEmail },
     })
 
-    if (!user) {
+    if (!user || user.deletedAt) {
       logger.info({ email: normalizedEmail }, 'Login failed - user not found')
       res.status(401).json({ error: '邮箱或密码错误' })
       return
@@ -198,6 +198,7 @@ router.post('/wechat/login', authRateLimiter, asyncHandler(async (req, res) => {
 
     let user = await prisma.user.findFirst({
       where: {
+        deletedAt: null,
         OR: [
           { wechatOpenId: openId },
           ...(unionId ? [{ wechatUnionId: unionId }] : []),

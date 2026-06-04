@@ -6,7 +6,8 @@ import { isAdminRole } from '../middleware/auth';
 const VIEWABLE_STATUSES: ReadonlySet<ContentStatus> = new Set(['published']);
 const EDITABLE_STATUSES: ReadonlySet<ContentStatus> = new Set(['draft', 'pending', 'published']);
 
-export function canViewWikiPage(page: { status: string; lastEditorUid: string }, authUser?: ApiUser): boolean {
+export function canViewWikiPage(page: { status: string; lastEditorUid: string; deletedAt?: Date | null }, authUser?: ApiUser): boolean {
+  if (page.deletedAt) return false;
   if (page.status === 'published') return true;
   if (!authUser) return false;
   if (isAdminRole(authUser.role)) {
@@ -17,14 +18,16 @@ export function canViewWikiPage(page: { status: string; lastEditorUid: string },
   return page.lastEditorUid === authUser.uid && EDITABLE_STATUSES.has(page.status as ContentStatus);
 }
 
-export function canViewPost(post: { status: ContentStatus; authorUid: string }, authUser?: ApiUser) {
+export function canViewPost(post: { status: ContentStatus; authorUid: string; deletedAt?: Date | null }, authUser?: ApiUser) {
+  if (post.deletedAt) return false;
   if (post.status === 'published') return true;
   if (!authUser) return false;
   if (isAdminRole(authUser.role)) return true;
   return post.authorUid === authUser.uid;
 }
 
-export function canViewGallery(gallery: { published: boolean; authorUid: string }, authUser?: ApiUser) {
+export function canViewGallery(gallery: { published: boolean; authorUid: string; deletedAt?: Date | null }, authUser?: ApiUser) {
+  if (gallery.deletedAt) return false;
   if (gallery.published) return true;
   if (!authUser) return false;
   if (isAdminRole(authUser.role)) return true;
@@ -39,12 +42,13 @@ export function canManageGallery(gallery: { authorUid: string }, authUser?: ApiU
 
 export function buildWikiVisibilityWhere(authUser?: ApiUser) {
   if (!authUser) {
-    return { status: 'published' as ContentStatus };
+    return { status: 'published' as ContentStatus, deletedAt: null };
   }
   if (isAdminRole(authUser.role)) {
-    return {};
+    return { deletedAt: null };
   }
   return {
+    deletedAt: null,
     OR: [
       { status: 'published' as ContentStatus },
       { lastEditorUid: authUser.uid },
@@ -54,12 +58,13 @@ export function buildWikiVisibilityWhere(authUser?: ApiUser) {
 
 export function buildPostVisibilityWhere(authUser?: ApiUser) {
   if (!authUser) {
-    return { status: 'published' as ContentStatus };
+    return { status: 'published' as ContentStatus, deletedAt: null };
   }
   if (isAdminRole(authUser.role)) {
-    return {};
+    return { deletedAt: null };
   }
   return {
+    deletedAt: null,
     OR: [
       { status: 'published' as ContentStatus },
       { authorUid: authUser.uid },
@@ -69,12 +74,13 @@ export function buildPostVisibilityWhere(authUser?: ApiUser) {
 
 export function buildGalleryVisibilityWhere(authUser?: ApiUser) {
   if (!authUser) {
-    return { published: true };
+    return { published: true, deletedAt: null };
   }
   if (isAdminRole(authUser.role)) {
-    return {};
+    return { deletedAt: null };
   }
   return {
+    deletedAt: null,
     OR: [
       { published: true },
       { authorUid: authUser.uid },

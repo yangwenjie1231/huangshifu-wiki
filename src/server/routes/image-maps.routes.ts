@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { requireAuth, requireAdmin, requireActiveUser } from '../middleware/auth';
-import { prisma, uploadsDir } from '../utils';
+import { prisma, uploadsDir, softDeleteData } from '../utils';
 import { isBlurhashEnabled, shouldAutoGenerate, generateBlurhashFromFile } from '../blurhashService';
 import { getS3BaseUrl, getPublicConfig } from '../s3/s3Service';
-import { variantCleanup, CleanupTrigger } from '../services/variantCleanup.service';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import type { AuthenticatedRequest } from '../types';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,11 +41,16 @@ function normalizeImageMap(item: {
   storageType: string;
   blurhash: string | null;
   thumbhash: string | null;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
   createdAt: Date;
 }) {
   return {
     ...item,
     storageType: inferStorageType(item),
+    isDeleted: Boolean(item.deletedAt),
+    deletedAt: item.deletedAt ? item.deletedAt.toISOString() : null,
+    deletedBy: item.deletedBy ?? null,
     createdAt: item.createdAt.toISOString(),
   };
 }
@@ -86,7 +91,10 @@ router.get('/', async (req, res) => {
     const md5 = typeof req.query.md5 === 'string' ? req.query.md5 : '';
 
     const items = await prisma.imageMap.findMany({
-      where: md5 ? { md5 } : {},
+      where: {
+        deletedAt: null,
+        ...(md5 ? { md5 } : {}),
+      },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
@@ -105,6 +113,7 @@ router.get('/export', requireAuth, requireAdmin, async (req, res) => {
   try {
     const format = (req.query.format as string) || 'json';
     const items = await prisma.imageMap.findMany({
+      where: { deletedAt: null },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -143,9 +152,9 @@ router.get('/export', requireAuth, requireAdmin, async (req, res) => {
 router.get('/stats', requireAuth, requireAdmin, async (req, res) => {
   try {
     const [total, withS3, withExternal] = await Promise.all([
-      prisma.imageMap.count(),
-      prisma.imageMap.count({ where: { s3Url: { not: null } } }),
-      prisma.imageMap.count({ where: { externalUrl: { not: null } } }),
+      prisma.imageMap.count({ where: { deletedAt: null } }),
+      prisma.imageMap.count({ where: { deletedAt: null, s3Url: { not: null } } }),
+      prisma.imageMap.count({ where: { deletedAt: null, externalUrl: { not: null } } }),
     ]);
 
     res.json({
@@ -273,6 +282,7 @@ router.post('/refresh-all-blurhash', requireAuth, requireAdmin, async (req, res)
 
     const imageMaps = await prisma.imageMap.findMany({
       where: {
+        deletedAt: null,
         OR: [
           { blurhash: null },
           { thumbhash: null },
@@ -457,32 +467,22 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // DELETE /api/image-maps/:id - Delete image map
-router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
+router.delete('/:id', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
     const existing = await prisma.imageMap.findUnique({
       where: { id: req.params.id },
-      select: { id: true },
+      select: { id: true, deletedAt: true },
     });
 
-    if (!existing) {
+    if (!existing || existing.deletedAt) {
       res.status(404).json({ error: '图片映射不存在' });
       return;
     }
 
-    await variantCleanup.cleanupByImageMapId(req.params.id, CleanupTrigger.ON_DELETE);
-
-    try {
-      await prisma.imageMap.delete({
-        where: { id: req.params.id },
-      });
-    } catch (deleteError) {
-      const prismaError = deleteError as { code?: string };
-      if (prismaError.code === 'P2025') {
-        res.json({ success: true });
-        return;
-      }
-      throw deleteError;
-    }
+    await prisma.imageMap.update({
+      where: { id: req.params.id },
+      data: softDeleteData(req.authUser!.uid),
+    });
 
     res.json({ success: true });
   } catch (error) {
@@ -555,6 +555,7 @@ router.post('/migrate-to-s3', requireAuth, requireAdmin, async (req, res) => {
     // Query all ImageMap records where s3Url is null
     const imageMaps = await prisma.imageMap.findMany({
       where: {
+        deletedAt: null,
         s3Url: null,
       },
       take: limitNum,

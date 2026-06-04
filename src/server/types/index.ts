@@ -180,6 +180,8 @@ type WikiResponseInput = {
   isPinned: boolean;
   likesCount: number;
   dislikesCount: number;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
   lastEditorUid: string;
   lastEditor?: { displayName: string } | null;
   createdAt: Date;

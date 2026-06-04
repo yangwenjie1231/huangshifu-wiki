@@ -17,6 +17,7 @@ import {
   applyAlbumTracksToRelations,
   enhancedCache,
   ensureTextLimit,
+  softDeleteData,
 } from '../utils';
 import type { AuthenticatedRequest } from '../types';
 import type { AlbumCover } from '@prisma/client';
@@ -48,6 +49,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     const skip = (page - 1) * limit;
 
     const where = {
+      deletedAt: null,
       ...(platform ? { platform } : {}),
       ...(resourceType ? { resourceType } : {}),
     };
@@ -163,7 +165,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res) => {
       });
     }
 
-    if (!album) {
+    if (!album || album.deletedAt) {
       res.status(404).json({ error: '专辑不存在' });
       return;
     }
@@ -394,7 +396,7 @@ router.patch('/:docId', requireAdmin, async (req, res) => {
   try {
     const docId = req.params.docId;
     const existing = await prisma.album.findUnique({ where: { docId } });
-    if (!existing) {
+    if (!existing || existing.deletedAt) {
       res.status(404).json({ error: '专辑不存在' });
       return;
     }
@@ -459,7 +461,7 @@ router.patch('/:docId', requireAdmin, async (req, res) => {
 });
 
 // Delete album
-router.delete('/:docId', requireAdmin, async (req, res) => {
+router.delete('/:docId', requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
     const docId = req.params.docId;
     const album = await prisma.album.findUnique({
@@ -468,74 +470,15 @@ router.delete('/:docId', requireAdmin, async (req, res) => {
         covers: true,
       },
     });
-    if (!album) {
+    if (!album || album.deletedAt) {
       res.status(404).json({ error: '专辑不存在' });
       return;
     }
 
-    const relations = await prisma.songAlbumRelation.findMany({ where: { albumDocId: docId } });
-    const songDocIds = relations.map((item) => item.songDocId);
-
-    await prisma.songAlbumRelation.deleteMany({ where: { albumDocId: docId } });
-
-    const coverSources = (album.covers || []).map((cover) => `album_cover:${cover.id}`);
-    if (coverSources.length) {
-      await prisma.musicTrack.updateMany({
-        where: {
-          docId: { in: songDocIds },
-          defaultCoverSource: { in: coverSources },
-        },
-        data: {
-          defaultCoverSource: null,
-        },
-      });
-    }
-
-    for (const cover of album.covers || []) {
-      if (cover.assetId) {
-        const [songLinked, albumLinked, galleryLinked] = await Promise.all([
-          prisma.songCover.count({ where: { assetId: cover.assetId } }),
-          prisma.albumCover.count({ where: { assetId: cover.assetId, id: { not: cover.id } } }),
-          prisma.galleryImage.count({ where: { assetId: cover.assetId } }),
-        ]);
-        if (songLinked + albumLinked + galleryLinked === 0) {
-          const asset = await prisma.mediaAsset.findUnique({ where: { id: cover.assetId } });
-          if (asset) {
-            await safeDeleteUploadFileByStorageKey(asset.storageKey);
-            await prisma.mediaAsset.update({
-              where: { id: asset.id },
-              data: { status: 'deleted' },
-            });
-          }
-        }
-      } else {
-        await safeDeleteUploadFileByStorageKey(cover.storageKey);
-      }
-    }
-
-    await prisma.albumCover.deleteMany({ where: { albumDocId: docId } });
-    await prisma.album.delete({ where: { docId } });
-
-    if (songDocIds.length) {
-      const songs = await prisma.songAlbumRelation.findMany({
-        where: { songDocId: { in: songDocIds } },
-      });
-      const groupedBySong = new Map<string, Array<{ id: string; isDisplay: boolean }>>();
-      for (const relation of songs) {
-        if (!groupedBySong.has(relation.songDocId)) {
-          groupedBySong.set(relation.songDocId, []);
-        }
-        groupedBySong.get(relation.songDocId)!.push({ id: relation.id, isDisplay: relation.isDisplay });
-      }
-      for (const [, relationList] of groupedBySong.entries()) {
-        if (!relationList.some((relation) => relation.isDisplay) && relationList[0]) {
-          await prisma.songAlbumRelation.update({
-            where: { id: relationList[0].id },
-            data: { isDisplay: true },
-          });
-        }
-      }
-    }
+    await prisma.album.update({
+      where: { docId },
+      data: softDeleteData(req.authUser!.uid),
+    });
 
     res.json({ success: true });
     enhancedCache.invalidateByPrefix('album_list:');

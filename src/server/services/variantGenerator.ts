@@ -98,6 +98,7 @@ export class VariantGenerator {
     try {
       const pendingTasks = await prisma.imageMap.findMany({
         where: {
+          deletedAt: null,
           variantStatus: { in: ['pending', 'processing'] },
         },
         take: 100,

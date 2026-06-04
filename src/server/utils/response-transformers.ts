@@ -184,6 +184,8 @@ export function toNotificationResponse(notification: {
 }
 
 export function toWikiResponse(page: WikiResponseInput) {
+  const deletedAt = 'deletedAt' in page ? page.deletedAt as Date | null | undefined : null
+  const deletedBy = 'deletedBy' in page ? page.deletedBy as string | null | undefined : null
   return {
     id: page.id,
     slug: page.slug,
@@ -205,6 +207,9 @@ export function toWikiResponse(page: WikiResponseInput) {
     isPinned: page.isPinned,
     likesCount: page.likesCount,
     dislikesCount: page.dislikesCount,
+    isDeleted: Boolean(deletedAt),
+    deletedAt: deletedAt ? deletedAt.toISOString() : null,
+    deletedBy: deletedBy ?? null,
     lastEditorUid: page.lastEditorUid,
     lastEditorName: page.lastEditor?.displayName || "匿名",
     createdAt: page.createdAt.toISOString(),
@@ -298,6 +303,8 @@ export function toPostResponse(post: {
   createdAt: Date;
   updatedAt: Date;
   location?: { code: string; name: string; fullName: string } | null;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
 }) {
   return {
     ...post,
@@ -310,6 +317,9 @@ export function toPostResponse(post: {
     tags: serializeTags(post.tags),
     musicDocId: post.musicDocId || null,
     albumDocId: post.albumDocId || null,
+    isDeleted: Boolean(post.deletedAt),
+    deletedAt: post.deletedAt ? post.deletedAt.toISOString() : null,
+    deletedBy: post.deletedBy ?? null,
     reviewedAt: post.reviewedAt ? post.reviewedAt.toISOString() : null,
     createdAt: post.createdAt.toISOString(),
     updatedAt: post.updatedAt.toISOString(),
@@ -388,6 +398,8 @@ type GalleryInput = {
   copyright?: string | null;
   published: boolean;
   publishedAt: Date | null;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
   createdAt: Date;
   updatedAt: Date;
   location?: { code: string; name: string; fullName: string } | null;
@@ -483,6 +495,7 @@ export async function toGalleryResponse(gallery: GalleryInput, storageStrategy?:
   const imageMaps = localUrls.length > 0
     ? await prisma.imageMap.findMany({
         where: {
+          deletedAt: null,
           localUrl: { in: localUrls },
         },
         select: {
@@ -509,6 +522,9 @@ export async function toGalleryResponse(gallery: GalleryInput, storageStrategy?:
     copyright: gallery.copyright || null,
     published: gallery.published,
     publishedAt: gallery.publishedAt ? gallery.publishedAt.toISOString() : null,
+    isDeleted: Boolean(gallery.deletedAt),
+    deletedAt: gallery.deletedAt ? gallery.deletedAt.toISOString() : null,
+    deletedBy: gallery.deletedBy ?? null,
     createdAt: gallery.createdAt.toISOString(),
     updatedAt: gallery.updatedAt.toISOString(),
     images: gallery.images
@@ -558,6 +574,7 @@ export async function toGalleryListResponse(galleries: GalleryInput[], storageSt
   const imageMaps = allLocalUrls.length > 0
     ? await prisma.imageMap.findMany({
         where: {
+          deletedAt: null,
           localUrl: { in: allLocalUrls },
         },
         select: {
@@ -584,6 +601,9 @@ export async function toGalleryListResponse(galleries: GalleryInput[], storageSt
     copyright: gallery.copyright || null,
     published: gallery.published,
     publishedAt: gallery.publishedAt ? gallery.publishedAt.toISOString() : null,
+    isDeleted: Boolean(gallery.deletedAt),
+    deletedAt: gallery.deletedAt ? gallery.deletedAt.toISOString() : null,
+    deletedBy: gallery.deletedBy ?? null,
     createdAt: gallery.createdAt.toISOString(),
     updatedAt: gallery.updatedAt.toISOString(),
     images: gallery.images
@@ -621,6 +641,8 @@ export function toMusicResponse(track: {
   manualAlbumName?: string | null;
   defaultCoverSource?: string | null;
   addedBy?: string | null;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -645,6 +667,9 @@ export function toMusicResponse(track: {
     displayAlbumMode: track.displayAlbumMode,
     manualAlbumName: track.manualAlbumName || null,
     addedBy: track.addedBy || null,
+    isDeleted: Boolean(track.deletedAt),
+    deletedAt: track.deletedAt ? track.deletedAt.toISOString() : null,
+    deletedBy: track.deletedBy ?? null,
     createdAt: track.createdAt.toISOString(),
     updatedAt: track.updatedAt.toISOString(),
   };
@@ -678,11 +703,16 @@ export function toUserResponse(user: {
   level: number;
   signature: string;
   bio: string;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }) {
   return {
     ...user,
+    isDeleted: Boolean(user.deletedAt),
+    deletedAt: user.deletedAt ? user.deletedAt.toISOString() : null,
+    deletedBy: user.deletedBy ?? null,
     bannedAt: user.bannedAt ? user.bannedAt.toISOString() : null,
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
@@ -804,6 +834,8 @@ export function toAlbumResponse(album: {
   platformUrl: string | null;
   tracks: Prisma.JsonValue;
   defaultCoverSource: string | null;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
   createdAt: Date;
   updatedAt: Date;
   covers?: Array<{
@@ -839,6 +871,9 @@ export function toAlbumResponse(album: {
     platformUrl: album.platformUrl,
     tracks: album.tracks || [],
     defaultCoverSource: album.defaultCoverSource,
+    isDeleted: Boolean(album.deletedAt),
+    deletedAt: album.deletedAt ? album.deletedAt.toISOString() : null,
+    deletedBy: album.deletedBy ?? null,
     covers: (album.covers || []).map((cover) => ({
       id: cover.id,
       url: cover.publicUrl,

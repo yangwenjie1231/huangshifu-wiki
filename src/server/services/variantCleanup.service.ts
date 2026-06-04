@@ -193,6 +193,7 @@ export class VariantCleanupService {
           select: {
             id: true,
             localUrl: true,
+            deletedAt: true,
           },
         });
 
@@ -214,6 +215,10 @@ export class VariantCleanupService {
           continue;
         }
 
+        if (imageMap.deletedAt) {
+          continue;
+        }
+
         const isDeletedSourceVariant = await this.isDeletedSourceVariant(imageMap.localUrl);
         if (isDeletedSourceVariant) {
           console.log(`[Cleanup] 🗑️ Found deleted-source variant: ${imageMapId}`);
@@ -225,7 +230,10 @@ export class VariantCleanupService {
             allErrors.push(...result.errors);
             totalFreedBytes += result.totalFreedBytes;
 
-            await prisma.imageMap.delete({ where: { id: imageMapId } });
+            await prisma.imageMap.update({
+              where: { id: imageMapId },
+              data: { deletedAt: new Date(), deletedBy: null },
+            });
           } catch (error) {
             allErrors.push({
               path: imageMapId,
@@ -263,7 +271,7 @@ export class VariantCleanupService {
 
     try {
       const failedImages = await prisma.imageMap.findMany({
-        where: { variantStatus: 'failed' },
+        where: { variantStatus: 'failed', deletedAt: null },
         select: { id: true },
         take: 100,
       });

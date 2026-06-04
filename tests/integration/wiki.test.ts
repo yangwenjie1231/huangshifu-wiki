@@ -995,23 +995,23 @@ describe('Wiki API - 百科接口测试', () => {
 
       expect(response.status).toBe(200)
       expect(response.body).toEqual({ success: true })
-      await expect(
-        prisma.wikiPage.findUnique({ where: { slug: wikiPage.slug } })
-      ).resolves.toBeNull()
+      const deletedPage = await prisma.wikiPage.findUnique({ where: { slug: wikiPage.slug } })
+      expect(deletedPage?.deletedAt).not.toBeNull()
+      expect(deletedPage?.deletedBy).toBe(adminUser.user.uid)
       await expect(
         prisma.favorite.count({ where: { targetType: 'wiki', targetId: wikiPage.slug } })
-      ).resolves.toBe(0)
+      ).resolves.toBe(1)
       await expect(
         prisma.browsingHistory.count({ where: { targetType: 'wiki', targetId: wikiPage.slug } })
-      ).resolves.toBe(0)
+      ).resolves.toBe(1)
       await expect(
         prisma.wikiImageEmbedding.count({ where: { wikiPageSlug: wikiPage.slug } })
-      ).resolves.toBe(0)
+      ).resolves.toBe(1)
       await expect(
         prisma.textEmbeddingChunk.count({
           where: { sourceType: 'wiki', sourceId: wikiPage.slug },
         })
-      ).resolves.toBe(0)
+      ).resolves.toBe(1)
 
       const notification = await prisma.notification.findFirst({
         where: {
@@ -1060,9 +1060,9 @@ describe('Wiki API - 百科接口测试', () => {
         .send({})
 
       expect(response.status).toBe(200)
-      await expect(
-        prisma.wikiPage.findUnique({ where: { slug: wikiPage.slug } })
-      ).resolves.toBeNull()
+      const deletedPage = await prisma.wikiPage.findUnique({ where: { slug: wikiPage.slug } })
+      expect(deletedPage?.deletedAt).not.toBeNull()
+      expect(deletedPage?.deletedBy).toBe(adminUser.user.uid)
       await expect(
         prisma.notification.count({
           where: {

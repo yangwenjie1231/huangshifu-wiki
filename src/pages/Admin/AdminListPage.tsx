@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Trash2, CheckCircle, XCircle, RefreshCw, Book, Music, MessageSquare, Image as ImageIcon, Layers, Megaphone } from 'lucide-react';
+import { Plus, Trash2, CheckCircle, XCircle, RefreshCw, Book, Music, MessageSquare, Image as ImageIcon, Layers, Megaphone, RotateCcw, Ban } from 'lucide-react';
 import { clsx } from 'clsx';
 import { apiDelete, apiGet, apiPost, apiPatch } from '../../lib/apiClient';
 import { formatDateTime } from '../../lib/dateUtils';
@@ -10,12 +10,12 @@ import type { AdminDataItem } from '../../types/entities';
 
 type ListType = 'wiki' | 'music' | 'posts' | 'galleries' | 'sections' | 'announcements';
 
-const configMap: Record<ListType, { title: string; icon: React.ElementType; apiPath: string; deletePath?: (id: string) => string; columns: string[]; hasCreate: boolean }> = {
+const configMap: Record<ListType, { title: string; icon: React.ElementType; apiPath: string; columns: string[]; hasCreate: boolean }> = {
   wiki: { title: '百科管理', icon: Book, apiPath: 'wiki', columns: ['内容详情', '分类', '更新时间', '操作'], hasCreate: false },
   music: { title: '音乐管理', icon: Music, apiPath: 'music', columns: ['内容详情', '状态', '更新时间', '操作'], hasCreate: false },
   posts: { title: '帖子管理', icon: MessageSquare, apiPath: 'posts', columns: ['内容详情', '版块', '更新时间', '操作'], hasCreate: false },
-  galleries: { title: '图集管理', icon: ImageIcon, apiPath: 'galleries', deletePath: (id) => `/api/galleries/${id}`, columns: ['内容详情', '状态', '更新时间', '操作'], hasCreate: false },
-  sections: { title: '版块管理', icon: Layers, apiPath: 'sections', deletePath: (id) => `/api/sections/${id}`, columns: ['名称', '描述', '排序', '操作'], hasCreate: true },
+  galleries: { title: '图集管理', icon: ImageIcon, apiPath: 'galleries', columns: ['内容详情', '状态', '更新时间', '操作'], hasCreate: false },
+  sections: { title: '版块管理', icon: Layers, apiPath: 'sections', columns: ['名称', '描述', '排序', '操作'], hasCreate: true },
   announcements: { title: '公告管理', icon: Megaphone, apiPath: 'announcements', columns: ['内容', '链接', '状态', '操作'], hasCreate: true },
 };
 
@@ -24,13 +24,16 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
   const Icon = cfg.icon;
   const [data, setData] = useState<AdminDataItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showDeleted, setShowDeleted] = useState(false);
   const { show } = useToast();
   const [newItem, setNewItem] = useState<any>({});
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const result = await apiGet<{ data: AdminDataItem[] }>(`/api/admin/${cfg.apiPath}`);
+      const result = await apiGet<{ data: AdminDataItem[] }>(`/api/admin/${cfg.apiPath}`, {
+        includeDeleted: showDeleted ? 'true' : undefined,
+      });
       setData(result.data || []);
     } catch (e) {
       console.error(e);
@@ -42,17 +45,37 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
 
   useEffect(() => {
     fetchData();
-  }, [type]);
+  }, [type, showDeleted]);
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('确定要删除吗？此操作不可撤销。')) return;
+    if (!window.confirm('确定要删除吗？删除后可在回收站恢复。')) return;
     try {
-      const url = cfg.deletePath ? cfg.deletePath(id) : `/api/admin/${cfg.apiPath}/${id}`;
-      await apiDelete(url);
-      setData((prev) => prev.filter((item) => (item.docId || item.id || item.uid) !== id));
+      await apiDelete(`/api/admin/${cfg.apiPath}/${id}`);
+      await fetchData();
       show('已删除', { variant: 'success' });
     } catch (e) {
       show(e instanceof Error ? e.message : '删除失败', { variant: 'error' });
+    }
+  };
+
+  const handleRestore = async (id: string) => {
+    try {
+      await apiPost(`/api/admin/${cfg.apiPath}/${id}/restore`);
+      await fetchData();
+      show('已恢复', { variant: 'success' });
+    } catch (e) {
+      show(e instanceof Error ? e.message : '恢复失败', { variant: 'error' });
+    }
+  };
+
+  const handlePermanentDelete = async (id: string) => {
+    if (!window.confirm('确定要彻底删除吗？此操作不可恢复。')) return;
+    try {
+      await apiDelete(`/api/admin/${cfg.apiPath}/${id}/permanent`);
+      await fetchData();
+      show('已彻底删除', { variant: 'success' });
+    } catch (e) {
+      show(e instanceof Error ? e.message : '彻底删除失败', { variant: 'error' });
     }
   };
 
@@ -95,9 +118,17 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
         <h1 className="text-2xl font-bold text-text-primary tracking-[0.12em] flex items-center gap-2">
           <Icon size={24} className="text-brand-gold" /> {cfg.title}
         </h1>
-        <button onClick={fetchData} className="px-4 py-2 border border-border text-text-secondary hover:text-brand-gold hover:border-brand-gold rounded text-sm transition-all">
-          <RefreshCw size={14} className="inline mr-1" /> 刷新
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowDeleted((value) => !value)}
+            className={clsx('px-4 py-2 border rounded text-sm transition-all', showDeleted ? 'border-brand-gold text-brand-gold' : 'border-border text-text-secondary hover:text-brand-gold hover:border-brand-gold')}
+          >
+            <Ban size={14} className="inline mr-1" /> {showDeleted ? '隐藏已删除' : '显示已删除'}
+          </button>
+          <button onClick={fetchData} className="px-4 py-2 border border-border text-text-secondary hover:text-brand-gold hover:border-brand-gold rounded text-sm transition-all">
+            <RefreshCw size={14} className="inline mr-1" /> 刷新
+          </button>
+        </div>
       </div>
 
       {cfg.hasCreate && (
@@ -147,7 +178,7 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
                 data.map((item) => {
                   const rowId = String(item.docId || item.id || item.uid || '');
                   return (
-                    <tr key={rowId} className="hover:bg-surface-alt transition-colors group">
+                    <tr key={rowId} className={clsx('hover:bg-surface-alt transition-colors group', item.isDeleted && 'opacity-60')}>
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
                           {type === 'galleries' ? (
@@ -158,7 +189,10 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
                             <div className="w-10 h-10 rounded bg-surface-alt flex items-center justify-center text-brand-gold"><Icon size={18} /></div>
                           )}
                           <div>
-                            <p className="text-sm font-medium text-text-primary">{item.title || item.displayName || item.slug || item.name || item.id}</p>
+                            <p className="text-sm font-medium text-text-primary">
+                              {item.title || item.displayName || item.slug || item.name || item.id}
+                              {item.isDeleted && <span className="ml-2 text-[10px] text-red-500">已删除</span>}
+                            </p>
                             <p className="text-xs text-text-muted truncate max-w-xs">{item.content?.slice(0, 60) || item.email || item.description || item.artist || ''}</p>
                           </div>
                         </div>
@@ -182,9 +216,20 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
                               {item.active ? <CheckCircle size={16} /> : <XCircle size={16} />}
                             </button>
                           )}
-                          <button onClick={() => handleDelete(rowId)} className="p-1.5 theme-icon-button-danger hover:bg-surface-alt rounded transition-all" title="删除">
-                            <Trash2 size={16} />
-                          </button>
+                          {item.isDeleted ? (
+                            <>
+                              <button onClick={() => handleRestore(rowId)} className="p-1.5 text-brand-gold hover:bg-surface-alt rounded transition-all" title="恢复">
+                                <RotateCcw size={16} />
+                              </button>
+                              <button onClick={() => handlePermanentDelete(rowId)} className="p-1.5 theme-icon-button-danger hover:bg-surface-alt rounded transition-all" title="彻底删除">
+                                <Trash2 size={16} />
+                              </button>
+                            </>
+                          ) : (
+                            <button onClick={() => handleDelete(rowId)} className="p-1.5 theme-icon-button-danger hover:bg-surface-alt rounded transition-all" title="删除">
+                              <Trash2 size={16} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

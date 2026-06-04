@@ -3,7 +3,7 @@ import { prisma } from '../prisma'
 import { requireAdmin } from '../middleware/auth'
 import { asyncHandler } from '../middleware/asyncHandler'
 import { enhancedCache, CACHE_KEYS, CACHE_TTL_SEC } from '../utils/cache'
-import { ensureTextLimit } from '../utils'
+import { ensureTextLimit, softDeleteData } from '../utils'
 import { CONTENT_LIMITS } from '../../lib/contentLimits'
 import type { AuthenticatedRequest } from '../types'
 
@@ -21,7 +21,7 @@ router.get('/latest', asyncHandler(async (_req, res) => {
   }
 
   const announcement = await prisma.announcement.findFirst({
-    where: { active: true },
+    where: { active: true, deletedAt: null },
     orderBy: { createdAt: 'desc' },
   })
 
@@ -34,6 +34,7 @@ router.get('/latest', asyncHandler(async (_req, res) => {
 
 router.get('/', requireAdmin, asyncHandler(async (_req, res) => {
   const announcements = await prisma.announcement.findMany({
+    where: { deletedAt: null },
     orderBy: { createdAt: 'desc' },
     take: 100,
   })
@@ -100,8 +101,9 @@ router.patch('/:id', requireAdmin, asyncHandler(async (req: AuthenticatedRequest
 }))
 
 router.delete('/:id', requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res) => {
-  await prisma.announcement.delete({
+  await prisma.announcement.update({
     where: { id: req.params.id },
+    data: softDeleteData(req.authUser!.uid),
   })
 
   clearAnnouncementCache()

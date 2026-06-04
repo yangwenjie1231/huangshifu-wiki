@@ -253,6 +253,7 @@ export interface ReviewQueueBucket {
 
 export interface AdminDataItem {
   id?: string;
+  docId?: string;
   uid?: string;
   title?: string;
   slug?: string;
@@ -283,6 +284,9 @@ export interface AdminDataItem {
   targetId?: string;
   action?: string;
   note?: string;
+  isDeleted?: boolean;
+  deletedAt?: string | null;
+  deletedBy?: string | null;
   createdAt?: string;
   updatedAt?: string;
   [key: string]: unknown;

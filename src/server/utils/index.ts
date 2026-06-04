@@ -88,6 +88,15 @@ export {
   canManageWikiPullRequest,
 } from './authorization';
 
+export {
+  SOFT_DELETE_TABS,
+  isSoftDeleteTab,
+  includeDeletedFromQuery,
+  deletedAtFilter,
+  softDeleteData,
+  restoreDeleteData,
+} from './soft-delete';
+
 // === API 响应转换器 ===
 export {
   toWikiResponse,

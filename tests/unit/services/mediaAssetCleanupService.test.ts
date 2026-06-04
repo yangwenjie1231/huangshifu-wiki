@@ -8,6 +8,7 @@ const mockSongCoverCount = vi.fn();
 const mockAlbumCoverCount = vi.fn();
 const mockImageMapFindMany = vi.fn();
 const mockImageMapDelete = vi.fn();
+const mockImageMapUpdate = vi.fn();
 const mockSafeDeleteUploadFileByStorageKey = vi.fn();
 const mockSafeDeleteUploadFileByUrl = vi.fn();
 const mockVariantCleanupByImageMapId = vi.fn();
@@ -31,6 +32,7 @@ vi.mock('../../../src/server/prisma', () => ({
     imageMap: {
       findMany: mockImageMapFindMany,
       delete: mockImageMapDelete,
+      update: mockImageMapUpdate,
     },
   },
 }));
@@ -39,6 +41,7 @@ vi.mock('../../../src/server/utils', () => ({
   buildUploadPublicUrl: (storageKey: string) => `/uploads/${storageKey}`,
   safeDeleteUploadFileByStorageKey: mockSafeDeleteUploadFileByStorageKey,
   safeDeleteUploadFileByUrl: mockSafeDeleteUploadFileByUrl,
+  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 
 vi.mock('../../../src/server/services/variantCleanup.service', () => ({
@@ -64,6 +67,7 @@ beforeEach(() => {
   mockMediaAssetCount.mockResolvedValue(0);
   mockImageMapFindMany.mockResolvedValue([{ id: 'image-map-1', localUrl: '/uploads/galleries/test.jpg' }]);
   mockImageMapDelete.mockResolvedValue({ id: 'image-map-1' });
+  mockImageMapUpdate.mockResolvedValue({ id: 'image-map-1' });
   mockMediaAssetUpdate.mockResolvedValue({ id: 'asset-1', status: 'deleted' });
   mockSafeDeleteUploadFileByStorageKey.mockResolvedValue(undefined);
   mockSafeDeleteUploadFileByUrl.mockResolvedValue(undefined);
@@ -87,7 +91,7 @@ describe('mediaAssetCleanupService', () => {
     expect(mockMediaAssetUpdate).not.toHaveBeenCalled();
   });
 
-  it('资产无人引用时删除本地原图、变体、ImageMap，并标记资产已删除', async () => {
+  it('资产无人引用时删除本地原图和变体，并软删除 ImageMap、标记资产已删除', async () => {
     const { cleanupUnusedMediaAssetById } = await import(
       '../../../src/server/services/mediaAssetCleanupService'
     );
@@ -98,7 +102,10 @@ describe('mediaAssetCleanupService', () => {
     expect(result.markedAssetDeleted).toBe(true);
     expect(mockSafeDeleteUploadFileByStorageKey).toHaveBeenCalledWith('galleries/test.jpg');
     expect(mockVariantCleanupByImageMapId).toHaveBeenCalledWith('image-map-1', 'on_delete');
-    expect(mockImageMapDelete).toHaveBeenCalledWith({ where: { id: 'image-map-1' } });
+    expect(mockImageMapUpdate).toHaveBeenCalledWith({
+      where: { id: 'image-map-1' },
+      data: { deletedAt: expect.any(Date), deletedBy: null },
+    });
     expect(mockMediaAssetUpdate).toHaveBeenCalledWith({
       where: { id: 'asset-1' },
       data: { status: 'deleted' },
@@ -121,7 +128,7 @@ describe('mediaAssetCleanupService', () => {
     expect(result.skippedReason).toBe('processing');
     expect(mockSafeDeleteUploadFileByStorageKey).toHaveBeenCalledWith('galleries/test.jpg');
     expect(mockVariantCleanupByImageMapId).toHaveBeenCalledWith('image-map-1', 'on_delete');
-    expect(mockImageMapDelete).not.toHaveBeenCalled();
+    expect(mockImageMapUpdate).not.toHaveBeenCalled();
     expect(mockMediaAssetUpdate).toHaveBeenCalledWith({
       where: { id: 'asset-1' },
       data: { status: 'deleted' },

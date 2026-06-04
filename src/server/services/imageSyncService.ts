@@ -320,8 +320,8 @@ export async function executeSyncTask(taskId: string): Promise<void> {
   try {
     // 获取需要同步的图片
     const whereClause = task.strategy === 's3'
-      ? { s3Url: null as null }
-      : { externalUrl: null as null };
+      ? { s3Url: null as null, deletedAt: null }
+      : { externalUrl: null as null, deletedAt: null };
 
     const imageMaps = await prisma.imageMap.findMany({
       where: whereClause,

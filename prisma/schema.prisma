@@ -150,6 +150,8 @@ model User {
   signature     String         @default("")
   bio           String
   preferences   Json?          @default("{}")
+  deletedAt     DateTime?
+  deletedBy     String?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   posts         Post[]         @relation("UserPosts")
@@ -179,6 +181,7 @@ model User {
 
   @@index([status, createdAt])
   @@index([wechatUnionId])
+  @@index([deletedAt])
 }
 
 model Region {
@@ -209,11 +212,14 @@ model Section {
   name        String
   description String   @default("")
   order       Int      @default(0)
+  deletedAt   DateTime?
+  deletedBy   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   posts       Post[]
 
   @@index([createdAt])
+  @@index([deletedAt])
 }
 
 model Post {
@@ -237,6 +243,8 @@ model Post {
   dislikesCount Int           @default(0)
   commentsCount Int           @default(0)
   isPinned      Boolean       @default(false)
+  deletedAt     DateTime?
+  deletedBy     String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   sectionRef    Section       @relation(fields: [section], references: [id], onDelete: Restrict)
@@ -258,6 +266,7 @@ model Post {
   @@index([createdAt])
   @@index([hotScore, updatedAt])
   @@index([locationCode])
+  @@index([deletedAt])
 }
 
 model PostComment {
@@ -322,6 +331,8 @@ model WikiPage {
   likesCount    Int            @default(0)
   dislikesCount Int            @default(0)
   isPinned      Boolean        @default(false)
+  deletedAt     DateTime?
+  deletedBy     String?
   lastEditorUid String
   mainBranchId  String?
   mergedAt      DateTime?
@@ -341,6 +352,7 @@ model WikiPage {
   @@index([eventDate])
   @@index([mainBranchId])
   @@index([locationCode])
+  @@index([deletedAt])
 }
 
 model PostLike {
@@ -524,10 +536,13 @@ model Announcement {
   content   String
   link      String?
   active    Boolean  @default(true)
+  deletedAt DateTime?
+  deletedBy String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([active, createdAt])
+  @@index([deletedAt])
 }
 
 model Gallery {
@@ -542,6 +557,8 @@ model Gallery {
   copyright  String?
   published  Boolean        @default(false)
   publishedAt DateTime?
+  deletedAt  DateTime?
+  deletedBy  String?
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
   author     User           @relation("UserGalleries", fields: [authorUid], references: [uid], onDelete: Cascade)
@@ -553,6 +570,7 @@ model Gallery {
   @@index([published, updatedAt])
   @@index([authorUid])
   @@index([locationCode])
+  @@index([deletedAt])
 }
 
 model EditLock {
@@ -682,6 +700,8 @@ model Album {
   platformUrl        String?
   tracks             Json?
   defaultCoverSource String?
+  deletedAt          DateTime?
+  deletedBy          String?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   covers             AlbumCover[]
@@ -692,6 +712,7 @@ model Album {
   @@index([title])
   @@index([artist])
   @@index([createdAt])
+  @@index([deletedAt])
 }
 
 model MusicTrack {
@@ -716,6 +737,8 @@ model MusicTrack {
   manualAlbumName    String?
   defaultCoverSource String?
   addedBy   String?
+  deletedAt DateTime?
+  deletedBy String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   adder     User?    @relation("MusicAddedBy", fields: [addedBy], references: [uid], onDelete: SetNull)
@@ -733,6 +756,7 @@ model MusicTrack {
   @@index([baiduId])
   @@index([kuwoId])
   @@index([createdAt])
+  @@index([deletedAt])
 }
 
 model SongCover {
@@ -827,7 +851,11 @@ model ImageMap {
   thumbnailUrl  String?
   variantStatus VariantStatus @default(pending)
   cloudSyncStatus CloudSyncStatus @default(pending)
+  deletedAt     DateTime?
+  deletedBy     String?
   createdAt     DateTime      @default(now())
+
+  @@index([deletedAt])
 }
 
 model SiteConfig {
