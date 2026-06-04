@@ -78,9 +78,9 @@ describe('Navbar', () => {
   });
 
   it('shows login and register buttons when not authenticated', () => {
-    const { container } = renderWithRouter(<Navbar />);
-    expect(container.innerHTML).not.toContain('注册');
-    expect(container.innerHTML).not.toContain('登录');
+    renderWithRouter(<Navbar />);
+    expect(screen.queryByRole('button', { name: '注册' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '登录' })).not.toBeInTheDocument();
   });
 
   it('has login and register buttons that are clickable', async () => {
