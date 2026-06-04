@@ -61,6 +61,7 @@ async function cleanupPostTestData() {
         { title: { startsWith: 'New Test Post ' } },
         { title: { startsWith: 'Admin Direct Publish Test ' } },
         { title: { startsWith: 'Admin Preserve Pending Test ' } },
+        { title: { startsWith: 'Admin Restore Post Test' } },
         { title: { startsWith: 'Long Content Test ' } },
       ],
     },
@@ -1705,6 +1706,52 @@ describe('Posts API - 文章接口测试', () => {
       const response = await request(app).delete(`/api/posts/${post.id}`);
 
       expect(response.status).toBe(401);
+    });
+  });
+
+  describe('POST /api/admin/posts/:id/restore - 恢复文章', () => {
+    it('管理员恢复他人的文章后通知作者', async () => {
+      const post = await createTestPost({
+        title: 'Admin Restore Post Test',
+        authorUid: testUser.user.uid,
+        status: 'published',
+      });
+      await prisma.post.update({
+        where: { id: post.id },
+        data: { deletedAt: new Date(), deletedBy: adminUser.user.uid },
+      });
+
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        adminUser.user.email,
+        adminUser.plainPassword,
+      );
+      const response = await agent
+        .post(`/api/admin/posts/${post.id}/restore`)
+        .set('X-XSRF-TOKEN', xsrfToken);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ success: true });
+      const restoredPost = await prisma.post.findUnique({ where: { id: post.id } });
+      expect(restoredPost?.deletedAt).toBeNull();
+      expect(restoredPost?.deletedBy).toBeNull();
+
+      const notification = await prisma.notification.findFirst({
+        where: {
+          userUid: testUser.user.uid,
+          type: 'review_result',
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(notification).not.toBeNull();
+      const payload = notification!.payload as Record<string, unknown>;
+      expect(payload.action).toBe('restored');
+      expect(payload.approved).toBe(true);
+      expect(payload.targetType).toBe('post');
+      expect(payload.targetId).toBe(post.id);
+      expect(payload.title).toBe(post.title);
+      expect(payload.status).toBe('published');
+      expect(payload.linkable).toBe(true);
+      expect(payload.operatorUid).toBe(adminUser.user.uid);
     });
   });
 

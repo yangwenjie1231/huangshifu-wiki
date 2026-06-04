@@ -2,12 +2,16 @@ import type { NotificationItem } from '../types/entities'
 
 interface ReviewNotificationPayload {
   approved?: boolean
-  action?: 'deleted'
+  action?: 'deleted' | 'restored'
   targetType?: 'wiki' | 'post'
   targetId?: string
   title?: string
   note?: string | null
+  status?: 'draft' | 'pending' | 'published' | 'rejected' | string | null
+  linkable?: boolean
 }
+
+const RESTORED_WIKI_LINKABLE_STATUSES = new Set(['draft', 'pending', 'published'])
 
 type ReplyTarget = { kind: 'post' | 'gallery'; id: string }
 
@@ -40,6 +44,8 @@ export function getNotificationText(notif: NotificationItem) {
       const base =
         payload.action === 'deleted'
           ? `你的${target}已被删除`
+          : payload.action === 'restored'
+            ? `你的${target}已被恢复`
           : payload.approved === true
             ? `已通过你的${target}编辑审核`
             : `已驳回你的${target}编辑审核`
@@ -67,7 +73,17 @@ export function getNotificationLink(notif: NotificationItem) {
     const payload = notif.payload as ReviewNotificationPayload
 
     if (payload.targetType === 'wiki' && typeof payload.targetId === 'string') {
-      if (payload.approved !== true) {
+      if (payload.action === 'restored') {
+        if (typeof payload.linkable === 'boolean') {
+          return payload.linkable ? `/wiki/${payload.targetId}` : null
+        }
+
+        if (!RESTORED_WIKI_LINKABLE_STATUSES.has(String(payload.status || ''))) {
+          return null
+        }
+      }
+
+      if (payload.action !== 'restored' && payload.approved !== true) {
         return null
       }
 

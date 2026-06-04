@@ -236,6 +236,45 @@ function invalidateSoftDeleteCaches(
   }
 }
 
+function canOpenRestoredWikiNotification(
+  status: string,
+  recipientRole: AuthenticatedRequest['authUser']['role'] | undefined
+) {
+  if (status === 'draft' || status === 'pending' || status === 'published') {
+    return true;
+  }
+
+  return status === 'rejected' && isAdminRole(recipientRole);
+}
+
+async function notifyContentRestored(options: {
+  recipientUid: string | null | undefined;
+  operatorUid: string;
+  operatorName?: string | null;
+  targetType: 'wiki' | 'post';
+  targetId: string;
+  title: string;
+  status: string;
+  linkable: boolean;
+  wasDeleted: boolean;
+}) {
+  if (!options.wasDeleted || !options.recipientUid || options.recipientUid === options.operatorUid) {
+    return;
+  }
+
+  await createNotification(options.recipientUid, 'review_result', {
+    approved: true,
+    action: 'restored',
+    targetType: options.targetType,
+    targetId: options.targetId,
+    title: options.title,
+    status: options.status,
+    linkable: options.linkable,
+    operatorUid: options.operatorUid,
+    operatorName: options.operatorName || null,
+  });
+}
+
 async function permanentlyDeleteMusicTrackByDocId(docId: string) {
   const song = await prisma.musicTrack.findUnique({
     where: { docId },
@@ -1760,18 +1799,61 @@ router.post('/:tab/:id/restore', requireAdmin, asyncHandler(async (req: Authenti
     const id = req.params.id;
 
     if (tab === 'wiki') {
-      const page = await prisma.wikiPage.update({
+      const page = await prisma.wikiPage.findUnique({
         where: { id },
-        data: restoreDeleteData,
-        select: { slug: true },
+        select: { slug: true, title: true, status: true, lastEditorUid: true, deletedAt: true },
       });
+      if (!page) {
+        res.status(404).json({ error: '百科不存在' });
+        return;
+      }
+
+      await prisma.wikiPage.update({ where: { id }, data: restoreDeleteData });
       invalidateSoftDeleteCaches(tab, { slug: page.slug });
+      const recipient =
+        !page.deletedAt || page.lastEditorUid === req.authUser!.uid
+          ? null
+          : await prisma.user.findUnique({
+              where: { uid: page.lastEditorUid },
+              select: { role: true },
+            });
+      await notifyContentRestored({
+        recipientUid: page.lastEditorUid,
+        operatorUid: req.authUser!.uid,
+        operatorName: req.authUser!.displayName,
+        targetType: 'wiki',
+        targetId: page.slug,
+        title: page.title,
+        status: page.status,
+        linkable: canOpenRestoredWikiNotification(page.status, recipient?.role),
+        wasDeleted: Boolean(page.deletedAt),
+      });
       res.json({ success: true });
       return;
     }
     if (tab === 'posts') {
+      const post = await prisma.post.findUnique({
+        where: { id },
+        select: { id: true, title: true, status: true, authorUid: true, deletedAt: true },
+      });
+      if (!post) {
+        res.status(404).json({ error: '帖子不存在' });
+        return;
+      }
+
       await prisma.post.update({ where: { id }, data: restoreDeleteData });
       invalidateSoftDeleteCaches(tab);
+      await notifyContentRestored({
+        recipientUid: post.authorUid,
+        operatorUid: req.authUser!.uid,
+        operatorName: req.authUser!.displayName,
+        targetType: 'post',
+        targetId: post.id,
+        title: post.title,
+        status: post.status,
+        linkable: true,
+        wasDeleted: Boolean(post.deletedAt),
+      });
       res.json({ success: true });
       return;
     }

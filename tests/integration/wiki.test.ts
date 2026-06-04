@@ -1074,6 +1074,128 @@ describe('Wiki API - 百科接口测试', () => {
     })
   })
 
+  describe('POST /api/admin/wiki/:id/restore - 恢复 Wiki 页面', () => {
+    it('管理员恢复他人的 Wiki 页面后通知最后编辑者', async () => {
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        adminUser.user.email,
+        adminUser.plainPassword
+      )
+      const wikiPage = await createTestWikiPage({
+        slug: 'test-admin-restore-other',
+        title: 'Admin Restore Other',
+        authorUid: testUser.user.uid,
+        status: 'published',
+      })
+      await prisma.wikiPage.update({
+        where: { id: wikiPage.id },
+        data: { deletedAt: new Date(), deletedBy: adminUser.user.uid },
+      })
+
+      const response = await agent
+        .post(`/api/admin/wiki/${wikiPage.id}/restore`)
+        .set('X-XSRF-TOKEN', xsrfToken)
+
+      expect(response.status).toBe(200)
+      expect(response.body).toEqual({ success: true })
+      const restoredPage = await prisma.wikiPage.findUnique({ where: { id: wikiPage.id } })
+      expect(restoredPage?.deletedAt).toBeNull()
+      expect(restoredPage?.deletedBy).toBeNull()
+
+      const notification = await prisma.notification.findFirst({
+        where: {
+          userUid: testUser.user.uid,
+          type: 'review_result',
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      expect(notification).not.toBeNull()
+      const payload = notification!.payload as Record<string, unknown>
+      expect(payload.action).toBe('restored')
+      expect(payload.approved).toBe(true)
+      expect(payload.targetType).toBe('wiki')
+      expect(payload.targetId).toBe(wikiPage.slug)
+      expect(payload.title).toBe(wikiPage.title)
+      expect(payload.status).toBe(wikiPage.status)
+      expect(payload.linkable).toBe(true)
+      expect(payload.operatorUid).toBe(adminUser.user.uid)
+    })
+
+    it('恢复 rejected Wiki 页面时通知保留状态供前端避免生成不可访问链接', async () => {
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        adminUser.user.email,
+        adminUser.plainPassword
+      )
+      const wikiPage = await createTestWikiPage({
+        slug: 'test-admin-restore-rejected',
+        title: 'Admin Restore Rejected',
+        authorUid: testUser.user.uid,
+        status: 'rejected',
+      })
+      await prisma.wikiPage.update({
+        where: { id: wikiPage.id },
+        data: { deletedAt: new Date(), deletedBy: adminUser.user.uid },
+      })
+
+      const response = await agent
+        .post(`/api/admin/wiki/${wikiPage.id}/restore`)
+        .set('X-XSRF-TOKEN', xsrfToken)
+
+      expect(response.status).toBe(200)
+      const notification = await prisma.notification.findFirst({
+        where: {
+          userUid: testUser.user.uid,
+          type: 'review_result',
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      expect(notification).not.toBeNull()
+      const payload = notification!.payload as Record<string, unknown>
+      expect(payload.action).toBe('restored')
+      expect(payload.targetType).toBe('wiki')
+      expect(payload.targetId).toBe(wikiPage.slug)
+      expect(payload.status).toBe('rejected')
+      expect(payload.linkable).toBe(false)
+    })
+
+    it('恢复 rejected Wiki 页面时管理员收件人仍可通过通知跳转', async () => {
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        adminUser.user.email,
+        adminUser.plainPassword
+      )
+      const recipientAdmin = await createTestUser({ role: 'admin' })
+      const wikiPage = await createTestWikiPage({
+        slug: 'test-admin-restore-rejected-admin-recipient',
+        title: 'Admin Restore Rejected Admin Recipient',
+        authorUid: recipientAdmin.user.uid,
+        status: 'rejected',
+      })
+      await prisma.wikiPage.update({
+        where: { id: wikiPage.id },
+        data: { deletedAt: new Date(), deletedBy: adminUser.user.uid },
+      })
+
+      const response = await agent
+        .post(`/api/admin/wiki/${wikiPage.id}/restore`)
+        .set('X-XSRF-TOKEN', xsrfToken)
+
+      expect(response.status).toBe(200)
+      const notification = await prisma.notification.findFirst({
+        where: {
+          userUid: recipientAdmin.user.uid,
+          type: 'review_result',
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      expect(notification).not.toBeNull()
+      const payload = notification!.payload as Record<string, unknown>
+      expect(payload.action).toBe('restored')
+      expect(payload.targetType).toBe('wiki')
+      expect(payload.targetId).toBe(wikiPage.slug)
+      expect(payload.status).toBe('rejected')
+      expect(payload.linkable).toBe(true)
+    })
+  })
+
   // ============================================================================
   // 边界情况和安全性测试
   // ============================================================================

@@ -56,6 +56,37 @@ describe('getNotificationLink', () => {
     expect(
       getNotificationLink(makeNotification('review_result', { targetType: 'post', targetId: 'p1' }))
     ).toBe('/forum/p1')
+    expect(
+      getNotificationLink(
+        makeNotification('review_result', {
+          targetType: 'wiki',
+          targetId: 'w1',
+          action: 'restored',
+          status: 'published',
+        })
+      )
+    ).toBe('/wiki/w1')
+    expect(
+      getNotificationLink(
+        makeNotification('review_result', {
+          targetType: 'wiki',
+          targetId: 'w1',
+          action: 'restored',
+          status: 'rejected',
+        })
+      )
+    ).toBeNull()
+    expect(
+      getNotificationLink(
+        makeNotification('review_result', {
+          targetType: 'wiki',
+          targetId: 'w1',
+          action: 'restored',
+          status: 'rejected',
+          linkable: true,
+        })
+      )
+    ).toBe('/wiki/w1')
   })
 })
 
@@ -126,5 +157,27 @@ describe('getNotificationText', () => {
         })
       )
     ).toBe('你的百科已被删除：《测试条目》')
+  })
+
+  it('renders restored review_result text', () => {
+    expect(
+      getNotificationText(
+        makeNotification('review_result', {
+          targetType: 'wiki',
+          action: 'restored',
+          title: '测试条目',
+        })
+      )
+    ).toBe('你的百科已被恢复：《测试条目》')
+
+    expect(
+      getNotificationText(
+        makeNotification('review_result', {
+          targetType: 'post',
+          action: 'restored',
+          title: '测试帖子',
+        })
+      )
+    ).toBe('你的帖子已被恢复：《测试帖子》')
   })
 })
