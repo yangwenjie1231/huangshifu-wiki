@@ -32,7 +32,6 @@ import { calculateFileMd5Hex } from '../utils/fileMd5';
 import type { GalleryDetailResponse } from '../types/api';
 import type { GalleryImageItem, GalleryItem } from '../types/entities';
 import { CONTENT_LIMITS } from '../lib/contentLimits';
-import { promptRequiredDeleteReason } from '../lib/deleteReason';
 
 type EditableGalleryImage = GalleryImageItem & {
   clientId: string;
@@ -145,7 +144,10 @@ const GalleryDetail = () => {
   const [replyTo, setReplyTo] = useState<CommentItem | null>(null);
   const [submittingComment, setSubmittingComment] = useState(false);
   const [deletingGallery, setDeletingGallery] = useState(false);
+  const [galleryDeleteReason, setGalleryDeleteReason] = useState('');
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+  const [deleteReasonCommentId, setDeleteReasonCommentId] = useState<string | null>(null);
+  const [commentDeleteReason, setCommentDeleteReason] = useState('');
   const [restoringCommentId, setRestoringCommentId] = useState<string | null>(null);
   const [likingCommentId, setLikingCommentId] = useState<string | null>(null);
   const [showDeletedComments, setShowDeletedComments] = useState(false);
@@ -189,6 +191,12 @@ const GalleryDetail = () => {
 
   useEffect(() => {
     fetchGallery();
+  }, [galleryId]);
+
+  useEffect(() => {
+    setGalleryDeleteReason('');
+    setDeleteReasonCommentId(null);
+    setCommentDeleteReason('');
   }, [galleryId]);
 
   useEffect(() => {
@@ -269,58 +277,91 @@ const GalleryDetail = () => {
         {comment.deletedByName ? ` · ${t('gallery.deletedBy', { name: comment.deletedByName })}` : ''}
       </span>
     ) : null;
-  const renderCommentActions = (comment: CommentItem, size: 'root' | 'reply') => (
-    <div className={clsx('flex flex-wrap items-center gap-3', size === 'reply' ? 'mt-1 text-[10px]' : 'text-[10px]')}>
-      <span className="text-text-muted">{formatDateTime(comment.createdAt)}</span>
-      <button
-        type="button"
-        onClick={() => void handleToggleCommentLike(comment)}
-        disabled={!user || isBanned || likingCommentId === comment.id || comment.isDeleted}
-        className={clsx(
-          'inline-flex items-center gap-1 font-medium disabled:opacity-50 disabled:cursor-not-allowed',
-          comment.likedByMe ? 'text-red-500' : 'text-text-muted hover:text-red-500'
+  const renderCommentActions = (comment: CommentItem, size: 'root' | 'reply') => {
+    const requiresDeleteReason = Boolean(
+      user && isAdmin && comment.authorUid !== user.uid && deleteReasonCommentId === comment.id
+    );
+
+    return (
+      <>
+        <div className={clsx('flex flex-wrap items-center gap-3', size === 'reply' ? 'mt-1 text-[10px]' : 'text-[10px]')}>
+          <span className="text-text-muted">{formatDateTime(comment.createdAt)}</span>
+          <button
+            type="button"
+            onClick={() => void handleToggleCommentLike(comment)}
+            disabled={!user || isBanned || likingCommentId === comment.id || comment.isDeleted}
+            className={clsx(
+              'inline-flex items-center gap-1 font-medium disabled:opacity-50 disabled:cursor-not-allowed',
+              comment.likedByMe ? 'text-red-500' : 'text-text-muted hover:text-red-500'
+            )}
+          >
+            <Heart size={size === 'reply' ? 10 : 12} fill={comment.likedByMe ? 'currentColor' : 'none'} />
+            {comment.likesCount || 0}
+          </button>
+          {canReplyComment(comment) && (
+            <button
+              type="button"
+              onClick={() => {
+                setReplyTo(comment);
+                scrollToCommentForm();
+                focusCommentInput();
+              }}
+              className="font-medium text-brand-gold hover:underline"
+            >
+              {t('gallery.reply')}
+            </button>
+          )}
+          {canDeleteComment(comment) && (
+            <button
+              type="button"
+              onClick={() => void handleDeleteComment(comment)}
+              disabled={deletingCommentId === comment.id}
+              className="font-medium text-text-muted hover:text-red-500 disabled:opacity-50"
+            >
+              <Trash2 size={size === 'reply' ? 11 : 12} className="inline mr-1" />
+              {requiresDeleteReason ? '确认删除' : t('gallery.deleteComment')}
+            </button>
+          )}
+          {requiresDeleteReason && (
+            <button
+              type="button"
+              onClick={() => {
+                setDeleteReasonCommentId(null);
+                setCommentDeleteReason('');
+              }}
+              disabled={deletingCommentId === comment.id}
+              className="font-medium text-text-muted hover:text-brand-gold disabled:opacity-50"
+            >
+              取消
+            </button>
+          )}
+          {isAdmin && showDeletedComments && comment.isDeleted && (
+            <button
+              type="button"
+              onClick={() => void handleRestoreComment(comment)}
+              disabled={restoringCommentId === comment.id}
+              className="font-medium text-brand-gold hover:underline disabled:opacity-50"
+            >
+              {t('gallery.restoreComment')}
+            </button>
+          )}
+          {renderDeletedMeta(comment)}
+        </div>
+        {requiresDeleteReason && (
+          <label className="mt-2 block max-w-xl text-xs font-medium text-text-secondary">
+            删除理由（必填）
+            <textarea
+              value={commentDeleteReason}
+              onChange={(event) => setCommentDeleteReason(event.target.value)}
+              maxLength={CONTENT_LIMITS.gallery.reviewNote}
+              rows={2}
+              className="mt-1 w-full rounded border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-danger"
+            />
+          </label>
         )}
-      >
-        <Heart size={size === 'reply' ? 10 : 12} fill={comment.likedByMe ? 'currentColor' : 'none'} />
-        {comment.likesCount || 0}
-      </button>
-      {canReplyComment(comment) && (
-        <button
-          type="button"
-          onClick={() => {
-            setReplyTo(comment);
-            scrollToCommentForm();
-            focusCommentInput();
-          }}
-          className="font-medium text-brand-gold hover:underline"
-        >
-          {t('gallery.reply')}
-        </button>
-      )}
-      {canDeleteComment(comment) && (
-        <button
-          type="button"
-          onClick={() => void handleDeleteComment(comment)}
-          disabled={deletingCommentId === comment.id}
-          className="font-medium text-text-muted hover:text-red-500 disabled:opacity-50"
-        >
-          <Trash2 size={size === 'reply' ? 11 : 12} className="inline mr-1" />
-          {t('gallery.deleteComment')}
-        </button>
-      )}
-      {isAdmin && showDeletedComments && comment.isDeleted && (
-        <button
-          type="button"
-          onClick={() => void handleRestoreComment(comment)}
-          disabled={restoringCommentId === comment.id}
-          className="font-medium text-brand-gold hover:underline disabled:opacity-50"
-        >
-          {t('gallery.restoreComment')}
-        </button>
-      )}
-      {renderDeletedMeta(comment)}
-    </div>
-  );
+      </>
+    );
+  };
 
   const handleOpenLightbox = (index: number) => {
     setLightboxIndex(index);
@@ -501,7 +542,7 @@ const GalleryDetail = () => {
     if (!isSelfDelete && !isAdmin) return;
     if (!window.confirm(`确定要删除图集《${gallery.title}》吗？删除后可由管理员在回收站恢复。`)) return;
 
-    const reason = isSelfDelete ? null : promptRequiredDeleteReason();
+    const reason = isSelfDelete ? null : galleryDeleteReason.trim();
     if (!isSelfDelete && !reason) {
       show('删除他人图集必须填写删除理由', { variant: 'error' });
       return;
@@ -524,12 +565,18 @@ const GalleryDetail = () => {
     if (!user || deletingCommentId) return;
     const canDeleteComment = comment.authorUid === user.uid || isAdmin;
     if (!canDeleteComment || comment.isDeleted) return;
-    if (!window.confirm(t('gallery.deleteCommentConfirm'))) return;
-    const reason = comment.authorUid === user.uid ? null : promptRequiredDeleteReason();
-    if (comment.authorUid !== user.uid && !reason) {
+    const isSelfDelete = comment.authorUid === user.uid;
+    if (!isSelfDelete && deleteReasonCommentId !== comment.id) {
+      setDeleteReasonCommentId(comment.id);
+      setCommentDeleteReason('');
+      return;
+    }
+    const reason = isSelfDelete ? null : commentDeleteReason.trim();
+    if (!isSelfDelete && !reason) {
       show('删除他人评论必须填写删除理由', { variant: 'error' });
       return;
     }
+    if (!window.confirm(t('gallery.deleteCommentConfirm'))) return;
 
     try {
       setDeletingCommentId(comment.id);
@@ -545,6 +592,10 @@ const GalleryDetail = () => {
       );
       if (replyTo?.id === comment.id) {
         setReplyTo(null);
+      }
+      if (deleteReasonCommentId === comment.id) {
+        setDeleteReasonCommentId(null);
+        setCommentDeleteReason('');
       }
       show(t('gallery.commentDeleted'));
     } catch (error) {
@@ -788,60 +839,74 @@ const GalleryDetail = () => {
             <ArrowLeft size={16} /> {t('gallery.backToList')}
           </Link>
           {canManage && (
-            <div className="flex flex-wrap items-center gap-2">
-              {editing ? (
-                <>
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {editing ? (
+                  <>
+                    <button
+                      onClick={handleSaveMeta}
+                      disabled={saving || uploading}
+                      className="px-4 py-2 text-[0.9375rem] rounded theme-button-primary transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <Save size={16} /> {saving || uploading ? t('gallery.saving') : t('gallery.saveChanges')}
+                    </button>
+                    <button
+                      onClick={handleCancelEdit}
+                      disabled={saving || uploading}
+                      className="px-4 py-2 text-[0.9375rem] rounded theme-button-secondary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {t('gallery.cancelEdit')}
+                    </button>
+                  </>
+                ) : (
                   <button
-                    onClick={handleSaveMeta}
-                    disabled={saving || uploading}
-                    className="px-4 py-2 text-[0.9375rem] rounded theme-button-primary transition-all flex items-center gap-2 disabled:opacity-50"
+                    onClick={handleEnterEditMode}
+                    className="px-4 py-2 text-[0.9375rem] rounded theme-button-secondary transition-all flex items-center gap-2"
                   >
-                    <Save size={16} /> {saving || uploading ? t('gallery.saving') : t('gallery.saveChanges')}
+                    <Save size={16} /> {t('gallery.enterEditMode')}
                   </button>
-                  <button
-                    onClick={handleCancelEdit}
-                    disabled={saving || uploading}
-                    className="px-4 py-2 text-[0.9375rem] rounded theme-button-secondary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {t('gallery.cancelEdit')}
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={handleEnterEditMode}
-                  className="px-4 py-2 text-[0.9375rem] rounded theme-button-secondary transition-all flex items-center gap-2"
-                >
-                  <Save size={16} /> {t('gallery.enterEditMode')}
-                </button>
-              )}
-              <button
-                onClick={handleTogglePublish}
-                disabled={!editing || saving || uploading}
-                className={clsx(
-                  'px-3 py-2 rounded text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5',
-                  (editing ? draft?.published : gallery.published)
-                    ? 'theme-status-success'
-                    : 'theme-status-warning',
                 )}
-              >
-                {(editing ? draft?.published : gallery.published) ? <Eye size={14} /> : <EyeOff size={14} />}
-                {editing ? (draft?.published ? t('gallery.setDraft') : t('gallery.setPublish')) : (gallery.published ? t('gallery.published') : t('gallery.draft'))}
-              </button>
-              <button
-                onClick={handleCopyLink}
-                className="px-4 py-2 text-[0.9375rem] rounded theme-button-secondary transition-all flex items-center gap-2"
-                title={t('gallery.copyInternalLink')}
-              >
-                <Link2 size={16} /> {t('gallery.copyInternalLink')}
-              </button>
-              <button
-                onClick={handleDeleteGallery}
-                disabled={deletingGallery || saving || uploading}
-                className="px-4 py-2 text-[0.9375rem] rounded theme-button-danger transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Trash2 size={16} /> {deletingGallery ? '删除中...' : '删除图集'}
-              </button>
-              <input ref={addImagesInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handleAddImages} />
+                <button
+                  onClick={handleTogglePublish}
+                  disabled={!editing || saving || uploading}
+                  className={clsx(
+                    'px-3 py-2 rounded text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5',
+                    (editing ? draft?.published : gallery.published)
+                      ? 'theme-status-success'
+                      : 'theme-status-warning',
+                  )}
+                >
+                  {(editing ? draft?.published : gallery.published) ? <Eye size={14} /> : <EyeOff size={14} />}
+                  {editing ? (draft?.published ? t('gallery.setDraft') : t('gallery.setPublish')) : (gallery.published ? t('gallery.published') : t('gallery.draft'))}
+                </button>
+                <button
+                  onClick={handleCopyLink}
+                  className="px-4 py-2 text-[0.9375rem] rounded theme-button-secondary transition-all flex items-center gap-2"
+                  title={t('gallery.copyInternalLink')}
+                >
+                  <Link2 size={16} /> {t('gallery.copyInternalLink')}
+                </button>
+                <button
+                  onClick={handleDeleteGallery}
+                  disabled={deletingGallery || saving || uploading}
+                  className="px-4 py-2 text-[0.9375rem] rounded theme-button-danger transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Trash2 size={16} /> {deletingGallery ? '删除中...' : '删除图集'}
+                </button>
+                <input ref={addImagesInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handleAddImages} />
+              </div>
+              {user && isAdmin && gallery.authorUid !== user.uid && (
+                <label className="block w-full max-w-md text-sm font-medium text-text-secondary">
+                  删除理由（必填）
+                  <textarea
+                    value={galleryDeleteReason}
+                    onChange={(event) => setGalleryDeleteReason(event.target.value)}
+                    maxLength={CONTENT_LIMITS.gallery.reviewNote}
+                    rows={3}
+                    className="mt-2 w-full rounded border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-danger"
+                  />
+                </label>
+              )}
             </div>
           )}
         </div>

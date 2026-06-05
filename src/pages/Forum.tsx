@@ -43,7 +43,6 @@ import { submitFormOnModifierEnter } from '../lib/formShortcuts'
 import { markCommentDeleted, restoreComment, updateCommentLike } from '../utils/commentState'
 import { CONTENT_LIMITS } from '../lib/contentLimits'
 import MarkdownRenderer from '../components/MarkdownRenderer'
-import { promptRequiredDeleteReason } from '../lib/deleteReason'
 
 type PostItem = {
   id: string
@@ -377,6 +376,8 @@ const PostDetail = () => {
   const [loading, setLoading] = useState(true)
   const [submittingComment, setSubmittingComment] = useState(false)
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null)
+  const [deleteReasonCommentId, setDeleteReasonCommentId] = useState<string | null>(null)
+  const [commentDeleteReason, setCommentDeleteReason] = useState('')
   const [restoringCommentId, setRestoringCommentId] = useState<string | null>(null)
   const [likingCommentId, setLikingCommentId] = useState<string | null>(null)
   const [showDeletedComments, setShowDeletedComments] = useState(false)
@@ -443,6 +444,11 @@ const PostDetail = () => {
     fetchPost()
   }, [postId, isAdmin, showDeletedComments])
 
+  useEffect(() => {
+    setDeleteReasonCommentId(null)
+    setCommentDeleteReason('')
+  }, [postId])
+
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!postId || !user || !newComment.trim() || submittingComment) return
@@ -481,12 +487,18 @@ const PostDetail = () => {
     if (!user || deletingCommentId) return
     const canDeleteComment = comment.authorUid === user.uid || isAdmin
     if (!canDeleteComment || comment.isDeleted) return
-    if (!window.confirm(t('forum.deleteCommentConfirm'))) return
-    const reason = comment.authorUid === user.uid ? null : promptRequiredDeleteReason()
-    if (comment.authorUid !== user.uid && !reason) {
+    const isSelfDelete = comment.authorUid === user.uid
+    if (!isSelfDelete && deleteReasonCommentId !== comment.id) {
+      setDeleteReasonCommentId(comment.id)
+      setCommentDeleteReason('')
+      return
+    }
+    const reason = isSelfDelete ? null : commentDeleteReason.trim()
+    if (!isSelfDelete && !reason) {
       show('删除他人评论必须填写删除理由', { variant: 'error' })
       return
     }
+    if (!window.confirm(t('forum.deleteCommentConfirm'))) return
 
     try {
       setDeletingCommentId(comment.id)
@@ -502,6 +514,10 @@ const PostDetail = () => {
       )
       if (replyTo?.id === comment.id) {
         setReplyTo(null)
+      }
+      if (deleteReasonCommentId === comment.id) {
+        setDeleteReasonCommentId(null)
+        setCommentDeleteReason('')
       }
       show(t('forum.commentDeleted'))
     } catch (error) {
@@ -601,68 +617,101 @@ const PostDetail = () => {
         {comment.deletedByName ? ` · ${t('forum.deletedBy', { name: comment.deletedByName })}` : ''}
       </span>
     ) : null
-  const renderCommentActions = (comment: CommentItem, size: 'root' | 'reply') => (
-    <div
-      className={clsx(
-        'flex flex-wrap items-center gap-3',
-        size === 'reply' ? 'mt-1 text-[10px]' : 'text-[11px]'
-      )}
-    >
-      <span className="text-text-muted">
-        {formatDate(comment.createdAt, size === 'reply' ? 'MM-dd HH:mm' : 'MM-dd HH:mm')}
-      </span>
-      <button
-        type="button"
-        onClick={() => void handleToggleCommentLike(comment)}
-        disabled={!user || isBanned || likingCommentId === comment.id || comment.isDeleted}
-        className={clsx(
-          'inline-flex items-center gap-1 font-medium disabled:opacity-50 disabled:cursor-not-allowed',
-          comment.likedByMe ? 'text-red-500' : 'text-text-muted hover:text-red-500'
+  const renderCommentActions = (comment: CommentItem, size: 'root' | 'reply') => {
+    const requiresDeleteReason = Boolean(
+      user && isAdmin && comment.authorUid !== user.uid && deleteReasonCommentId === comment.id
+    )
+
+    return (
+      <>
+        <div
+          className={clsx(
+            'flex flex-wrap items-center gap-3',
+            size === 'reply' ? 'mt-1 text-[10px]' : 'text-[11px]'
+          )}
+        >
+          <span className="text-text-muted">
+            {formatDate(comment.createdAt, size === 'reply' ? 'MM-dd HH:mm' : 'MM-dd HH:mm')}
+          </span>
+          <button
+            type="button"
+            onClick={() => void handleToggleCommentLike(comment)}
+            disabled={!user || isBanned || likingCommentId === comment.id || comment.isDeleted}
+            className={clsx(
+              'inline-flex items-center gap-1 font-medium disabled:opacity-50 disabled:cursor-not-allowed',
+              comment.likedByMe ? 'text-red-500' : 'text-text-muted hover:text-red-500'
+            )}
+          >
+            <Heart
+              size={size === 'reply' ? 10 : 12}
+              fill={comment.likedByMe ? 'currentColor' : 'none'}
+            />
+            {comment.likesCount || 0}
+          </button>
+          {canReplyComment(comment) && (
+            <button
+              type="button"
+              onClick={() => {
+                setReplyTo(comment)
+                scrollToCommentForm()
+                focusCommentInput()
+              }}
+              className="font-medium text-brand-gold hover:underline"
+            >
+              {t('forum.reply')}
+            </button>
+          )}
+          {canDeleteComment(comment) && (
+            <button
+              type="button"
+              onClick={() => void handleDeleteComment(comment)}
+              disabled={deletingCommentId === comment.id}
+              className="font-medium text-text-muted hover:text-red-500 disabled:opacity-50"
+            >
+              <Trash2 size={size === 'reply' ? 11 : 12} className="inline mr-1" />
+              {requiresDeleteReason ? '确认删除' : t('forum.deleteComment')}
+            </button>
+          )}
+          {requiresDeleteReason && (
+            <button
+              type="button"
+              onClick={() => {
+                setDeleteReasonCommentId(null)
+                setCommentDeleteReason('')
+              }}
+              disabled={deletingCommentId === comment.id}
+              className="font-medium text-text-muted hover:text-brand-gold disabled:opacity-50"
+            >
+              取消
+            </button>
+          )}
+          {isAdmin && showDeletedComments && comment.isDeleted && (
+            <button
+              type="button"
+              onClick={() => void handleRestoreComment(comment)}
+              disabled={restoringCommentId === comment.id}
+              className="font-medium text-brand-gold hover:underline disabled:opacity-50"
+            >
+              {t('forum.restoreComment')}
+            </button>
+          )}
+          {renderDeletedMeta(comment)}
+        </div>
+        {requiresDeleteReason && (
+          <label className="mt-2 block max-w-xl text-xs font-medium text-text-secondary">
+            删除理由（必填）
+            <textarea
+              value={commentDeleteReason}
+              onChange={(event) => setCommentDeleteReason(event.target.value)}
+              maxLength={CONTENT_LIMITS.post.reviewNote}
+              rows={2}
+              className="mt-1 w-full rounded border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-danger"
+            />
+          </label>
         )}
-      >
-        <Heart
-          size={size === 'reply' ? 10 : 12}
-          fill={comment.likedByMe ? 'currentColor' : 'none'}
-        />
-        {comment.likesCount || 0}
-      </button>
-      {canReplyComment(comment) && (
-        <button
-          type="button"
-          onClick={() => {
-            setReplyTo(comment)
-            scrollToCommentForm()
-            focusCommentInput()
-          }}
-          className="font-medium text-brand-gold hover:underline"
-        >
-          {t('forum.reply')}
-        </button>
-      )}
-      {canDeleteComment(comment) && (
-        <button
-          type="button"
-          onClick={() => void handleDeleteComment(comment)}
-          disabled={deletingCommentId === comment.id}
-          className="font-medium text-text-muted hover:text-red-500 disabled:opacity-50"
-        >
-          <Trash2 size={size === 'reply' ? 11 : 12} className="inline mr-1" />
-          {t('forum.deleteComment')}
-        </button>
-      )}
-      {isAdmin && showDeletedComments && comment.isDeleted && (
-        <button
-          type="button"
-          onClick={() => void handleRestoreComment(comment)}
-          disabled={restoringCommentId === comment.id}
-          className="font-medium text-brand-gold hover:underline disabled:opacity-50"
-        >
-          {t('forum.restoreComment')}
-        </button>
-      )}
-      {renderDeletedMeta(comment)}
-    </div>
-  )
+      </>
+    )
+  }
 
   const handleSubmitReview = async () => {
     if (!post || !postId || !canSubmitReview || submittingReview) return
@@ -1102,6 +1151,7 @@ const PostEditor = () => {
   const [savingMode, setSavingMode] = useState<'draft' | 'pending' | null>(null)
   const [loadingPost, setLoadingPost] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteReason, setDeleteReason] = useState('')
   const [editablePostAuthorUid, setEditablePostAuthorUid] = useState<string | null>(null)
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
   const { show } = useToast()
@@ -1172,6 +1222,10 @@ const PostEditor = () => {
 
     fetchEditingPost()
   }, [authLoading, isAdmin, isEditing, navigate, postId, show, user])
+
+  useEffect(() => {
+    setDeleteReason('')
+  }, [postId, editablePostAuthorUid])
 
   const handleSubmit = async (status: 'draft' | 'pending') => {
     if (!user) return
@@ -1246,7 +1300,7 @@ const PostEditor = () => {
       return
     }
     const isSelfDelete = editablePostAuthorUid === user.uid
-    const reason = isSelfDelete ? null : promptRequiredDeleteReason()
+    const reason = isSelfDelete ? null : deleteReason.trim()
     if (!isSelfDelete && !reason) {
       show('删除他人帖子必须填写删除理由', { variant: 'error' })
       return
@@ -1454,6 +1508,22 @@ const PostEditor = () => {
                 {t('forum.deleteZoneTitle')}
               </h2>
               <p className="mt-2 text-sm text-text-muted">{t('forum.deleteZoneDescription')}</p>
+              {editablePostAuthorUid !== user?.uid && (
+                <label
+                  htmlFor="post-delete-reason"
+                  className="mt-4 block text-sm font-medium text-text-secondary"
+                >
+                  {t('forum.deleteReasonLabel')}
+                  <textarea
+                    id="post-delete-reason"
+                    value={deleteReason}
+                    onChange={(event) => setDeleteReason(event.target.value)}
+                    maxLength={CONTENT_LIMITS.post.reviewNote}
+                    rows={3}
+                    className="mt-2 w-full rounded border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-danger"
+                  />
+                </label>
+              )}
               <button
                 type="button"
                 onClick={handleDelete}
