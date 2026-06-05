@@ -228,7 +228,7 @@ export function parseBrowsingTargetType(value: unknown): BrowsingTargetType | nu
 }
 
 export function parseModerationTargetType(value: unknown): ModerationTargetType | null {
-  if (value === 'wiki' || value === 'post') {
+  if (value === 'wiki' || value === 'post' || value === 'gallery' || value === 'comment') {
     return value;
   }
   return null;
@@ -237,6 +237,12 @@ export function parseModerationTargetType(value: unknown): ModerationTargetType 
 export function normalizeModerationTargetType(value: unknown): ModerationTargetType | null {
   if (value === 'posts') {
     return 'post';
+  }
+  if (value === 'galleries') {
+    return 'gallery';
+  }
+  if (value === 'comments') {
+    return 'comment';
   }
   return parseModerationTargetType(value);
 }

@@ -3,7 +3,7 @@ import type { NotificationItem } from '../types/entities'
 interface ReviewNotificationPayload {
   approved?: boolean
   action?: 'deleted' | 'restored'
-  targetType?: 'wiki' | 'post'
+  targetType?: 'wiki' | 'post' | 'gallery'
   targetId?: string
   title?: string
   note?: string | null
@@ -49,7 +49,13 @@ export function getNotificationText(notif: NotificationItem) {
     case 'review_result': {
       const payload = notif.payload as ReviewNotificationPayload
       const target =
-        payload.targetType === 'wiki' ? '百科' : payload.targetType === 'post' ? '帖子' : '内容'
+        payload.targetType === 'wiki'
+          ? '百科'
+          : payload.targetType === 'post'
+            ? '帖子'
+            : payload.targetType === 'gallery'
+              ? '图集'
+              : '内容'
       const title =
         typeof payload.title === 'string' && payload.title.trim() ? `《${payload.title}》` : ''
       const base =
@@ -111,6 +117,14 @@ export function getNotificationLink(notif: NotificationItem) {
       }
 
       return `/forum/${payload.targetId}`
+    }
+
+    if (payload.targetType === 'gallery' && typeof payload.targetId === 'string') {
+      if (payload.action === 'deleted') {
+        return null
+      }
+
+      return `/gallery/${payload.targetId}`
     }
   }
 

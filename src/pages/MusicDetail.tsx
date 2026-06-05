@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Clock, ExternalLink, Heart, Link2, MessageSquare, Play, ChevronDown, ChevronUp, Music as MusicIcon } from 'lucide-react';
+import { ArrowLeft, Clock, ExternalLink, Heart, Link2, MessageSquare, Play, ChevronDown, ChevronUp, Music as MusicIcon, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 
-import { apiGet } from '../lib/apiClient';
+import { apiDelete, apiGet } from '../lib/apiClient';
 import { useAuth } from '../context/AuthContext';
 import { useMusic } from '../context/MusicContext';
 import { useToast } from '../components/Toast';
@@ -79,6 +79,7 @@ const MusicDetail = () => {
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [customPlatforms, setCustomPlatforms] = useState<CustomPlatformConfig[]>([]);
   const [descExpanded, setDescExpanded] = useState(false);
   const [lyricsExpanded, setLyricsExpanded] = useState(false);
@@ -157,6 +158,23 @@ const MusicDetail = () => {
       setTimeout(() => setLyricsCopied(false), 2000);
     } catch {
       show('复制失败，请手动复制', { variant: 'error' });
+    }
+  };
+
+  const handleDeleteSong = async () => {
+    if (!song?.docId || isDeleting) return;
+    if (!window.confirm(`确定要删除歌曲《${song.title}》吗？删除后可在回收站恢复。`)) return;
+
+    try {
+      setIsDeleting(true);
+      await apiDelete(`/api/music/${song.docId}`);
+      show('歌曲已删除');
+      navigate('/music');
+    } catch (error) {
+      console.error('Delete song failed:', error);
+      show(error instanceof Error ? error.message : '删除歌曲失败', { variant: 'error' });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -416,6 +434,13 @@ const MusicDetail = () => {
                     className="px-5 py-2 border border-border text-sm text-text-secondary hover:text-brand-gold hover:border-brand-gold rounded transition-all"
                   >
                     编辑歌曲
+                  </button>
+                  <button
+                    onClick={handleDeleteSong}
+                    disabled={isDeleting}
+                    className="inline-flex items-center gap-2 px-5 py-2 theme-button-danger rounded text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 size={15} /> {isDeleting ? '删除中...' : '删除歌曲'}
                   </button>
                   <CoverManager
                     resourceType="song"

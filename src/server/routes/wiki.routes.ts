@@ -1446,7 +1446,14 @@ router.delete(
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     try {
       const slug = req.params.slug
-      const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() || null : null
+      const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : ''
+      if (!reason) {
+        res.status(400).json({ error: '删除理由不能为空' })
+        return
+      }
+      if (!ensureTextLimit(res, reason, '删除理由', CONTENT_LIMITS.wiki.reviewNote)) {
+        return
+      }
 
       const page = await prisma.wikiPage.findUnique({
         where: { slug },

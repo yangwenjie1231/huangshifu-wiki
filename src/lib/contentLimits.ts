@@ -46,6 +46,7 @@ export const CONTENT_LIMITS = {
     locationCode: 64,
     locationDetail: 200,
     copyright: 200,
+    reviewNote: 1000,
     imageName: 255,
     imageUrl: 2048,
   },

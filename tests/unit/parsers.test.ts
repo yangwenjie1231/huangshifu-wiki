@@ -496,25 +496,31 @@ describe('parsers', () => {
     it('returns valid types', () => {
       expect(parseModerationTargetType('wiki')).toBe('wiki');
       expect(parseModerationTargetType('post')).toBe('post');
+      expect(parseModerationTargetType('gallery')).toBe('gallery');
+      expect(parseModerationTargetType('comment')).toBe('comment');
     });
 
     it('returns null for invalid types', () => {
-      expect(parseModerationTargetType('comment')).toBeNull();
+      expect(parseModerationTargetType('music')).toBeNull();
     });
   });
 
   describe('normalizeModerationTargetType', () => {
     it('normalizes posts to post', () => {
       expect(normalizeModerationTargetType('posts')).toBe('post');
+      expect(normalizeModerationTargetType('galleries')).toBe('gallery');
+      expect(normalizeModerationTargetType('comments')).toBe('comment');
     });
 
     it('passes through valid types', () => {
       expect(normalizeModerationTargetType('wiki')).toBe('wiki');
       expect(normalizeModerationTargetType('post')).toBe('post');
+      expect(normalizeModerationTargetType('gallery')).toBe('gallery');
+      expect(normalizeModerationTargetType('comment')).toBe('comment');
     });
 
     it('returns null for invalid types', () => {
-      expect(normalizeModerationTargetType('comment')).toBeNull();
+      expect(normalizeModerationTargetType('music')).toBeNull();
     });
   });
 

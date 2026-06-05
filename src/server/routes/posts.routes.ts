@@ -28,8 +28,11 @@ import {
   createCommentLike,
   deleteCommentLike,
   softDeleteData,
+  resolveDeleteReason,
+  ensureTextLimit,
 } from '../utils';
 import type { AuthenticatedRequest, ContentStatus } from '../types';
+import { CONTENT_LIMITS } from '../../lib/contentLimits';
 
 const router = Router();
 const MUSIC_SECTION_ID = 'music';
@@ -498,7 +501,6 @@ router.delete(
   validateBody(postDeleteSchema),
   async (req: AuthenticatedRequest, res) => {
     try {
-      const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() || null : null;
       const post = await prisma.post.findUnique({
         where: { id: req.params.id },
         select: { authorUid: true, title: true, status: true, deletedAt: true },
@@ -513,6 +515,15 @@ router.delete(
       const isAdmin = isAdminRole(req.authUser!.role);
       if (!isOwner && !isAdmin) {
         res.status(403).json({ error: '无权删除该帖子' });
+        return;
+      }
+
+      const reason = resolveDeleteReason(req.body?.reason, isOwner);
+      if (!isOwner && !reason) {
+        res.status(400).json({ error: '删除理由不能为空' });
+        return;
+      }
+      if (!ensureTextLimit(res, reason, '删除理由', CONTENT_LIMITS.post.reviewNote)) {
         return;
       }
 
@@ -707,13 +718,34 @@ router.delete('/comments/:id', requireAuth, requireActiveUser, async (req: Authe
       return;
     }
 
+    const reason = resolveDeleteReason(req.body?.reason, isOwner);
+    if (!isOwner && !reason) {
+      res.status(400).json({ error: '删除理由不能为空' });
+      return;
+    }
+    if (!ensureTextLimit(res, reason, '删除理由', CONTENT_LIMITS.post.reviewNote)) {
+      return;
+    }
+
     if (!comment.deletedAt) {
-      await prisma.postComment.update({
-        where: { id: req.params.id },
-        data: {
-          deletedAt: new Date(),
-          deletedBy: req.authUser!.uid,
-        },
+      await prisma.$transaction(async (tx) => {
+        await tx.postComment.update({
+          where: { id: req.params.id },
+          data: {
+            deletedAt: new Date(),
+            deletedBy: req.authUser!.uid,
+          },
+        });
+
+        await tx.moderationLog.create({
+          data: {
+            targetType: 'comment',
+            targetId: req.params.id,
+            action: 'delete',
+            operatorUid: req.authUser!.uid,
+            note: reason,
+          },
+        });
       });
     }
 

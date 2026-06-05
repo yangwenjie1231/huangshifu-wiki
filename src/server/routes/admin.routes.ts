@@ -35,6 +35,8 @@ import {
   deletedAtFilter,
   softDeleteData,
   restoreDeleteData,
+  resolveDeleteReason,
+  normalizeDeleteReason,
   enhancedCache,
   CACHE_KEYS,
 } from '../utils';
@@ -79,7 +81,7 @@ function isString(value: string | null): value is string {
   return typeof value === 'string';
 }
 
-async function getDeleteReasonsByTargetId(targetType: 'wiki' | 'post', targetIds: string[]) {
+async function getDeleteReasonsByTargetId(targetType: 'wiki' | 'post' | 'gallery' | 'comment', targetIds: string[]) {
   const uniqueTargetIds = [...new Set(targetIds.filter(Boolean))];
   if (uniqueTargetIds.length === 0) return new Map<string, string | null>();
 
@@ -305,10 +307,10 @@ async function notifyContentDeleted(options: {
   recipientUid: string | null | undefined;
   operatorUid: string;
   operatorName?: string | null;
-  targetType: 'wiki' | 'post';
+  targetType: 'wiki' | 'post' | 'gallery';
   targetId: string;
   title: string;
-  note: string | null;
+  note: string;
 }) {
   if (!options.recipientUid || options.recipientUid === options.operatorUid) {
     return;
@@ -458,6 +460,10 @@ async function handleReviewAction(
   return { item: action === 'approve' ? { ...toPostResponse(post), sensitiveWords: containsSensitive(post.content || '') } : toPostResponse(post), targetType };
 }
 
+function isReviewTargetType(value: unknown): value is 'wiki' | 'post' {
+  return value === 'wiki' || value === 'post';
+}
+
 /**
  * ====================
  * Review Queue Routes
@@ -508,7 +514,7 @@ router.put('/review-queue/:id/approve', requireAdmin, asyncHandler(async (req: A
       return;
     }
 
-    if (!targetType) {
+    if (!isReviewTargetType(targetType)) {
       res.status(400).json({ error: '无效审核类型' });
       return;
     }
@@ -532,7 +538,7 @@ router.put('/review-queue/:id/reject', requireAdmin, asyncHandler(async (req: Au
       return;
     }
 
-    if (!targetType) {
+    if (!isReviewTargetType(targetType)) {
       res.status(400).json({ error: '无效审核类型' });
       return;
     }
@@ -561,7 +567,7 @@ router.post('/review/:type/:id/:action', requireAdmin, asyncHandler(async (req: 
     }
 
     const targetType = normalizeModerationTargetType(type);
-    if (!targetType) {
+    if (!isReviewTargetType(targetType)) {
       res.status(400).json({ error: '无效的类型' });
       return;
     }
@@ -857,9 +863,39 @@ router.post('/batch-delete-posts', requireAdmin, asyncHandler(async (req: Authen
       return;
     }
 
-    const result = await prisma.post.updateMany({
+    const posts = await prisma.post.findMany({
       where: { id: { in: postIds }, deletedAt: null },
-      data: softDeleteData(req.authUser!.uid),
+      select: { id: true, authorUid: true },
+    });
+    const hasOtherPeopleContent = posts.some((post) => post.authorUid !== req.authUser!.uid);
+    const reason = resolveDeleteReason(req.body?.reason, !hasOtherPeopleContent);
+    if (hasOtherPeopleContent && !reason) {
+      res.status(400).json({ error: '删除理由不能为空' });
+      return;
+    }
+    if (!ensureTextLimit(res, reason, '删除理由', CONTENT_LIMITS.post.reviewNote)) {
+      return;
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      let deleted = 0;
+      for (const post of posts) {
+        await tx.post.update({
+          where: { id: post.id },
+          data: softDeleteData(req.authUser!.uid),
+        });
+        await tx.moderationLog.create({
+          data: {
+            targetType: 'post',
+            targetId: post.id,
+            action: 'delete',
+            operatorUid: req.authUser!.uid,
+            note: post.authorUid === req.authUser!.uid ? resolveDeleteReason(null, true) : reason,
+          },
+        });
+        deleted++;
+      }
+      return { count: deleted };
     });
 
     res.json({ deleted: result.count });
@@ -878,20 +914,40 @@ router.post('/batch-delete-galleries', requireAdmin, asyncHandler(async (req: Au
       return;
     }
 
-    let deleted = 0;
-    for (const galleryId of galleryIds) {
-      const gallery = await prisma.gallery.findUnique({
-        where: { id: galleryId },
-        include: { images: true },
-      });
-      if (!gallery || gallery.deletedAt) continue;
-
-      await prisma.gallery.update({
-        where: { id: galleryId },
-        data: softDeleteData(req.authUser!.uid),
-      });
-      deleted++;
+    const galleries = await prisma.gallery.findMany({
+      where: { id: { in: galleryIds }, deletedAt: null },
+      select: { id: true, authorUid: true },
+    });
+    const hasOtherPeopleContent = galleries.some((gallery) => gallery.authorUid !== req.authUser!.uid);
+    const reason = resolveDeleteReason(req.body?.reason, !hasOtherPeopleContent);
+    if (hasOtherPeopleContent && !reason) {
+      res.status(400).json({ error: '删除理由不能为空' });
+      return;
     }
+    if (!ensureTextLimit(res, reason, '删除理由', CONTENT_LIMITS.gallery.reviewNote)) {
+      return;
+    }
+
+    const deleted = await prisma.$transaction(async (tx) => {
+      let count = 0;
+      for (const gallery of galleries) {
+        await tx.gallery.update({
+          where: { id: gallery.id },
+          data: softDeleteData(req.authUser!.uid),
+        });
+        await tx.moderationLog.create({
+          data: {
+            targetType: 'gallery',
+            targetId: gallery.id,
+            action: 'delete',
+            operatorUid: req.authUser!.uid,
+            note: gallery.authorUid === req.authUser!.uid ? resolveDeleteReason(null, true) : reason,
+          },
+        });
+        count++;
+      }
+      return count;
+    });
 
     res.json({ deleted });
   } catch (error) {
@@ -909,15 +965,42 @@ router.post('/batch-delete-comments', requireAdmin, asyncHandler(async (req: Aut
       return;
     }
 
-    const result = await prisma.postComment.updateMany({
-      where: {
-        id: { in: commentIds },
-        deletedAt: null,
-      },
-      data: {
-        deletedAt: new Date(),
-        deletedBy: req.authUser!.uid,
-      },
+    const comments = await prisma.postComment.findMany({
+      where: { id: { in: commentIds }, deletedAt: null },
+      select: { id: true, authorUid: true },
+    });
+    const hasOtherPeopleContent = comments.some((comment) => comment.authorUid !== req.authUser!.uid);
+    const reason = resolveDeleteReason(req.body?.reason, !hasOtherPeopleContent);
+    if (hasOtherPeopleContent && !reason) {
+      res.status(400).json({ error: '删除理由不能为空' });
+      return;
+    }
+    if (!ensureTextLimit(res, reason, '删除理由', CONTENT_LIMITS.post.reviewNote)) {
+      return;
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      let deleted = 0;
+      for (const comment of comments) {
+        await tx.postComment.update({
+          where: { id: comment.id },
+          data: {
+            deletedAt: new Date(),
+            deletedBy: req.authUser!.uid,
+          },
+        });
+        await tx.moderationLog.create({
+          data: {
+            targetType: 'comment',
+            targetId: comment.id,
+            action: 'delete',
+            operatorUid: req.authUser!.uid,
+            note: comment.authorUid === req.authUser!.uid ? resolveDeleteReason(null, true) : reason,
+          },
+        });
+        deleted++;
+      }
+      return { count: deleted };
     });
 
     res.json({ deleted: result.count });
@@ -1581,7 +1664,17 @@ router.get('/:tab', requireAdmin, asyncHandler(async (req: AuthenticatedRequest,
         orderBy: { updatedAt: 'desc' },
         take: 100,
       });
-      res.json({ data: await Promise.all(data.map(g => toGalleryResponse(g))) });
+      const deleteReasonsById = await getDeleteReasonsByTargetId(
+        'gallery',
+        data.filter((gallery) => gallery.deletedAt).map((gallery) => gallery.id),
+      );
+      const serialized = await Promise.all(data.map(g => toGalleryResponse(g)));
+      res.json({
+        data: serialized.map((gallery) => ({
+          ...gallery,
+          deletionReason: deleteReasonsById.get(gallery.id) ?? null,
+        })),
+      });
       return;
     }
 
@@ -1769,10 +1862,15 @@ router.delete('/:tab/:id', requireAdmin, asyncHandler(async (req: AuthenticatedR
   try {
     const tab = req.params.tab;
     const id = req.params.id;
-    const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() || null : null;
+    const rawReason = req.body?.reason;
 
     if (tab === 'wiki') {
-      if (!ensureTextLimit(res, reason || '', '删除理由', CONTENT_LIMITS.wiki.reviewNote)) {
+      const reason = normalizeDeleteReason(rawReason);
+      if (!reason) {
+        res.status(400).json({ error: '删除理由不能为空' });
+        return;
+      }
+      if (!ensureTextLimit(res, reason, '删除理由', CONTENT_LIMITS.wiki.reviewNote)) {
         return;
       }
 
@@ -1817,16 +1915,22 @@ router.delete('/:tab/:id', requireAdmin, asyncHandler(async (req: AuthenticatedR
       return;
     }
     if (tab === 'posts') {
-      if (!ensureTextLimit(res, reason || '', '删除理由', CONTENT_LIMITS.post.reviewNote)) {
-        return;
-      }
-
       const post = await prisma.post.findUnique({
         where: { id },
         select: { title: true, authorUid: true, deletedAt: true },
       });
       if (!post || post.deletedAt) {
         res.status(404).json({ error: '帖子不存在' });
+        return;
+      }
+
+      const isSelfDelete = post.authorUid === req.authUser!.uid;
+      const reason = resolveDeleteReason(rawReason, isSelfDelete);
+      if (!isSelfDelete && !reason) {
+        res.status(400).json({ error: '删除理由不能为空' });
+        return;
+      }
+      if (!ensureTextLimit(res, reason, '删除理由', CONTENT_LIMITS.post.reviewNote)) {
         return;
       }
 
@@ -1844,15 +1948,17 @@ router.delete('/:tab/:id', requireAdmin, asyncHandler(async (req: AuthenticatedR
         });
       });
 
-      await notifyContentDeleted({
-        recipientUid: post.authorUid,
-        operatorUid: req.authUser!.uid,
-        operatorName: req.authUser!.displayName,
-        targetType: 'post',
-        targetId: id,
-        title: post.title,
-        note: reason,
-      });
+      if (!isSelfDelete) {
+        await notifyContentDeleted({
+          recipientUid: post.authorUid,
+          operatorUid: req.authUser!.uid,
+          operatorName: req.authUser!.displayName,
+          targetType: 'post',
+          targetId: id,
+          title: post.title,
+          note: reason,
+        });
+      }
 
       invalidateSoftDeleteCaches(tab);
       res.json({ success: true });
@@ -1867,7 +1973,43 @@ router.delete('/:tab/:id', requireAdmin, asyncHandler(async (req: AuthenticatedR
         res.status(404).json({ error: '图集不存在' });
         return;
       }
-      await prisma.gallery.update({ where: { id }, data: softDeleteData(req.authUser!.uid) });
+
+      const isSelfDelete = gallery.authorUid === req.authUser!.uid;
+      const reason = resolveDeleteReason(rawReason, isSelfDelete);
+      if (!isSelfDelete && !reason) {
+        res.status(400).json({ error: '删除理由不能为空' });
+        return;
+      }
+      if (!ensureTextLimit(res, reason, '删除理由', CONTENT_LIMITS.gallery.reviewNote)) {
+        return;
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.gallery.update({ where: { id }, data: softDeleteData(req.authUser!.uid) });
+
+        await tx.moderationLog.create({
+          data: {
+            targetType: 'gallery',
+            targetId: id,
+            action: 'delete',
+            operatorUid: req.authUser!.uid,
+            note: reason,
+          },
+        });
+      });
+
+      if (!isSelfDelete) {
+        await notifyContentDeleted({
+          recipientUid: gallery.authorUid,
+          operatorUid: req.authUser!.uid,
+          operatorName: req.authUser!.displayName,
+          targetType: 'gallery',
+          targetId: id,
+          title: gallery.title,
+          note: reason,
+        });
+      }
+
       invalidateSoftDeleteCaches(tab);
       res.json({ success: true });
       return;

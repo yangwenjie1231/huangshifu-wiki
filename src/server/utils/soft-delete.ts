@@ -37,3 +37,14 @@ export const restoreDeleteData = {
   deletedAt: null,
   deletedBy: null,
 } as const
+
+export const SELF_DELETE_REASON = '自行删除'
+
+export function normalizeDeleteReason(input: unknown) {
+  return typeof input === 'string' ? input.trim() : ''
+}
+
+export function resolveDeleteReason(input: unknown, isSelfDelete: boolean) {
+  if (isSelfDelete) return SELF_DELETE_REASON
+  return normalizeDeleteReason(input)
+}

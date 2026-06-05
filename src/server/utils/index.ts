@@ -95,6 +95,9 @@ export {
   deletedAtFilter,
   softDeleteData,
   restoreDeleteData,
+  SELF_DELETE_REASON,
+  normalizeDeleteReason,
+  resolveDeleteReason,
 } from './soft-delete';
 
 // === API 响应转换器 ===

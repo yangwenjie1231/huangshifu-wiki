@@ -43,6 +43,7 @@ import { submitFormOnModifierEnter } from '../lib/formShortcuts'
 import { markCommentDeleted, restoreComment, updateCommentLike } from '../utils/commentState'
 import { CONTENT_LIMITS } from '../lib/contentLimits'
 import MarkdownRenderer from '../components/MarkdownRenderer'
+import { promptRequiredDeleteReason } from '../lib/deleteReason'
 
 type PostItem = {
   id: string
@@ -481,10 +482,15 @@ const PostDetail = () => {
     const canDeleteComment = comment.authorUid === user.uid || isAdmin
     if (!canDeleteComment || comment.isDeleted) return
     if (!window.confirm(t('forum.deleteCommentConfirm'))) return
+    const reason = comment.authorUid === user.uid ? null : promptRequiredDeleteReason()
+    if (comment.authorUid !== user.uid && !reason) {
+      show('删除他人评论必须填写删除理由', { variant: 'error' })
+      return
+    }
 
     try {
       setDeletingCommentId(comment.id)
-      await apiDelete(`/api/posts/comments/${comment.id}`)
+      await apiDelete(`/api/posts/comments/${comment.id}`, reason ? { reason } : {})
       setComments((prev) =>
         markCommentDeleted(prev, {
           commentId: comment.id,
@@ -1096,7 +1102,6 @@ const PostEditor = () => {
   const [savingMode, setSavingMode] = useState<'draft' | 'pending' | null>(null)
   const [loadingPost, setLoadingPost] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [deleteReason, setDeleteReason] = useState('')
   const [editablePostAuthorUid, setEditablePostAuthorUid] = useState<string | null>(null)
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
   const { show } = useToast()
@@ -1240,10 +1245,15 @@ const PostEditor = () => {
     if (!window.confirm(t('forum.deletePostConfirm', { title: formData.title || postId }))) {
       return
     }
+    const isSelfDelete = editablePostAuthorUid === user.uid
+    const reason = isSelfDelete ? null : promptRequiredDeleteReason()
+    if (!isSelfDelete && !reason) {
+      show('删除他人帖子必须填写删除理由', { variant: 'error' })
+      return
+    }
 
     setIsDeleting(true)
     try {
-      const reason = deleteReason.trim()
       await apiDelete(`/api/posts/${postId}`, reason ? { reason } : {})
       invalidateApiCacheByPrefix('/api/posts')
       show(t('forum.postDeleted'), { variant: 'success' })
@@ -1444,20 +1454,6 @@ const PostEditor = () => {
                 {t('forum.deleteZoneTitle')}
               </h2>
               <p className="mt-2 text-sm text-text-muted">{t('forum.deleteZoneDescription')}</p>
-              <label
-                htmlFor="post-delete-reason"
-                className="mt-4 block text-sm font-medium text-text-secondary"
-              >
-                {t('forum.deleteReasonLabel')}
-              </label>
-              <textarea
-                id="post-delete-reason"
-                value={deleteReason}
-                onChange={(event) => setDeleteReason(event.target.value)}
-                maxLength={1000}
-                rows={3}
-                className="mt-2 w-full rounded border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-danger"
-              />
               <button
                 type="button"
                 onClick={handleDelete}

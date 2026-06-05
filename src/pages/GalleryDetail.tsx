@@ -32,6 +32,7 @@ import { calculateFileMd5Hex } from '../utils/fileMd5';
 import type { GalleryDetailResponse } from '../types/api';
 import type { GalleryImageItem, GalleryItem } from '../types/entities';
 import { CONTENT_LIMITS } from '../lib/contentLimits';
+import { promptRequiredDeleteReason } from '../lib/deleteReason';
 
 type EditableGalleryImage = GalleryImageItem & {
   clientId: string;
@@ -143,6 +144,7 @@ const GalleryDetail = () => {
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState<CommentItem | null>(null);
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [deletingGallery, setDeletingGallery] = useState(false);
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const [restoringCommentId, setRestoringCommentId] = useState<string | null>(null);
   const [likingCommentId, setLikingCommentId] = useState<string | null>(null);
@@ -493,15 +495,45 @@ const GalleryDetail = () => {
     }
   };
 
+  const handleDeleteGallery = async () => {
+    if (!gallery || !user || deletingGallery) return;
+    const isSelfDelete = gallery.authorUid === user.uid;
+    if (!isSelfDelete && !isAdmin) return;
+    if (!window.confirm(`确定要删除图集《${gallery.title}》吗？删除后可由管理员在回收站恢复。`)) return;
+
+    const reason = isSelfDelete ? null : promptRequiredDeleteReason();
+    if (!isSelfDelete && !reason) {
+      show('删除他人图集必须填写删除理由', { variant: 'error' });
+      return;
+    }
+
+    try {
+      setDeletingGallery(true);
+      await apiDelete(`/api/galleries/${gallery.id}`, reason ? { reason } : {});
+      show('图集已删除');
+      navigate('/gallery');
+    } catch (error) {
+      console.error('Error deleting gallery:', error);
+      show(error instanceof Error ? error.message : '删除图集失败', { variant: 'error' });
+    } finally {
+      setDeletingGallery(false);
+    }
+  };
+
   const handleDeleteComment = async (comment: CommentItem) => {
     if (!user || deletingCommentId) return;
     const canDeleteComment = comment.authorUid === user.uid || isAdmin;
     if (!canDeleteComment || comment.isDeleted) return;
     if (!window.confirm(t('gallery.deleteCommentConfirm'))) return;
+    const reason = comment.authorUid === user.uid ? null : promptRequiredDeleteReason();
+    if (comment.authorUid !== user.uid && !reason) {
+      show('删除他人评论必须填写删除理由', { variant: 'error' });
+      return;
+    }
 
     try {
       setDeletingCommentId(comment.id);
-      await apiDelete(`/api/posts/comments/${comment.id}`);
+      await apiDelete(`/api/posts/comments/${comment.id}`, reason ? { reason } : {});
       setComments((prev) =>
         markCommentDeleted(prev, {
           commentId: comment.id,
@@ -801,6 +833,13 @@ const GalleryDetail = () => {
                 title={t('gallery.copyInternalLink')}
               >
                 <Link2 size={16} /> {t('gallery.copyInternalLink')}
+              </button>
+              <button
+                onClick={handleDeleteGallery}
+                disabled={deletingGallery || saving || uploading}
+                className="px-4 py-2 text-[0.9375rem] rounded theme-button-danger transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Trash2 size={16} /> {deletingGallery ? '删除中...' : '删除图集'}
               </button>
               <input ref={addImagesInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handleAddImages} />
             </div>

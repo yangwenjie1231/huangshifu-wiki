@@ -27,6 +27,8 @@ import {
   GALLERY_ADMIN_ONLY,
   ensureTextLimit,
   softDeleteData,
+  resolveDeleteReason,
+  createNotification,
 } from '../utils'
 import { CONTENT_LIMITS } from '../../lib/contentLimits'
 import { enqueueGalleryImageEmbeddings } from '../vector/embeddingSync'
@@ -1339,7 +1341,7 @@ router.post('/:id/comments', galleryWriteLimiter, requireAuth, requireActiveUser
   }
 }))
 
-router.delete('/:id', requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.delete('/:id', requireAuth, requireActiveUser, asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const gallery = await prisma.gallery.findUnique({
       where: { id: req.params.id },
@@ -1353,10 +1355,51 @@ router.delete('/:id', requireAdmin, asyncHandler(async (req: AuthenticatedReques
       return
     }
 
-    await prisma.gallery.update({
-      where: { id: req.params.id },
-      data: softDeleteData(req.authUser!.uid),
+    const isOwner = gallery.authorUid === req.authUser!.uid
+    const isAdmin = isAdminRole(req.authUser!.role)
+    if (!isOwner && !isAdmin) {
+      res.status(403).json({ error: '无权删除该图集' })
+      return
+    }
+
+    const reason = resolveDeleteReason(req.body?.reason, isOwner)
+    if (!isOwner && !reason) {
+      res.status(400).json({ error: '删除理由不能为空' })
+      return
+    }
+    if (!ensureTextLimit(res, reason, '删除理由', CONTENT_LIMITS.gallery.reviewNote)) {
+      return
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.gallery.update({
+        where: { id: req.params.id },
+        data: softDeleteData(req.authUser!.uid),
+      })
+
+      await tx.moderationLog.create({
+        data: {
+          targetType: 'gallery',
+          targetId: req.params.id,
+          action: 'delete',
+          operatorUid: req.authUser!.uid,
+          note: reason,
+        },
+      })
     })
+
+    if (!isOwner) {
+      await createNotification(gallery.authorUid, 'review_result', {
+        approved: false,
+        action: 'deleted',
+        targetType: 'gallery',
+        targetId: req.params.id,
+        title: gallery.title,
+        note: reason,
+        operatorUid: req.authUser!.uid,
+        operatorName: req.authUser!.displayName,
+      })
+    }
 
     res.json({ success: true })
   } catch (error) {

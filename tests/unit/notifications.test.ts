@@ -59,6 +59,24 @@ describe('getNotificationLink', () => {
     expect(
       getNotificationLink(
         makeNotification('review_result', {
+          targetType: 'gallery',
+          targetId: 'g1',
+          action: 'deleted',
+        })
+      )
+    ).toBeNull()
+    expect(
+      getNotificationLink(
+        makeNotification('review_result', {
+          targetType: 'gallery',
+          targetId: 'g1',
+          action: 'restored',
+        })
+      )
+    ).toBe('/gallery/g1')
+    expect(
+      getNotificationLink(
+        makeNotification('review_result', {
           targetType: 'post',
           targetId: 'p1',
           action: 'deleted',
@@ -228,6 +246,19 @@ describe('getNotificationText', () => {
         })
       )
     ).toBe('你的帖子已被删除：《测试帖子》（原因：违规内容）')
+  })
+
+  it('renders gallery deletion review_result text with optional reason', () => {
+    expect(
+      getNotificationText(
+        makeNotification('review_result', {
+          targetType: 'gallery',
+          action: 'deleted',
+          title: '测试图集',
+          note: '违规图片',
+        })
+      )
+    ).toBe('你的图集已被删除：《测试图集》（原因：违规图片）')
   })
 
   it('renders restored review_result text', () => {

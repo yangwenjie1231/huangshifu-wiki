@@ -1042,7 +1042,7 @@ describe('Wiki API - 百科接口测试', () => {
       expect(moderationLog?.note).toBe('重复内容')
     })
 
-    it('管理员删除自己的 Wiki 页面时不通知自己，空理由保持为空', async () => {
+    it('管理员删除 Wiki 页面时必须提供删除理由', async () => {
       const { agent, xsrfToken } = await createAuthenticatedAgent(
         adminUser.user.email,
         adminUser.plainPassword
@@ -1059,10 +1059,43 @@ describe('Wiki API - 百科接口测试', () => {
         .set('X-XSRF-TOKEN', xsrfToken)
         .send({})
 
+      expect(response.status).toBe(400)
+      expect(response.body.error).toContain('删除理由不能为空')
+      const existingPage = await prisma.wikiPage.findUnique({ where: { slug: wikiPage.slug } })
+      expect(existingPage?.deletedAt).toBeNull()
+    })
+
+    it('管理员删除自己的 Wiki 页面时带理由成功且不通知自己', async () => {
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        adminUser.user.email,
+        adminUser.plainPassword
+      )
+      const wikiPage = await createTestWikiPage({
+        slug: 'test-admin-delete-self-with-reason',
+        title: 'Admin Delete Self With Reason',
+        authorUid: adminUser.user.uid,
+        status: 'published',
+      })
+
+      const response = await agent
+        .delete(`/api/wiki/${wikiPage.slug}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
+        .send({ reason: '管理员删除共建百科' })
+
       expect(response.status).toBe(200)
       const deletedPage = await prisma.wikiPage.findUnique({ where: { slug: wikiPage.slug } })
       expect(deletedPage?.deletedAt).not.toBeNull()
       expect(deletedPage?.deletedBy).toBe(adminUser.user.uid)
+      const moderationLog = await prisma.moderationLog.findFirst({
+        where: {
+          targetType: 'wiki',
+          targetId: wikiPage.slug,
+          action: 'delete',
+          operatorUid: adminUser.user.uid,
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      expect(moderationLog?.note).toBe('管理员删除共建百科')
       await expect(
         prisma.notification.count({
           where: {

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Disc3, Play, Heart, ExternalLink, Link2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Disc3, Play, Heart, ExternalLink, Link2, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 
 import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
@@ -46,6 +46,7 @@ const AlbumDetail = () => {
   const [loading, setLoading] = useState(true);
   const [album, setAlbum] = useState<AlbumResponse['album'] | null>(null);
   const [favoriting, setFavoriting] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
   const [descNeedExpand, setDescNeedExpand] = useState(false);
   const descRef = useRef<HTMLDivElement>(null);
@@ -127,6 +128,23 @@ const AlbumDetail = () => {
       return;
     }
     show('复制链接失败，请稍后重试', { variant: 'error' });
+  };
+
+  const handleDeleteAlbum = async () => {
+    if (!albumId || !album || isDeleting) return;
+    if (!window.confirm(`确定要删除专辑《${album.title}》吗？删除后可在回收站恢复。`)) return;
+
+    try {
+      setIsDeleting(true);
+      await apiDelete(`/api/albums/${albumId}`);
+      show('专辑已删除');
+      navigate('/music');
+    } catch (error) {
+      console.error('Delete album failed:', error);
+      show(error instanceof Error ? error.message : '删除专辑失败', { variant: 'error' });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   if (loading) {
@@ -286,12 +304,21 @@ const AlbumDetail = () => {
               <span className="w-[3px] h-4 bg-brand-gold rounded-[1px] opacity-60 inline-block" />
               管理功能
             </h2>
-            <CoverManager
-              resourceType="album"
-              resourceId={albumId}
-              currentCover={album.cover}
-              onCoverUpdated={(newCoverUrl) => setAlbum((prev) => prev ? { ...prev, cover: newCoverUrl } : prev)}
-            />
+            <div className="flex flex-wrap gap-3">
+              <CoverManager
+                resourceType="album"
+                resourceId={albumId}
+                currentCover={album.cover}
+                onCoverUpdated={(newCoverUrl) => setAlbum((prev) => prev ? { ...prev, cover: newCoverUrl } : prev)}
+              />
+              <button
+                onClick={handleDeleteAlbum}
+                disabled={isDeleting}
+                className="inline-flex items-center gap-2 px-5 py-2 theme-button-danger rounded text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Trash2 size={15} /> {isDeleting ? '删除中...' : '删除专辑'}
+              </button>
+            </div>
           </div>
         )}
       </div>

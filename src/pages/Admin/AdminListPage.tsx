@@ -455,9 +455,13 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
   const handleDelete = async (id: string) => {
     if (!window.confirm('确定要删除吗？删除后可在回收站恢复。')) return
     const reasonInput =
-      type === 'wiki' || type === 'posts'
-        ? window.prompt('删除理由（可选）', '')?.trim() || ''
+      type === 'wiki' || type === 'posts' || type === 'galleries'
+        ? window.prompt('删除理由（必填）', '')?.trim() || ''
         : ''
+    if ((type === 'wiki' || type === 'posts' || type === 'galleries') && !reasonInput) {
+      show('删除该内容必须填写删除理由', { variant: 'error' })
+      return
+    }
     const previousData = data
     const deletedAt = new Date().toISOString()
     setRowPendingAction(id, 'delete')

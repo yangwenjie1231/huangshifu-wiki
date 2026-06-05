@@ -41,13 +41,13 @@ const hasDraggedFiles = (event: Pick<React.DragEvent<HTMLElement>, 'dataTransfer
 interface GalleryCardProps {
   gallery: GalleryItem;
   viewMode: string;
-  isAdmin: boolean;
+  canDelete: boolean;
   deletingGalleryId: string | null;
   onCopyLink: (event: React.MouseEvent<HTMLButtonElement>, galleryId: string) => void;
   onRequestDelete: (event: React.MouseEvent<HTMLButtonElement>, gallery: { id: string; title?: string | null }) => void;
 }
 
-const GalleryCard = React.memo(({ gallery, viewMode, isAdmin, deletingGalleryId, onCopyLink, onRequestDelete }: GalleryCardProps) => (
+const GalleryCard = React.memo(({ gallery, viewMode, canDelete, deletingGalleryId, onCopyLink, onRequestDelete }: GalleryCardProps) => (
   <div className={clsx('relative group', viewMode === 'list' && 'flex')}>
     <Link
       to={`/gallery/${gallery.id}`}
@@ -110,7 +110,7 @@ const GalleryCard = React.memo(({ gallery, viewMode, isAdmin, deletingGalleryId,
         </>
       )}
     </Link>
-    {isAdmin ? (
+    {canDelete ? (
       <button
         onClick={(event) => onRequestDelete(event, gallery)}
         disabled={deletingGalleryId === gallery.id}
@@ -142,6 +142,7 @@ const GalleryList = () => {
   const [isGalleryAdminOnly, setIsGalleryAdminOnly] = useState(false);
   const [galleryAccessLoaded, setGalleryAccessLoaded] = useState(false);
   const [galleryToDelete, setGalleryToDelete] = useState<{ id: string; title: string } | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
   const [deletingGalleryId, setDeletingGalleryId] = useState<string | null>(null);
   const [totalGalleries, setTotalGalleries] = useState(0);
   const { show } = useToast();
@@ -209,14 +210,23 @@ const GalleryList = () => {
       id: gallery.id,
       title: gallery.title?.trim() || '未命名图集',
     });
+    setDeleteReason('');
   };
 
   const handleConfirmDeleteGallery = async () => {
     if (!galleryToDelete || deletingGalleryId) return;
 
+    const target = galleries.find((gallery) => gallery.id === galleryToDelete.id);
+    const isSelfDelete = Boolean(target && user && target.authorUid === user.uid);
+    const reason = isSelfDelete ? '' : deleteReason.trim();
+    if (!isSelfDelete && !reason) {
+      show('删除他人图集必须填写删除理由', { variant: 'error' });
+      return;
+    }
+
     try {
       setDeletingGalleryId(galleryToDelete.id);
-      await apiDelete(`/api/galleries/${galleryToDelete.id}`);
+      await apiDelete(`/api/galleries/${galleryToDelete.id}`, reason ? { reason } : {});
       setGalleries((prev) => {
         const next = prev.filter((gallery) => gallery.id !== galleryToDelete.id);
         // 如果当前页删空了且不是第一页，自动回退一页
@@ -228,6 +238,7 @@ const GalleryList = () => {
       setTotalGalleries((prev) => Math.max(0, prev - 1));
       show('图集已删除');
       setGalleryToDelete(null);
+      setDeleteReason('');
     } catch (error) {
       console.error('Delete gallery from list error:', error);
       show('删除图集失败', { variant: 'error' });
@@ -278,7 +289,7 @@ const GalleryList = () => {
                   key={gallery.id}
                   gallery={gallery}
                   viewMode={viewMode}
-                  isAdmin={isAdmin}
+                  canDelete={Boolean(user && (isAdmin || gallery.authorUid === user.uid))}
                   deletingGalleryId={deletingGalleryId}
                   onCopyLink={handleCopyGalleryLink}
                   onRequestDelete={handleRequestDeleteGallery}
@@ -329,9 +340,28 @@ const GalleryList = () => {
                 <p className="text-text-secondary mb-8 text-[0.9375rem]">
                   您确定要删除图集《{galleryToDelete.title}》吗？此操作无法撤销。
                 </p>
+                {(() => {
+                  const target = galleries.find((gallery) => gallery.id === galleryToDelete.id);
+                  const requiresReason = Boolean(target && user && target.authorUid !== user.uid);
+                  return requiresReason ? (
+                    <label className="mb-6 block text-sm font-medium text-text-secondary">
+                      删除理由（必填）
+                      <textarea
+                        value={deleteReason}
+                        onChange={(event) => setDeleteReason(event.target.value)}
+                        maxLength={CONTENT_LIMITS.gallery.reviewNote}
+                        rows={3}
+                        className="mt-2 w-full rounded border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-danger"
+                      />
+                    </label>
+                  ) : null;
+                })()}
                 <div className="flex gap-4">
                   <button
-                    onClick={() => setGalleryToDelete(null)}
+                    onClick={() => {
+                      setGalleryToDelete(null);
+                      setDeleteReason('');
+                    }}
                     disabled={Boolean(deletingGalleryId)}
                     className="flex-1 px-6 py-3 bg-surface-alt text-text-secondary rounded font-semibold hover:bg-bg-tertiary active:scale-[0.98] transition-all disabled:cursor-not-allowed disabled:opacity-60"
                   >

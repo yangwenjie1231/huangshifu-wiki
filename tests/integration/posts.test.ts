@@ -47,6 +47,7 @@ async function cleanupPostTestData() {
         { title: { startsWith: 'Comment Pagination Visibility Test' } },
         { title: { startsWith: 'Soft Delete Parent Comment Test' } },
         { title: { startsWith: 'Soft Delete Child Comment Test' } },
+        { title: { startsWith: 'Comment Delete Reason Test' } },
         { title: { startsWith: 'Restore Deleted Comment Test' } },
         { title: { startsWith: 'Comment Like Test' } },
         { title: { startsWith: 'Hidden Comment Like Post Test' } },
@@ -57,6 +58,7 @@ async function cleanupPostTestData() {
         { title: { startsWith: "User's Post" } },
         { title: { startsWith: 'To Be Deleted By Author' } },
         { title: { startsWith: 'To Be Deleted By Admin' } },
+        { title: { startsWith: 'To Be Deleted By Admin Missing Reason' } },
         { title: { startsWith: 'Unauth Delete Test' } },
         { title: { startsWith: 'New Test Post ' } },
         { title: { startsWith: 'Admin Direct Publish Test ' } },
@@ -81,6 +83,7 @@ async function cleanupPostTestData() {
         { content: { startsWith: 'Child comment content' } },
         { content: { startsWith: 'Reply to deleted parent' } },
         { content: { startsWith: 'Gallery comment content' } },
+        { content: { startsWith: 'Comment delete reason content' } },
         { content: { startsWith: 'Reply to deleted child' } },
         { content: { startsWith: 'Restorable comment' } },
         { content: { startsWith: 'Comment to like' } },
@@ -93,6 +96,7 @@ async function cleanupPostTestData() {
     where: {
       OR: [
         { title: { startsWith: 'Test Gallery ' } },
+        { title: { startsWith: 'Gallery Delete Reason Test' } },
         { title: { startsWith: 'Gallery Comment Notification Test' } },
       ],
     },
@@ -984,6 +988,55 @@ describe('Posts API - 文章接口测试', () => {
       });
       expect(dbComment?.deletedAt).not.toBeNull();
       expect(dbComment?.deletedBy).toBe(testUser.user.uid);
+
+      const moderationLog = await prisma.moderationLog.findFirst({
+        where: {
+          targetType: 'comment',
+          targetId: galleryComment.id,
+          action: 'delete',
+        },
+      });
+      expect(moderationLog?.note).toBe('自行删除');
+    });
+
+    it('管理员删除他人评论时必须提供删除理由并记录日志', async () => {
+      const post = await createCurrentUserPost({
+        title: 'Comment Delete Reason Test',
+        status: 'published',
+      });
+      const comment = await prisma.postComment.create({
+        data: {
+          postId: post.id,
+          authorUid: testUser.user.uid,
+          content: 'Comment delete reason content',
+        },
+      });
+
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        adminUser.user.email,
+        adminUser.plainPassword,
+      );
+      const missingReasonResponse = await agent
+        .delete(`/api/posts/comments/${comment.id}`)
+        .set('X-XSRF-TOKEN', xsrfToken);
+      expect(missingReasonResponse.status).toBe(400);
+
+      const response = await agent
+        .delete(`/api/posts/comments/${comment.id}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
+        .send({ reason: '管理员删除违规评论' });
+      expect(response.status).toBe(200);
+
+      const moderationLog = await prisma.moderationLog.findFirst({
+        where: {
+          targetType: 'comment',
+          targetId: comment.id,
+          action: 'delete',
+          operatorUid: adminUser.user.uid,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(moderationLog?.note).toBe('管理员删除违规评论');
     });
 
     it('删除子评论后普通用户不可见且不能继续回复', async () => {
@@ -1630,7 +1683,7 @@ describe('Posts API - 文章接口测试', () => {
       });
       expect(moderationLog).not.toBeNull();
       expect(moderationLog?.operatorUid).toBe(testUser.user.uid);
-      expect(moderationLog?.note).toBe('作者自行删除');
+      expect(moderationLog?.note).toBe('自行删除');
     });
 
     /**
@@ -1707,6 +1760,25 @@ describe('Posts API - 文章接口测试', () => {
       expect(payload.operatorUid).toBe(adminUser.user.uid);
     });
 
+    it('管理员删除他人文章时必须提供删除理由', async () => {
+      const post = await createTestPost({
+        title: 'To Be Deleted By Admin Missing Reason',
+        authorUid: testUser.user.uid,
+        status: 'published',
+      });
+
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        adminUser.user.email,
+        adminUser.plainPassword,
+      );
+      const response = await agent
+        .delete(`/api/posts/${post.id}`)
+        .set('X-XSRF-TOKEN', xsrfToken);
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('删除理由不能为空');
+    });
+
     /**
      * 测试目的：验证删除不存在的文章
      * 预期结果：返回 404 错误
@@ -1737,6 +1809,81 @@ describe('Posts API - 文章接口测试', () => {
       const response = await request(app).delete(`/api/posts/${post.id}`);
 
       expect(response.status).toBe(401);
+    });
+  });
+
+  describe('DELETE /api/galleries/:id - 删除图集', () => {
+    it('作者删除自己的图集时固定记录自行删除', async () => {
+      const gallery = await createTestGallery({
+        title: 'Gallery Delete Reason Test Self',
+        authorUid: testUser.user.uid,
+        authorName: testUser.user.displayName,
+      });
+
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword,
+      );
+      const response = await agent
+        .delete(`/api/galleries/${gallery.id}`)
+        .set('X-XSRF-TOKEN', xsrfToken);
+
+      expect(response.status).toBe(200);
+      const dbGallery = await prisma.gallery.findUnique({ where: { id: gallery.id } });
+      expect(dbGallery?.deletedAt).not.toBeNull();
+      expect(dbGallery?.deletedBy).toBe(testUser.user.uid);
+
+      const moderationLog = await prisma.moderationLog.findFirst({
+        where: {
+          targetType: 'gallery',
+          targetId: gallery.id,
+          action: 'delete',
+        },
+      });
+      expect(moderationLog?.note).toBe('自行删除');
+    });
+
+    it('管理员删除他人图集时必须提供删除理由并在后台列表返回', async () => {
+      const gallery = await createTestGallery({
+        title: 'Gallery Delete Reason Test Admin',
+        authorUid: testUser.user.uid,
+        authorName: testUser.user.displayName,
+      });
+
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        adminUser.user.email,
+        adminUser.plainPassword,
+      );
+      const missingReasonResponse = await agent
+        .delete(`/api/galleries/${gallery.id}`)
+        .set('X-XSRF-TOKEN', xsrfToken);
+      expect(missingReasonResponse.status).toBe(400);
+
+      const response = await agent
+        .delete(`/api/galleries/${gallery.id}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
+        .send({ reason: '管理员删除违规图集' });
+      expect(response.status).toBe(200);
+
+      const moderationLog = await prisma.moderationLog.findFirst({
+        where: {
+          targetType: 'gallery',
+          targetId: gallery.id,
+          action: 'delete',
+          operatorUid: adminUser.user.uid,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(moderationLog?.note).toBe('管理员删除违规图集');
+
+      const listResponse = await agent
+        .get('/api/admin/galleries')
+        .query({ includeDeleted: 'true' })
+        .set('X-XSRF-TOKEN', xsrfToken);
+      expect(listResponse.status).toBe(200);
+      const deletedItem = listResponse.body.data.find((item: { id: string }) => item.id === gallery.id);
+      expect(deletedItem).toBeDefined();
+      expect(deletedItem.deletionReason).toBe('管理员删除违规图集');
     });
   });
 

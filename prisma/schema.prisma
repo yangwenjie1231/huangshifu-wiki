@@ -28,6 +28,8 @@ enum ContentStatus {
 enum ModerationTargetType {
   wiki
   post
+  gallery
+  comment
 }
 
 enum ModerationAction {
