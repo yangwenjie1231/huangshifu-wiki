@@ -407,6 +407,7 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
   const Icon = cfg.icon
   const [data, setData] = useState<AdminDataItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [pendingActions, setPendingActions] = useState<Record<string, 'delete' | 'restore' | 'permanentDelete'>>({})
   const [showDeleted, setShowDeleted] = useState(false)
   const { show } = useToast()
   const [newItem, setNewItem] = useState<any>({})
@@ -426,39 +427,85 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
     }
   }
 
+  const setRowPendingAction = (
+    id: string,
+    action: 'delete' | 'restore' | 'permanentDelete' | null,
+  ) => {
+    setPendingActions((prev) => {
+      if (action) return { ...prev, [id]: action }
+
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+  }
+
   useEffect(() => {
     fetchData()
   }, [type, showDeleted])
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('确定要删除吗？删除后可在回收站恢复。')) return
+    const previousData = data
+    const deletedAt = new Date().toISOString()
+    setRowPendingAction(id, 'delete')
+    show('正在删除...', { duration: 1200 })
+    setData((prev) =>
+      showDeleted
+        ? prev.map((item) =>
+            String(item.docId || item.id || item.uid || '') === id
+              ? { ...item, isDeleted: true, deletedAt }
+              : item,
+          )
+        : prev.filter((item) => String(item.docId || item.id || item.uid || '') !== id),
+    )
     try {
       await apiDelete(`/api/admin/${cfg.apiPath}/${id}`)
-      await fetchData()
       show('已删除', { variant: 'success' })
     } catch (e) {
+      setData(previousData)
       show(e instanceof Error ? e.message : '删除失败', { variant: 'error' })
+    } finally {
+      setRowPendingAction(id, null)
     }
   }
 
   const handleRestore = async (id: string) => {
+    const previousData = data
+    setRowPendingAction(id, 'restore')
+    show('正在恢复...', { duration: 1200 })
     try {
       await apiPost(`/api/admin/${cfg.apiPath}/${id}/restore`)
-      await fetchData()
+      setData((prev) =>
+        prev.map((item) =>
+          String(item.docId || item.id || item.uid || '') === id
+            ? { ...item, isDeleted: false, deletedAt: null, deletedBy: null }
+            : item,
+        ),
+      )
       show('已恢复', { variant: 'success' })
     } catch (e) {
+      setData(previousData)
       show(e instanceof Error ? e.message : '恢复失败', { variant: 'error' })
+    } finally {
+      setRowPendingAction(id, null)
     }
   }
 
   const handlePermanentDelete = async (id: string) => {
     if (!window.confirm('确定要彻底删除吗？此操作不可恢复。')) return
+    const previousData = data
+    setRowPendingAction(id, 'permanentDelete')
+    show('正在彻底删除...', { duration: 1200 })
+    setData((prev) => prev.filter((item) => String(item.docId || item.id || item.uid || '') !== id))
     try {
       await apiDelete(`/api/admin/${cfg.apiPath}/${id}/permanent`)
-      await fetchData()
       show('已彻底删除', { variant: 'success' })
     } catch (e) {
+      setData(previousData)
       show(e instanceof Error ? e.message : '彻底删除失败', { variant: 'error' })
+    } finally {
+      setRowPendingAction(id, null)
     }
   }
 
@@ -500,46 +547,84 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
   }
 
   const renderActions = (item: AdminDataItem, rowId: string) => (
-    <div className="flex items-center justify-end gap-2">
-      {type === 'announcements' && (
-        <button
-          onClick={() => toggleAnnouncement(item)}
-          className={clsx(
-            'rounded p-1.5 transition-all hover:bg-surface-alt',
-            item.active ? 'theme-text-success' : 'text-text-muted',
+    (() => {
+      const pendingAction = pendingActions[rowId]
+      const isPending = Boolean(pendingAction)
+
+      return (
+        <div className="flex items-center justify-end gap-2">
+          {pendingAction === 'delete' && (
+            <button
+              disabled
+              className="theme-icon-button-danger rounded p-1.5 transition-all disabled:cursor-wait disabled:opacity-50"
+              title="删除中"
+            >
+              <RefreshCw size={16} className="animate-spin" />
+            </button>
           )}
-          title={item.active ? '禁用' : '启用'}
-        >
-          {item.active ? <CheckCircle size={16} /> : <XCircle size={16} />}
-        </button>
-      )}
-      {item.isDeleted ? (
-        <>
-          <button
-            onClick={() => handleRestore(rowId)}
-            className="rounded p-1.5 text-brand-gold transition-all hover:bg-surface-alt"
-            title="恢复"
-          >
-            <RotateCcw size={16} />
-          </button>
-          <button
-            onClick={() => handlePermanentDelete(rowId)}
-            className="theme-icon-button-danger rounded p-1.5 transition-all hover:bg-surface-alt"
-            title="彻底删除"
-          >
-            <Trash2 size={16} />
-          </button>
-        </>
-      ) : (
-        <button
-          onClick={() => handleDelete(rowId)}
-          className="theme-icon-button-danger rounded p-1.5 transition-all hover:bg-surface-alt"
-          title="删除"
-        >
-          <Trash2 size={16} />
-        </button>
-      )}
-    </div>
+          {pendingAction === 'restore' && (
+            <button
+              disabled
+              className="rounded p-1.5 text-brand-gold transition-all disabled:cursor-wait disabled:opacity-50"
+              title="恢复中"
+            >
+              <RefreshCw size={16} className="animate-spin" />
+            </button>
+          )}
+          {pendingAction === 'permanentDelete' && (
+            <button
+              disabled
+              className="theme-icon-button-danger rounded p-1.5 transition-all disabled:cursor-wait disabled:opacity-50"
+              title="彻底删除中"
+            >
+              <RefreshCw size={16} className="animate-spin" />
+            </button>
+          )}
+          {type === 'announcements' && !item.isDeleted && (
+            <button
+              onClick={() => toggleAnnouncement(item)}
+              disabled={isPending}
+              className={clsx(
+                'rounded p-1.5 transition-all hover:bg-surface-alt disabled:cursor-wait disabled:opacity-50',
+                item.active ? 'theme-text-success' : 'text-text-muted',
+              )}
+              title={item.active ? '禁用' : '启用'}
+            >
+              {item.active ? <CheckCircle size={16} /> : <XCircle size={16} />}
+            </button>
+          )}
+          {!isPending && item.isDeleted ? (
+            <>
+              <button
+                onClick={() => handleRestore(rowId)}
+                disabled={isPending}
+                className="rounded p-1.5 text-brand-gold transition-all hover:bg-surface-alt disabled:cursor-wait disabled:opacity-50"
+                title="恢复"
+              >
+                <RotateCcw size={16} />
+              </button>
+              <button
+                onClick={() => handlePermanentDelete(rowId)}
+                disabled={isPending}
+                className="theme-icon-button-danger rounded p-1.5 transition-all hover:bg-surface-alt disabled:cursor-wait disabled:opacity-50"
+                title="彻底删除"
+              >
+                <Trash2 size={16} />
+              </button>
+            </>
+          ) : !isPending ? (
+            <button
+              onClick={() => handleDelete(rowId)}
+              disabled={isPending}
+              className="theme-icon-button-danger rounded p-1.5 transition-all hover:bg-surface-alt disabled:cursor-wait disabled:opacity-50"
+              title="删除"
+            >
+              <Trash2 size={16} />
+            </button>
+          ) : null}
+        </div>
+      )
+    })()
   )
 
   return (
