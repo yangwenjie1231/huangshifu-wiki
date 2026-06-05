@@ -84,6 +84,24 @@ function clearWikiListCaches() {
   enhancedCache.invalidateByPrefix(`${CACHE_KEYS.WIKI_TIMELINE}:`)
 }
 
+async function updateWikiPinState(req: AuthenticatedRequest, res: Response, isPinned: boolean) {
+  const slug = req.params.slug
+
+  const result = await prisma.wikiPage.updateMany({
+    where: { slug },
+    data: { isPinned },
+  })
+
+  if (result.count === 0) {
+    res.status(404).json({ error: '页面未找到' })
+    return
+  }
+
+  clearWikiPageCache(slug)
+  clearWikiListCaches()
+  res.json({ isPinned })
+}
+
 function resolveWikiUpdateStatus(input: {
   currentStatus: ContentStatus
   requestedStatus: ContentStatus | undefined
@@ -895,6 +913,36 @@ router.delete(
   })
 )
 
+router.post(
+  '/:slug/pin',
+  wikiWriteLimiter,
+  requireAdmin,
+  validateWikiSlugParam,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    try {
+      await updateWikiPinState(req, res, true)
+    } catch (error) {
+      logger.error({ err: error }, 'Pin wiki page error')
+      res.status(500).json({ error: '置顶操作失败' })
+    }
+  })
+)
+
+router.delete(
+  '/:slug/pin',
+  wikiWriteLimiter,
+  requireAdmin,
+  validateWikiSlugParam,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    try {
+      await updateWikiPinState(req, res, false)
+    } catch (error) {
+      logger.error({ err: error }, 'Unpin wiki page error')
+      res.status(500).json({ error: '置顶操作失败' })
+    }
+  })
+)
+
 router.put(
   '/:slug/pin',
   wikiWriteLimiter,
@@ -902,26 +950,8 @@ router.put(
   validateWikiSlugParam,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     try {
-      const slug = req.params.slug
       const { isPinned } = req.body as { isPinned?: boolean }
-
-      const page = await prisma.wikiPage.findUnique({
-        where: { slug },
-        select: { slug: true, isPinned: true },
-      })
-
-      if (!page) {
-        res.status(404).json({ error: '页面未找到' })
-        return
-      }
-
-      const updatedPage = await prisma.wikiPage.update({
-        where: { slug },
-        data: { isPinned: isPinned ?? true },
-      })
-
-      clearWikiPageCache(slug)
-      res.json({ isPinned: updatedPage.isPinned })
+      await updateWikiPinState(req, res, isPinned ?? true)
     } catch (error) {
       logger.error({ err: error }, 'Pin/Unpin wiki page error')
       res.status(500).json({ error: '置顶操作失败' })

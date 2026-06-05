@@ -8,6 +8,7 @@ const mockPrisma = vi.hoisted(() => ({
   wikiPage: {
     create: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
   },
   wikiRevision: {
     create: vi.fn(),
@@ -71,6 +72,15 @@ async function createApp(authUser: TestUser | null) {
 }
 
 async function postJson(app: express.Express, path: string, body: unknown) {
+  return requestJson(app, 'POST', path, body);
+}
+
+async function requestJson(
+  app: express.Express,
+  method: 'DELETE' | 'POST',
+  path: string,
+  body?: unknown,
+) {
   const server = createServer(app);
   await new Promise<void>((resolve) => server.listen(0, resolve));
   const { port } = server.address() as AddressInfo;
@@ -82,13 +92,15 @@ async function postJson(app: express.Express, path: string, body: unknown) {
           hostname: '127.0.0.1',
           port,
           path,
-          method: 'POST',
+          method,
           headers: { 'Content-Type': 'application/json' },
         },
         resolve,
       );
       req.on('error', reject);
-      req.write(JSON.stringify(body));
+      if (body !== undefined) {
+        req.write(JSON.stringify(body));
+      }
       req.end();
     });
 
@@ -138,6 +150,7 @@ describe('wiki routes slug normalization', () => {
     mockPrisma.wikiRevision.create.mockResolvedValue({ id: 'revision_1' });
     mockPrisma.wikiBranch.create.mockResolvedValue({ id: 'branch_1' });
     mockPrisma.wikiPage.update.mockResolvedValue({});
+    mockPrisma.wikiPage.updateMany.mockResolvedValue({ count: 1 });
   });
 
   it('canonicalizes created wiki page slugs before writing', async () => {
@@ -169,6 +182,32 @@ describe('wiki routes slug normalization', () => {
       data: expect.objectContaining({
         pageSlug: 'test-page-name',
       }),
+    }));
+  });
+
+  it('supports the frontend POST route for pinning wiki pages', async () => {
+    const app = await createApp({ uid: 'admin_1', role: 'admin', displayName: 'Admin' });
+
+    const response = await requestJson(app, 'POST', '/api/wiki/test-page/pin');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ isPinned: true });
+    expect(mockPrisma.wikiPage.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { slug: 'test-page' },
+      data: { isPinned: true },
+    }));
+  });
+
+  it('supports the frontend DELETE route for unpinning wiki pages', async () => {
+    const app = await createApp({ uid: 'admin_1', role: 'admin', displayName: 'Admin' });
+
+    const response = await requestJson(app, 'DELETE', '/api/wiki/test-page/pin');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ isPinned: false });
+    expect(mockPrisma.wikiPage.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { slug: 'test-page' },
+      data: { isPinned: false },
     }));
   });
 });
