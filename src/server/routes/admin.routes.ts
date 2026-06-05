@@ -1472,6 +1472,10 @@ router.get('/:tab', requireAdmin, asyncHandler(async (req: AuthenticatedRequest,
     if (tab === 'wiki') {
       const data = await prisma.wikiPage.findMany({
         where: activeWhere,
+        include: {
+          lastEditor: { select: { displayName: true } },
+          location: true,
+        },
         orderBy: { updatedAt: 'desc' },
         take: 100,
       });
@@ -1482,6 +1486,10 @@ router.get('/:tab', requireAdmin, asyncHandler(async (req: AuthenticatedRequest,
     if (tab === 'posts') {
       const data = await prisma.post.findMany({
         where: activeWhere,
+        include: {
+          author: { select: { displayName: true } },
+          location: true,
+        },
         orderBy: { updatedAt: 'desc' },
         take: 100,
       });
@@ -1499,6 +1507,7 @@ router.get('/:tab', requireAdmin, asyncHandler(async (req: AuthenticatedRequest,
             },
             orderBy: { sortOrder: 'asc' },
           },
+          location: true,
         },
         orderBy: { updatedAt: 'desc' },
         take: 100,
