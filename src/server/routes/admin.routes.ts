@@ -470,6 +470,33 @@ function isReviewTargetType(value: unknown): value is 'wiki' | 'post' {
  * ====================
  */
 
+// GET /api/admin/review-queue/count - Get pending review counts
+router.get('/review-queue/count', requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  try {
+    const type = normalizeModerationTargetType(req.query.type);
+    const status = parseContentStatus(req.query.status) || 'pending';
+
+    if (type && type !== 'wiki' && type !== 'post') {
+      res.status(400).json({ error: 'type 必须为 wiki 或 posts' });
+      return;
+    }
+
+    const [wiki, posts] = await Promise.all([
+      type && type !== 'wiki'
+        ? Promise.resolve(0)
+        : prisma.wikiPage.count({ where: { status, deletedAt: null } }),
+      type && type !== 'post'
+        ? Promise.resolve(0)
+        : prisma.post.count({ where: { status, deletedAt: null } }),
+    ]);
+
+    res.json({ status, counts: { wiki, posts }, total: wiki + posts });
+  } catch (error) {
+    logger.error({ err: error }, 'Fetch review queue count error');
+    res.status(500).json({ error: '获取审核队列数量失败' });
+  }
+}));
+
 // GET /api/admin/review-queue - Get review queue items
 router.get('/review-queue', requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {

@@ -3,6 +3,7 @@
 }
 
 .avatarTrigger {
+	position: relative;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -69,6 +70,27 @@
 	height: 100%;
 	border-radius: 9999px;
 	color: var(--color-text-muted);
+}
+
+.notificationDot,
+.menuActionDot {
+	display: inline-block;
+	width: 0.5rem;
+	height: 0.5rem;
+	border-radius: 9999px;
+	background: var(--color-error);
+	box-shadow: 0 0 0 2px var(--color-surface);
+}
+
+.notificationDot {
+	position: absolute;
+	top: 0.05rem;
+	right: 0.05rem;
+}
+
+.menuActionDot {
+	flex-shrink: 0;
+	margin-left: auto;
 }
 
 .accountMenuPanel {

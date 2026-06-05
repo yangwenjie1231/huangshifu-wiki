@@ -6,6 +6,7 @@ import { DEFAULT_AVATAR, handleAvatarError } from '../lib/defaultAvatar'
 import { DropdownPanel } from './DropdownPanel'
 import { useDismissableLayer } from '../hooks/useClickOutside'
 import { ThemeToggle } from './ThemeToggle'
+import { usePendingReviewCount } from '../hooks/usePendingReviewCount'
 import type { AuthMode } from './Navbar/types'
 import styles from './AccountMenu.module.css'
 
@@ -23,6 +24,8 @@ export const AccountMenu = ({ onLogout, onOpenAuth }: AccountMenuProps) => {
   const isAuthResolved = !loading
   const displayName = profile?.displayName || user?.displayName || '游客'
   const accountAvatarSrc = profile?.photoURL || user?.photoURL || DEFAULT_AVATAR
+  const pendingReviewCount = usePendingReviewCount(isAdmin && !isBanned)
+  const hasPendingReviews = pendingReviewCount > 0
 
   const closeAccountMenu = () => {
     setIsAccountMenuOpen(false)
@@ -96,6 +99,7 @@ export const AccountMenu = ({ onLogout, onOpenAuth }: AccountMenuProps) => {
             <UserRound size={14} strokeWidth={1.75} />
           </span>
         )}
+        {hasPendingReviews && <span className={styles.notificationDot} aria-hidden="true" />}
       </button>
 
       <DropdownPanel
@@ -160,6 +164,9 @@ export const AccountMenu = ({ onLogout, onOpenAuth }: AccountMenuProps) => {
                   <Link to="/admin" className={styles.menuAction} onClick={closeAccountMenu}>
                     <Server size={16} />
                     <span>管理后台</span>
+                    {hasPendingReviews && (
+                      <span className={styles.menuActionDot} aria-label="有待审核项目" />
+                    )}
                   </Link>
                 )}
               </>

@@ -31,6 +31,7 @@ import { useAuth } from '../../context/AuthContext'
 import { logoutRequest } from '../../lib/auth'
 import { HeaderUserControls } from '../HeaderUserControls'
 import { useToast } from '../Toast'
+import { usePendingReviewCount } from '../../hooks/usePendingReviewCount'
 
 type AdminNavItem = {
   id: string
@@ -82,6 +83,7 @@ const SidebarNavLink = ({
   match = 'prefix',
   paddingClassName = 'px-3 py-2',
   className,
+  showDot = false,
 }: {
   item: AdminNavItem
   currentPath: string
@@ -91,6 +93,7 @@ const SidebarNavLink = ({
   match?: 'exact' | 'prefix' | 'none'
   paddingClassName?: string
   className?: string
+  showDot?: boolean
 }) => {
   const Icon = item.icon
   const isActive =
@@ -114,7 +117,15 @@ const SidebarNavLink = ({
       )}
       title={sidebarCollapsed && !mobileOpen ? item.label : undefined}
     >
-      <Icon size={18} className="shrink-0" />
+      <span className="relative inline-flex shrink-0">
+        <Icon size={18} className="shrink-0" />
+        {showDot && (
+          <span
+            className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-[var(--color-error)] shadow-[0_0_0_2px_var(--color-surface)]"
+            aria-hidden="true"
+          />
+        )}
+      </span>
       {(!sidebarCollapsed || mobileOpen) && (
         <span className="whitespace-nowrap text-sm">{item.label}</span>
       )}
@@ -129,6 +140,7 @@ const NavGroup = ({
   sidebarCollapsed,
   mobileOpen,
   onClick,
+  showReviewDot = false,
 }: {
   title: string
   items: AdminNavItem[]
@@ -136,6 +148,7 @@ const NavGroup = ({
   sidebarCollapsed: boolean
   mobileOpen: boolean
   onClick: () => void
+  showReviewDot?: boolean
 }) => (
   <div className="mb-3">
     {(!sidebarCollapsed || mobileOpen) && (
@@ -153,6 +166,7 @@ const NavGroup = ({
             sidebarCollapsed={sidebarCollapsed}
             mobileOpen={mobileOpen}
             onClick={onClick}
+            showDot={showReviewDot && item.id === 'reviews'}
           />
         )
       })}
@@ -167,6 +181,7 @@ export const AdminLayout = () => {
   const { show } = useToast()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const pendingReviewCount = usePendingReviewCount(isAdmin)
 
   const currentPath = location.pathname
   const closeMobileMenu = () => setMobileOpen(false)
@@ -281,6 +296,7 @@ export const AdminLayout = () => {
               sidebarCollapsed={sidebarCollapsed}
               mobileOpen={mobileOpen}
               onClick={closeMobileMenu}
+              showReviewDot={pendingReviewCount > 0}
             />
           </nav>
 

@@ -5,6 +5,10 @@ import { apiGet, apiPut, invalidateApiCacheByPrefix } from '../../lib/apiClient'
 import { formatDateTime, toDateValue } from '../../lib/dateUtils';
 import { useDialog } from '../../components/Dialog';
 import { useToast } from '../../components/Toast';
+import {
+  PENDING_REVIEW_COUNT_PATH,
+  notifyPendingReviewCountChanged,
+} from '../../hooks/usePendingReviewCount';
 
 type ReviewQueueItem = {
   id: string;
@@ -18,6 +22,12 @@ type ReviewQueueItem = {
 };
 
 type ReviewFilter = 'all' | 'wiki' | 'posts';
+
+const invalidateReviewQueueCaches = () => {
+  invalidateApiCacheByPrefix('/api/admin/review-queue');
+  invalidateApiCacheByPrefix(PENDING_REVIEW_COUNT_PATH);
+  notifyPendingReviewCountChanged();
+};
 
 export const AdminReviews = () => {
   const [items, setItems] = useState<ReviewQueueItem[]>([]);
@@ -73,7 +83,7 @@ export const AdminReviews = () => {
     if (note === null) return;
     try {
       await apiPut(`/api/admin/review-queue/${item.reviewId}/${action}`, { note, type: item.reviewType });
-      invalidateApiCacheByPrefix('/api/admin/review-queue');
+      invalidateReviewQueueCaches();
       await fetchQueue();
       show(action === 'approve' ? '已通过' : '已驳回', { variant: 'success' });
     } catch (e) {
@@ -81,11 +91,16 @@ export const AdminReviews = () => {
     }
   };
 
+  const handleRefreshQueue = () => {
+    invalidateReviewQueueCaches();
+    fetchQueue();
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-text-primary tracking-[0.12em]">审核队列</h1>
-        <button onClick={() => { invalidateApiCacheByPrefix('/api/admin/review-queue'); fetchQueue(); }} className="px-4 py-2 border border-border text-text-secondary hover:text-brand-gold hover:border-brand-gold rounded text-sm transition-all">
+        <button onClick={handleRefreshQueue} className="px-4 py-2 border border-border text-text-secondary hover:text-brand-gold hover:border-brand-gold rounded text-sm transition-all">
           刷新队列
         </button>
       </div>

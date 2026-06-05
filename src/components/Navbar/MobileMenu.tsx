@@ -19,6 +19,7 @@ import { useI18n } from "../../lib/i18n";
 import { DEFAULT_AVATAR, handleAvatarError } from "../../lib/defaultAvatar";
 import { ThemeToggle } from "../ThemeToggle";
 import accountMenuStyles from "../AccountMenu.module.css";
+import { usePendingReviewCount } from "../../hooks/usePendingReviewCount";
 import type { AuthMode } from "./types";
 
 interface MobileMenuProps {
@@ -36,6 +37,8 @@ export const MobileMenu = ({
 }: MobileMenuProps) => {
 	const { user, profile, isAdmin, isBanned } = useAuth();
 	const { t } = useI18n();
+	const pendingReviewCount = usePendingReviewCount(open && isAdmin && !isBanned);
+	const hasPendingReviews = pendingReviewCount > 0;
 
 	return (
 		<AnimatePresence>
@@ -164,6 +167,12 @@ export const MobileMenu = ({
 										>
 											<Shield size={20} />
 											<span className="text-sm font-medium">管理后台</span>
+											{hasPendingReviews && (
+												<span
+													className="ml-auto h-2 w-2 rounded-full bg-[var(--color-error)] shadow-[0_0_0_2px_var(--color-surface-alt)]"
+													aria-label="有待审核项目"
+												/>
+											)}
 										</Link>
 									)}
 									<button

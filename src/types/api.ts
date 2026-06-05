@@ -322,6 +322,15 @@ export interface AdminReviewQueueResponse {
   total: number;
 }
 
+export interface AdminReviewQueueCountResponse {
+  status: 'draft' | 'pending' | 'published' | 'rejected';
+  counts: {
+    wiki: number;
+    posts: number;
+  };
+  total: number;
+}
+
 // ============================================================================
 // 文本语义搜索类型
 // ============================================================================
