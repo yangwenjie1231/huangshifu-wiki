@@ -267,6 +267,12 @@ model Post {
   @@index([hotScore, updatedAt])
   @@index([locationCode])
   @@index([deletedAt])
+  @@index([musicDocId])
+  @@index([albumDocId])
+  @@index([isPinned])
+  @@index([section, status, hotScore(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([title(ops: raw("gin_trgm_ops"))], map: "Post_title_trgm_idx", type: Gin)
 }
 
 model PostComment {
@@ -293,6 +299,7 @@ model PostComment {
   @@index([replyToId])
   @@index([deletedAt])
   @@index([authorUid, createdAt])
+  @@index([galleryId])
 }
 
 model PostCommentLike {
@@ -334,6 +341,7 @@ model WikiPage {
   deletedAt     DateTime?
   deletedBy     String?
   lastEditorUid String
+  lastEditorName String?
   mainBranchId  String?
   mergedAt      DateTime?
   createdAt     DateTime       @default(now())
@@ -353,6 +361,11 @@ model WikiPage {
   @@index([mainBranchId])
   @@index([locationCode])
   @@index([deletedAt])
+  @@index([category, status, updatedAt(sort: Desc)])
+  @@index([isPinned])
+  @@index([slug(ops: raw("gin_trgm_ops"))], map: "WikiPage_slug_trgm_idx", type: Gin)
+  @@index([title(ops: raw("gin_trgm_ops"))], map: "WikiPage_title_trgm_idx", type: Gin)
+  @@index([tags], map: "wiki_tags_gin", type: Gin)
 }
 
 model PostLike {
@@ -567,7 +580,8 @@ model Gallery {
   comments   PostComment[]  @relation("GalleryComments")
 
   @@index([createdAt])
-  @@index([published, updatedAt])
+  @@index([published, updatedAt], map: "Gallery_published_idx")
+  @@index([published, createdAt(sort: Desc)])
   @@index([authorUid])
   @@index([locationCode])
   @@index([deletedAt])

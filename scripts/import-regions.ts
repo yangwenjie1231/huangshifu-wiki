@@ -131,15 +131,35 @@ async function importRegions() {
 
   console.log(`Transformed ${regions.length} unique regions`);
 
-  await prisma.region.deleteMany({});
-  console.log('Cleared existing regions');
-
   let imported = 0;
   for (let i = 0; i < regions.length; i += IMPORT_BATCH_SIZE) {
     const batch = regions.slice(i, i + IMPORT_BATCH_SIZE);
-    await prisma.region.createMany({ data: batch });
+    await prisma.$transaction(
+      batch.map((region) =>
+        prisma.region.upsert({
+          where: { code: region.code },
+          create: { ...region, parentCode: null },
+          update: { ...region, parentCode: null },
+        })
+      )
+    );
     imported += batch.length;
-    console.log(`Imported ${imported}/${regions.length} regions`);
+    console.log(`Upserted ${imported}/${regions.length} regions`);
+  }
+
+  let linked = 0;
+  for (let i = 0; i < regions.length; i += IMPORT_BATCH_SIZE) {
+    const batch = regions.slice(i, i + IMPORT_BATCH_SIZE);
+    await prisma.$transaction(
+      batch.map((region) =>
+        prisma.region.update({
+          where: { code: region.code },
+          data: { parentCode: region.parentCode },
+        })
+      )
+    );
+    linked += batch.length;
+    console.log(`Linked parent regions ${linked}/${regions.length}`);
   }
 
   console.log('Regions import completed!');
