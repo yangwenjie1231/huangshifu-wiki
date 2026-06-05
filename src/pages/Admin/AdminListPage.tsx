@@ -244,7 +244,12 @@ const renderDetails = (type: ListType, item: AdminDataItem, Icon: React.ElementT
       <div className="min-w-0">
         <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-text-primary">
           {href ? (
-            <Link to={href} className="hover:text-brand-gold hover:underline">
+            <Link
+              to={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-brand-gold hover:underline"
+            >
               {title}
             </Link>
           ) : (
