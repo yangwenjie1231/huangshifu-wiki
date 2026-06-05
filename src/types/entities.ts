@@ -287,6 +287,7 @@ export interface AdminDataItem {
   isDeleted?: boolean;
   deletedAt?: string | null;
   deletedBy?: string | null;
+  deletionReason?: string | null;
   createdAt?: string;
   updatedAt?: string;
   [key: string]: unknown;

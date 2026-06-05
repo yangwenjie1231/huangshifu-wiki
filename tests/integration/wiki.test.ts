@@ -1074,6 +1074,51 @@ describe('Wiki API - 百科接口测试', () => {
     })
   })
 
+  describe('DELETE /api/admin/wiki/:id - 后台删除 Wiki 页面', () => {
+    it('管理员后台删除 Wiki 页面时记录删除理由并在管理列表返回', async () => {
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        adminUser.user.email,
+        adminUser.plainPassword
+      )
+      const wikiPage = await createTestWikiPage({
+        slug: 'test-admin-list-delete-wiki',
+        title: 'Admin List Delete Wiki',
+        authorUid: testUser.user.uid,
+        status: 'published',
+      })
+
+      const response = await agent
+        .delete(`/api/admin/wiki/${wikiPage.id}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
+        .send({ reason: '后台管理删除重复条目' })
+
+      expect(response.status).toBe(200)
+      expect(response.body).toEqual({ success: true })
+
+      const moderationLog = await prisma.moderationLog.findFirst({
+        where: {
+          targetType: 'wiki',
+          targetId: wikiPage.slug,
+          action: 'delete',
+          operatorUid: adminUser.user.uid,
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      expect(moderationLog).not.toBeNull()
+      expect(moderationLog?.note).toBe('后台管理删除重复条目')
+
+      const listResponse = await agent
+        .get('/api/admin/wiki')
+        .query({ includeDeleted: 'true' })
+        .set('X-XSRF-TOKEN', xsrfToken)
+
+      expect(listResponse.status).toBe(200)
+      const deletedItem = listResponse.body.data.find((item: { slug: string }) => item.slug === wikiPage.slug)
+      expect(deletedItem).toBeDefined()
+      expect(deletedItem.deletionReason).toBe('后台管理删除重复条目')
+    })
+  })
+
   describe('POST /api/admin/wiki/:id/restore - 恢复 Wiki 页面', () => {
     it('管理员恢复他人的 Wiki 页面后通知最后编辑者', async () => {
       const { agent, xsrfToken } = await createAuthenticatedAgent(

@@ -183,14 +183,22 @@ const getItemHref = (type: ListType, item: AdminDataItem) => {
   return null
 }
 
-const renderDateBlock = (item: AdminDataItem) => (
-  <div className="space-y-1 text-xs text-text-muted">
-    <p>更新：{formatDateTime(item.updatedAt, 'N/A')}</p>
-    <p>创建：{formatDateTime(item.createdAt, 'N/A')}</p>
-    {toOptionalText(item.reviewedAt) && <p>审核：{formatDateTime(toOptionalText(item.reviewedAt), 'N/A')}</p>}
-    {item.deletedAt && <p className="theme-text-error">删除：{formatDateTime(item.deletedAt, 'N/A')}</p>}
-  </div>
-)
+const renderDateBlock = (item: AdminDataItem) => {
+  const reviewedAt = toOptionalText(item.reviewedAt)
+  const deletionReason = toOptionalText(item.deletionReason)
+
+  return (
+    <div className="space-y-1 text-xs text-text-muted">
+      <p>更新：{formatDateTime(item.updatedAt, 'N/A')}</p>
+      <p>创建：{formatDateTime(item.createdAt, 'N/A')}</p>
+      {reviewedAt && <p>审核：{formatDateTime(reviewedAt, 'N/A')}</p>}
+      {item.deletedAt && <p className="theme-text-error">删除：{formatDateTime(item.deletedAt, 'N/A')}</p>}
+      {item.deletedAt && deletionReason && (
+        <p className="max-w-[220px] break-words theme-text-error">理由：{deletionReason}</p>
+      )}
+    </div>
+  )
+}
 
 const renderTagsAndLocation = (item: AdminDataItem) => {
   const tags = getTags(item)
@@ -446,6 +454,10 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('确定要删除吗？删除后可在回收站恢复。')) return
+    const reasonInput =
+      type === 'wiki' || type === 'posts'
+        ? window.prompt('删除理由（可选）', '')?.trim() || ''
+        : ''
     const previousData = data
     const deletedAt = new Date().toISOString()
     setRowPendingAction(id, 'delete')
@@ -454,13 +466,18 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
       showDeleted
         ? prev.map((item) =>
             String(item.docId || item.id || item.uid || '') === id
-              ? { ...item, isDeleted: true, deletedAt }
+              ? { ...item, isDeleted: true, deletedAt, deletionReason: reasonInput || null }
               : item,
           )
         : prev.filter((item) => String(item.docId || item.id || item.uid || '') !== id),
     )
     try {
-      await apiDelete(`/api/admin/${cfg.apiPath}/${id}`)
+      const deletePath = `/api/admin/${cfg.apiPath}/${id}`
+      if (reasonInput) {
+        await apiDelete(deletePath, { reason: reasonInput })
+      } else {
+        await apiDelete(deletePath)
+      }
       show('已删除', { variant: 'success' })
     } catch (e) {
       setData(previousData)

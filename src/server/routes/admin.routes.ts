@@ -79,6 +79,32 @@ function isString(value: string | null): value is string {
   return typeof value === 'string';
 }
 
+async function getDeleteReasonsByTargetId(targetType: 'wiki' | 'post', targetIds: string[]) {
+  const uniqueTargetIds = [...new Set(targetIds.filter(Boolean))];
+  if (uniqueTargetIds.length === 0) return new Map<string, string | null>();
+
+  const logs = await prisma.moderationLog.findMany({
+    where: {
+      targetType,
+      targetId: { in: uniqueTargetIds },
+      action: 'delete',
+    },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      targetId: true,
+      note: true,
+    },
+  });
+
+  const reasons = new Map<string, string | null>();
+  for (const log of logs) {
+    if (reasons.has(log.targetId)) continue;
+    reasons.set(log.targetId, log.note);
+  }
+
+  return reasons;
+}
+
 const backupsDir = path.join(__dirname, '..', '..', '..', 'backups');
 fs.mkdirSync(backupsDir, { recursive: true });
 
@@ -270,6 +296,31 @@ async function notifyContentRestored(options: {
     title: options.title,
     status: options.status,
     linkable: options.linkable,
+    operatorUid: options.operatorUid,
+    operatorName: options.operatorName || null,
+  });
+}
+
+async function notifyContentDeleted(options: {
+  recipientUid: string | null | undefined;
+  operatorUid: string;
+  operatorName?: string | null;
+  targetType: 'wiki' | 'post';
+  targetId: string;
+  title: string;
+  note: string | null;
+}) {
+  if (!options.recipientUid || options.recipientUid === options.operatorUid) {
+    return;
+  }
+
+  await createNotification(options.recipientUid, 'review_result', {
+    approved: false,
+    action: 'deleted',
+    targetType: options.targetType,
+    targetId: options.targetId,
+    title: options.title,
+    note: options.note,
     operatorUid: options.operatorUid,
     operatorName: options.operatorName || null,
   });
@@ -1479,7 +1530,16 @@ router.get('/:tab', requireAdmin, asyncHandler(async (req: AuthenticatedRequest,
         orderBy: { updatedAt: 'desc' },
         take: 100,
       });
-      res.json({ data: data.map(toWikiResponse) });
+      const deleteReasonsBySlug = await getDeleteReasonsByTargetId(
+        'wiki',
+        data.filter((page) => page.deletedAt).map((page) => page.slug),
+      );
+      res.json({
+        data: data.map((page) => ({
+          ...toWikiResponse(page),
+          deletionReason: deleteReasonsBySlug.get(page.slug) ?? null,
+        })),
+      });
       return;
     }
 
@@ -1493,7 +1553,16 @@ router.get('/:tab', requireAdmin, asyncHandler(async (req: AuthenticatedRequest,
         orderBy: { updatedAt: 'desc' },
         take: 100,
       });
-      res.json({ data: data.map(toPostResponse) });
+      const deleteReasonsById = await getDeleteReasonsByTargetId(
+        'post',
+        data.filter((post) => post.deletedAt).map((post) => post.id),
+      );
+      res.json({
+        data: data.map((post) => ({
+          ...toPostResponse(post),
+          deletionReason: deleteReasonsById.get(post.id) ?? null,
+        })),
+      });
       return;
     }
 
@@ -1700,19 +1769,91 @@ router.delete('/:tab/:id', requireAdmin, asyncHandler(async (req: AuthenticatedR
   try {
     const tab = req.params.tab;
     const id = req.params.id;
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() || null : null;
 
     if (tab === 'wiki') {
-      const page = await prisma.wikiPage.update({
+      if (!ensureTextLimit(res, reason || '', '删除理由', CONTENT_LIMITS.wiki.reviewNote)) {
+        return;
+      }
+
+      const page = await prisma.wikiPage.findUnique({
         where: { id },
-        data: softDeleteData(req.authUser!.uid),
-        select: { slug: true },
+        select: { slug: true, title: true, lastEditorUid: true, deletedAt: true },
       });
+      if (!page || page.deletedAt) {
+        res.status(404).json({ error: '页面不存在' });
+        return;
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.wikiPage.update({
+          where: { id },
+          data: softDeleteData(req.authUser!.uid),
+        });
+
+        await tx.moderationLog.create({
+          data: {
+            targetType: 'wiki',
+            targetId: page.slug,
+            action: 'delete',
+            operatorUid: req.authUser!.uid,
+            note: reason,
+          },
+        });
+      });
+
+      await notifyContentDeleted({
+        recipientUid: page.lastEditorUid,
+        operatorUid: req.authUser!.uid,
+        operatorName: req.authUser!.displayName,
+        targetType: 'wiki',
+        targetId: page.slug,
+        title: page.title,
+        note: reason,
+      });
+
       invalidateSoftDeleteCaches(tab, { slug: page.slug });
       res.json({ success: true });
       return;
     }
     if (tab === 'posts') {
-      await prisma.post.update({ where: { id }, data: softDeleteData(req.authUser!.uid) });
+      if (!ensureTextLimit(res, reason || '', '删除理由', CONTENT_LIMITS.post.reviewNote)) {
+        return;
+      }
+
+      const post = await prisma.post.findUnique({
+        where: { id },
+        select: { title: true, authorUid: true, deletedAt: true },
+      });
+      if (!post || post.deletedAt) {
+        res.status(404).json({ error: '帖子不存在' });
+        return;
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.post.update({ where: { id }, data: softDeleteData(req.authUser!.uid) });
+
+        await tx.moderationLog.create({
+          data: {
+            targetType: 'post',
+            targetId: id,
+            action: 'delete',
+            operatorUid: req.authUser!.uid,
+            note: reason,
+          },
+        });
+      });
+
+      await notifyContentDeleted({
+        recipientUid: post.authorUid,
+        operatorUid: req.authUser!.uid,
+        operatorName: req.authUser!.displayName,
+        targetType: 'post',
+        targetId: id,
+        title: post.title,
+        note: reason,
+      });
+
       invalidateSoftDeleteCaches(tab);
       res.json({ success: true });
       return;

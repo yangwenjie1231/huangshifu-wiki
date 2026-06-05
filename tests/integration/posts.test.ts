@@ -62,6 +62,7 @@ async function cleanupPostTestData() {
         { title: { startsWith: 'Admin Direct Publish Test ' } },
         { title: { startsWith: 'Admin Preserve Pending Test ' } },
         { title: { startsWith: 'Admin Restore Post Test' } },
+        { title: { startsWith: 'Admin List Delete Post Test' } },
         { title: { startsWith: 'Long Content Test ' } },
       ],
     },
@@ -1736,6 +1737,50 @@ describe('Posts API - 文章接口测试', () => {
       const response = await request(app).delete(`/api/posts/${post.id}`);
 
       expect(response.status).toBe(401);
+    });
+  });
+
+  describe('DELETE /api/admin/posts/:id - 后台删除文章', () => {
+    it('管理员后台删除文章时记录删除理由并在管理列表返回', async () => {
+      const post = await createTestPost({
+        title: 'Admin List Delete Post Test',
+        authorUid: testUser.user.uid,
+        status: 'published',
+      });
+
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        adminUser.user.email,
+        adminUser.plainPassword,
+      );
+      const response = await agent
+        .delete(`/api/admin/posts/${post.id}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
+        .send({ reason: '后台管理删除违规帖子' });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ success: true });
+
+      const moderationLog = await prisma.moderationLog.findFirst({
+        where: {
+          targetType: 'post',
+          targetId: post.id,
+          action: 'delete',
+          operatorUid: adminUser.user.uid,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(moderationLog).not.toBeNull();
+      expect(moderationLog?.note).toBe('后台管理删除违规帖子');
+
+      const listResponse = await agent
+        .get('/api/admin/posts')
+        .query({ includeDeleted: 'true' })
+        .set('X-XSRF-TOKEN', xsrfToken);
+
+      expect(listResponse.status).toBe(200);
+      const deletedItem = listResponse.body.data.find((item: { id: string }) => item.id === post.id);
+      expect(deletedItem).toBeDefined();
+      expect(deletedItem.deletionReason).toBe('后台管理删除违规帖子');
     });
   });
 
