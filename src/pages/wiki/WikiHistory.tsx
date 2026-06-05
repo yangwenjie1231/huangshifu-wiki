@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, History, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "../../context/AuthContext";
+import { useDialog } from "../../components/Dialog";
 import { useToast } from "../../components/Toast";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import { formatDate } from "../../lib/dateUtils";
@@ -16,6 +17,7 @@ const WikiHistory = () => {
 	const [selectedRevision, setSelectedRevision] = useState<any>(null);
 	const [loadingRevision, setLoadingRevision] = useState(false);
 	const navigate = useNavigate();
+	const dialog = useDialog();
 	const { show } = useToast();
 
 	useEffect(() => {
@@ -48,11 +50,13 @@ const WikiHistory = () => {
 	};
 
 	const handleRollback = async (revision: any) => {
-		if (
-			!window.confirm(
-				`确定要回滚到 ${formatDate(revision.createdAt, "yyyy-MM-dd HH:mm")} 的版本吗？`,
-			)
-		)
+		const confirmed = await dialog.confirm({
+			title: "回滚版本",
+			message: `确定要回滚到 ${formatDate(revision.createdAt, "yyyy-MM-dd HH:mm")} 的版本吗？`,
+			confirmText: "回滚",
+			variant: "warning",
+		});
+		if (!confirmed)
 			return;
 		if (isBanned) {
 			show("账号已被封禁，无法回滚", { variant: "error" });

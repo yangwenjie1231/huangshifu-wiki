@@ -1,0 +1,151 @@
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+
+import { ConfirmModal } from './Modal'
+
+type DialogVariant = 'danger' | 'warning' | 'info'
+
+type ConfirmOptions = {
+  title: string
+  message: string
+  confirmText?: string
+  cancelText?: string
+  variant?: DialogVariant
+}
+
+type PromptOptions = ConfirmOptions & {
+  defaultValue?: string
+  placeholder?: string
+  multiline?: boolean
+}
+
+type DialogContextValue = {
+  confirm: (options: ConfirmOptions) => Promise<boolean>
+  prompt: (options: PromptOptions) => Promise<string | null>
+}
+
+type ConfirmState = ConfirmOptions & {
+  open: boolean
+}
+
+type PromptState = PromptOptions & {
+  open: boolean
+  value: string
+}
+
+const DialogContext = createContext<DialogContextValue | undefined>(undefined)
+
+const PROMPT_FIELD_CLASS =
+  'mt-4 w-full rounded border border-border bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-brand-gold'
+
+export const DialogProvider = ({ children }: { children: React.ReactNode }) => {
+  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
+  const [promptState, setPromptState] = useState<PromptState | null>(null)
+  const confirmResolveRef = useRef<((value: boolean) => void) | null>(null)
+  const promptResolveRef = useRef<((value: string | null) => void) | null>(null)
+
+  const closeConfirm = useCallback((result: boolean) => {
+    confirmResolveRef.current?.(result)
+    confirmResolveRef.current = null
+    setConfirmState(null)
+  }, [])
+
+  const closePrompt = useCallback((result: string | null) => {
+    promptResolveRef.current?.(result)
+    promptResolveRef.current = null
+    setPromptState(null)
+  }, [])
+
+  const confirm = useCallback(
+    (options: ConfirmOptions) => {
+      confirmResolveRef.current?.(false)
+      promptResolveRef.current?.(null)
+      promptResolveRef.current = null
+      setPromptState(null)
+      setConfirmState({ ...options, open: true })
+      return new Promise<boolean>((resolve) => {
+        confirmResolveRef.current = resolve
+      })
+    },
+    []
+  )
+
+  const prompt = useCallback((options: PromptOptions) => {
+    promptResolveRef.current?.(null)
+    confirmResolveRef.current?.(false)
+    confirmResolveRef.current = null
+    setConfirmState(null)
+    setPromptState({ ...options, open: true, value: options.defaultValue ?? '' })
+    return new Promise<string | null>((resolve) => {
+      promptResolveRef.current = resolve
+    })
+  }, [])
+
+  const value = useMemo(() => ({ confirm, prompt }), [confirm, prompt])
+
+  useEffect(() => {
+    return () => {
+      confirmResolveRef.current?.(false)
+      promptResolveRef.current?.(null)
+    }
+  }, [])
+
+  const handlePromptValueChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setPromptState((prev) => (prev ? { ...prev, value: event.target.value } : prev))
+  }
+
+  const promptField = promptState?.multiline ? (
+    <textarea
+      value={promptState.value}
+      onChange={handlePromptValueChange}
+      placeholder={promptState.placeholder}
+      className={`${PROMPT_FIELD_CLASS} min-h-24`}
+    />
+  ) : promptState ? (
+    <input
+      type="text"
+      value={promptState.value}
+      onChange={handlePromptValueChange}
+      placeholder={promptState.placeholder}
+      className={PROMPT_FIELD_CLASS}
+    />
+  ) : null
+
+  return (
+    <DialogContext.Provider value={value}>
+      {children}
+      <ConfirmModal
+        open={Boolean(confirmState?.open)}
+        onClose={() => closeConfirm(false)}
+        onConfirm={() => closeConfirm(true)}
+        title={confirmState?.title ?? ''}
+        message={confirmState?.message ?? ''}
+        confirmText={confirmState?.confirmText}
+        cancelText={confirmState?.cancelText}
+        variant={confirmState?.variant}
+      />
+      {promptState && (
+        <ConfirmModal
+          open={promptState.open}
+          onClose={() => closePrompt(null)}
+          onConfirm={() => closePrompt(promptState.value)}
+          title={promptState.title}
+          message={promptState.message}
+          confirmText={promptState.confirmText ?? '确认'}
+          cancelText={promptState.cancelText}
+          variant={promptState.variant}
+          initialFocus="firstField"
+        >
+          {promptField}
+        </ConfirmModal>
+      )}
+    </DialogContext.Provider>
+  )
+}
+
+export const useDialog = () => {
+  const context = useContext(DialogContext)
+  if (!context) {
+    throw new Error('useDialog must be used within DialogProvider')
+  }
+  return context
+}

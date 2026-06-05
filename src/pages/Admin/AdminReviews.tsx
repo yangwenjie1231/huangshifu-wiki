@@ -3,6 +3,7 @@ import { CheckCircle, XCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { apiGet, apiPut, invalidateApiCacheByPrefix } from '../../lib/apiClient';
 import { formatDateTime, toDateValue } from '../../lib/dateUtils';
+import { useDialog } from '../../components/Dialog';
 import { useToast } from '../../components/Toast';
 
 type ReviewQueueItem = {
@@ -22,6 +23,7 @@ export const AdminReviews = () => {
   const [items, setItems] = useState<ReviewQueueItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<ReviewFilter>('all');
+  const dialog = useDialog();
   const { show } = useToast();
 
   const fetchQueue = async () => {
@@ -60,7 +62,15 @@ export const AdminReviews = () => {
   }, [filter]);
 
   const handleAction = async (item: ReviewQueueItem, action: 'approve' | 'reject') => {
-    const note = window.prompt(action === 'approve' ? '通过备注（可选）' : '驳回原因（可选）', action === 'reject' ? '请按规范完善内容' : '') || '';
+    const note = await dialog.prompt({
+      title: action === 'approve' ? '通过审核' : '驳回审核',
+      message: action === 'approve' ? '通过备注（可选）' : '驳回原因（可选）',
+      defaultValue: action === 'reject' ? '请按规范完善内容' : '',
+      confirmText: action === 'approve' ? '通过' : '驳回',
+      variant: action === 'approve' ? 'info' : 'warning',
+      multiline: true,
+    });
+    if (note === null) return;
     try {
       await apiPut(`/api/admin/review-queue/${item.reviewId}/${action}`, { note, type: item.reviewType });
       invalidateApiCacheByPrefix('/api/admin/review-queue');

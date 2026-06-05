@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { useDialog } from '../../components/Dialog'
 import { useToast } from '../../components/Toast'
 import { useI18n } from '../../lib/i18n'
 import {
@@ -27,6 +28,7 @@ const WikiEditor = () => {
   const navigate = useNavigate()
   const { user, isAdmin, isBanned } = useAuth()
   const { t } = useI18n()
+  const dialog = useDialog()
 
   const [formData, setFormData] = useState({
     title: '',
@@ -183,14 +185,25 @@ const WikiEditor = () => {
       return
     }
 
-    if (!window.confirm(t('wiki.deleteConfirm', { title: formData.title || pageSlug }))) {
+    const reason = deleteReason.trim()
+    if (!reason) {
+      show('删除 Wiki 必须填写删除理由', { variant: 'error' })
+      return
+    }
+
+    const confirmed = await dialog.confirm({
+      title: '删除 Wiki',
+      message: t('wiki.deleteConfirm', { title: formData.title || pageSlug }),
+      confirmText: '删除',
+      variant: 'danger',
+    })
+    if (!confirmed) {
       return
     }
 
     setIsDeleting(true)
     try {
-      const reason = deleteReason.trim()
-      await apiDelete(`/api/wiki/${pageSlug}`, reason ? { reason } : {})
+      await apiDelete(`/api/wiki/${pageSlug}`, { reason })
       invalidateApiCache(`GET|/api/wiki/${pageSlug}|`)
       invalidateApiCacheByPrefix('/api/wiki')
       show(t('wiki.deleteSuccess'), { variant: 'success' })

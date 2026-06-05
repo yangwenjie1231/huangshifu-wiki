@@ -6,6 +6,7 @@ import { clsx } from 'clsx';
 import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
 import { useMusic } from '../context/MusicContext';
 import { useAuth } from '../context/AuthContext';
+import { useDialog } from '../components/Dialog';
 import { useToast } from '../components/Toast';
 import { CoverManager } from '../components/CoverManager';
 import { SmartImage } from '../components/SmartImage';
@@ -51,6 +52,7 @@ const AlbumDetail = () => {
   const [descNeedExpand, setDescNeedExpand] = useState(false);
   const descRef = useRef<HTMLDivElement>(null);
   const { user, isAdmin } = useAuth();
+  const dialog = useDialog();
 
   useEffect(() => {
     if (descRef.current && !descExpanded) {
@@ -132,7 +134,13 @@ const AlbumDetail = () => {
 
   const handleDeleteAlbum = async () => {
     if (!albumId || !album || isDeleting) return;
-    if (!window.confirm(`确定要删除专辑《${album.title}》吗？删除后可在回收站恢复。`)) return;
+    const confirmed = await dialog.confirm({
+      title: '删除专辑',
+      message: `确定要删除专辑《${album.title}》吗？删除后可在回收站恢复。`,
+      confirmText: '删除',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
 
     try {
       setIsDeleting(true);

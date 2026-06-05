@@ -11,6 +11,8 @@ const mockApiDelete = vi.hoisted(() => vi.fn())
 const mockApiPost = vi.hoisted(() => vi.fn())
 const mockApiPatch = vi.hoisted(() => vi.fn())
 const mockShowToast = vi.hoisted(() => vi.fn())
+const mockConfirmDialog = vi.hoisted(() => vi.fn())
+const mockPromptDialog = vi.hoisted(() => vi.fn())
 
 vi.mock('../../src/lib/apiClient', () => ({
   apiGet: mockApiGet,
@@ -25,6 +27,13 @@ vi.mock('../../src/components/Toast', () => ({
   }),
 }))
 
+vi.mock('../../src/components/Dialog', () => ({
+  useDialog: () => ({
+    confirm: mockConfirmDialog,
+    prompt: mockPromptDialog,
+  }),
+}))
+
 vi.mock('../../src/components/SmartImage', () => ({
   SmartImage: (props: { alt?: string; className?: string; src?: string }) => (
     <img alt={props.alt || ''} className={props.className} src={props.src || ''} />
@@ -34,7 +43,8 @@ vi.mock('../../src/components/SmartImage', () => ({
 describe('AdminListPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.stubGlobal('confirm', vi.fn(() => true))
+    mockConfirmDialog.mockResolvedValue(true)
+    mockPromptDialog.mockResolvedValue('')
 
     mockApiGet.mockResolvedValue({
       data: [

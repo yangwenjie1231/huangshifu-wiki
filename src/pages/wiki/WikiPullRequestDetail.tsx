@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { clsx } from "clsx";
+import { useDialog } from "../../components/Dialog";
 import { useToast } from "../../components/Toast";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import { formatDate } from "../../lib/dateUtils";
@@ -21,6 +22,7 @@ const WikiPullRequestDetail = () => {
 	);
 	const [diff, setDiff] = useState<WikiPrDiffResponse["diff"] | null>(null);
 	const [comment, setComment] = useState("");
+	const dialog = useDialog();
 	const { show } = useToast();
 
 	const fetchDetail = async () => {
@@ -67,13 +69,27 @@ const WikiPullRequestDetail = () => {
 
 	const handleAdminAction = async (action: "merge" | "reject") => {
 		if (!prId || !pullRequest || saving) return;
-		if (action === "merge" && !window.confirm("确认合并该 PR 吗？")) return;
+		if (action === "merge") {
+			const confirmed = await dialog.confirm({
+				title: "合并 PR",
+				message: "确认合并该 PR 吗？",
+				confirmText: "合并",
+				variant: "warning",
+			});
+			if (!confirmed) return;
+		}
 
 		let note = "";
 		if (action === "reject") {
 			note =
-				window.prompt("请填写驳回说明（可选）", "请根据评审意见调整后重提") ||
-				"";
+				(await dialog.prompt({
+					title: "驳回 PR",
+					message: "请填写驳回说明（可选）",
+					defaultValue: "请根据评审意见调整后重提",
+					confirmText: "驳回",
+					variant: "warning",
+					multiline: true,
+				})) || "";
 		}
 
 		try {

@@ -27,6 +27,7 @@ import { clsx } from 'clsx'
 import MarkdownEditor from '../components/MarkdownEditor'
 import { CharacterCount } from '../components/CharacterCount'
 import { apiDelete, apiGet, apiPost, apiPut, invalidateApiCacheByPrefix } from '../lib/apiClient'
+import { useDialog } from '../components/Dialog'
 import { useToast } from '../components/Toast'
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink'
 import { ContentStatus, getStatusClassName, getStatusText } from '../lib/contentUtils'
@@ -386,6 +387,7 @@ const PostDetail = () => {
   const commentInputRef = useRef<HTMLTextAreaElement | null>(null)
   const { user, profile, isBanned } = useAuth()
   const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin'
+  const dialog = useDialog()
   const { show } = useToast()
   const navigate = useNavigate()
 
@@ -498,7 +500,13 @@ const PostDetail = () => {
       show('删除他人评论必须填写删除理由', { variant: 'error' })
       return
     }
-    if (!window.confirm(t('forum.deleteCommentConfirm'))) return
+    const confirmed = await dialog.confirm({
+      title: '删除评论',
+      message: t('forum.deleteCommentConfirm'),
+      confirmText: '删除',
+      variant: 'danger',
+    })
+    if (!confirmed) return
 
     try {
       setDeletingCommentId(comment.id)
@@ -1154,6 +1162,7 @@ const PostEditor = () => {
   const [deleteReason, setDeleteReason] = useState('')
   const [editablePostAuthorUid, setEditablePostAuthorUid] = useState<string | null>(null)
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
+  const dialog = useDialog()
   const { show } = useToast()
 
   useEffect(() => {
@@ -1296,13 +1305,20 @@ const PostEditor = () => {
     if (!postId || !isEditing || !editablePostAuthorUid || isDeleting) return
     if (!user || (editablePostAuthorUid !== user.uid && !isAdmin)) return
 
-    if (!window.confirm(t('forum.deletePostConfirm', { title: formData.title || postId }))) {
-      return
-    }
     const isSelfDelete = editablePostAuthorUid === user.uid
     const reason = isSelfDelete ? null : deleteReason.trim()
     if (!isSelfDelete && !reason) {
       show('删除他人帖子必须填写删除理由', { variant: 'error' })
+      return
+    }
+
+    const confirmed = await dialog.confirm({
+      title: '删除帖子',
+      message: t('forum.deletePostConfirm', { title: formData.title || postId }),
+      confirmText: '删除',
+      variant: 'danger',
+    })
+    if (!confirmed) {
       return
     }
 

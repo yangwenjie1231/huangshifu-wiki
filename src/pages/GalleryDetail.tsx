@@ -17,6 +17,7 @@ import { useAuth } from '../context/AuthContext';
 import { SmartImage } from '../components/SmartImage';
 import { Lightbox } from '../components/Lightbox';
 import { CharacterCount } from '../components/CharacterCount';
+import { useDialog } from '../components/Dialog';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { apiDelete, apiGet, apiPatch, apiPost, apiUpload } from '../lib/apiClient';
@@ -124,6 +125,7 @@ const GalleryDetail = () => {
   const { galleryId } = useParams();
   const navigate = useNavigate();
   const { user, profile, isBanned } = useAuth();
+  const dialog = useDialog();
   const { show } = useToast();
   const { t } = useI18n();
 
@@ -540,13 +542,19 @@ const GalleryDetail = () => {
     if (!gallery || !user || deletingGallery) return;
     const isSelfDelete = gallery.authorUid === user.uid;
     if (!isSelfDelete && !isAdmin) return;
-    if (!window.confirm(`确定要删除图集《${gallery.title}》吗？删除后可由管理员在回收站恢复。`)) return;
-
     const reason = isSelfDelete ? null : galleryDeleteReason.trim();
     if (!isSelfDelete && !reason) {
       show('删除他人图集必须填写删除理由', { variant: 'error' });
       return;
     }
+
+    const confirmed = await dialog.confirm({
+      title: '删除图集',
+      message: `确定要删除图集《${gallery.title}》吗？删除后可由管理员在回收站恢复。`,
+      confirmText: '删除',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
 
     try {
       setDeletingGallery(true);
@@ -576,7 +584,13 @@ const GalleryDetail = () => {
       show('删除他人评论必须填写删除理由', { variant: 'error' });
       return;
     }
-    if (!window.confirm(t('gallery.deleteCommentConfirm'))) return;
+    const confirmed = await dialog.confirm({
+      title: '删除评论',
+      message: t('gallery.deleteCommentConfirm'),
+      confirmText: '删除',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
 
     try {
       setDeletingCommentId(comment.id);

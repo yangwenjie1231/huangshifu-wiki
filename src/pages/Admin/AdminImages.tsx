@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Download, Upload, Edit2, Trash2, CheckCircle, XCircle, FileText, Settings, RefreshCw, Sparkles } from 'lucide-react';
 import { apiGet, apiPatch, apiDelete, apiPost, apiDownload } from '../../lib/apiClient';
+import { useDialog } from '../../components/Dialog';
 import { useToast } from '../../components/Toast';
 import { formatDateTime } from '../../lib/dateUtils';
 import { clsx } from 'clsx';
@@ -53,6 +54,7 @@ const AdminImages: React.FC = () => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showPreferenceModal, setShowPreferenceModal] = useState(false);
   const [preference, setPreference] = useState<ImagePreference>({ strategy: 'local', fallback: true });
+  const dialog = useDialog();
   const { show } = useToast();
 
   const fetchImages = async () => {
@@ -106,7 +108,13 @@ const AdminImages: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('确定要删除这张图片的映射吗？')) return;
+    const confirmed = await dialog.confirm({
+      title: '删除图片映射',
+      message: '确定要删除这张图片的映射吗？',
+      confirmText: '删除',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     try {
       await apiDelete(`/api/image-maps/${id}`);
       setImages((prev) => prev.filter((img) => img.id !== id));

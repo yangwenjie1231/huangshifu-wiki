@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { HardDrive, RefreshCw, Settings, Save, X, RotateCcw, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { apiGet, apiPut, apiPost } from '../../lib/apiClient';
+import { useDialog } from '../../components/Dialog';
 
 interface DiskStatus {
   totalSpaceGB: number;
@@ -31,6 +32,7 @@ export const AdminDiskMonitor: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const dialog = useDialog();
 
   const fetchDiskStatus = useCallback(async () => {
     try {
@@ -114,7 +116,13 @@ export const AdminDiskMonitor: React.FC = () => {
   };
 
   const handleResetToDefaults = async () => {
-    if (!confirm('确定要重置为默认配置吗？')) return;
+    const confirmed = await dialog.confirm({
+      title: '重置磁盘监控配置',
+      message: '确定要重置为默认配置吗？',
+      confirmText: '重置',
+      variant: 'warning',
+    });
+    if (!confirmed) return;
     try {
       setSaving(true);
       const result = await apiPost<{ success: boolean; data: DiskMonitorConfig }>('/api/admin/disk/config/reset');

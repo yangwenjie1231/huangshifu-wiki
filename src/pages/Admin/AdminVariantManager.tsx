@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Image, Trash2, RotateCcw, Loader2, CheckCircle, AlertTriangle, XCircle, Zap, Clock, BarChart3 } from 'lucide-react';
 import { apiGet, apiPost } from '../../lib/apiClient';
+import { useDialog } from '../../components/Dialog';
 import { clsx } from 'clsx';
 
 interface VariantStats {
@@ -43,6 +44,7 @@ export const AdminVariantManager: React.FC = () => {
   const [rebuildResult, setRebuildResult] = useState<RebuildResponse | null>(null);
   const [cleaning, setCleaning] = useState(false);
   const [cleanupResult, setCleanupResult] = useState<{ type: string; freedSpace: number; deletedCount: number; errorsCount: number } | null>(null);
+  const dialog = useDialog();
 
   const fetchStats = useCallback(async () => {
     try {
@@ -69,7 +71,14 @@ export const AdminVariantManager: React.FC = () => {
   }, [fetchStats]);
 
   const handleRebuildVariants = async (scope: string) => {
-    if (!confirm(`确定要执行"${scope === 'missing' ? '补全缺失' : scope === 'failed' ? '重建失败' : '全部重建'}"吗？`)) return;
+    const actionLabel = scope === 'missing' ? '补全缺失' : scope === 'failed' ? '重建失败' : '全部重建';
+    const confirmed = await dialog.confirm({
+      title: '重建变体',
+      message: `确定要执行"${actionLabel}"吗？`,
+      confirmText: '执行',
+      variant: scope === 'all' ? 'danger' : 'warning',
+    });
+    if (!confirmed) return;
     try {
       setRebuilding(true);
       setRebuildResult(null);
@@ -88,7 +97,13 @@ export const AdminVariantManager: React.FC = () => {
   };
 
   const handleCleanupOrphaned = async () => {
-    if (!confirm('确定要清理所有孤儿变体文件吗？')) return;
+    const confirmed = await dialog.confirm({
+      title: '清理孤儿变体',
+      message: '确定要清理所有孤儿变体文件吗？',
+      confirmText: '清理',
+      variant: 'warning',
+    });
+    if (!confirmed) return;
     try {
       setCleaning(true);
       setCleanupResult(null);
@@ -105,7 +120,13 @@ export const AdminVariantManager: React.FC = () => {
   };
 
   const handleCleanupFailed = async () => {
-    if (!confirm('确定要清理所有失败的变体文件吗？')) return;
+    const confirmed = await dialog.confirm({
+      title: '清理失败变体',
+      message: '确定要清理所有失败的变体文件吗？',
+      confirmText: '清理',
+      variant: 'warning',
+    });
+    if (!confirmed) return;
     try {
       setCleaning(true);
       setCleanupResult(null);
@@ -122,7 +143,13 @@ export const AdminVariantManager: React.FC = () => {
   };
 
   const handleCleanupAll = async () => {
-    if (!confirm('确定要执行全量清理吗？这将同时清理孤儿文件和失败残留。')) return;
+    const confirmed = await dialog.confirm({
+      title: '全量清理',
+      message: '确定要执行全量清理吗？这将同时清理孤儿文件和失败残留。',
+      confirmText: '清理',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     try {
       setCleaning(true);
       setCleanupResult(null);

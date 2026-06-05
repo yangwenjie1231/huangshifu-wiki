@@ -10,6 +10,8 @@ const mockApiDelete = vi.hoisted(() => vi.fn())
 const mockInvalidateApiCacheByPrefix = vi.hoisted(() => vi.fn())
 const mockShow = vi.hoisted(() => vi.fn())
 const mockUseAuth = vi.hoisted(() => vi.fn())
+const mockConfirmDialog = vi.hoisted(() => vi.fn())
+const mockPromptDialog = vi.hoisted(() => vi.fn())
 
 vi.mock('../../../src/lib/apiClient', () => ({
   apiGet: mockApiGet,
@@ -21,6 +23,13 @@ vi.mock('../../../src/lib/apiClient', () => ({
 vi.mock('../../../src/components/Toast', () => ({
   useToast: () => ({
     show: mockShow,
+  }),
+}))
+
+vi.mock('../../../src/components/Dialog', () => ({
+  useDialog: () => ({
+    confirm: mockConfirmDialog,
+    prompt: mockPromptDialog,
   }),
 }))
 
@@ -87,6 +96,8 @@ vi.mock('../../../src/components/Modal', () => ({
 describe('AdminUsers', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockConfirmDialog.mockResolvedValue(true)
+    mockPromptDialog.mockResolvedValue('')
     mockUseAuth.mockReturnValue({
       user: { uid: 'admin-1' },
       profile: { role: 'admin' },

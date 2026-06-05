@@ -3,6 +3,7 @@ import { Trash2, CheckCircle, XCircle, AlertTriangle, RefreshCw, KeyRound, Loade
 import { clsx } from 'clsx';
 import { CharacterCount } from '../../components/CharacterCount';
 import { apiDelete, apiGet, apiPut, invalidateApiCacheByPrefix } from '../../lib/apiClient';
+import { useDialog } from '../../components/Dialog';
 import { useToast } from '../../components/Toast';
 import { SmartImage } from '../../components/SmartImage';
 import { useAuth } from '../../context/AuthContext';
@@ -22,6 +23,7 @@ export const AdminUsers = () => {
   const [resetTarget, setResetTarget] = useState<AdminDataItem | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
+  const dialog = useDialog();
   const { show } = useToast();
 
   const invalidateAdminUsersCache = () => invalidateApiCacheByPrefix(ADMIN_USERS_API_PREFIX)
@@ -66,12 +68,26 @@ export const AdminUsers = () => {
     }
 
     const shouldUnban = target.status === 'banned';
-    if (!window.confirm(`确定要${shouldUnban ? '解封' : '封禁'} ${target.displayName || target.uid} 吗？`)) return;
-    const note = window.prompt(shouldUnban ? '解封备注（可选）' : '封禁原因', shouldUnban ? '' : '违反社区规范') || '';
+    const note = await dialog.prompt({
+      title: shouldUnban ? '解封备注' : '封禁原因',
+      message: shouldUnban ? '解封备注（可选）' : '封禁原因',
+      defaultValue: shouldUnban ? '' : '违反社区规范',
+      confirmText: '确认',
+      variant: shouldUnban ? 'info' : 'warning',
+      multiline: true,
+    });
+    if (note === null) return;
     if (!shouldUnban && !note.trim()) {
       show('请输入封禁原因', { variant: 'error' });
       return;
     }
+    const confirmed = await dialog.confirm({
+      title: shouldUnban ? '解封用户' : '封禁用户',
+      message: `确定要${shouldUnban ? '解封' : '封禁'} ${target.displayName || target.uid} 吗？`,
+      confirmText: shouldUnban ? '解封' : '封禁',
+      variant: shouldUnban ? 'warning' : 'danger',
+    });
+    if (!confirmed) return;
     try {
       const endpoint = shouldUnban ? `/api/users/${target.uid}/unban` : `/api/users/${target.uid}/ban`;
       const result = await apiPut<{ user: AdminDataItem }>(endpoint, shouldUnban ? { note } : { reason: note, note });
@@ -89,7 +105,13 @@ export const AdminUsers = () => {
       return;
     }
     const newRole = getNextRole(target.role);
-    if (!window.confirm(`确定要将 ${target.displayName || target.uid} 的角色更改为 ${formatAdminRole(newRole)} 吗？`)) return;
+    const confirmed = await dialog.confirm({
+      title: '更改用户角色',
+      message: `确定要将 ${target.displayName || target.uid} 的角色更改为 ${formatAdminRole(newRole)} 吗？`,
+      confirmText: '更改',
+      variant: 'warning',
+    });
+    if (!confirmed) return;
     try {
       await apiPut(`/api/users/${target.uid}/role`, { role: newRole });
       invalidateAdminUsersCache();
@@ -110,7 +132,13 @@ export const AdminUsers = () => {
       return;
     }
 
-    if (!window.confirm('确定删除此用户吗？')) {
+    const confirmed = await dialog.confirm({
+      title: '删除用户',
+      message: '确定删除此用户吗？',
+      confirmText: '删除',
+      variant: 'danger',
+    });
+    if (!confirmed) {
       return;
     }
 

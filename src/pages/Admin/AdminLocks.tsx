@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Lock, RefreshCw } from 'lucide-react';
 import { apiDelete, apiGet } from '../../lib/apiClient';
 import { formatDateTime } from '../../lib/dateUtils';
+import { useDialog } from '../../components/Dialog';
 import { useToast } from '../../components/Toast';
 import type { EditLockItem } from '../../types/entities';
 
 export const AdminLocks = () => {
   const [data, setData] = useState<EditLockItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const dialog = useDialog();
   const { show } = useToast();
 
   const fetchData = async () => {
@@ -28,7 +30,13 @@ export const AdminLocks = () => {
   }, []);
 
   const releaseLock = async (lock: EditLockItem) => {
-    if (!window.confirm('确定要强制释放这个编辑锁吗？')) return;
+    const confirmed = await dialog.confirm({
+      title: '释放编辑锁',
+      message: '确定要强制释放这个编辑锁吗？',
+      confirmText: '释放',
+      variant: 'warning',
+    });
+    if (!confirmed) return;
     try {
       await apiDelete(`/api/admin/locks/${lock.collection}/${encodeURIComponent(lock.recordId)}`);
       setData((prev) => prev.filter((item) => item.id !== lock.id));

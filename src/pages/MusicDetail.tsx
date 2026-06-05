@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { apiDelete, apiGet } from '../lib/apiClient';
 import { useAuth } from '../context/AuthContext';
 import { useMusic } from '../context/MusicContext';
+import { useDialog } from '../components/Dialog';
 import { useToast } from '../components/Toast';
 import { useToggleInteraction } from '../hooks/useToggleInteraction';
 import { useI18n } from '../lib/i18n';
@@ -86,6 +87,7 @@ const MusicDetail = () => {
   const [lyricsCopied, setLyricsCopied] = useState(false);
   const { user, isAdmin } = useAuth();
   const { setCurrentSong, setIsPlaying, setPlaylist } = useMusic();
+  const dialog = useDialog();
   const { show } = useToast();
   const { t } = useI18n();
 
@@ -163,7 +165,13 @@ const MusicDetail = () => {
 
   const handleDeleteSong = async () => {
     if (!song?.docId || isDeleting) return;
-    if (!window.confirm(`确定要删除歌曲《${song.title}》吗？删除后可在回收站恢复。`)) return;
+    const confirmed = await dialog.confirm({
+      title: '删除歌曲',
+      message: `确定要删除歌曲《${song.title}》吗？删除后可在回收站恢复。`,
+      confirmText: '删除',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
 
     try {
       setIsDeleting(true);

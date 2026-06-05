@@ -3,6 +3,7 @@ import { Loader2, Trash2, Star, Upload, X } from 'lucide-react';
 import { clsx } from 'clsx';
 
 import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/apiClient';
+import { useDialog } from './Dialog';
 import { useToast } from './Toast';
 import { uploadImageWithStrategy, type UploadImageResult } from '../services/imageService';
 import { UPLOAD_MAX_FILE_SIZE_BYTES, formatUploadLimitWithSize } from '../lib/uploadLimits';
@@ -55,6 +56,7 @@ export const CoverManager = ({
   const [settingDefault, setSettingDefault] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const dialog = useDialog();
   const { show } = useToast();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -116,7 +118,13 @@ export const CoverManager = ({
   };
 
   const handleDelete = async (coverId: string) => {
-    if (!window.confirm('确定要删除这个封面吗？')) return;
+    const confirmed = await dialog.confirm({
+      title: '删除封面',
+      message: '确定要删除这个封面吗？',
+      confirmText: '删除',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     setDeleting(coverId);
     try {
       await apiDelete(`${config.apiPrefix}/${resourceId}/covers/${coverId}`);
@@ -131,7 +139,13 @@ export const CoverManager = ({
   };
 
   const handleSyncToSongsInternal = async () => {
-    if (!window.confirm('确定要将此封面同步到专辑内的所有歌曲吗？')) return;
+    const confirmed = await dialog.confirm({
+      title: '同步封面',
+      message: '确定要将此封面同步到专辑内的所有歌曲吗？',
+      confirmText: '同步',
+      variant: 'warning',
+    });
+    if (!confirmed) return;
     try {
       await apiPost(`${config.apiPrefix}/${resourceId}/sync-covers-to-songs`);
       show('封面已同步到专辑内歌曲');

@@ -19,6 +19,7 @@ import { clsx } from 'clsx'
 import { apiDelete, apiGet, apiPatch, apiPost } from '../../lib/apiClient'
 import { formatDateTime } from '../../lib/dateUtils'
 import { getStatusClassName, getStatusText } from '../../lib/contentUtils'
+import { useDialog } from '../../components/Dialog'
 import { useToast } from '../../components/Toast'
 import { SmartImage } from '../../components/SmartImage'
 import type { ContentStatus } from '../../types/common'
@@ -417,6 +418,7 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
   const [loading, setLoading] = useState(true)
   const [pendingActions, setPendingActions] = useState<Record<string, 'delete' | 'restore' | 'permanentDelete'>>({})
   const [showDeleted, setShowDeleted] = useState(false)
+  const dialog = useDialog()
   const { show } = useToast()
   const [newItem, setNewItem] = useState<any>({})
 
@@ -453,15 +455,31 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
   }, [type, showDeleted])
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('确定要删除吗？删除后可在回收站恢复。')) return
+    const requiresReason = type === 'wiki' || type === 'posts' || type === 'galleries'
     const reasonInput =
-      type === 'wiki' || type === 'posts' || type === 'galleries'
-        ? window.prompt('删除理由（必填）', '')?.trim() || ''
+      requiresReason
+        ? await dialog.prompt({
+            title: '删除理由',
+            message: '删除理由（必填）',
+            confirmText: '继续删除',
+            variant: 'warning',
+            multiline: true,
+          })
         : ''
-    if ((type === 'wiki' || type === 'posts' || type === 'galleries') && !reasonInput) {
+    if (reasonInput === null) return
+    const trimmedReasonInput = reasonInput.trim()
+    if (requiresReason && !trimmedReasonInput) {
       show('删除该内容必须填写删除理由', { variant: 'error' })
       return
     }
+    const confirmed = await dialog.confirm({
+      title: '删除内容',
+      message: '确定要删除吗？删除后可在回收站恢复。',
+      confirmText: '删除',
+      variant: 'danger',
+    })
+    if (!confirmed) return
+
     const previousData = data
     const deletedAt = new Date().toISOString()
     setRowPendingAction(id, 'delete')
@@ -470,15 +488,15 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
       showDeleted
         ? prev.map((item) =>
             String(item.docId || item.id || item.uid || '') === id
-              ? { ...item, isDeleted: true, deletedAt, deletionReason: reasonInput || null }
+              ? { ...item, isDeleted: true, deletedAt, deletionReason: trimmedReasonInput || null }
               : item,
           )
         : prev.filter((item) => String(item.docId || item.id || item.uid || '') !== id),
     )
     try {
       const deletePath = `/api/admin/${cfg.apiPath}/${id}`
-      if (reasonInput) {
-        await apiDelete(deletePath, { reason: reasonInput })
+      if (trimmedReasonInput) {
+        await apiDelete(deletePath, { reason: trimmedReasonInput })
       } else {
         await apiDelete(deletePath)
       }
@@ -514,7 +532,13 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
   }
 
   const handlePermanentDelete = async (id: string) => {
-    if (!window.confirm('确定要彻底删除吗？此操作不可恢复。')) return
+    const confirmed = await dialog.confirm({
+      title: '彻底删除',
+      message: '确定要彻底删除吗？此操作不可恢复。',
+      confirmText: '彻底删除',
+      variant: 'danger',
+    })
+    if (!confirmed) return
     const previousData = data
     setRowPendingAction(id, 'permanentDelete')
     show('正在彻底删除...', { duration: 1200 })

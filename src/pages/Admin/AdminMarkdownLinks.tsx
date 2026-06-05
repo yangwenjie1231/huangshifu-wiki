@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost } from '../../lib/apiClient';
+import { useDialog } from '../../components/Dialog';
 import { useToast } from '../../components/Toast';
 import { clsx } from 'clsx';
 
@@ -47,6 +48,7 @@ interface UpdateResult {
 }
 
 export default function AdminMarkdownLinks() {
+  const dialog = useDialog();
   const { show } = useToast();
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -88,7 +90,15 @@ export default function AdminMarkdownLinks() {
   const handleUpdate = async () => {
     const valid = mappings.filter((m) => m.oldUrl && m.newUrl);
     if (valid.length === 0) { show('请至少填写一个链接映射', { variant: 'error' }); return; }
-    if (!dryRun && !window.confirm('确定要执行实际更新吗？此操作将修改 Wiki 页面内容。')) return;
+    if (!dryRun) {
+      const confirmed = await dialog.confirm({
+        title: '执行实际更新',
+        message: '确定要执行实际更新吗？此操作将修改 Wiki 页面内容。',
+        confirmText: '更新',
+        variant: 'warning',
+      });
+      if (!confirmed) return;
+    }
     setUpdating(true);
     try {
       const result = await apiPost<UpdateResult>('/api/admin/wiki-links/update', { mappings: valid, dryRun });
@@ -100,7 +110,15 @@ export default function AdminMarkdownLinks() {
 
   const handleSwitchStorage = async () => {
     if (fromStorage === toStorage) { show('源存储和目标存储不能相同', { variant: 'error' }); return; }
-    if (!dryRun && !window.confirm('确定要执行存储策略切换吗？此操作将修改 Wiki 页面内容。')) return;
+    if (!dryRun) {
+      const confirmed = await dialog.confirm({
+        title: '切换存储策略',
+        message: '确定要执行存储策略切换吗？此操作将修改 Wiki 页面内容。',
+        confirmText: '切换',
+        variant: 'warning',
+      });
+      if (!confirmed) return;
+    }
     setUpdating(true);
     try {
       const result = await apiPost<UpdateResult>('/api/admin/wiki-links/switch-storage', { fromStorage, toStorage, config: storageConfig, dryRun });
@@ -111,7 +129,15 @@ export default function AdminMarkdownLinks() {
   };
 
   const handleSyncWithImageMap = async () => {
-    if (!dryRun && !window.confirm('确定要同步 ImageMap 吗？此操作将修改 Wiki 页面内容。')) return;
+    if (!dryRun) {
+      const confirmed = await dialog.confirm({
+        title: '同步 ImageMap',
+        message: '确定要同步 ImageMap 吗？此操作将修改 Wiki 页面内容。',
+        confirmText: '同步',
+        variant: 'warning',
+      });
+      if (!confirmed) return;
+    }
     setUpdating(true);
     try {
       const result = await apiPost<any>('/api/admin/wiki-links/sync-with-imagemap', { dryRun });

@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useLskyUpload } from '../hooks/useLskyUpload';
 import { useLskyPhotos } from '../hooks/useLskyPhotos';
 import { useLskyAlbums } from '../hooks/useLskyAlbums';
+import { useDialog } from './Dialog';
+import { useToast } from './Toast';
 
 export function LskyImageManager() {
   const [activeTab, setActiveTab] = useState<'upload' | 'photos' | 'albums'>('upload');
@@ -190,6 +192,7 @@ export function LskyImageManager() {
 
 function UploadPanel() {
   const { uploading, progress, error, data, upload, reset } = useLskyUpload();
+  const { show } = useToast();
   const [imageUrl, setImageUrl] = useState<string>('');
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -205,7 +208,7 @@ function UploadPanel() {
   const handleCopyUrl = () => {
     if (imageUrl) {
       navigator.clipboard.writeText(imageUrl);
-      alert('URL 已复制到剪贴板！');
+      show('URL 已复制到剪贴板');
     }
   };
 
@@ -276,11 +279,16 @@ function UploadPanel() {
 
 function PhotosPanel() {
   const { loading, error, photos, pagination, fetchPhotos, deletePhoto } = useLskyPhotos();
+  const dialog = useDialog();
 
   const handleDelete = async (id: number) => {
-    if (confirm('确定要删除这张图片吗？')) {
-      await deletePhoto(id);
-    }
+    const confirmed = await dialog.confirm({
+      title: '删除图片',
+      message: '确定要删除这张图片吗？',
+      confirmText: '删除',
+      variant: 'danger',
+    });
+    if (confirmed) await deletePhoto(id);
   };
 
   if (loading) {
@@ -348,13 +356,15 @@ function PhotosPanel() {
 
 function AlbumsPanel() {
   const { loading, error, albums, createAlbum, deleteAlbum } = useLskyAlbums();
+  const dialog = useDialog();
+  const { show } = useToast();
   const [showCreate, setShowCreate] = useState(false);
   const [newAlbumName, setNewAlbumName] = useState('');
   const [newAlbumDesc, setNewAlbumDesc] = useState('');
 
   const handleCreate = async () => {
     if (!newAlbumName.trim()) {
-      alert('请输入相册名称');
+      show('请输入相册名称', { variant: 'error' });
       return;
     }
 
@@ -367,14 +377,18 @@ function AlbumsPanel() {
       setShowCreate(false);
       setNewAlbumName('');
       setNewAlbumDesc('');
-      alert('相册创建成功！');
+      show('相册创建成功');
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('确定要删除这个相册吗？')) {
-      await deleteAlbum(id);
-    }
+    const confirmed = await dialog.confirm({
+      title: '删除相册',
+      message: '确定要删除这个相册吗？',
+      confirmText: '删除',
+      variant: 'danger',
+    });
+    if (confirmed) await deleteAlbum(id);
   };
 
   if (loading) {
