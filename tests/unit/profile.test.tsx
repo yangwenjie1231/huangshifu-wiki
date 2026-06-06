@@ -1,13 +1,21 @@
+// @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import Profile from '../../src/pages/Profile'
 
-const { mockApiGet, mockApiPatch, mockRefreshAuth, mockShow } = vi.hoisted(() => ({
+import UserProfile from '../../src/pages/UserProfile'
+
+const { mockApiGet } = vi.hoisted(() => ({
   mockApiGet: vi.fn(),
+}))
+const { mockApiPatch } = vi.hoisted(() => ({
   mockApiPatch: vi.fn(),
+}))
+const { mockRefreshAuth } = vi.hoisted(() => ({
   mockRefreshAuth: vi.fn(),
-  mockShow: vi.fn(),
+}))
+const { mockToastShow } = vi.hoisted(() => ({
+  mockToastShow: vi.fn(),
 }))
 
 vi.mock('../../src/lib/apiClient', () => ({
@@ -23,98 +31,202 @@ vi.mock('../../src/context/AuthContext', () => ({
       photoURL: '',
       role: 'user',
     },
-    profile: {
-      displayName: '测试用户',
-      signature: '',
-      bio: '',
-      photoURL: '',
-      level: 1,
-      role: 'user',
-      status: 'active',
-    },
     refreshAuth: mockRefreshAuth,
   }),
 }))
 
 vi.mock('../../src/components/Toast', () => ({
   useToast: () => ({
-    show: mockShow,
+    show: mockToastShow,
   }),
 }))
 
-vi.mock('../../src/components/AvatarCropModal', () => ({
-  AvatarCropModal: () => null,
-}))
-
-describe('Profile posts status', () => {
+describe('UserProfile', () => {
   beforeEach(() => {
     mockApiGet.mockReset()
     mockApiPatch.mockReset()
+    mockApiPatch.mockResolvedValue({})
     mockRefreshAuth.mockReset()
-    mockShow.mockReset()
+    mockRefreshAuth.mockResolvedValue(undefined)
+    mockToastShow.mockReset()
   })
 
   afterEach(() => {
     cleanup()
   })
 
-  it('renders rejected posts with Chinese status text and error style', async () => {
+  const renderProfile = (path = '/users/user-1') =>
+    render(
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/users/:userId/:tab?" element={<UserProfile />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+  it('opens on the profile tab and hides comments tab', async () => {
     mockApiGet.mockImplementation(async (path: string) => {
+      if (path === '/api/users/user-1/profile') {
+        return {
+          user: {
+            uid: 'user-1',
+            displayName: '测试用户',
+            photoURL: '',
+            signature: '',
+            bio: '公开简介',
+            createdAt: '2026-05-25T10:00:00.000Z',
+            updatedAt: '2026-05-25T10:00:00.000Z',
+            isSelf: true,
+            canViewFavorites: true,
+            canViewHistory: true,
+            publicFavorites: false,
+            publicHistory: false,
+          },
+        }
+      }
+
+      return { galleries: [], favorites: [], history: [] }
+    })
+
+    renderProfile()
+
+    expect(await screen.findByText('公开简介')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /设置/ })).toHaveAttribute('href', '/settings/profile')
+    expect(screen.queryByRole('link', { name: '评论' })).not.toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(mockApiGet).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('renders public posts on the posts tab', async () => {
+    mockApiGet.mockImplementation(async (path: string) => {
+      if (path === '/api/users/user-1/profile') {
+        return {
+          user: {
+            uid: 'user-1',
+            displayName: '测试用户',
+            photoURL: '',
+            signature: '',
+            bio: '',
+            createdAt: '2026-05-25T10:00:00.000Z',
+            updatedAt: '2026-05-25T10:00:00.000Z',
+            isSelf: true,
+            canViewFavorites: true,
+            canViewHistory: true,
+            publicFavorites: false,
+            publicHistory: false,
+          },
+        }
+      }
+
       if (path === '/api/users/user-1/posts') {
         return {
           posts: [
             {
               id: 'post-1',
-              title: '被驳回的帖子',
+              title: '公开帖子',
               section: '闲聊',
-              status: 'rejected',
-              likesCount: 0,
-              commentsCount: 0,
+              content: '',
+              authorUid: 'user-1',
+              status: 'published',
+              likesCount: 2,
+              dislikesCount: 0,
+              commentsCount: 1,
               createdAt: '2026-05-25T10:00:00.000Z',
               updatedAt: '2026-05-25T10:00:00.000Z',
             },
           ],
-          total: 1,
         }
       }
 
-      return { favorites: [], comments: [], history: [], total: 0 }
+      return { galleries: [], favorites: [], history: [] }
     })
 
-    const view = render(
-      <MemoryRouter initialEntries={['/profile']}>
-        <Routes>
-          <Route path="/profile/:tab?" element={<Profile />} />
-        </Routes>
-      </MemoryRouter>
-    )
+    renderProfile('/users/user-1/posts')
 
-    fireEvent.click(screen.getAllByRole('link', { name: '我的帖子' })[0])
-
-    const statusBadge = await screen.findByText('已驳回')
-    await screen.findByText('被驳回的帖子')
+    expect(await screen.findByText('公开帖子')).toBeInTheDocument()
 
     await waitFor(() => {
-      expect(statusBadge.className).toContain('theme-status-error')
+      expect(mockApiGet).toHaveBeenCalledWith('/api/users/user-1/posts', {
+        limit: 50,
+        visibility: 'public',
+      })
     })
-    expect(screen.queryByText('rejected')).not.toBeInTheDocument()
-
-    view.unmount()
   })
 
-  it('links profile editing entry to settings', () => {
-    mockApiGet.mockResolvedValue({ favorites: [], comments: [], history: [], total: 0 })
+  it('allows the owner to edit the signature inline', async () => {
+    mockApiGet.mockImplementation(async (path: string) => {
+      if (path === '/api/users/user-1/profile') {
+        return {
+          user: {
+            uid: 'user-1',
+            displayName: '测试用户',
+            photoURL: '',
+            signature: '旧签名',
+            bio: '',
+            createdAt: '2026-05-25T10:00:00.000Z',
+            updatedAt: '2026-05-25T10:00:00.000Z',
+            isSelf: true,
+            canViewFavorites: true,
+            canViewHistory: true,
+            publicFavorites: false,
+            publicHistory: false,
+          },
+        }
+      }
 
-    render(
-      <MemoryRouter initialEntries={['/profile']}>
-        <Routes>
-          <Route path="/profile/:tab?" element={<Profile />} />
-        </Routes>
-      </MemoryRouter>
-    )
+      return {}
+    })
 
-    const settingsLink = screen.getByRole('link', { name: /设置/ })
-    expect(settingsLink).toHaveAttribute('href', '/settings/profile')
-    expect(screen.queryByRole('button', { name: /编辑资料/ })).not.toBeInTheDocument()
+    renderProfile()
+
+    fireEvent.click(await screen.findByRole('button', { name: '旧签名' }))
+    const editor = screen.getByRole('textbox', { name: '编辑签名' })
+
+    fireEvent.input(editor, { target: { innerText: '新签名' } })
+    fireEvent.blur(editor)
+
+    await waitFor(() => {
+      expect(mockApiPatch).toHaveBeenCalledWith('/api/users/me', { signature: '新签名' })
+    })
+    expect(mockRefreshAuth).toHaveBeenCalled()
+    expect(mockToastShow).toHaveBeenCalledWith('签名已保存')
+    expect(await screen.findByRole('button', { name: '新签名' })).toBeInTheDocument()
+  })
+
+  it('does not show private tabs when the profile keeps them private', async () => {
+    mockApiGet.mockImplementation(async (path: string) => {
+      if (path === '/api/users/user-2/profile') {
+        return {
+          user: {
+            uid: 'user-2',
+            displayName: '其他用户',
+            photoURL: '',
+            signature: '',
+            bio: '',
+            createdAt: '2026-05-25T10:00:00.000Z',
+            updatedAt: '2026-05-25T10:00:00.000Z',
+            isSelf: false,
+            canViewFavorites: false,
+            canViewHistory: false,
+            publicFavorites: false,
+            publicHistory: false,
+          },
+        }
+      }
+
+      if (path === '/api/users/user-2/posts') {
+        return { posts: [] }
+      }
+
+      return {}
+    })
+
+    renderProfile('/users/user-2')
+
+    expect(await screen.findByText('其他用户')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '收藏' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '浏览历史' })).not.toBeInTheDocument()
   })
 })

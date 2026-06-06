@@ -70,6 +70,8 @@ describe('theme helpers', () => {
       viewMode: 'large',
       theme: 'dark',
       showCharacterCount: true,
+      publicFavorites: false,
+      publicHistory: false,
     })
   })
 
@@ -79,6 +81,7 @@ describe('theme helpers', () => {
     expect(hasStoredPreferenceValues({ theme: 'dark' })).toBe(true)
     expect(hasStoredPreferenceValues({ viewMode: 'small' })).toBe(true)
     expect(hasStoredPreferenceValues({ showCharacterCount: false })).toBe(true)
+    expect(hasStoredPreferenceValues({ publicFavorites: false })).toBe(true)
     expect(hasStoredPreferenceValues({ theme: 'sepia' })).toBe(false)
   })
 
@@ -98,6 +101,8 @@ describe('theme helpers', () => {
       viewMode: 'small',
       theme: 'default',
       showCharacterCount: true,
+      publicFavorites: false,
+      publicHistory: false,
     })
   })
 
@@ -113,6 +118,8 @@ describe('theme helpers', () => {
         viewMode: 'small',
         theme: 'dark',
         showCharacterCount: true,
+        publicFavorites: false,
+        publicHistory: false,
       },
       users: {},
     })
@@ -133,6 +140,8 @@ describe('theme helpers', () => {
       viewMode: 'list',
       theme: 'default',
       showCharacterCount: true,
+      publicFavorites: false,
+      publicHistory: false,
     })
     expect(JSON.parse(window.localStorage.getItem(THEME_STORAGE_KEY) || '{}')).toEqual({
       users: {
@@ -140,6 +149,8 @@ describe('theme helpers', () => {
           viewMode: 'list',
           theme: 'default',
           showCharacterCount: true,
+          publicFavorites: false,
+          publicHistory: false,
         },
       },
     })
@@ -158,6 +169,8 @@ describe('theme helpers', () => {
       viewMode: 'small',
       theme: 'dark',
       showCharacterCount: false,
+      publicFavorites: false,
+      publicHistory: false,
     })
   })
 
@@ -174,6 +187,8 @@ describe('theme helpers', () => {
       viewMode: 'small',
       theme: 'dark',
       showCharacterCount: false,
+      publicFavorites: false,
+      publicHistory: false,
     })
     expect(readStoredPreferences('user-1')).toEqual(DEFAULT_PREFERENCES)
   })

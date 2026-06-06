@@ -18,7 +18,7 @@
 import { describe, beforeEach, afterEach, it, expect } from 'vitest';
 import request from 'supertest';
 import { app } from '../../server';
-import { prisma, createTestUser, createTestToken, createTestPost } from './setup';
+import { prisma, createTestUser, createTestToken, createTestPost, createTestGallery } from './setup';
 import type { CreateTestPostInput } from './setup';
 import { WIKI_MAX_CONTENT_SIZE } from '../../src/lib/contentLimits';
 
@@ -693,6 +693,59 @@ describe('Users API - 用户接口测试', () => {
     });
   });
 
+  describe('GET /api/users/:userId/profile - 获取公开个人资料', () => {
+    it('应该返回公开资料且不泄露敏感字段', async () => {
+      const response = await request(app).get(`/api/users/${testUser.user.uid}/profile`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.user.uid).toBe(testUser.user.uid);
+      expect(response.body.user).toHaveProperty('displayName');
+      expect(response.body.user).toHaveProperty('canViewFavorites', false);
+      expect(response.body.user).toHaveProperty('canViewHistory', false);
+      expect(response.body.user).not.toHaveProperty('email');
+      expect(response.body.user).not.toHaveProperty('preferences');
+      expect(response.body.user).not.toHaveProperty('role');
+    });
+  });
+
+  describe('GET /api/users/:userId/galleries - 获取用户图集列表', () => {
+    it('公开模式只返回已发布图集', async () => {
+      const publishedGallery = await createTestGallery({
+        title: 'Test Published User Gallery',
+        authorUid: testUser.user.uid,
+        authorName: testUser.user.displayName,
+        published: true,
+      });
+      await createTestGallery({
+        title: 'Test Draft User Gallery',
+        authorUid: testUser.user.uid,
+        authorName: testUser.user.displayName,
+        published: false,
+      });
+
+      const publicResponse = await request(app).get(`/api/users/${testUser.user.uid}/galleries`).query({
+        visibility: 'public',
+      });
+
+      expect(publicResponse.status).toBe(200);
+      expect(publicResponse.body.galleries.map((gallery: { id: string }) => gallery.id)).toContain(
+        publishedGallery.id
+      );
+      expect(
+        publicResponse.body.galleries.find((gallery: { title: string }) => gallery.title === 'Test Draft User Gallery')
+      ).toBeUndefined();
+
+      const selfResponse = await request(app)
+        .get(`/api/users/${testUser.user.uid}/galleries`)
+        .set('Authorization', `Bearer ${userToken}`);
+
+      expect(selfResponse.status).toBe(200);
+      expect(
+        selfResponse.body.galleries.find((gallery: { title: string }) => gallery.title === 'Test Draft User Gallery')
+      ).toBeDefined();
+    });
+  });
+
   // ============================================================================
   // 获取用户评论列表接口测试
   // ============================================================================
@@ -857,6 +910,183 @@ describe('Users API - 用户接口测试', () => {
       );
 
       expect(newerCommentIndex).toBeLessThan(olderCommentIndex);
+    });
+
+    it('应该正确返回图集评论目标信息', async () => {
+      const gallery = await createTestGallery({
+        title: 'Test Gallery Comment Target',
+        authorUid: adminUser.user.uid,
+        authorName: adminUser.user.displayName,
+        published: true,
+      });
+
+      const comment = await prisma.postComment.create({
+        data: {
+          galleryId: gallery.id,
+          authorUid: testUser.user.uid,
+          content: 'Gallery comment by user',
+        },
+      });
+
+      const response = await request(app).get(`/api/users/${testUser.user.uid}/comments`);
+
+      expect(response.status).toBe(200);
+      const item = response.body.comments.find((entry: { id: string }) => entry.id === comment.id);
+      expect(item).toBeDefined();
+      expect(item.targetType).toBe('gallery');
+      expect(item.target).toMatchObject({ id: gallery.id, title: 'Test Gallery Comment Target' });
+      expect(item.gallery).toMatchObject({ id: gallery.id, title: 'Test Gallery Comment Target' });
+      expect(item.post).toBeNull();
+    });
+  });
+
+  describe('GET /api/users/:userId/favorites 和 /history - 隐私设置', () => {
+    it('默认不允许他人查看收藏，开启后可查看公开收藏', async () => {
+      const post = await createTestPost({
+        title: 'Test Favorited Public Post',
+        status: 'published',
+        authorUid: adminUser.user.uid,
+      });
+      await prisma.favorite.create({
+        data: {
+          userUid: testUser.user.uid,
+          targetType: 'post',
+          targetId: post.id,
+        },
+      });
+
+      const deniedResponse = await request(app).get(`/api/users/${testUser.user.uid}/favorites`);
+      expect(deniedResponse.status).toBe(403);
+
+      await prisma.user.update({
+        where: { uid: testUser.user.uid },
+        data: { preferences: { publicFavorites: true } },
+      });
+
+      const response = await request(app).get(`/api/users/${testUser.user.uid}/favorites`);
+      expect(response.status).toBe(200);
+      expect(response.body.favorites[0]).toMatchObject({
+        targetType: 'post',
+        targetId: post.id,
+      });
+      expect(response.body.favorites[0].target.title).toBe('Test Favorited Public Post');
+    });
+
+    it('公开收藏分页不应被不可见目标截断', async () => {
+      const hiddenPost = await createTestPost({
+        title: 'Test Hidden Favorite Prefix',
+        status: 'draft',
+        authorUid: testUser.user.uid,
+      });
+      const visiblePost = await createTestPost({
+        title: 'Test Visible Favorite After Hidden',
+        status: 'published',
+        authorUid: adminUser.user.uid,
+      });
+
+      await prisma.user.update({
+        where: { uid: testUser.user.uid },
+        data: { preferences: { publicFavorites: true } },
+      });
+      await prisma.favorite.create({
+        data: {
+          userUid: testUser.user.uid,
+          targetType: 'post',
+          targetId: visiblePost.id,
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      await prisma.favorite.create({
+        data: {
+          userUid: testUser.user.uid,
+          targetType: 'post',
+          targetId: hiddenPost.id,
+        },
+      });
+
+      const response = await request(app)
+        .get(`/api/users/${testUser.user.uid}/favorites`)
+        .query({ page: 1, limit: 1 });
+
+      expect(response.status).toBe(200);
+      expect(response.body.total).toBe(1);
+      expect(response.body.hasMore).toBe(false);
+      expect(response.body.favorites).toHaveLength(1);
+      expect(response.body.favorites[0].targetId).toBe(visiblePost.id);
+    });
+
+    it('默认不允许他人查看浏览历史，开启后可查看公开历史', async () => {
+      const post = await createTestPost({
+        title: 'Test History Public Post',
+        status: 'published',
+        authorUid: adminUser.user.uid,
+      });
+      await prisma.browsingHistory.create({
+        data: {
+          userUid: testUser.user.uid,
+          targetType: 'post',
+          targetId: post.id,
+        },
+      });
+
+      const deniedResponse = await request(app).get(`/api/users/${testUser.user.uid}/history`);
+      expect(deniedResponse.status).toBe(403);
+
+      await prisma.user.update({
+        where: { uid: testUser.user.uid },
+        data: { preferences: { publicHistory: true } },
+      });
+
+      const response = await request(app).get(`/api/users/${testUser.user.uid}/history`);
+      expect(response.status).toBe(200);
+      expect(response.body.history[0]).toMatchObject({
+        targetType: 'post',
+        targetId: post.id,
+      });
+      expect(response.body.history[0].target.title).toBe('Test History Public Post');
+    });
+
+    it('公开浏览历史分页不应被不可见目标截断', async () => {
+      const hiddenPost = await createTestPost({
+        title: 'Test Hidden History Prefix',
+        status: 'draft',
+        authorUid: testUser.user.uid,
+      });
+      const visiblePost = await createTestPost({
+        title: 'Test Visible History After Hidden',
+        status: 'published',
+        authorUid: adminUser.user.uid,
+      });
+
+      await prisma.user.update({
+        where: { uid: testUser.user.uid },
+        data: { preferences: { publicHistory: true } },
+      });
+      await prisma.browsingHistory.create({
+        data: {
+          userUid: testUser.user.uid,
+          targetType: 'post',
+          targetId: visiblePost.id,
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      await prisma.browsingHistory.create({
+        data: {
+          userUid: testUser.user.uid,
+          targetType: 'post',
+          targetId: hiddenPost.id,
+        },
+      });
+
+      const response = await request(app)
+        .get(`/api/users/${testUser.user.uid}/history`)
+        .query({ page: 1, limit: 1 });
+
+      expect(response.status).toBe(200);
+      expect(response.body.total).toBe(1);
+      expect(response.body.hasMore).toBe(false);
+      expect(response.body.history).toHaveLength(1);
+      expect(response.body.history[0].targetId).toBe(visiblePost.id);
     });
   });
 

@@ -99,7 +99,7 @@ export const MobileMenu = ({
 										</div>
 									)}
 									<Link
-										to="/profile"
+										to={`/users/${user.uid}`}
 										onClick={onClose}
 										className="flex items-center gap-3 p-2"
 									>
@@ -119,7 +119,7 @@ export const MobileMenu = ({
 									</Link>
 									<div className={accountMenuStyles.quickLinksGrid}>
 										<NavLink
-											to="/profile/posts"
+											to="/settings/content?tab=posts"
 											onClick={onClose}
 											className={accountMenuStyles.menuAction}
 										>
@@ -127,7 +127,7 @@ export const MobileMenu = ({
 											<span>我的帖子</span>
 										</NavLink>
 										<NavLink
-											to="/profile/comments"
+											to="/settings/content?tab=comments"
 											onClick={onClose}
 											className={accountMenuStyles.menuAction}
 										>
@@ -135,7 +135,7 @@ export const MobileMenu = ({
 											<span>我的评论</span>
 										</NavLink>
 										<NavLink
-											to="/profile/history"
+											to={`/users/${user.uid}/history`}
 											onClick={onClose}
 											className={accountMenuStyles.menuAction}
 										>
@@ -143,7 +143,7 @@ export const MobileMenu = ({
 											<span>浏览历史</span>
 										</NavLink>
 										<NavLink
-											to="/profile/favorites"
+											to={`/users/${user.uid}/favorites`}
 											onClick={onClose}
 											className={accountMenuStyles.menuAction}
 										>

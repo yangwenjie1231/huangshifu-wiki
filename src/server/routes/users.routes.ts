@@ -15,8 +15,14 @@ import {
   prisma,
   toUserResponse,
   buildPostVisibilityWhere,
+  buildGalleryVisibilityWhere,
+  canViewWikiPage,
+  canViewPost,
   toPostResponse,
   toCommentResponse,
+  toGalleryListResponse,
+  toWikiResponse,
+  parseFavoriteType,
   safeDeleteUploadFileByUrl,
   parsePagination,
   logger,
@@ -31,6 +37,16 @@ const PASSWORD_SALT_ROUNDS = getPasswordSaltRounds();
 type PasswordUpdateResponse = {
   success: true;
   token?: string;
+}
+
+type PublicProfilePreferences = {
+  publicFavorites: boolean;
+  publicHistory: boolean;
+}
+
+const DEFAULT_PUBLIC_PROFILE_PREFERENCES: PublicProfilePreferences = {
+  publicFavorites: false,
+  publicHistory: false,
 }
 
 const ADMIN_USER_SELECT = {
@@ -53,6 +69,233 @@ function canManageTargetUserRole(operatorRole: PrismaUserRole | undefined, targe
   if (operatorRole === 'super_admin') return true;
   if (operatorRole === 'admin') return targetRole === 'user';
   return false;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizePublicProfilePreferences(value: unknown): PublicProfilePreferences {
+  if (!isRecord(value)) {
+    return DEFAULT_PUBLIC_PROFILE_PREFERENCES;
+  }
+
+  return {
+    publicFavorites:
+      typeof value.publicFavorites === 'boolean'
+        ? value.publicFavorites
+        : DEFAULT_PUBLIC_PROFILE_PREFERENCES.publicFavorites,
+    publicHistory:
+      typeof value.publicHistory === 'boolean'
+        ? value.publicHistory
+        : DEFAULT_PUBLIC_PROFILE_PREFERENCES.publicHistory,
+  };
+}
+
+function canViewPrivateProfileSection(
+  targetUid: string,
+  authUser: AuthenticatedRequest['authUser'],
+  isPublic: boolean
+) {
+  if (authUser?.uid === targetUid) return true;
+  if (authUser?.role === 'admin' || authUser?.role === 'super_admin') return true;
+  return isPublic;
+}
+
+function getPublicVisibilityWhere(forcePublic: boolean, authUser?: AuthenticatedRequest['authUser']) {
+  return forcePublic ? undefined : authUser;
+}
+
+function toPublicUserProfile(user: {
+  uid: string;
+  displayName: string;
+  photoURL: string | null;
+  signature: string;
+  bio: string;
+  preferences: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+}, authUser?: AuthenticatedRequest['authUser']) {
+  const preferences = normalizePublicProfilePreferences(user.preferences);
+  const isSelf = authUser?.uid === user.uid;
+  const isAdmin = authUser?.role === 'admin' || authUser?.role === 'super_admin';
+
+  return {
+    uid: user.uid,
+    displayName: user.displayName,
+    photoURL: user.photoURL,
+    signature: user.signature,
+    bio: user.bio,
+    createdAt: user.createdAt.toISOString(),
+    updatedAt: user.updatedAt.toISOString(),
+    isSelf,
+    canViewFavorites: Boolean(isSelf || isAdmin || preferences.publicFavorites),
+    canViewHistory: Boolean(isSelf || isAdmin || preferences.publicHistory),
+    publicFavorites: preferences.publicFavorites,
+    publicHistory: preferences.publicHistory,
+  };
+}
+
+async function resolveProfileContentTargets(
+  items: Array<{ targetType: string; targetId: string }>,
+  authUser?: AuthenticatedRequest['authUser']
+) {
+  const wikiIds = items.filter((item) => item.targetType === 'wiki').map((item) => item.targetId);
+  const postIds = items.filter((item) => item.targetType === 'post').map((item) => item.targetId);
+  const musicIds = items.filter((item) => item.targetType === 'music').map((item) => item.targetId);
+
+  const [wikiPages, posts, songs] = await Promise.all([
+    wikiIds.length
+      ? prisma.wikiPage.findMany({
+          where: { slug: { in: wikiIds }, deletedAt: null },
+          include: {
+            lastEditor: { select: { displayName: true } },
+            location: true,
+          },
+        })
+      : Promise.resolve([]),
+    postIds.length
+      ? prisma.post.findMany({ where: { id: { in: postIds }, deletedAt: null } })
+      : Promise.resolve([]),
+    musicIds.length
+      ? prisma.musicTrack.findMany({ where: { docId: { in: musicIds }, deletedAt: null } })
+      : Promise.resolve([]),
+  ]);
+
+  const wikiMap = new Map(
+    wikiPages
+      .filter((page) => canViewWikiPage(page, authUser))
+      .map((item) => [item.slug, toWikiResponse(item)])
+  );
+  const postMap = new Map(
+    posts.filter((post) => canViewPost(post, authUser)).map((item) => [item.id, toPostResponse(item)])
+  );
+  const songMap = new Map(
+    songs.map((song) => [
+      song.docId,
+      {
+        ...song,
+        createdAt: song.createdAt.toISOString(),
+        updatedAt: song.updatedAt.toISOString(),
+      },
+    ])
+  );
+
+  return { wikiMap, postMap, songMap };
+}
+
+function getResolvedTarget(
+  item: { targetType: string; targetId: string },
+  targets: Awaited<ReturnType<typeof resolveProfileContentTargets>>
+) {
+  if (item.targetType === 'wiki') return targets.wikiMap.get(item.targetId) ?? null;
+  if (item.targetType === 'post') return targets.postMap.get(item.targetId) ?? null;
+  if (item.targetType === 'music') return targets.songMap.get(item.targetId) ?? null;
+  return null;
+}
+
+type ProfileContentRecord = {
+  id: string;
+  targetType: string;
+  targetId: string;
+  createdAt: Date;
+}
+
+function getProfileContentKey(item: { targetType: string; targetId: string }) {
+  return `${item.targetType}:${item.targetId}`;
+}
+
+async function resolveVisibleProfileContentKeys(
+  items: Array<{ targetType: string; targetId: string }>,
+  authUser?: AuthenticatedRequest['authUser']
+) {
+  const wikiIds = items.filter((item) => item.targetType === 'wiki').map((item) => item.targetId);
+  const postIds = items.filter((item) => item.targetType === 'post').map((item) => item.targetId);
+  const musicIds = items.filter((item) => item.targetType === 'music').map((item) => item.targetId);
+
+  const [wikiPages, posts, songs] = await Promise.all([
+    wikiIds.length
+      ? prisma.wikiPage.findMany({
+          where: { slug: { in: wikiIds }, deletedAt: null },
+          select: {
+            slug: true,
+            status: true,
+            lastEditorUid: true,
+            deletedAt: true,
+          },
+        })
+      : Promise.resolve([]),
+    postIds.length
+      ? prisma.post.findMany({
+          where: { id: { in: postIds }, deletedAt: null },
+          select: {
+            id: true,
+            status: true,
+            authorUid: true,
+            deletedAt: true,
+          },
+        })
+      : Promise.resolve([]),
+    musicIds.length
+      ? prisma.musicTrack.findMany({
+          where: { docId: { in: musicIds }, deletedAt: null },
+          select: { docId: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const visibleKeys = new Set<string>();
+  wikiPages.forEach((page) => {
+    if (canViewWikiPage(page, authUser)) {
+      visibleKeys.add(`wiki:${page.slug}`);
+    }
+  });
+  posts.forEach((post) => {
+    if (canViewPost(post, authUser)) {
+      visibleKeys.add(`post:${post.id}`);
+    }
+  });
+  songs.forEach((song) => {
+    visibleKeys.add(`music:${song.docId}`);
+  });
+
+  return visibleKeys;
+}
+
+async function paginateVisibleProfileContent(
+  records: ProfileContentRecord[],
+  options: {
+    skip: number;
+    limit: number;
+    authUser?: AuthenticatedRequest['authUser'];
+  }
+) {
+  const visibleKeys = await resolveVisibleProfileContentKeys(records, options.authUser);
+  const visibleRecords = records.filter((record) => visibleKeys.has(getProfileContentKey(record)));
+
+  return {
+    pageItems: visibleRecords.slice(options.skip, options.skip + options.limit),
+    total: visibleRecords.length,
+  };
+}
+
+function toProfileContentItems(
+  items: ProfileContentRecord[],
+  targets: Awaited<ReturnType<typeof resolveProfileContentTargets>>
+) {
+  return items
+    .map((item) => {
+      const target = getResolvedTarget(item, targets);
+      if (!target) return null;
+      return {
+        id: item.id,
+        targetType: item.targetType,
+        targetId: item.targetId,
+        createdAt: item.createdAt.toISOString(),
+        target,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
 }
 
 /**
@@ -389,7 +632,14 @@ router.patch('/me', profileLimiter, requireAuth, requireActiveUser, asyncHandler
         res.status(400).json({ error: '偏好设置不能超过2KB' });
         return;
       }
-      updateData.preferences = preferences;
+      const existing = await prisma.user.findUnique({
+        where: { uid: req.authUser!.uid },
+        select: { preferences: true },
+      });
+      updateData.preferences = {
+        ...(isRecord(existing?.preferences) ? existing.preferences : {}),
+        ...(isRecord(preferences) ? preferences : {}),
+      };
     }
 
     // 头像处理：校验 URL，并在变更时同步历史评论 / 帖子作者头像快照
@@ -715,13 +965,91 @@ router.put('/:userId/unban', requireAdmin, asyncHandler(async (req: Authenticate
   }
 }));
 
+// User browsing history route
+router.get('/me/history', requireAuth, requireActiveUser, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  try {
+    const { type, limit = '20', offset = '0' } = req.query;
+    const userId = req.authUser!.uid;
+
+    const limitNum = Math.min(Math.max(Number(limit) || 20, 1), 100);
+    const offsetNum = Math.max(Number(offset) || 0, 0);
+
+    const where: Record<string, unknown> = {
+      userUid: userId,
+    };
+
+    // Filter by type if provided
+    if (type && ['wiki', 'post', 'music'].includes(type as string)) {
+      where.targetType = type as string;
+    }
+
+    const [histories, total] = await Promise.all([
+      prisma.browsingHistory.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limitNum,
+        skip: offsetNum,
+      }),
+      prisma.browsingHistory.count({ where }),
+    ]);
+
+    res.json({
+      history: histories.map((item) => ({
+        id: item.id,
+        targetType: item.targetType,
+        targetId: item.targetId,
+        createdAt: item.createdAt.toISOString(),
+      })),
+      pagination: {
+        total,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + limitNum < total,
+      },
+    });
+  } catch (error) {
+    console.error('Get user history error:', error);
+    res.status(500).json({ error: '获取历史记录失败' });
+  }
+}));
+
 // User detail routes
+router.get('/:userId/profile', asyncHandler(async (req: AuthenticatedRequest, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { uid: req.params.userId },
+      select: {
+        uid: true,
+        displayName: true,
+        photoURL: true,
+        signature: true,
+        bio: true,
+        preferences: true,
+        deletedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!user || user.deletedAt) {
+      res.status(404).json({ error: '用户不存在' });
+      return;
+    }
+
+    res.json({ user: toPublicUserProfile(user, req.authUser) });
+  } catch (error) {
+    console.error('Fetch public user profile error:', error);
+    res.status(500).json({ error: '获取用户资料失败' });
+  }
+}));
+
 router.get('/:userId/posts', asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const uid = req.params.userId;
     const { limit, page, offset: skip } = parsePagination(req.query);
+    const forcePublic = req.query.visibility === 'public';
 
-    const visibilityWhere = buildPostVisibilityWhere(req.authUser);
+    const visibilityWhere = buildPostVisibilityWhere(getPublicVisibilityWhere(forcePublic, req.authUser));
 
     const where = {
       authorUid: uid,
@@ -810,6 +1138,51 @@ router.get('/:userId/posts', asyncHandler(async (req: AuthenticatedRequest, res)
   }
 }));
 
+router.get('/:userId/galleries', asyncHandler(async (req: AuthenticatedRequest, res) => {
+  try {
+    const uid = req.params.userId;
+    const { limit, page, offset: skip } = parsePagination(req.query);
+    const forcePublic = req.query.visibility === 'public';
+    const visibilityWhere = buildGalleryVisibilityWhere(
+      getPublicVisibilityWhere(forcePublic, req.authUser)
+    );
+
+    const where = {
+      authorUid: uid,
+      ...visibilityWhere,
+    };
+
+    const [galleries, total] = await Promise.all([
+      prisma.gallery.findMany({
+        where,
+        include: {
+          images: {
+            include: {
+              asset: true,
+            },
+            orderBy: { sortOrder: 'asc' },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip,
+      }),
+      prisma.gallery.count({ where }),
+    ]);
+
+    res.json({
+      galleries: await toGalleryListResponse(galleries),
+      total,
+      page,
+      limit,
+      hasMore: skip + galleries.length < total,
+    });
+  } catch (error) {
+    console.error('Fetch user galleries error:', error);
+    res.status(500).json({ error: '获取用户图集失败' });
+  }
+}));
+
 router.get('/:userId/comments', asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const uid = req.params.userId;
@@ -817,19 +1190,25 @@ router.get('/:userId/comments', asyncHandler(async (req: AuthenticatedRequest, r
     const isAdmin = req.authUser?.role === 'admin' || req.authUser?.role === 'super_admin';
 
     const visibilityWhere = buildPostVisibilityWhere(req.authUser);
+    const galleryVisibilityWhere = buildGalleryVisibilityWhere(req.authUser);
+    const where = {
+      authorUid: uid,
+      OR: [
+        { postId: { not: null }, post: visibilityWhere },
+        { galleryId: { not: null }, gallery: galleryVisibilityWhere },
+      ],
+    };
 
     const [comments, total] = await Promise.all([
       prisma.postComment.findMany({
-        where: {
-          authorUid: uid,
-        },
+        where,
         orderBy: { createdAt: 'desc' },
         take: limit,
         skip,
-	        include: {
-	          author: {
-	            select: { displayName: true, photoURL: true },
-	          },
+        include: {
+          author: {
+            select: { displayName: true, photoURL: true },
+          },
           replyTo: {
             select: {
               authorUid: true,
@@ -841,32 +1220,56 @@ router.get('/:userId/comments', asyncHandler(async (req: AuthenticatedRequest, r
           _count: {
             select: { likes: true },
           },
-	        },
-	      }),
-      prisma.postComment.count({ where: { authorUid: uid } }),
+        },
+      }),
+      prisma.postComment.count({ where }),
     ]);
 
     // PostComment.postId 可能为 null（图集评论），筛掉非空的再传给 Post 查询，
     // 让 Prisma 的 in 子句类型对齐 string[]
     const postIds = [...new Set(comments.map((c) => c.postId).filter((id): id is string => Boolean(id)))];
+    const galleryIds = [...new Set(comments.map((c) => c.galleryId).filter((id): id is string => Boolean(id)))];
     const postsMap = new Map<string, { id: string; title: string; status: string }>();
+    const galleriesMap = new Map<string, { id: string; title: string; published: boolean }>();
 
-    if (postIds.length) {
-      const posts = await prisma.post.findMany({
-        where: {
-          id: { in: postIds },
-          ...visibilityWhere,
-        },
-        select: { id: true, title: true, status: true },
-      });
-      posts.forEach((p) => postsMap.set(p.id, p));
-    }
+    const [posts, galleries] = await Promise.all([
+      postIds.length
+        ? prisma.post.findMany({
+            where: {
+              id: { in: postIds },
+              ...visibilityWhere,
+            },
+            select: { id: true, title: true, status: true },
+          })
+        : Promise.resolve([]),
+      galleryIds.length
+        ? prisma.gallery.findMany({
+            where: {
+              id: { in: galleryIds },
+              ...galleryVisibilityWhere,
+            },
+            select: { id: true, title: true, published: true },
+          })
+        : Promise.resolve([]),
+    ]);
+    posts.forEach((p) => postsMap.set(p.id, p));
+    galleries.forEach((gallery) => galleriesMap.set(gallery.id, gallery));
 
     res.json({
-      comments: comments.map((comment) => ({
-        ...toCommentResponse(comment, { maskDeletedContent: !isAdmin }),
-        post: comment.postId && postsMap.has(comment.postId) ? postsMap.get(comment.postId)! : null,
-      })),
+      comments: comments.map((comment) => {
+        const post = comment.postId ? postsMap.get(comment.postId) ?? null : null;
+        const gallery = comment.galleryId ? galleriesMap.get(comment.galleryId) ?? null : null;
+        const targetType = gallery ? 'gallery' : 'post';
+        return {
+          ...toCommentResponse(comment, { maskDeletedContent: !isAdmin }),
+          targetType,
+          target: gallery
+            ? { id: gallery.id, title: gallery.title, published: gallery.published }
+            : post,
+          post,
+          gallery,
+        };
+      }),
       total,
       page,
       limit,
@@ -875,6 +1278,127 @@ router.get('/:userId/comments', asyncHandler(async (req: AuthenticatedRequest, r
   } catch (error) {
     console.error('Fetch user comments error:', error);
     res.status(500).json({ error: '获取用户评论失败' });
+  }
+}));
+
+router.get('/:userId/favorites', asyncHandler(async (req: AuthenticatedRequest, res) => {
+  try {
+    const uid = req.params.userId;
+    const rawType = req.query.type;
+    const requestedType = parseFavoriteType(rawType);
+    const { limit, page, offset: skip } = parsePagination(req.query);
+
+    if (rawType !== undefined && rawType !== null && rawType !== '' && !requestedType) {
+      res.status(400).json({ error: '无效收藏类型' });
+      return;
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { uid },
+      select: { uid: true, preferences: true, deletedAt: true },
+    });
+
+    if (!targetUser || targetUser.deletedAt) {
+      res.status(404).json({ error: '用户不存在' });
+      return;
+    }
+
+    const preferences = normalizePublicProfilePreferences(targetUser.preferences);
+    if (!canViewPrivateProfileSection(uid, req.authUser, preferences.publicFavorites)) {
+      res.status(403).json({ error: '无权查看该用户的收藏' });
+      return;
+    }
+
+    const favorites = await prisma.favorite.findMany({
+      where: {
+        userUid: uid,
+        ...(requestedType ? { targetType: requestedType } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        targetType: true,
+        targetId: true,
+        createdAt: true,
+      },
+    });
+    const { pageItems, total } = await paginateVisibleProfileContent(favorites, {
+      skip,
+      limit,
+      authUser: req.authUser,
+    });
+    const targets = await resolveProfileContentTargets(pageItems, req.authUser);
+
+    res.json({
+      favorites: toProfileContentItems(pageItems, targets),
+      total,
+      page,
+      limit,
+      hasMore: skip + pageItems.length < total,
+    });
+  } catch (error) {
+    console.error('Fetch user public favorites error:', error);
+    res.status(500).json({ error: '获取用户收藏失败' });
+  }
+}));
+
+router.get('/:userId/history', asyncHandler(async (req: AuthenticatedRequest, res) => {
+  try {
+    const uid = req.params.userId;
+    const { limit, page, offset: skip } = parsePagination(req.query);
+    const type = req.query.type;
+
+    if (type && !['wiki', 'post', 'music'].includes(String(type))) {
+      res.status(400).json({ error: '无效历史类型' });
+      return;
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { uid },
+      select: { uid: true, preferences: true, deletedAt: true },
+    });
+
+    if (!targetUser || targetUser.deletedAt) {
+      res.status(404).json({ error: '用户不存在' });
+      return;
+    }
+
+    const preferences = normalizePublicProfilePreferences(targetUser.preferences);
+    if (!canViewPrivateProfileSection(uid, req.authUser, preferences.publicHistory)) {
+      res.status(403).json({ error: '无权查看该用户的浏览历史' });
+      return;
+    }
+
+    const histories = await prisma.browsingHistory.findMany({
+      where: {
+        userUid: uid,
+        ...(type ? { targetType: String(type) as 'wiki' | 'post' | 'music' } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        targetType: true,
+        targetId: true,
+        createdAt: true,
+      },
+    });
+    const { pageItems, total } = await paginateVisibleProfileContent(histories, {
+      skip,
+      limit,
+      authUser: req.authUser,
+    });
+    const targets = await resolveProfileContentTargets(pageItems, req.authUser);
+
+    res.json({
+      history: toProfileContentItems(pageItems, targets),
+      total,
+      page,
+      limit,
+      hasMore: skip + pageItems.length < total,
+    });
+  } catch (error) {
+    console.error('Fetch user public history error:', error);
+    res.status(500).json({ error: '获取用户浏览历史失败' });
   }
 }));
 
@@ -950,54 +1474,6 @@ router.get('/:userId/likes', requireAuth, asyncHandler(async (req: Authenticated
   } catch (error) {
     console.error('Fetch user likes error:', error);
     res.status(500).json({ error: '获取用户点赞失败' });
-  }
-}));
-
-// User browsing history route
-router.get('/me/history', requireAuth, requireActiveUser, asyncHandler(async (req: AuthenticatedRequest, res) => {
-  try {
-    const { type, limit = '20', offset = '0' } = req.query;
-    const userId = req.authUser!.uid;
-
-    const limitNum = Math.min(Math.max(Number(limit) || 20, 1), 100);
-    const offsetNum = Math.max(Number(offset) || 0, 0);
-
-    const where: Record<string, unknown> = {
-      userUid: userId,
-    };
-
-    // Filter by type if provided
-    if (type && ['wiki', 'post', 'music'].includes(type as string)) {
-      where.targetType = type as string;
-    }
-
-    const [histories, total] = await Promise.all([
-      prisma.browsingHistory.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        take: limitNum,
-        skip: offsetNum,
-      }),
-      prisma.browsingHistory.count({ where }),
-    ]);
-
-    res.json({
-      history: histories.map((item) => ({
-        id: item.id,
-        targetType: item.targetType,
-        targetId: item.targetId,
-        createdAt: item.createdAt.toISOString(),
-      })),
-      pagination: {
-        total,
-        limit: limitNum,
-        offset: offsetNum,
-        hasMore: offsetNum + limitNum < total,
-      },
-    });
-  } catch (error) {
-    console.error('Get user history error:', error);
-    res.status(500).json({ error: '获取历史记录失败' });
   }
 }));
 

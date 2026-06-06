@@ -21,7 +21,9 @@ import {
 
 const Home = lazy(() => import('./pages/Home').then((m) => ({ default: m.default })))
 const Wiki = lazy(() => import('./pages/wiki').then((m) => ({ default: m.default })))
-const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.default })))
+const UserProfile = lazy(() =>
+  import('./pages/UserProfile').then((m) => ({ default: m.default }))
+)
 const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.default })))
 const Forum = lazy(() => import('./pages/Forum').then((m) => ({ default: m.default })))
 const Music = lazy(() => import('./pages/Music').then((m) => ({ default: m.default })))
@@ -86,23 +88,13 @@ const MainLayout = () => {
               <Route path="/album/:albumId" element={<AlbumDetail />} />
               <Route path="/search" element={<Search />} />
               <Route path="/login" element={<Login />} />
-              <Route
-                path="/profile/:tab?"
-                element={
-                  <RouteGuard
-                    title="个人资料页需要先登录"
-                    description="登录后可以查看和维护你的个人资料、收藏、历史记录以及发帖信息。"
-                  >
-                    <Profile />
-                  </RouteGuard>
-                }
-              />
+              <Route path="/users/:userId/:tab?" element={<UserProfile />} />
               <Route
                 path="/settings/:section?"
                 element={
                   <RouteGuard
                     title="设置页需要先登录"
-                    description="登录后可以维护公开资料、账户信息和外观偏好。"
+                    description="登录后可以维护公开资料、内容、隐私、账户信息和外观偏好。"
                   >
                     <Settings />
                   </RouteGuard>

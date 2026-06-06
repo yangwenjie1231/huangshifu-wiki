@@ -13,6 +13,7 @@ import {
 import { PASSWORD_MAX_LENGTH } from '../../src/lib/passwordRules'
 
 const {
+  mockApiGet,
   mockApiPatch,
   mockApiPut,
   mockRefreshAuth,
@@ -20,6 +21,7 @@ const {
   mockUpdatePreferences,
   mockShow,
 } = vi.hoisted(() => ({
+  mockApiGet: vi.fn(),
   mockApiPatch: vi.fn(),
   mockApiPut: vi.fn(),
   mockRefreshAuth: vi.fn(),
@@ -29,6 +31,7 @@ const {
 }))
 
 vi.mock('../../src/lib/apiClient', () => ({
+  apiGet: mockApiGet,
   apiPatch: mockApiPatch,
   apiPut: mockApiPut,
 }))
@@ -60,6 +63,8 @@ vi.mock('../../src/context/UserPreferencesContext', () => ({
     preferences: {
       theme: 'system',
       showCharacterCount: false,
+      publicFavorites: false,
+      publicHistory: false,
     },
     updatePreferences: mockUpdatePreferences,
     setTheme: mockSetTheme,
@@ -81,6 +86,7 @@ vi.mock('../../src/components/AvatarCropModal', () => ({
 describe('Settings', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockApiGet.mockResolvedValue({ posts: [], galleries: [], comments: [] })
     mockApiPatch.mockResolvedValue({})
     mockApiPut.mockResolvedValue({})
     mockRefreshAuth.mockResolvedValue(undefined)
@@ -236,7 +242,48 @@ describe('Settings', () => {
     renderSettings('/settings/profile')
 
     expect(screen.getByRole('link', { name: '公开资料' })).toHaveAttribute('href', '/settings/profile')
+    expect(screen.getByRole('link', { name: '内容管理' })).toHaveAttribute('href', '/settings/content')
+    expect(screen.getByRole('link', { name: '隐私设置' })).toHaveAttribute('href', '/settings/privacy')
     expect(screen.getByRole('link', { name: '账户' })).toHaveAttribute('href', '/settings/account')
     expect(screen.getByRole('link', { name: '外观' })).toHaveAttribute('href', '/settings/appearance')
+  })
+
+  it('can update privacy settings', async () => {
+    renderSettings('/settings/privacy')
+
+    const favoritesToggle = screen.getByRole('switch', { name: '公开我的收藏' })
+    expect(favoritesToggle).toHaveAttribute('aria-checked', 'false')
+
+    await userEvent.click(favoritesToggle)
+
+    expect(mockUpdatePreferences).toHaveBeenCalledWith({ publicFavorites: true })
+  })
+
+  it('loads content management comments tab', async () => {
+    mockApiGet.mockResolvedValue({
+      comments: [
+        {
+          id: 'comment-1',
+          postId: null,
+          galleryId: 'gallery-1',
+          authorUid: 'user-1',
+          authorName: '测试用户',
+          authorPhoto: null,
+          content: '图集评论',
+          parentId: null,
+          isDeleted: false,
+          createdAt: '2026-05-25T10:00:00.000Z',
+          targetType: 'gallery',
+          target: { id: 'gallery-1', title: '图集标题', published: true },
+        },
+      ],
+      total: 1,
+    })
+
+    renderSettings('/settings/content?tab=comments')
+
+    expect(await screen.findByText('图集评论')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '图集标题' })).toHaveAttribute('href', '/gallery/gallery-1')
+    expect(mockApiGet).toHaveBeenCalledWith('/api/users/user-1/comments', { limit: 50 })
   })
 })

@@ -55,6 +55,12 @@ export function normalizeStoredPreferences(
     showCharacterCount: isBooleanPreference(value?.showCharacterCount)
       ? value.showCharacterCount
       : DEFAULT_PREFERENCES.showCharacterCount,
+    publicFavorites: isBooleanPreference(value?.publicFavorites)
+      ? value.publicFavorites
+      : DEFAULT_PREFERENCES.publicFavorites,
+    publicHistory: isBooleanPreference(value?.publicHistory)
+      ? value.publicHistory
+      : DEFAULT_PREFERENCES.publicHistory,
   }
 }
 
@@ -68,24 +74,33 @@ export function hasStoredPreferenceValues(
   return (
     isViewMode(value.viewMode) ||
     isThemeMode(value.theme) ||
-    isBooleanPreference(value.showCharacterCount)
+    isBooleanPreference(value.showCharacterCount) ||
+    isBooleanPreference(value.publicFavorites) ||
+    isBooleanPreference(value.publicHistory)
   )
 }
 
 export function mergeStoredPreferences(
-  base: UserPreferences,
+  base: Partial<UserPreferences>,
   value?: Partial<UserPreferences> | Record<string, unknown> | null
 ): UserPreferences {
+  const normalizedBase = normalizeStoredPreferences(base)
   if (!value || typeof value !== 'object') {
-    return base
+    return normalizedBase
   }
 
   return {
-    viewMode: isViewMode(value.viewMode) ? value.viewMode : base.viewMode,
-    theme: isThemeMode(value.theme) ? value.theme : base.theme,
+    viewMode: isViewMode(value.viewMode) ? value.viewMode : normalizedBase.viewMode,
+    theme: isThemeMode(value.theme) ? value.theme : normalizedBase.theme,
     showCharacterCount: isBooleanPreference(value.showCharacterCount)
       ? value.showCharacterCount
-      : base.showCharacterCount,
+      : normalizedBase.showCharacterCount,
+    publicFavorites: isBooleanPreference(value.publicFavorites)
+      ? value.publicFavorites
+      : normalizedBase.publicFavorites,
+    publicHistory: isBooleanPreference(value.publicHistory)
+      ? value.publicHistory
+      : normalizedBase.publicHistory,
   }
 }
 
@@ -210,7 +225,7 @@ export function readStoredPreferences(
   }
 }
 
-export function writeStoredPreferences(preferences: UserPreferences, uid?: string | null): void {
+export function writeStoredPreferences(preferences: Partial<UserPreferences>, uid?: string | null): void {
   if (typeof window === 'undefined') {
     return
   }

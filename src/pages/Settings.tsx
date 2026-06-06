@@ -3,15 +3,21 @@ import {
   Camera,
   ChevronDown,
   ChevronUp,
+  Eye,
+  FileText,
+  Image as ImageIcon,
   KeyRound,
   Loader2,
   Mail,
+  MessageSquare,
   Save,
   Shield,
   SlidersHorizontal,
   UserRound,
 } from 'lucide-react'
-import { Link, Navigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom'
+import { clsx } from 'clsx'
+import { format } from 'date-fns'
 
 import { AvatarCropModal } from '../components/AvatarCropModal'
 import { CharacterCount } from '../components/CharacterCount'
@@ -25,9 +31,11 @@ import {
   PROFILE_SIGNATURE_MAX_LENGTH,
   WIKI_MAX_CONTENT_SIZE,
 } from '../lib/contentLimits'
-import { apiPatch, apiPut } from '../lib/apiClient'
+import { apiGet, apiPatch, apiPut } from '../lib/apiClient'
 import { DEFAULT_AVATAR, handleAvatarError } from '../lib/defaultAvatar'
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '../lib/passwordRules'
+import { getStatusClassName, getStatusText } from '../lib/contentUtils'
+import type { CommentItem, GalleryItem, PostItem } from '../types/entities'
 
 type PublicProfileForm = {
   displayName: string
@@ -47,7 +55,14 @@ type PasswordForm = {
   confirmPassword: string
 }
 
-type SettingsSection = 'profile' | 'account' | 'appearance'
+type SettingsSection = 'profile' | 'content' | 'privacy' | 'account' | 'appearance'
+type ContentTab = 'posts' | 'galleries' | 'comments'
+
+type UserCommentItem = CommentItem & {
+  targetType?: 'post' | 'gallery'
+  target?: { id: string; title: string; status?: string; published?: boolean } | null
+  gallery?: { id: string; title: string; published: boolean } | null
+}
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback
@@ -55,11 +70,20 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 const SECTION_NAV = [
   { id: 'profile', label: '公开资料', icon: UserRound, path: '/settings/profile' },
+  { id: 'content', label: '内容管理', icon: FileText, path: '/settings/content' },
+  { id: 'privacy', label: '隐私设置', icon: Eye, path: '/settings/privacy' },
   { id: 'account', label: '账户', icon: Shield, path: '/settings/account' },
   { id: 'appearance', label: '外观', icon: SlidersHorizontal, path: '/settings/appearance' },
 ] as const
 
-const SETTINGS_SECTION_SET = new Set<SettingsSection>(['profile', 'account', 'appearance'])
+const SETTINGS_SECTION_SET = new Set<SettingsSection>([
+  'profile',
+  'content',
+  'privacy',
+  'account',
+  'appearance',
+])
+const CONTENT_TAB_SET = new Set<ContentTab>(['posts', 'galleries', 'comments'])
 
 function resolveSettingsSection(section?: string): SettingsSection | null {
   if (!section) {
@@ -69,12 +93,58 @@ function resolveSettingsSection(section?: string): SettingsSection | null {
   return SETTINGS_SECTION_SET.has(section as SettingsSection) ? (section as SettingsSection) : null
 }
 
+function resolveContentTab(tab: string | null): ContentTab {
+  return CONTENT_TAB_SET.has(tab as ContentTab) ? (tab as ContentTab) : 'posts'
+}
+
+function EmptyState({ message }: { message: string }) {
+  return <div className="py-8 text-center text-sm italic text-text-muted">{message}</div>
+}
+
+function PrivacySwitch({
+  id,
+  label,
+  checked,
+  onToggle,
+}: {
+  id: string
+  label: string
+  checked: boolean
+  onToggle: () => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-border pb-5 last:border-b-0">
+      <label htmlFor={id} className="text-sm font-medium text-text-primary">
+        {label}
+      </label>
+      <button
+        type="button"
+        id={id}
+        role="switch"
+        aria-checked={checked}
+        onClick={onToggle}
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-gold focus:ring-offset-2 ${
+          checked ? 'bg-[var(--color-theme-accent)]' : 'bg-border'
+        }`}
+      >
+        <span
+          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+            checked ? 'translate-x-6' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </div>
+  )
+}
+
 const Settings = () => {
   const { user, profile, refreshAuth } = useAuth()
   const { preferences, updatePreferences } = useUserPreferences()
   const { section } = useParams<{ section?: string }>()
+  const [searchParams] = useSearchParams()
   const { show } = useToast()
   const activeSection = resolveSettingsSection(section)
+  const activeContentTab = resolveContentTab(searchParams.get('tab'))
   const [profileForm, setProfileForm] = useState<PublicProfileForm>({
     displayName: '',
     signature: '',
@@ -96,6 +166,10 @@ const Settings = () => {
   const [savingProfile, setSavingProfile] = useState(false)
   const [savingEmail, setSavingEmail] = useState(false)
   const [savingPassword, setSavingPassword] = useState(false)
+  const [contentLoading, setContentLoading] = useState(false)
+  const [myPosts, setMyPosts] = useState<PostItem[]>([])
+  const [myGalleries, setMyGalleries] = useState<GalleryItem[]>([])
+  const [myComments, setMyComments] = useState<UserCommentItem[]>([])
 
   useEffect(() => {
     if (!user) return
@@ -116,6 +190,47 @@ const Settings = () => {
     user?.photoURL,
     user?.uid,
   ])
+
+  useEffect(() => {
+    if (!user || activeSection !== 'content') return
+
+    let cancelled = false
+    const run = async () => {
+      setContentLoading(true)
+      try {
+        if (activeContentTab === 'posts') {
+          const data = await apiGet<{ posts: PostItem[] }>(`/api/users/${user.uid}/posts`, {
+            limit: 50,
+          })
+          if (!cancelled) setMyPosts(data.posts || [])
+          return
+        }
+
+        if (activeContentTab === 'galleries') {
+          const data = await apiGet<{ galleries: GalleryItem[] }>(`/api/users/${user.uid}/galleries`, {
+            limit: 50,
+          })
+          if (!cancelled) setMyGalleries(data.galleries || [])
+          return
+        }
+
+        const data = await apiGet<{ comments: UserCommentItem[] }>(`/api/users/${user.uid}/comments`, {
+          limit: 50,
+        })
+        if (!cancelled) setMyComments(data.comments || [])
+      } catch (error) {
+        console.error('Fetch content management data error:', error)
+        show('内容加载失败', { variant: 'error' })
+      } finally {
+        if (!cancelled) setContentLoading(false)
+      }
+    }
+
+    void run()
+    return () => {
+      cancelled = true
+    }
+  }, [activeContentTab, activeSection, show, user])
 
   if (!activeSection) {
     return <Navigate to="/settings/profile" replace />
@@ -254,6 +369,128 @@ const Settings = () => {
     } finally {
       setSavingPassword(false)
     }
+  }
+
+  const renderContentPanel = () => {
+    if (contentLoading) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 size={24} className="animate-spin text-brand-gold" />
+        </div>
+      )
+    }
+
+    if (activeContentTab === 'posts') {
+      return myPosts.length ? (
+        <ul>
+          {myPosts.map((post) => (
+            <li key={post.id} className="border-b border-border last:border-b-0">
+              <Link to={`/forum/${post.id}`} className="group block py-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.16em]">
+                      <span
+                        className={clsx(
+                          'rounded border px-2 py-0.5',
+                          getStatusClassName(post.status || 'published')
+                        )}
+                      >
+                        {getStatusText(post.status || 'published')}
+                      </span>
+                      <span className="text-text-muted">{post.section}</span>
+                    </div>
+                    <p className="mt-2 truncate text-sm font-medium text-text-primary group-hover:text-brand-gold">
+                      {post.title}
+                    </p>
+                  </div>
+                  <p className="shrink-0 whitespace-nowrap text-xs text-text-muted">
+                    {format(new Date(post.createdAt), 'MM-dd HH:mm')}
+                  </p>
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <EmptyState message="暂无帖子" />
+      )
+    }
+
+    if (activeContentTab === 'galleries') {
+      return myGalleries.length ? (
+        <ul>
+          {myGalleries.map((gallery) => (
+            <li key={gallery.id} className="border-b border-border last:border-b-0">
+              <Link to={`/gallery/${gallery.id}`} className="group flex gap-3 py-3">
+                <div className="h-14 w-14 shrink-0 overflow-hidden rounded bg-surface-alt">
+                  {gallery.images?.[0]?.thumbnailUrl ? (
+                    <img
+                      src={gallery.images[0].thumbnailUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : null}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.16em]">
+                    <span
+                      className={clsx(
+                        'rounded border px-2 py-0.5',
+                        gallery.published ? 'theme-status-success' : 'theme-status-warning'
+                      )}
+                    >
+                      {gallery.published ? '已发布' : '未发布'}
+                    </span>
+                    <span className="text-text-muted">{gallery.images?.length || 0} 张</span>
+                  </div>
+                  <p className="mt-2 truncate text-sm font-medium text-text-primary group-hover:text-brand-gold">
+                    {gallery.title}
+                  </p>
+                  <p className="mt-1 text-xs text-text-muted">
+                    {format(new Date(gallery.createdAt), 'MM-dd HH:mm')}
+                  </p>
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <EmptyState message="暂无图集" />
+      )
+    }
+
+    return myComments.length ? (
+      <ul>
+        {myComments.map((comment) => {
+          const target = comment.target || comment.post || comment.gallery || null
+          const isGalleryComment = comment.targetType === 'gallery' || Boolean(comment.gallery)
+          const href = target ? (isGalleryComment ? `/gallery/${target.id}` : `/forum/${target.id}`) : '#'
+          return (
+            <li key={comment.id} className="border-b border-border last:border-b-0 py-3">
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
+                  <span>评论了{isGalleryComment ? '图集' : '帖子'}</span>
+                  {target ? (
+                    <Link to={href} className="text-brand-gold hover:underline">
+                      {target.title}
+                    </Link>
+                  ) : (
+                    <span>原内容已删除或不可见</span>
+                  )}
+                </div>
+                <p className="max-w-[72ch] text-sm leading-7 text-text-secondary">{comment.content}</p>
+                <p className="text-xs text-text-muted">
+                  {format(new Date(comment.createdAt), 'MM-dd HH:mm')}
+                </p>
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+    ) : (
+      <EmptyState message="暂无评论" />
+    )
   }
 
   return (
@@ -419,6 +656,81 @@ const Settings = () => {
                     </button>
                   </div>
                 </form>
+              </section>
+            )}
+
+            {activeSection === 'content' && (
+              <section className="space-y-6" aria-labelledby="settings-content">
+                <div className="flex items-center gap-2 border-b border-border pb-3">
+                  <FileText size={18} className="text-brand-gold" />
+                  <h2 id="settings-content" className="text-base font-semibold text-text-primary">
+                    内容管理
+                  </h2>
+                </div>
+
+                <div className="max-w-3xl">
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { id: 'posts', label: '帖子', icon: FileText },
+                      { id: 'galleries', label: '图集', icon: ImageIcon },
+                      { id: 'comments', label: '评论', icon: MessageSquare },
+                    ].map((item) => {
+                      const Icon = item.icon
+                      const isActive = activeContentTab === item.id
+                      return (
+                        <Link
+                          key={item.id}
+                          to={`/settings/content?tab=${item.id}`}
+                          className={clsx(
+                            'inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-sm transition-colors',
+                            isActive
+                              ? 'theme-button-primary border-brand-gold'
+                              : 'theme-button-secondary'
+                          )}
+                        >
+                          <Icon size={14} />
+                          {item.label}
+                        </Link>
+                      )
+                    })}
+                  </div>
+
+                  <div className="mt-4">{renderContentPanel()}</div>
+                </div>
+              </section>
+            )}
+
+            {activeSection === 'privacy' && (
+              <section className="space-y-6" aria-labelledby="settings-privacy">
+                <div className="flex items-center gap-2 border-b border-border pb-3">
+                  <Eye size={18} className="text-brand-gold" />
+                  <h2 id="settings-privacy" className="text-base font-semibold text-text-primary">
+                    隐私设置
+                  </h2>
+                </div>
+
+                <div className="max-w-3xl space-y-5">
+                  <PrivacySwitch
+                    id="settings-public-favorites-toggle"
+                    label="公开我的收藏"
+                    checked={preferences.publicFavorites}
+                    onToggle={() =>
+                      void updatePreferences({
+                        publicFavorites: !preferences.publicFavorites,
+                      })
+                    }
+                  />
+                  <PrivacySwitch
+                    id="settings-public-history-toggle"
+                    label="公开我的浏览历史"
+                    checked={preferences.publicHistory}
+                    onToggle={() =>
+                      void updatePreferences({
+                        publicHistory: !preferences.publicHistory,
+                      })
+                    }
+                  />
+                </div>
               </section>
             )}
 

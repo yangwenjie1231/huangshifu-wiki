@@ -206,11 +206,15 @@ describe('UserPreferencesProvider', () => {
       viewMode: 'medium',
       theme: 'system',
       showCharacterCount: false,
+      publicFavorites: false,
+      publicHistory: false,
     })
     expect(readStoredPreferences()).toEqual({
       viewMode: 'small',
       theme: 'dark',
       showCharacterCount: false,
+      publicFavorites: false,
+      publicHistory: false,
     })
   })
 
@@ -252,11 +256,15 @@ describe('UserPreferencesProvider', () => {
       viewMode: 'small',
       theme: 'dark',
       showCharacterCount: false,
+      publicFavorites: false,
+      publicHistory: false,
     })
     expect(readStoredPreferences()).toEqual({
       viewMode: 'small',
       theme: 'dark',
       showCharacterCount: false,
+      publicFavorites: false,
+      publicHistory: false,
     })
   })
 })

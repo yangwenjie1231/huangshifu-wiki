@@ -115,7 +115,7 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
 
     if (user) {
       try {
-        await apiPatch('/api/users/me', { preferences: updates });
+        await apiPatch('/api/users/me', { preferences: newPrefs });
       } catch (error) {
         console.error('Failed to sync preferences to server:', error);
       }
