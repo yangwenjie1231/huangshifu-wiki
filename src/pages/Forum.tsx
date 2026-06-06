@@ -1543,7 +1543,7 @@ const PostEditor = () => {
                 {t('forum.advancedOptions')}
               </button>
             )}
-            <div className="flex flex-wrap justify-start gap-3 sm:justify-end">
+            <div className="flex w-full flex-wrap justify-end gap-3 sm:ml-auto sm:w-auto">
               <button
                 type="button"
                 onClick={() => handleSubmit('draft')}
