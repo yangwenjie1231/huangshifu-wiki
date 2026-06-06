@@ -152,7 +152,6 @@ const GalleryDetail = () => {
   const [replyTo, setReplyTo] = useState<CommentItem | null>(null);
   const [submittingComment, setSubmittingComment] = useState(false);
   const [deletingGallery, setDeletingGallery] = useState(false);
-  const [galleryDeleteReason, setGalleryDeleteReason] = useState('');
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const [restoringCommentId, setRestoringCommentId] = useState<string | null>(null);
   const [likingCommentId, setLikingCommentId] = useState<string | null>(null);
@@ -199,10 +198,6 @@ const GalleryDetail = () => {
 
   useEffect(() => {
     fetchGallery();
-  }, [galleryId]);
-
-  useEffect(() => {
-    setGalleryDeleteReason('');
   }, [galleryId]);
 
   useEffect(() => {
@@ -567,19 +562,34 @@ const GalleryDetail = () => {
     if (!gallery || !user || deletingGallery) return;
     const isSelfDelete = gallery.authorUid === user.uid;
     if (!isSelfDelete && !isAdmin) return;
-    const reason = isSelfDelete ? null : galleryDeleteReason.trim();
-    if (!isSelfDelete && !reason) {
-      show('删除他人图集必须填写删除理由', { variant: 'error' });
-      return;
-    }
+    let reason: string | null = null;
 
-    const confirmed = await dialog.confirm({
-      title: '删除图集',
-      message: `确定要删除图集《${gallery.title}》吗？删除后可由管理员在回收站恢复。`,
-      confirmText: '删除',
-      variant: 'danger',
-    });
-    if (!confirmed) return;
+    if (isSelfDelete) {
+      const confirmed = await dialog.confirm({
+        title: '删除图集',
+        message: `确定要删除图集《${gallery.title}》吗？删除后可由管理员在回收站恢复。`,
+        confirmText: '删除',
+        variant: 'danger',
+      });
+      if (!confirmed) return;
+    } else {
+      const promptValue = await dialog.prompt({
+        title: '删除图集',
+        message: `删除图集《${gallery.title}》前必须填写删除理由。此操作会记录到管理日志。`,
+        confirmText: '确认删除',
+        cancelText: '取消',
+        variant: 'danger',
+        multiline: true,
+        placeholder: '填写删除理由',
+        maxLength: CONTENT_LIMITS.gallery.reviewNote,
+      });
+      reason = promptValue?.trim() || null;
+      if (promptValue === null) return;
+      if (!reason) {
+        show('删除他人图集必须填写删除理由', { variant: 'error' });
+        return;
+      }
+    }
 
     try {
       setDeletingGallery(true);
@@ -941,18 +951,6 @@ const GalleryDetail = () => {
                 </button>
                 <input ref={addImagesInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handleAddImages} />
               </div>
-              {user && isAdmin && gallery.authorUid !== user.uid && (
-                <label className="block w-full max-w-md text-sm font-medium text-text-secondary">
-                  删除理由（必填）
-                  <textarea
-                    value={galleryDeleteReason}
-                    onChange={(event) => setGalleryDeleteReason(event.target.value)}
-                    maxLength={CONTENT_LIMITS.gallery.reviewNote}
-                    rows={3}
-                    className="mt-2 w-full rounded border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-danger"
-                  />
-                </label>
-              )}
             </div>
           )}
         </div>
