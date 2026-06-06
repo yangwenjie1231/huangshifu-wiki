@@ -38,6 +38,8 @@ import Pagination from '../components/Pagination'
 import { usePagination } from '../hooks/usePagination'
 import { PageSkeleton } from '../components/PageSkeleton'
 import { RouteGuard } from '../components/RouteGuard'
+import { CommentActionMenu } from '../components/CommentActionMenu'
+import { useHoveredCommentMenu } from '../hooks/useHoveredCommentMenu'
 import { useI18n } from '../lib/i18n'
 import { useToggleInteraction } from '../hooks/useToggleInteraction'
 import { submitFormOnModifierEnter } from '../lib/formShortcuts'
@@ -395,6 +397,7 @@ const PostDetail = () => {
   const { show } = useToast()
   const navigate = useNavigate()
   const location = useLocation()
+  const { hoveredCommentId, showCommentMenu, hideCommentMenu } = useHoveredCommentMenu()
 
   const {
     toggleLike,
@@ -741,6 +744,12 @@ const PostDetail = () => {
             </button>
           )}
           {renderDeletedMeta(comment)}
+          <CommentActionMenu
+            menuLabel={t('forum.commentMoreActions')}
+            copyLabel={t('forum.copyCommentLink')}
+            onCopyLink={() => handleCopyCommentLink(comment)}
+            visibleOnDesktop={hoveredCommentId === comment.id}
+          />
         </div>
         {requiresDeleteReason && (
           <label className="mt-2 block max-w-xl text-xs font-medium text-text-secondary">
@@ -781,6 +790,18 @@ const PostDetail = () => {
       return
     }
     show(t('forum.copyLinkFailedManual'), { variant: 'error' })
+  }
+
+  const handleCopyCommentLink = async (comment: CommentItem) => {
+    if (!postId) return
+    const copied = await copyToClipboard(
+      toAbsoluteInternalUrl(`/forum/${postId}#comment-${comment.id}`)
+    )
+    if (copied) {
+      show(t('forum.commentLinkCopied'))
+      return
+    }
+    show(t('forum.commentLinkCopyFailed'), { variant: 'error' })
   }
 
   return (
@@ -932,6 +953,8 @@ const PostDetail = () => {
                     <div
                       id={`comment-${comment.id}`}
                       key={comment.id}
+                      onMouseMove={() => showCommentMenu(comment.id)}
+                      onMouseLeave={() => hideCommentMenu(comment.id)}
                       className={clsx(
                         'scroll-mt-24 border-b border-border px-3 py-5 transition-colors',
                         highlightedCommentId === comment.id && HIGHLIGHTED_COMMENT_CLASS
@@ -972,6 +995,11 @@ const PostDetail = () => {
                             <div
                               id={`comment-${reply.id}`}
                               key={reply.id}
+                              onMouseMove={(event) => {
+                                event.stopPropagation()
+                                showCommentMenu(reply.id)
+                              }}
+                              onMouseLeave={() => hideCommentMenu(reply.id)}
                               className={clsx(
                                 'flex scroll-mt-24 gap-3 px-3 py-2 transition-colors',
                                 highlightedCommentId === reply.id && HIGHLIGHTED_COMMENT_CLASS

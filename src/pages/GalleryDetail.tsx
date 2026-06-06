@@ -17,12 +17,14 @@ import { useAuth } from '../context/AuthContext';
 import { SmartImage } from '../components/SmartImage';
 import { Lightbox } from '../components/Lightbox';
 import { CharacterCount } from '../components/CharacterCount';
+import { CommentActionMenu } from '../components/CommentActionMenu';
 import { useDialog } from '../components/Dialog';
 import { useToast } from '../components/Toast';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { apiDelete, apiGet, apiPatch, apiPost, apiUpload } from '../lib/apiClient';
 import { splitTagsInput } from '../lib/contentUtils';
 import { useI18n } from '../lib/i18n';
+import { useHoveredCommentMenu } from '../hooks/useHoveredCommentMenu';
 import { formatDateTime, toDateValue } from '../lib/dateUtils';
 import { DEFAULT_AVATAR, handleAvatarError } from '../lib/defaultAvatar';
 import { UPLOAD_MAX_FILE_SIZE_BYTES, formatUploadLimitWithSize } from '../lib/uploadLimits';
@@ -160,6 +162,7 @@ const GalleryDetail = () => {
   const [isGalleryAdminOnly, setIsGalleryAdminOnly] = useState(false);
   const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
   const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
+  const { hoveredCommentId, showCommentMenu, hideCommentMenu } = useHoveredCommentMenu();
 
   const addImagesInputRef = useRef<HTMLInputElement>(null);
   const commentFormRef = useRef<HTMLFormElement | null>(null);
@@ -385,6 +388,12 @@ const GalleryDetail = () => {
             </button>
           )}
           {renderDeletedMeta(comment)}
+          <CommentActionMenu
+            menuLabel={t('gallery.commentMoreActions')}
+            copyLabel={t('gallery.copyCommentLink')}
+            onCopyLink={() => handleCopyCommentLink(comment)}
+            visibleOnDesktop={hoveredCommentId === comment.id}
+          />
         </div>
         {requiresDeleteReason && (
           <label className="mt-2 block max-w-xl text-xs font-medium text-text-secondary">
@@ -415,6 +424,18 @@ const GalleryDetail = () => {
       return;
     }
     show(t('gallery.linkCopyFailed'), { variant: 'error' });
+  };
+
+  const handleCopyCommentLink = async (comment: CommentItem) => {
+    if (!gallery?.id) return;
+    const copied = await copyToClipboard(
+      toAbsoluteInternalUrl(`/gallery/${gallery.id}#comment-${comment.id}`)
+    );
+    if (copied) {
+      show(t('gallery.commentLinkCopied'));
+      return;
+    }
+    show(t('gallery.commentLinkCopyFailed'), { variant: 'error' });
   };
 
   const handleEnterEditMode = () => {
@@ -1253,6 +1274,8 @@ const GalleryDetail = () => {
                 <div
                   id={`comment-${comment.id}`}
                   key={comment.id}
+                  onMouseMove={() => showCommentMenu(comment.id)}
+                  onMouseLeave={() => hideCommentMenu(comment.id)}
                   className={clsx(
                     'scroll-mt-24 space-y-4 px-3 py-2 transition-colors',
                     highlightedCommentId === comment.id && HIGHLIGHTED_COMMENT_CLASS,
@@ -1291,6 +1314,11 @@ const GalleryDetail = () => {
                         <div
                           id={`comment-${reply.id}`}
                           key={reply.id}
+                          onMouseMove={(event) => {
+                            event.stopPropagation();
+                            showCommentMenu(reply.id);
+                          }}
+                          onMouseLeave={() => hideCommentMenu(reply.id)}
                           className={clsx(
                             'flex scroll-mt-24 gap-3 px-3 py-2 transition-colors',
                             highlightedCommentId === reply.id && HIGHLIGHTED_COMMENT_CLASS,
