@@ -116,15 +116,16 @@ const WikiCard = React.memo(({ page, viewMode, cardHeight, onCopyLink }: WikiCar
 			<button
 				onClick={(event) => onCopyLink(event, page.slug)}
 				className={clsx(
-					"p-2 rounded border bg-surface/90 text-text-muted hover:text-brand-gold hover:border-brand-gold transition-all",
+					"inline-flex items-center gap-1.5 rounded border bg-surface/90 px-3 py-2 text-xs font-medium text-text-muted hover:border-brand-gold hover:text-brand-gold transition-all",
 					viewMode === "list"
 						? "absolute top-4 right-4"
 						: "absolute bottom-4 right-4 opacity-0 group-hover:opacity-100",
 				)}
-				title="复制内链"
-				aria-label="复制百科内链"
+				title="复制链接"
+				aria-label="复制链接"
 			>
 				<Link2 size={14} />
+				<span>复制链接</span>
 			</button>
 		</div>
 	);
