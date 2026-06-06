@@ -418,7 +418,7 @@ async function handleReviewAction(
   note: string,
 ) {
   const reviewedAt = new Date();
-  const rejectNote = action === 'reject' ? note || null : note || null;
+  const reviewNote = action === 'reject' ? note : null;
 
   if (targetType === 'wiki') {
     const page = await prisma.wikiPage.update({
@@ -429,18 +429,18 @@ async function handleReviewAction(
       },
       data: {
         status: action === 'approve' ? 'published' : 'rejected',
-        reviewNote: action === 'approve' ? (note || null) : rejectNote,
+        reviewNote,
         reviewedBy: reqAuthUser.uid,
         reviewedAt,
       },
     });
 
     await prisma.moderationLog.create({
-      data: { targetType: 'wiki', targetId, action, operatorUid: reqAuthUser.uid, note: action === 'approve' ? note || null : rejectNote },
+      data: { targetType: 'wiki', targetId, action, operatorUid: reqAuthUser.uid, note: reviewNote },
     });
 
     if (page.lastEditorUid && page.lastEditorUid !== reqAuthUser.uid) {
-      await createNotification(page.lastEditorUid, 'review_result', { approved: action === 'approve', targetType: 'wiki', targetId, title: page.title, note: action === 'approve' ? note || null : rejectNote });
+      await createNotification(page.lastEditorUid, 'review_result', { approved: action === 'approve', targetType: 'wiki', targetId, title: page.title, note: reviewNote });
     }
 
     return { item: { ...toWikiResponse(page), sensitiveWords: containsSensitive(page.content || '') }, targetType };
@@ -448,13 +448,13 @@ async function handleReviewAction(
 
   const post = await prisma.post.update({
     where: { id: targetId },
-    data: { status: action === 'approve' ? 'published' : 'rejected', reviewNote: action === 'approve' ? (note || null) : rejectNote, reviewedBy: reqAuthUser.uid, reviewedAt },
+    data: { status: action === 'approve' ? 'published' : 'rejected', reviewNote, reviewedBy: reqAuthUser.uid, reviewedAt },
   });
 
-  await prisma.moderationLog.create({ data: { targetType: 'post', targetId, action, operatorUid: reqAuthUser.uid, note: action === 'approve' ? note || null : rejectNote } });
+  await prisma.moderationLog.create({ data: { targetType: 'post', targetId, action, operatorUid: reqAuthUser.uid, note: reviewNote } });
 
   if (post.authorUid && post.authorUid !== reqAuthUser.uid) {
-    await createNotification(post.authorUid, 'review_result', { approved: action === 'approve', targetType: 'post', targetId, title: post.title, note: action === 'approve' ? note || null : rejectNote });
+    await createNotification(post.authorUid, 'review_result', { approved: action === 'approve', targetType: 'post', targetId, title: post.title, note: reviewNote });
   }
 
   return { item: action === 'approve' ? { ...toPostResponse(post), sensitiveWords: containsSensitive(post.content || '') } : toPostResponse(post), targetType };
@@ -535,18 +535,14 @@ router.put('/review-queue/:id/approve', requireAdmin, asyncHandler(async (req: A
   try {
     const targetType = normalizeModerationTargetType(req.body.type) || 'wiki';
     const targetId = req.params.id;
-    const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
     const reqAuthUser = req.authUser!;
-    if (!ensureTextLimit(res, note, '审核备注', CONTENT_LIMITS.post.reviewNote)) {
-      return;
-    }
 
     if (!isReviewTargetType(targetType)) {
       res.status(400).json({ error: '无效审核类型' });
       return;
     }
 
-    const result = await handleReviewAction(targetType, targetId, 'approve', reqAuthUser, note);
+    const result = await handleReviewAction(targetType, targetId, 'approve', reqAuthUser, '');
     res.json(result);
   } catch (error) {
     logger.error({ err: error }, 'Approve review item error');
@@ -587,19 +583,22 @@ router.put('/review-queue/:id/reject', requireAdmin, asyncHandler(async (req: Au
 router.post('/review/:type/:id/:action', requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const { type, id, action } = req.params;
-    const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
-    if (!ensureTextLimit(res, note, '审核备注', CONTENT_LIMITS.post.reviewNote)) {
-      return;
-    }
+    let rejectNote = '';
 
     if (action !== 'approve' && action !== 'reject') {
       res.status(400).json({ error: '无效的操作' });
       return;
     }
 
-    if (action === 'reject' && !note) {
-      res.status(400).json({ error: '驳回原因不能为空' });
-      return;
+    if (action === 'reject') {
+      rejectNote = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
+      if (!rejectNote) {
+        res.status(400).json({ error: '驳回原因不能为空' });
+        return;
+      }
+      if (!ensureTextLimit(res, rejectNote, '审核备注', CONTENT_LIMITS.post.reviewNote)) {
+        return;
+      }
     }
 
     const targetType = normalizeModerationTargetType(type);
@@ -608,7 +607,7 @@ router.post('/review/:type/:id/:action', requireAdmin, asyncHandler(async (req: 
       return;
     }
 
-    const result = await handleReviewAction(targetType, id, action, req.authUser!, note);
+    const result = await handleReviewAction(targetType, id, action, req.authUser!, rejectNote);
     res.json(result);
   } catch (error) {
     logger.error({ err: error }, 'Review action error');
