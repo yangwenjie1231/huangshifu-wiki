@@ -61,9 +61,11 @@ type UploadSessionResponse = {
 type UploadFileResponse = {
   asset: {
     id: string
-    url: string
-    publicUrl?: string
+    publicUrl: string
     fileName: string
+  }
+  tripleStorage?: {
+    localUrl: string
   }
 }
 
@@ -673,7 +675,7 @@ const GalleryDetail = () => {
           const uploadResult = await uploadFileToSession(await ensureSession(), image.pendingFile!)
           assetIdByClientId.set(image.clientId, uploadResult.asset.id)
           const uploadedImageRef = {
-            url: uploadResult.asset.publicUrl || uploadResult.asset.url,
+            url: uploadResult.tripleStorage?.localUrl || uploadResult.asset.publicUrl,
             name: uploadResult.asset.fileName || image.name || image.pendingFile!.name,
           }
           imageUrlByMd5.set(md5, uploadedImageRef)

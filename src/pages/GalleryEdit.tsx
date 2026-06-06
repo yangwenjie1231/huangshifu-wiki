@@ -387,7 +387,7 @@ const GalleryEdit = () => {
           const uploadResult = await uploadFileToSession(await ensureSession(), file)
           assetIdByClientId.set(image.clientId, uploadResult.asset.id)
           const uploadedImageRef = {
-            url: uploadResult.asset.url,
+            url: uploadResult.tripleStorage?.localUrl || uploadResult.asset.publicUrl,
             name: uploadResult.asset.fileName || image.name || file.name,
           }
           imageUrlByMd5.set(md5, uploadedImageRef)

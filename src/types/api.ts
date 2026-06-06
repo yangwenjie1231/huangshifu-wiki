@@ -71,8 +71,8 @@ export interface UploadFileResponse {
   };
   asset: {
     id: string;
-    url: string;
-    publicUrl?: string;
+    publicUrl: string;
+    storageKey?: string;
     fileName: string;
     mimeType: string;
     sizeBytes: number;

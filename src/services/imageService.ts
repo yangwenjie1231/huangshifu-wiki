@@ -410,7 +410,7 @@ export const uploadToS3 = async (file: File): Promise<{ id: string; s3Url: strin
       `/api/uploads/sessions/${sessionId2}/files`,
       formData
     );
-    localUrl = uploadData.asset.url;
+    localUrl = uploadData.tripleStorage?.localUrl || uploadData.asset.publicUrl;
     // 完成会话
     await apiPost(`/api/uploads/sessions/${sessionId2}/finalize`);
   } catch (error) {
