@@ -75,7 +75,7 @@ export const AdminReviews = () => {
     const note = await dialog.prompt({
       title: action === 'approve' ? '通过审核' : '驳回审核',
       message: action === 'approve' ? '通过备注（可选）' : '驳回原因（可选）',
-      defaultValue: action === 'reject' ? '请按规范完善内容' : '',
+      defaultValue: '',
       confirmText: action === 'approve' ? '通过' : '驳回',
       variant: action === 'approve' ? 'info' : 'warning',
       multiline: true,

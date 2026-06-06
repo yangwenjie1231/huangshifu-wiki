@@ -418,7 +418,7 @@ async function handleReviewAction(
   note: string,
 ) {
   const reviewedAt = new Date();
-  const rejectNote = action === 'reject' ? (note || '内容未通过审核') : note || null;
+  const rejectNote = action === 'reject' ? note || null : note || null;
 
   if (targetType === 'wiki') {
     const page = await prisma.wikiPage.update({
