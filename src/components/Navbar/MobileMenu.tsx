@@ -152,6 +152,14 @@ export const MobileMenu = ({
 										</NavLink>
 									</div>
 									<Link
+										to="/settings/content"
+										onClick={onClose}
+										className={accountMenuStyles.menuAction}
+									>
+										<FileText size={16} />
+										<span>内容管理</span>
+									</Link>
+									<Link
 										to="/settings/profile"
 										onClick={onClose}
 										className={accountMenuStyles.menuAction}

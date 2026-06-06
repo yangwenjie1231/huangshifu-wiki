@@ -148,6 +148,11 @@ export const AccountMenu = ({ onLogout, onOpenAuth }: AccountMenuProps) => {
                   </Link>
                 </div>
 
+                <Link to="/settings/content" className={styles.menuAction} onClick={closeAccountMenu}>
+                  <FileText size={16} />
+                  <span>内容管理</span>
+                </Link>
+
                 <Link to="/settings/profile" className={styles.menuAction} onClick={closeAccountMenu}>
                   <Settings size={16} />
                   <span>设置</span>
