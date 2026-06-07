@@ -5,7 +5,6 @@ import {
   Edit3,
   Link2,
   Heart,
-  Plus,
   Save,
   Share2,
   ThumbsDown,
@@ -22,52 +21,20 @@ import { CommentActionMenu } from '../components/CommentActionMenu'
 import { useDialog } from '../components/Dialog'
 import { useToast } from '../components/Toast'
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink'
-import { apiDelete, apiGet, apiPatch, apiPost, apiUpload } from '../lib/apiClient'
-import { getStatusClassName, getStatusText, splitTagsInput } from '../lib/contentUtils'
+import { apiDelete, apiGet, apiPost } from '../lib/apiClient'
+import { getStatusClassName, getStatusText } from '../lib/contentUtils'
 import { useI18n } from '../lib/i18n'
 import { useHoveredCommentMenu } from '../hooks/useHoveredCommentMenu'
-import { formatDateTime, toDateValue } from '../lib/dateUtils'
+import { formatDateTime } from '../lib/dateUtils'
 import { DEFAULT_AVATAR, handleAvatarError } from '../lib/defaultAvatar'
-import { UPLOAD_MAX_FILE_SIZE_BYTES, formatUploadLimitWithSize } from '../lib/uploadLimits'
-import { findExistingImageMapByMd5, getImagePreference } from '../services/imageService'
 import { submitFormOnModifierEnter } from '../lib/formShortcuts'
 import { markCommentDeleted, restoreComment, updateCommentLike } from '../utils/commentState'
-import { runInBatches } from '../utils/asyncBatch'
-import { calculateFileMd5Hex } from '../utils/fileMd5'
 import type { GalleryDetailResponse } from '../types/api'
 import type { GalleryImageItem, GalleryItem } from '../types/entities'
 import { CONTENT_LIMITS } from '../lib/contentLimits'
 
-type EditableGalleryImage = GalleryImageItem & {
+type DisplayGalleryImage = GalleryImageItem & {
   clientId: string
-  pendingFile?: File
-  isPending?: boolean
-}
-
-type GalleryDraft = {
-  title: string
-  description: string
-  tagsText: string
-  copyrightText: string
-  published: boolean
-  images: EditableGalleryImage[]
-}
-
-type UploadSessionResponse = {
-  session: {
-    id: string
-  }
-}
-
-type UploadFileResponse = {
-  asset: {
-    id: string
-    publicUrl: string
-    fileName: string
-  }
-  tripleStorage?: {
-    localUrl: string
-  }
 }
 
 type CommentItem = {
@@ -90,46 +57,13 @@ type CommentItem = {
   createdAt: string
 }
 
-const toEditableImage = (image: GalleryImageItem): EditableGalleryImage => ({
+const toDisplayImage = (image: GalleryImageItem): DisplayGalleryImage => ({
   ...image,
   clientId: image.id,
 })
-
-const createPendingImage = (file: File): EditableGalleryImage => ({
-  clientId: `pending-${Math.random().toString(36).slice(2, 10)}`,
-  assetId: null,
-  id: '',
-  url: URL.createObjectURL(file),
-  name: file.name,
-  mimeType: file.type || null,
-  sizeBytes: file.size,
-  pendingFile: file,
-  isPending: true,
-})
-
-const releasePendingImageUrls = (images: EditableGalleryImage[]) => {
-  images.forEach((image) => {
-    if (image.isPending) {
-      URL.revokeObjectURL(image.url)
-    }
-  })
-}
-
-const createDraftFromGallery = (item: GalleryItem): GalleryDraft => ({
-  title: item.title || '',
-  description: item.description || '',
-  tagsText: item.tags.join(', '),
-  copyrightText: item.copyright || '',
-  published: item.published,
-  images: item.images.map(toEditableImage),
-})
-
-const hasDraggedFiles = (event: Pick<React.DragEvent<HTMLElement>, 'dataTransfer'>) =>
-  Array.from(event.dataTransfer?.types || []).includes('Files')
 const COMMENT_HIGHLIGHT_DURATION_MS = 3200
 const HIGHLIGHTED_COMMENT_CLASS =
   'bg-[color-mix(in_srgb,var(--color-theme-accent)_18%,var(--color-surface))]'
-const UPLOAD_BATCH_SIZE = 3
 
 const GalleryDetail = () => {
   const { galleryId } = useParams()
@@ -145,12 +79,6 @@ const GalleryDetail = () => {
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState(0)
 
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState<GalleryDraft | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
-  const [pageDragDepth, setPageDragDepth] = useState(0)
   const [likingGallery, setLikingGallery] = useState(false)
   const [dislikingGallery, setDislikingGallery] = useState(false)
   const [favoritingGallery, setFavoritingGallery] = useState(false)
@@ -163,27 +91,14 @@ const GalleryDetail = () => {
   const [restoringCommentId, setRestoringCommentId] = useState<string | null>(null)
   const [likingCommentId, setLikingCommentId] = useState<string | null>(null)
   const [showDeletedComments, setShowDeletedComments] = useState(false)
+  const [submittingReview, setSubmittingReview] = useState(false)
   const [isGalleryAdminOnly, setIsGalleryAdminOnly] = useState(false)
   const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null)
   const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin'
   const { hoveredCommentId, showCommentMenu, hideCommentMenu } = useHoveredCommentMenu()
 
-  const addImagesInputRef = useRef<HTMLInputElement>(null)
   const commentFormRef = useRef<HTMLFormElement | null>(null)
   const commentInputRef = useRef<HTMLTextAreaElement | null>(null)
-  const draftRef = useRef<GalleryDraft | null>(null)
-
-  const applyDraft = (
-    updater: GalleryDraft | null | ((prev: GalleryDraft | null) => GalleryDraft | null)
-  ) => {
-    const previous = draftRef.current
-    const next =
-      typeof updater === 'function'
-        ? (updater as (value: GalleryDraft | null) => GalleryDraft | null)(previous)
-        : updater
-    draftRef.current = next
-    setDraft(next)
-  }
 
   const fetchGallery = async () => {
     if (!galleryId) return
@@ -191,13 +106,6 @@ const GalleryDetail = () => {
       setLoading(true)
       const data = await apiGet<GalleryDetailResponse>(`/api/galleries/${galleryId}`)
       setGallery(data.gallery)
-      applyDraft((prev) => {
-        if (prev) {
-          releasePendingImageUrls(prev.images)
-        }
-        return null
-      })
-      setEditing(false)
     } catch (error) {
       console.error('Fetch gallery detail error:', error)
       setGallery(null)
@@ -277,18 +185,9 @@ const GalleryDetail = () => {
     }
   }, [comments, location.hash])
 
-  useEffect(
-    () => () => {
-      if (draftRef.current) {
-        releasePendingImageUrls(draftRef.current.images)
-      }
-    },
-    []
-  )
-
-  const images = useMemo<EditableGalleryImage[]>(
-    () => (editing ? draft?.images || [] : (gallery?.images || []).map(toEditableImage)),
-    [draft?.images, editing, gallery?.images]
+  const images = useMemo<DisplayGalleryImage[]>(
+    () => (gallery?.images || []).map(toDisplayImage),
+    [gallery?.images]
   )
 
   const canManage = Boolean(
@@ -296,6 +195,14 @@ const GalleryDetail = () => {
     gallery &&
     !isBanned &&
     (isAdmin || (!isGalleryAdminOnly && gallery.authorUid === user.uid))
+  )
+  const isOwner = Boolean(user && gallery && gallery.authorUid === user.uid)
+  const canSubmitReview = Boolean(
+    !isBanned &&
+      canManage &&
+      isOwner &&
+      gallery &&
+      (gallery.status === 'draft' || gallery.status === 'rejected')
   )
   const rootComments = comments.filter((comment) => !comment.parentId)
   const getReplies = (parentId: string) =>
@@ -605,149 +512,19 @@ const GalleryDetail = () => {
     show(t('gallery.commentLinkCopyFailed'), { variant: 'error' })
   }
 
-  const handleEnterEditMode = () => {
-    if (!gallery || !canManage || saving || uploading) return
-    applyDraft((prev) => {
-      if (prev) {
-        releasePendingImageUrls(prev.images)
-      }
-      return createDraftFromGallery(gallery)
-    })
-    setEditing(true)
-  }
-
-  const handleCancelEdit = () => {
-    applyDraft((prev) => {
-      if (prev) {
-        releasePendingImageUrls(prev.images)
-      }
-      return null
-    })
-    setEditing(false)
-    setPageDragDepth(0)
-    setDraggingIndex(null)
-  }
-
-  const handleSaveMeta = async () => {
-    const currentDraft = draftRef.current
-    if (!gallery || !currentDraft || !canManage || saving || uploading) return
-    if (currentDraft.images.length === 0) {
-      show(t('gallery.atLeastOneImage'), { variant: 'error' })
-      return
-    }
+  const handleSubmitReview = async () => {
+    if (!gallery || !canSubmitReview || submittingReview) return
+    setSubmittingReview(true)
     try {
-      setSaving(true)
-      const pendingImages = currentDraft.images.filter(
-        (image) => image.isPending && image.pendingFile
-      )
-      let assetIdByClientId = new Map<string, string>()
-      let imageUrlByClientId = new Map<string, { url: string; name: string }>()
-
-      if (pendingImages.length) {
-        setUploading(true)
-        const imageTaskByMd5 = new Map<
-          string,
-          Promise<{ imageRef: { url: string; name: string }; assetId?: string }>
-        >()
-        let sessionId: string | null = null
-        let sessionPromise: Promise<string> | null = null
-
-        const ensureSession = async () => {
-          if (sessionId) {
-            return sessionId
-          }
-          if (!sessionPromise) {
-            sessionPromise = apiPost<UploadSessionResponse>('/api/uploads/sessions', {
-              maxFiles: pendingImages.length,
-            }).then((sessionData) => {
-              sessionId = sessionData.session.id
-              return sessionId
-            })
-          }
-          return sessionPromise
-        }
-
-        const processPendingImage = async (image: EditableGalleryImage) => {
-          const file = image.pendingFile
-          if (!file) return
-
-          const md5 = await calculateFileMd5Hex(file)
-          let imageTask = imageTaskByMd5.get(md5)
-          if (!imageTask) {
-            imageTask = (async () => {
-              const existing = await findExistingImageMapByMd5(md5)
-              if (existing) {
-                return {
-                  imageRef: { url: existing.localUrl, name: image.name || file.name },
-                }
-              }
-
-              const uploadResult = await uploadFileToSession(await ensureSession(), file)
-              return {
-                assetId: uploadResult.asset.id,
-                imageRef: {
-                  url: uploadResult.tripleStorage?.localUrl || uploadResult.asset.publicUrl,
-                  name: uploadResult.asset.fileName || image.name || file.name,
-                },
-              }
-            })()
-            imageTaskByMd5.set(md5, imageTask)
-          }
-
-          const result = await imageTask
-          if (result.assetId) {
-            assetIdByClientId.set(image.clientId, result.assetId)
-          }
-          imageUrlByClientId.set(image.clientId, result.imageRef)
-        }
-
-        await runInBatches(pendingImages, UPLOAD_BATCH_SIZE, processPendingImage)
-
-        if (sessionId) {
-          await apiPost(`/api/uploads/sessions/${sessionId}/finalize`)
-        }
-      }
-
-      const result = await apiPatch<GalleryDetailResponse>(`/api/galleries/${gallery.id}`, {
-        title: currentDraft.title,
-        description: currentDraft.description,
-        tags: splitTagsInput(currentDraft.tagsText),
-        copyright: currentDraft.copyrightText.trim() || null,
-        status: currentDraft.published || gallery.status === 'pending' ? 'pending' : 'draft',
-        published: currentDraft.published,
-        images: currentDraft.images
-          .map((image) =>
-            image.isPending
-              ? assetIdByClientId.has(image.clientId)
-                ? { assetId: assetIdByClientId.get(image.clientId) }
-                : imageUrlByClientId.get(image.clientId)
-              : { imageId: image.id }
-          )
-          .filter((image) => image && ('imageId' in image || 'assetId' in image || 'url' in image)),
-      })
-      releasePendingImageUrls(currentDraft.images)
-      setGallery(result.gallery)
-      applyDraft(null)
-      setEditing(false)
-      show(t('gallery.changesSaved'))
+      const data = await apiPost<GalleryDetailResponse>(`/api/galleries/${gallery.id}/submit`)
+      setGallery(data.gallery)
+      show(data.gallery.status === 'published' ? t('gallery.galleryPublished') : t('gallery.reviewSubmitted'))
     } catch (error) {
-      console.error('Save gallery meta error:', error)
-      show(t('gallery.saveFailed'), { variant: 'error' })
+      console.error('Submit gallery review error:', error)
+      show(t('gallery.submitReviewFailed'), { variant: 'error' })
     } finally {
-      setUploading(false)
-      setSaving(false)
+      setSubmittingReview(false)
     }
-  }
-
-  const handleTogglePublish = async () => {
-    if (!editing || !canManage || saving) return
-    applyDraft((prev) => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        published: !prev.published,
-      }
-    })
   }
 
   const handleAddComment = async (e: React.FormEvent) => {
@@ -879,149 +656,6 @@ const GalleryDetail = () => {
     }
   }
 
-  const uploadFileToSession = async (sessionId: string, file: File) => {
-    const formData = new FormData()
-    formData.append('file', file)
-
-    const preference = await getImagePreference()
-    const useTripleStorage = preference.strategy === 's3' || preference.strategy === 'external'
-
-    const url = new URL(`/api/uploads/sessions/${sessionId}/files`, window.location.origin)
-    if (useTripleStorage) {
-      url.searchParams.set('tripleStorage', 'true')
-    }
-
-    const data = await apiUpload<UploadFileResponse>(url.toString(), formData)
-    return data
-  }
-
-  const appendPendingFiles = (fileList: FileList | File[]) => {
-    if (!editing || !draftRef.current || !canManage || uploading) return
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp']
-    const files = Array.from(fileList)
-    const invalidFiles: string[] = []
-    const validImages: EditableGalleryImage[] = []
-
-    files.forEach((file) => {
-      if (!allowedTypes.includes(file.type)) {
-        invalidFiles.push(`${file.name} (${t('gallery.unsupportedFileType')})`)
-        return
-      }
-      if (file.size > UPLOAD_MAX_FILE_SIZE_BYTES) {
-        invalidFiles.push(
-          `${file.name} (${t('gallery.fileTooLarge', { maxSize: formatUploadLimitWithSize() })})`
-        )
-        return
-      }
-      validImages.push(createPendingImage(file))
-    })
-
-    if (invalidFiles.length) {
-      show(
-        `${t('gallery.filesCannotAdd')}${invalidFiles.slice(0, 3).join(', ')}${invalidFiles.length > 3 ? '...' : ''}`,
-        { variant: 'error' }
-      )
-    }
-    if (!validImages.length) return
-
-    applyDraft((prev) => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        images: [...prev.images, ...validImages],
-      }
-    })
-    show(t('gallery.imagesAdded', { count: validImages.length }))
-  }
-
-  const handleAddImages = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || [])
-    event.target.value = ''
-
-    if (!files.length) return
-    appendPendingFiles(files)
-  }
-
-  const handleDeleteImage = async (index: number) => {
-    const currentDraft = draftRef.current
-    if (!editing || !currentDraft || !canManage) return
-    const image = currentDraft.images[index]
-    if (!image?.clientId) {
-      show(t('gallery.cannotDeleteImage'), { variant: 'error' })
-      return
-    }
-
-    if (image.isPending) {
-      URL.revokeObjectURL(image.url)
-    }
-
-    const nextImages = currentDraft.images.filter((_, currentIndex) => currentIndex !== index)
-    applyDraft((prev) => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        images: nextImages,
-      }
-    })
-    show(image.isPending ? t('gallery.pendingImageRemoved') : t('gallery.markedForDeletion'))
-  }
-
-  const handleReorder = async (fromIndex: number, toIndex: number) => {
-    const currentDraft = draftRef.current
-    if (!editing || !currentDraft || !canManage || fromIndex === toIndex) return
-    const next = [...currentDraft.images]
-    const [moved] = next.splice(fromIndex, 1)
-    if (!moved) return
-    next.splice(toIndex, 0, moved)
-
-    applyDraft((prev) => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        images: next,
-      }
-    })
-  }
-
-  const onThumbDragStart = (event: React.DragEvent<HTMLDivElement>, index: number) => {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', String(index))
-    setDraggingIndex(index)
-  }
-
-  const onThumbDrop = async (targetIndex: number) => {
-    if (draggingIndex === null) return
-    const sourceIndex = draggingIndex
-    setDraggingIndex(null)
-    await handleReorder(sourceIndex, targetIndex)
-  }
-
-  const handlePageDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
-    if (!editing || !canManage || !hasDraggedFiles(event)) return
-    event.preventDefault()
-    setPageDragDepth((prev) => prev + 1)
-  }
-
-  const handlePageDragOver = (event: React.DragEvent<HTMLDivElement>) => {
-    if (!editing || !canManage || !hasDraggedFiles(event)) return
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'copy'
-  }
-
-  const handlePageDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
-    if (!editing || !canManage || !hasDraggedFiles(event)) return
-    event.preventDefault()
-    setPageDragDepth((prev) => Math.max(0, prev - 1))
-  }
-
-  const handlePageDrop = (event: React.DragEvent<HTMLDivElement>) => {
-    if (!editing || !canManage || !hasDraggedFiles(event)) return
-    event.preventDefault()
-    setPageDragDepth(0)
-    if (!event.dataTransfer.files?.length) return
-    appendPendingFiles(event.dataTransfer.files)
-  }
-
   if (loading) {
     return (
       <div className="min-h-[calc(100vh-60px)] antique-page bg-bg-primary">
@@ -1057,20 +691,7 @@ const GalleryDetail = () => {
         fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif",
         lineHeight: 1.8,
       }}
-      onDragEnter={handlePageDragEnter}
-      onDragOver={handlePageDragOver}
-      onDragLeave={handlePageDragLeave}
-      onDrop={handlePageDrop}
     >
-      {editing && canManage && pageDragDepth > 0 ? (
-        <div className="pointer-events-none fixed inset-0 z-20 flex items-center justify-center bg-bg-primary/80 px-4">
-          <div className="w-full max-w-3xl rounded border-2 border-dashed border-brand-gold bg-surface/95 px-8 py-12 text-center">
-            <p className="text-lg font-bold text-text-primary">{t('gallery.dropToUpload')}</p>
-            <p className="mt-2 text-sm text-text-muted">{t('gallery.dropHint')}</p>
-          </div>
-        </div>
-      ) : null}
-
       <div className="max-w-[1100px] mx-auto px-6 py-8 pb-32 gallery-detail-page">
         <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px] lg:items-start">
           <div className="min-w-0">
@@ -1084,10 +705,15 @@ const GalleryDetail = () => {
             <header>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-[1.75rem] font-semibold tracking-[0.12em] text-text-primary">
-                  {editing && draft ? draft.title || gallery.title : gallery.title}
+                  {gallery.title}
                 </h1>
                 {gallery.status && gallery.status !== 'published' ? (
-                  <span className={clsx('px-2 py-0.5 text-xs font-medium rounded', getStatusClassName(gallery.status))}>
+                  <span
+                    className={clsx(
+                      'px-2 py-0.5 text-xs font-medium rounded',
+                      getStatusClassName(gallery.status)
+                    )}
+                  >
                     {getStatusText(gallery.status)}
                   </span>
                 ) : null}
@@ -1095,15 +721,11 @@ const GalleryDetail = () => {
               {gallery.status === 'rejected' && gallery.reviewNote ? (
                 <p className="mt-2 text-sm theme-text-error">{gallery.reviewNote}</p>
               ) : null}
-              {!editing && (
-                <>
-                  <p className="mt-2 text-text-secondary leading-relaxed">
-                    {gallery.description || t('gallery.noDescription')}
-                  </p>
-                  {gallery.copyright && (
-                    <p className="text-xs text-text-muted mt-1">{gallery.copyright}</p>
-                  )}
-                </>
+              <p className="mt-2 text-text-secondary leading-relaxed">
+                {gallery.description || t('gallery.noDescription')}
+              </p>
+              {gallery.copyright && (
+                <p className="text-xs text-text-muted mt-1">{gallery.copyright}</p>
               )}
             </header>
           </div>
@@ -1179,137 +801,6 @@ const GalleryDetail = () => {
             </div>
           </div>
         </div>
-        <input
-          ref={addImagesInputRef}
-          type="file"
-          multiple
-          accept="image/*"
-          className="hidden"
-          onChange={handleAddImages}
-        />
-
-        {/* Editable metadata */}
-        {editing && draft ? (
-          <section className="mb-6">
-            <div className="space-y-4 max-w-2xl">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={handleSaveMeta}
-                  disabled={saving || uploading}
-                  className="px-4 py-2 text-[0.9375rem] rounded theme-button-primary transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Save size={16} />{' '}
-                  {saving || uploading ? t('gallery.saving') : t('gallery.saveChanges')}
-                </button>
-                <button
-                  onClick={handleCancelEdit}
-                  disabled={saving || uploading}
-                  className="px-4 py-2 text-[0.9375rem] rounded theme-button-secondary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {t('gallery.cancelEdit')}
-                </button>
-              </div>
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between gap-3">
-                  <label
-                    htmlFor="gallery-title"
-                    className="block text-sm font-medium text-text-secondary"
-                  >
-                    {t('gallery.titleLabel')}
-                  </label>
-                  <CharacterCount current={draft.title.length} max={CONTENT_LIMITS.gallery.title} />
-                </div>
-                <input
-                  id="gallery-title"
-                  type="text"
-                  value={draft.title}
-                  onChange={(event) =>
-                    applyDraft((prev) => (prev ? { ...prev, title: event.target.value } : prev))
-                  }
-                  maxLength={CONTENT_LIMITS.gallery.title}
-                  className="theme-input w-full px-4 py-2.5 rounded text-base"
-                  placeholder={t('gallery.titlePlaceholder')}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between gap-3">
-                  <label
-                    htmlFor="gallery-description"
-                    className="block text-sm font-medium text-text-secondary"
-                  >
-                    {t('gallery.descriptionLabel')}
-                  </label>
-                  <CharacterCount
-                    current={draft.description.length}
-                    max={CONTENT_LIMITS.gallery.description}
-                  />
-                </div>
-                <textarea
-                  id="gallery-description"
-                  value={draft.description}
-                  onChange={(event) =>
-                    applyDraft((prev) =>
-                      prev ? { ...prev, description: event.target.value } : prev
-                    )
-                  }
-                  maxLength={CONTENT_LIMITS.gallery.description}
-                  className="theme-input w-full px-4 py-2.5 rounded resize-none text-base"
-                  rows={3}
-                  placeholder={t('gallery.descriptionPlaceholder')}
-                />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <label
-                      htmlFor="gallery-tags"
-                      className="block text-sm font-medium text-text-secondary"
-                    >
-                      {t('gallery.tagsLabel')}
-                    </label>
-                    <CharacterCount
-                      current={draft.tagsText.length}
-                      max={CONTENT_LIMITS.gallery.tag * CONTENT_LIMITS.gallery.tags}
-                    />
-                  </div>
-                  <input
-                    id="gallery-tags"
-                    type="text"
-                    value={draft.tagsText}
-                    onChange={(event) =>
-                      applyDraft((prev) =>
-                        prev ? { ...prev, tagsText: event.target.value } : prev
-                      )
-                    }
-                    maxLength={CONTENT_LIMITS.gallery.tag * CONTENT_LIMITS.gallery.tags}
-                    className="theme-input w-full px-4 py-2.5 rounded text-base"
-                    placeholder={t('gallery.tagsPlaceholder')}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label
-                    htmlFor="gallery-copyright"
-                    className="block text-sm font-medium text-text-secondary"
-                  >
-                    {t('gallery.copyrightLabel')}
-                  </label>
-                  <input
-                    id="gallery-copyright"
-                    type="text"
-                    value={draft.copyrightText}
-                    onChange={(event) =>
-                      applyDraft((prev) =>
-                        prev ? { ...prev, copyrightText: event.target.value } : prev
-                      )
-                    }
-                    className="theme-input w-full px-4 py-2.5 rounded text-base"
-                    placeholder={t('gallery.copyrightPlaceholder')}
-                  />
-                </div>
-              </div>
-            </div>
-          </section>
-        ) : null}
 
         {/* Info bar */}
         <div className="flex items-end justify-between border-b border-border mb-6 pb-2">
@@ -1317,11 +808,15 @@ const GalleryDetail = () => {
             <span className="text-[1.125rem] pb-2 relative tracking-[0.05em] text-brand-gold font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[var(--color-theme-accent)] after:rounded-[1px]">
               {t('gallery.imageCount', { count: images.length })}
             </span>
-            {editing ? (
-              <span className="text-[11px] px-2 py-0.5 rounded font-medium bg-surface-alt text-text-secondary border border-border">
-                {t('gallery.editMode')}
-              </span>
-            ) : null}
+            {canSubmitReview && (
+              <button
+                onClick={() => void handleSubmitReview()}
+                disabled={submittingReview}
+                className="px-3 py-1 text-[0.8125rem] rounded theme-status-warning hover:opacity-90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all self-center mb-1"
+              >
+                {submittingReview ? t('gallery.submitting') : t('gallery.submitReview')}
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-3 pb-2 text-[0.8125rem] text-text-muted">
             <span className="flex items-center gap-1">
@@ -1340,39 +835,14 @@ const GalleryDetail = () => {
 
         {/* Images Grid */}
         <section className="mb-10">
-          {editing ? (
-            <p className="mb-3 text-xs text-text-muted">{t('gallery.editImageHint')}</p>
-          ) : null}
-
-          <div
-            className={clsx(
-              'grid gap-4',
-              editing ? 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5' : 'grid-cols-2 md:grid-cols-3'
-            )}
-          >
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
             {images.map((image, index) => (
               <div
                 key={image.clientId || image.id}
-                draggable={editing && canManage}
-                onDragStart={(event) => onThumbDragStart(event, index)}
-                onDragOver={(event) => {
-                  if (!editing || !canManage) return
-                  event.preventDefault()
-                }}
-                onDrop={(event) => {
-                  event.preventDefault()
-                  onThumbDrop(index)
-                }}
-                className={clsx(
-                  'relative overflow-hidden rounded group',
-                  editing
-                    ? 'aspect-square cursor-grab active:cursor-grabbing'
-                    : 'cursor-zoom-in aspect-[3/4]',
-                  draggingIndex === index && 'opacity-60'
-                )}
+                className="relative aspect-[3/4] cursor-zoom-in overflow-hidden rounded group"
               >
                 <button
-                  onClick={() => !editing && handleOpenLightbox(index)}
+                  onClick={() => handleOpenLightbox(index)}
                   className="w-full h-full"
                   type="button"
                 >
@@ -1380,48 +850,17 @@ const GalleryDetail = () => {
                     src={image.url}
                     alt={image.name || ''}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                    useOriginal={!editing}
+                    useOriginal
                   />
                 </button>
 
-                {!editing && (
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 pointer-events-none">
-                    <div className="absolute bottom-3 right-3 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 bg-black/40 text-white text-xs px-2 py-1 rounded">
-                      {t('gallery.viewFullSize')}
-                    </div>
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 pointer-events-none">
+                  <div className="absolute bottom-3 right-3 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 bg-black/40 text-white text-xs px-2 py-1 rounded">
+                    {t('gallery.viewFullSize')}
                   </div>
-                )}
-
-                {editing && canManage && (
-                  <>
-                    <button
-                      onClick={() => handleDeleteImage(index)}
-                      className="absolute top-1.5 left-1.5 z-10 p-1 rounded bg-black/50 text-white hover:bg-[var(--color-error)]/80 transition-colors"
-                      title={t('gallery.deleteImage')}
-                    >
-                      <Trash2 size={11} />
-                    </button>
-                    {image.isPending ? (
-                      <span className="absolute top-1.5 right-1.5 z-10 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-theme-accent)] text-white">
-                        {t('gallery.pendingUpload')}
-                      </span>
-                    ) : null}
-                  </>
-                )}
+                </div>
               </div>
             ))}
-
-            {editing && canManage ? (
-              <button
-                type="button"
-                onClick={() => addImagesInputRef.current?.click()}
-                disabled={uploading || saving}
-                className="flex aspect-square items-center justify-center rounded border border-dashed border-brand-gold/40 bg-surface-alt text-brand-gold transition-colors hover:border-brand-gold hover:bg-surface-alt disabled:opacity-50 disabled:cursor-not-allowed"
-                title={uploading ? t('gallery.uploading') : t('gallery.addImages')}
-              >
-                <Plus size={24} />
-              </button>
-            ) : null}
           </div>
         </section>
 

@@ -3,7 +3,7 @@ import { requireAuth, requireActiveUser, requireAdmin, isAdminRole } from '../mi
 import { asyncHandler } from '../middleware/asyncHandler'
 import { galleryWriteLimiter } from '../middleware/rateLimiter'
 import { galleryDeleteSchema, validateBody } from '../schemas'
-import type { ApiUser, AuthenticatedRequest } from '../types'
+import type { ApiUser, AuthenticatedRequest, ContentStatus } from '../types'
 import {
   serializeTags,
   normalizeTagList,
@@ -74,20 +74,45 @@ const router = Router()
 function resolveGalleryRequestedStatus(
   body: Record<string, unknown>,
   authUser: ApiUser,
-  fallbackStatus?: unknown
+  fallbackStatus: ContentStatus = 'draft'
 ) {
-  const rawStatus =
-    body.status !== undefined
-      ? body.status
-      : body.published !== undefined
-        ? (parseBoolean(body.published, false) ? 'published' : 'draft')
-        : fallbackStatus
-  return normalizeGalleryWriteStatus(rawStatus, authUser)
+  if (body.status !== undefined) {
+    return normalizeGalleryWriteStatus(body.status, authUser)
+  }
+  if (body.published !== undefined) {
+    return resolveGalleryPublishStatus(parseBoolean(body.published, false), authUser, fallbackStatus)
+  }
+  return normalizeGalleryWriteStatus(undefined, authUser)
 }
 
-function resolveGalleryPublishStatus(published: boolean, authUser: ApiUser) {
-  if (!published) return 'draft'
+function resolveGalleryPublishStatus(
+  published: boolean,
+  authUser: ApiUser,
+  currentStatus: ContentStatus
+) {
+  if (!published) {
+    return isAdminRole(authUser.role)
+      ? 'draft'
+      : resolveGalleryUpdateStatus('draft', currentStatus, authUser)
+  }
   return isAdminRole(authUser.role) ? 'published' : 'pending'
+}
+
+function resolveGalleryUpdateStatus(
+  requestedStatus: ContentStatus | undefined,
+  currentStatus: ContentStatus,
+  authUser: ApiUser
+) {
+  if (isAdminRole(authUser.role)) {
+    return requestedStatus === undefined
+      ? currentStatus
+      : normalizeGalleryWriteStatus(requestedStatus, authUser)
+  }
+  if (currentStatus === 'published') {
+    return 'pending'
+  }
+  const normalized = normalizeGalleryWriteStatus(requestedStatus ?? currentStatus, authUser)
+  return currentStatus === 'pending' && normalized === 'draft' ? 'pending' : normalized
 }
 
 function galleryStatusData(status: ReturnType<typeof normalizeGalleryWriteStatus>) {
@@ -99,6 +124,49 @@ function galleryStatusData(status: ReturnType<typeof normalizeGalleryWriteStatus
     published: status === 'published',
     publishedAt: status === 'published' ? new Date() : null,
   }
+}
+
+function gallerySubmissionLogData(
+  targetId: string,
+  nextStatus: ContentStatus,
+  authUser: ApiUser,
+  note: string | null = null
+) {
+  if (nextStatus !== 'pending') return null
+  return {
+    targetType: 'gallery' as const,
+    targetId,
+    action: 'submit' as const,
+    operatorUid: authUser.uid,
+    note,
+  }
+}
+
+async function updateGalleryStatusWithSubmitLog(
+  galleryId: string,
+  nextStatus: ContentStatus,
+  authUser: ApiUser,
+  note: string | null = null
+) {
+  return prisma.$transaction(async (tx) => {
+    const nextGallery = await tx.gallery.update({
+      where: { id: galleryId },
+      data: galleryStatusData(nextStatus),
+      include: {
+        images: {
+          include: {
+            asset: true,
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    })
+    const submissionLog = gallerySubmissionLogData(nextGallery.id, nextStatus, authUser, note)
+    if (submissionLog) {
+      await tx.moderationLog.create({ data: submissionLog })
+    }
+    return nextGallery
+  })
 }
 
 async function attachGalleryInteractions<T extends { id: string }>(
@@ -570,34 +638,41 @@ router.post('/', galleryWriteLimiter, requireAuth, requireActiveUser, asyncHandl
         .map((id) => assetsById.get(id))
         .filter((asset): asset is typeof assets[number] => Boolean(asset))
 
-      const gallery = await prisma.gallery.create({
-        data: {
-          title: finalTitle,
-          description: finalDescription,
-          authorUid: req.authUser!.uid,
-          authorName: req.authUser!.displayName,
-          tags: finalTags,
-          locationCode: locationCode || null,
-          locationDetail: locationDetail || null,
-          copyright: normalizedCopyright,
-          ...galleryStatusData(nextStatus),
-          images: {
-            create: orderedAssets.map((asset, index) => ({
-              assetId: asset.id,
-              url: asset.publicUrl,
-              name: asset.fileName || `image-${index + 1}`,
-              sortOrder: index,
-            })),
-          },
-        },
-        include: {
-          images: {
-            orderBy: { sortOrder: 'asc' },
-            include: {
-              asset: true,
+      const gallery = await prisma.$transaction(async (tx) => {
+        const created = await tx.gallery.create({
+          data: {
+            title: finalTitle,
+            description: finalDescription,
+            authorUid: req.authUser!.uid,
+            authorName: req.authUser!.displayName,
+            tags: finalTags,
+            locationCode: locationCode || null,
+            locationDetail: locationDetail || null,
+            copyright: normalizedCopyright,
+            ...galleryStatusData(nextStatus),
+            images: {
+              create: orderedAssets.map((asset, index) => ({
+                assetId: asset.id,
+                url: asset.publicUrl,
+                name: asset.fileName || `image-${index + 1}`,
+                sortOrder: index,
+              })),
             },
           },
-        },
+          include: {
+            images: {
+              orderBy: { sortOrder: 'asc' },
+              include: {
+                asset: true,
+              },
+            },
+          },
+        })
+        const submissionLog = gallerySubmissionLogData(created.id, nextStatus, req.authUser!)
+        if (submissionLog) {
+          await tx.moderationLog.create({ data: submissionLog })
+        }
+        return created
       })
 
       try {
@@ -610,9 +685,9 @@ router.post('/', galleryWriteLimiter, requireAuth, requireActiveUser, asyncHandl
       }
 
       try {
-      for (const asset of orderedAssets) {
-        await syncGalleryImageToImageMapWithVariant(asset.publicUrl, asset.storageKey)
-      }
+        for (const asset of orderedAssets) {
+          await syncGalleryImageToImageMapWithVariant(asset.publicUrl, asset.storageKey)
+        }
       } catch (error) {
         console.error('Sync gallery images to ImageMap error:', error)
       }
@@ -675,34 +750,41 @@ router.post('/', galleryWriteLimiter, requireAuth, requireActiveUser, asyncHandl
     })
     const assetByUrl = new Map(fallbackAssets.map((item) => [item.publicUrl, item.id]))
 
-    const gallery = await prisma.gallery.create({
-      data: {
-        title: normalizedTitle,
-        description: normalizedDescription,
-        authorUid: req.authUser!.uid,
-        authorName: req.authUser!.displayName,
-        tags: normalizedTags,
-        locationCode: locationCode || null,
-        locationDetail: locationDetail || null,
-        copyright: normalizedCopyright,
-        ...galleryStatusData(nextStatus),
-        images: {
-          create: normalizedImages.map((image, index) => ({
-            assetId: assetByUrl.get(image.url) || null,
-            url: image.url,
-            name: image.name,
-            sortOrder: index,
-          })),
-        },
-      },
-      include: {
-        images: {
-          orderBy: { sortOrder: 'asc' },
-          include: {
-            asset: true,
+    const gallery = await prisma.$transaction(async (tx) => {
+      const created = await tx.gallery.create({
+        data: {
+          title: normalizedTitle,
+          description: normalizedDescription,
+          authorUid: req.authUser!.uid,
+          authorName: req.authUser!.displayName,
+          tags: normalizedTags,
+          locationCode: locationCode || null,
+          locationDetail: locationDetail || null,
+          copyright: normalizedCopyright,
+          ...galleryStatusData(nextStatus),
+          images: {
+            create: normalizedImages.map((image, index) => ({
+              assetId: assetByUrl.get(image.url) || null,
+              url: image.url,
+              name: image.name,
+              sortOrder: index,
+            })),
           },
         },
-      },
+        include: {
+          images: {
+            orderBy: { sortOrder: 'asc' },
+            include: {
+              asset: true,
+            },
+          },
+        },
+      })
+      const submissionLog = gallerySubmissionLogData(created.id, nextStatus, req.authUser!)
+      if (submissionLog) {
+        await tx.moderationLog.create({ data: submissionLog })
+      }
+      return created
     })
 
     try {
@@ -770,10 +852,15 @@ router.patch('/:id', requireAuth, requireActiveUser, asyncHandler(async (req: Au
     if (!ensureGalleryTextLimits(res, { title, description, locationCode, locationDetail, copyright })) {
       return
     }
-    const nextStatus =
+    const requestedStatus =
       req.body?.status !== undefined || req.body?.published !== undefined
         ? resolveGalleryRequestedStatus(req.body as Record<string, unknown>, req.authUser!, gallery.status)
         : undefined
+    const nextStatus = resolveGalleryUpdateStatus(
+      requestedStatus,
+      gallery.status as ContentStatus,
+      req.authUser!
+    )
     const imagesRaw = Array.isArray(req.body?.images) ? req.body.images : undefined
     const imageInstructions = imagesRaw?.map((item) => {
       if (!item || typeof item !== 'object') {
@@ -843,7 +930,7 @@ router.patch('/:id', requireAuth, requireActiveUser, asyncHandler(async (req: Au
     if (copyright !== undefined) {
       data.copyright = copyright
     }
-    if (nextStatus !== undefined) {
+    if (nextStatus !== gallery.status) {
       Object.assign(data, galleryStatusData(nextStatus))
     }
 
@@ -868,6 +955,18 @@ router.patch('/:id', requireAuth, requireActiveUser, asyncHandler(async (req: Au
           where: { id: req.params.id },
           data,
         })
+      }
+
+      const submissionLog = gallerySubmissionLogData(
+        req.params.id,
+        nextStatus,
+        req.authUser!,
+        !isAdminRole(req.authUser!.role) && gallery.status === 'published'
+          ? '编辑后重新提交审核'
+          : null
+      )
+      if (submissionLog) {
+        await tx.moderationLog.create({ data: submissionLog })
       }
 
       if (imageInstructions !== undefined) {
@@ -1080,24 +1179,65 @@ router.patch('/:id/publish', requireAuth, requireActiveUser, asyncHandler(async 
     }
 
     const nextPublished = parseBoolean(req.body?.published, gallery.status !== 'published')
-    const nextStatus = resolveGalleryPublishStatus(nextPublished, req.authUser!)
-    const updated = await prisma.gallery.update({
-      where: { id: req.params.id },
-      data: galleryStatusData(nextStatus),
-      include: {
-        images: {
-          include: {
-            asset: true,
-          },
-          orderBy: { sortOrder: 'asc' },
-        },
-      },
-    })
+    const nextStatus = resolveGalleryPublishStatus(
+      nextPublished,
+      req.authUser!,
+      gallery.status as ContentStatus
+    )
+    const updated = await updateGalleryStatusWithSubmitLog(
+      req.params.id,
+      nextStatus,
+      req.authUser!
+    )
 
     res.json({ gallery: await toGalleryResponse(updated) })
   } catch (error) {
     console.error('Update gallery publish status error:', error)
     res.status(500).json({ error: '修改图集发布状态失败' })
+  }
+}))
+
+router.post('/:id/submit', requireAuth, requireActiveUser, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  try {
+    if (GALLERY_ADMIN_ONLY && !isAdminRole(req.authUser?.role)) {
+      res.status(403).json({ error: '当前图集已临时限制为仅管理员可操作' })
+      return
+    }
+
+    const gallery = await prisma.gallery.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        authorUid: true,
+        status: true,
+      },
+    })
+
+    if (!gallery) {
+      res.status(404).json({ error: '图集不存在' })
+      return
+    }
+
+    if (!canManageGallery(gallery, req.authUser)) {
+      res.status(403).json({ error: '无权限提交该图集' })
+      return
+    }
+
+    const nextStatus = resolveGalleryUpdateStatus(
+      'pending',
+      gallery.status as ContentStatus,
+      req.authUser!
+    )
+    const updated = await updateGalleryStatusWithSubmitLog(
+      req.params.id,
+      nextStatus,
+      req.authUser!
+    )
+
+    res.json({ gallery: await toGalleryResponse(updated) })
+  } catch (error) {
+    console.error('Submit gallery review error:', error)
+    res.status(500).json({ error: '提交审核失败' })
   }
 }))
 

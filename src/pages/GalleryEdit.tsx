@@ -361,8 +361,10 @@ const GalleryEdit = () => {
       return
     }
 
+    setSavingMode(status)
+    let redirectTarget: string | null = null
+
     try {
-      setSavingMode(status)
       const pendingImages = currentDraft.images.filter(
         (image) => image.isPending && image.pendingFile
       )
@@ -456,41 +458,65 @@ const GalleryEdit = () => {
           images: imagesPayload.filter((image) => image && 'url' in image),
         })
 
-        const createdId = created.gallery?.id
-        if (!createdId) {
+        const savedGallery = created.gallery
+        if (!savedGallery?.id) {
           throw new Error('Create gallery failed')
         }
 
         releasePendingImageUrls(currentDraft.images)
+        if (savedGallery.status === 'published') {
+          show(t('gallery.galleryPublished'))
+        } else if (savedGallery.status === 'pending') {
+          show(t('gallery.reviewSubmitted'))
+        } else if (savedGallery.status === 'draft') {
+          show(t('gallery.draftSaved'))
+        }
+
         invalidateApiCacheByPrefix('/api/galleries')
-        show(t('gallery.changesSaved'))
-        navigate(`/gallery/${createdId}`)
-        return
+        redirectTarget = `/gallery/${savedGallery.id}`
+      } else {
+        const result = await apiPatch<GalleryDetailResponse>(`/api/galleries/${galleryId}`, {
+          title: currentDraft.title,
+          description: currentDraft.description,
+          tags: splitTagsInput(currentDraft.tagsText),
+          locationCode: currentDraft.locationCode,
+          locationDetail: currentDraft.locationName,
+          copyright: currentDraft.copyrightText.trim() || null,
+          status,
+          images: imagesPayload,
+        })
+
+        const savedGallery = result.gallery
+        releasePendingImageUrls(currentDraft.images)
+        setGallery(savedGallery)
+        applyDraft(createDraftFromGallery(savedGallery))
+
+        if (savedGallery.status === 'published') {
+          show(t('gallery.galleryUpdated'))
+        } else if (savedGallery.status === 'pending') {
+          show(t('gallery.reviewSubmitted'))
+        } else if (savedGallery.status === 'draft') {
+          show(t('gallery.draftSaved'))
+        }
+
+        invalidateApiCacheByPrefix('/api/galleries')
+        redirectTarget = `/gallery/${savedGallery.id}`
       }
-
-      const result = await apiPatch<GalleryDetailResponse>(`/api/galleries/${galleryId}`, {
-        title: currentDraft.title,
-        description: currentDraft.description,
-        tags: splitTagsInput(currentDraft.tagsText),
-        locationCode: currentDraft.locationCode,
-        locationDetail: currentDraft.locationName,
-        copyright: currentDraft.copyrightText.trim() || null,
-        status,
-        images: imagesPayload,
-      })
-
-      releasePendingImageUrls(currentDraft.images)
-      setGallery(result.gallery)
-      applyDraft(createDraftFromGallery(result.gallery))
-      invalidateApiCacheByPrefix('/api/galleries')
-      show(t('gallery.changesSaved'))
-      navigate(`/gallery/${result.gallery.id}`)
     } catch (error) {
       console.error('Save gallery error:', error)
-      show(t('gallery.saveFailed'), { variant: 'error' })
+      show(
+        status === 'draft'
+          ? t('gallery.saveDraftFailed')
+          : t(isAdmin ? 'gallery.publishFailed' : 'gallery.submitReviewFailed'),
+        { variant: 'error' }
+      )
     } finally {
       setUploading(false)
       setSavingMode(null)
+    }
+
+    if (redirectTarget) {
+      navigate(redirectTarget)
     }
   }
 
@@ -882,7 +908,7 @@ const GalleryEdit = () => {
               disabled={Boolean(savingMode) || uploading}
               className="px-6 py-2.5 bg-surface-alt text-text-secondary border border-border rounded text-sm font-medium hover:border-brand-gold hover:text-brand-gold transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Save size={16} /> {savingMode === 'draft' ? t('gallery.saving') : '保存草稿'}
+              <Save size={16} /> {savingMode === 'draft' ? t('gallery.saving') : t('gallery.saveDraft')}
             </button>
             <button
               type="submit"

@@ -281,6 +281,7 @@ export interface CreateTestGalleryInput {
   description?: string;
   authorUid: string;
   authorName?: string;
+  status?: 'draft' | 'pending' | 'published' | 'rejected';
   published?: boolean;
 }
 
@@ -288,8 +289,8 @@ export async function createTestGallery(input: CreateTestGalleryInput) {
   const title = input.title || `Test Gallery ${Date.now()}`;
   const description = input.description || 'Test gallery';
   const authorName = input.authorName || 'Test Gallery Author';
-  const published = input.published ?? true;
-  const status = published ? 'published' : 'draft';
+  const status = input.status || (input.published === false ? 'draft' : 'published');
+  const published = status === 'published';
 
   return prisma.gallery.create({
     data: {

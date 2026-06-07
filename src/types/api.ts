@@ -86,9 +86,7 @@ export interface UploadFileResponse {
 }
 
 export interface GalleryCreateResponse {
-  gallery: {
-    id: string;
-  };
+  gallery: GalleryItem;
 }
 
 export interface ImageStats {

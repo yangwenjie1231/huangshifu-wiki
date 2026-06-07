@@ -98,6 +98,13 @@ async function cleanupPostTestData() {
         { title: { startsWith: 'Test Gallery ' } },
         { title: { startsWith: 'Gallery Delete Reason Test' } },
         { title: { startsWith: 'Gallery Publish Review Test' } },
+        { title: { startsWith: 'Gallery Submit Endpoint Review Test' } },
+        { title: { startsWith: 'Gallery Submit Endpoint Admin Publish Test' } },
+        { title: { startsWith: 'Gallery Submit Review Create Test' } },
+        { title: { startsWith: 'Gallery Published Edit Review Test' } },
+        { title: { startsWith: 'Gallery Pending Preserve Test' } },
+        { title: { startsWith: 'Gallery Publish False Review Test' } },
+        { title: { startsWith: 'Gallery Legacy Published Flag Test' } },
         { title: { startsWith: 'Gallery Comment Notification Test' } },
       ],
     },
@@ -1973,6 +1980,257 @@ describe('Posts API - 文章接口测试', () => {
         .patch(`/api/galleries/${gallery.id}/publish`)
         .set('X-XSRF-TOKEN', xsrfToken)
         .send({})
+
+      expect(response.status).toBe(200)
+      expect(response.body.gallery.status).toBe('pending')
+      expect(response.body.gallery.published).toBe(false)
+
+      const updatedGallery = await prisma.gallery.findUnique({
+        where: { id: gallery.id },
+        select: { status: true, published: true, publishedAt: true },
+      })
+      expect(updatedGallery?.status).toBe('pending')
+      expect(updatedGallery?.published).toBe(false)
+      expect(updatedGallery?.publishedAt).toBeNull()
+    })
+
+    it('普通用户通过提交审核端点应进入待审核并记录日志', async () => {
+      const gallery = await createTestGallery({
+        title: 'Gallery Submit Endpoint Review Test',
+        authorUid: testUser.user.uid,
+        authorName: testUser.user.displayName,
+        status: 'draft',
+      })
+
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword
+      )
+      const response = await agent
+        .post(`/api/galleries/${gallery.id}/submit`)
+        .set('X-XSRF-TOKEN', xsrfToken)
+
+      expect(response.status).toBe(200)
+      expect(response.body.gallery.status).toBe('pending')
+      expect(response.body.gallery.published).toBe(false)
+
+      const updatedGallery = await prisma.gallery.findUnique({
+        where: { id: gallery.id },
+        select: { status: true, published: true, publishedAt: true },
+      })
+      expect(updatedGallery?.status).toBe('pending')
+      expect(updatedGallery?.published).toBe(false)
+      expect(updatedGallery?.publishedAt).toBeNull()
+
+      const moderationLog = await prisma.moderationLog.findFirst({
+        where: {
+          targetType: 'gallery',
+          targetId: gallery.id,
+          action: 'submit',
+          operatorUid: testUser.user.uid,
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      expect(moderationLog).not.toBeNull()
+      expect(moderationLog?.note).toBeNull()
+    })
+
+    it('管理员通过提交审核端点应按论坛写入规则直接发布', async () => {
+      const gallery = await createTestGallery({
+        title: 'Gallery Submit Endpoint Admin Publish Test',
+        authorUid: testUser.user.uid,
+        authorName: testUser.user.displayName,
+        status: 'draft',
+      })
+
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        adminUser.user.email,
+        adminUser.plainPassword
+      )
+      const response = await agent
+        .post(`/api/galleries/${gallery.id}/submit`)
+        .set('X-XSRF-TOKEN', xsrfToken)
+
+      expect(response.status).toBe(200)
+      expect(response.body.gallery.status).toBe('published')
+      expect(response.body.gallery.published).toBe(true)
+
+      const updatedGallery = await prisma.gallery.findUnique({
+        where: { id: gallery.id },
+        select: { status: true, published: true, publishedAt: true },
+      })
+      expect(updatedGallery?.status).toBe('published')
+      expect(updatedGallery?.published).toBe(true)
+      expect(updatedGallery?.publishedAt).not.toBeNull()
+    })
+
+    it('普通用户创建图集传 pending 时应进入待审核并记录提交日志', async () => {
+      const asset = await prisma.mediaAsset.create({
+        data: {
+          ownerUid: testUser.user.uid,
+          storageKey: `galleries/test-submit-review-create-${Date.now()}.jpg`,
+          publicUrl: `/uploads/galleries/test-submit-review-create-${Date.now()}.jpg`,
+          fileName: 'test-submit-review-create.jpg',
+          mimeType: 'image/jpeg',
+          sizeBytes: 1024,
+          status: 'ready',
+        },
+      })
+
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword
+      )
+      const response = await agent
+        .post('/api/galleries')
+        .set('X-XSRF-TOKEN', xsrfToken)
+        .send({
+          title: `Gallery Submit Review Create Test ${Date.now()}`,
+          assetIds: [asset.id],
+          status: 'pending',
+        })
+
+      expect(response.status).toBe(201)
+      expect(response.body.gallery.status).toBe('pending')
+      expect(response.body.gallery.published).toBe(false)
+
+      const moderationLog = await prisma.moderationLog.findFirst({
+        where: {
+          targetType: 'gallery',
+          targetId: response.body.gallery.id,
+          action: 'submit',
+          operatorUid: testUser.user.uid,
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      expect(moderationLog).not.toBeNull()
+      expect(moderationLog?.note).toBeNull()
+    })
+
+    it('普通用户编辑已发布图集时应像论坛一样强制回待审核', async () => {
+      const gallery = await createTestGallery({
+        title: 'Gallery Published Edit Review Test',
+        authorUid: testUser.user.uid,
+        authorName: testUser.user.displayName,
+        status: 'published',
+      })
+
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword
+      )
+      const response = await agent
+        .patch(`/api/galleries/${gallery.id}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
+        .send({
+          description: '普通用户编辑已发布图集',
+          status: 'draft',
+        })
+
+      expect(response.status).toBe(200)
+      expect(response.body.gallery.status).toBe('pending')
+      expect(response.body.gallery.published).toBe(false)
+
+      const updatedGallery = await prisma.gallery.findUnique({
+        where: { id: gallery.id },
+        select: { status: true, published: true, publishedAt: true },
+      })
+      expect(updatedGallery?.status).toBe('pending')
+      expect(updatedGallery?.published).toBe(false)
+      expect(updatedGallery?.publishedAt).toBeNull()
+
+      const moderationLog = await prisma.moderationLog.findFirst({
+        where: {
+          targetType: 'gallery',
+          targetId: gallery.id,
+          action: 'submit',
+          operatorUid: testUser.user.uid,
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      expect(moderationLog).not.toBeNull()
+      expect(moderationLog?.note).toBe('编辑后重新提交审核')
+    })
+
+    it('普通用户保存待审核图集时不应被草稿状态降级', async () => {
+      const gallery = await createTestGallery({
+        title: 'Gallery Pending Preserve Test',
+        authorUid: testUser.user.uid,
+        authorName: testUser.user.displayName,
+        status: 'pending',
+      })
+
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword
+      )
+      const response = await agent
+        .patch(`/api/galleries/${gallery.id}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
+        .send({
+          description: '保存待审核图集',
+          status: 'draft',
+        })
+
+      expect(response.status).toBe(200)
+      expect(response.body.gallery.status).toBe('pending')
+      expect(response.body.gallery.published).toBe(false)
+
+      const updatedGallery = await prisma.gallery.findUnique({
+        where: { id: gallery.id },
+        select: { status: true, published: true },
+      })
+      expect(updatedGallery?.status).toBe('pending')
+      expect(updatedGallery?.published).toBe(false)
+    })
+
+    it('普通用户通过旧 published 字段提交图集时也应进入待审核', async () => {
+      const gallery = await createTestGallery({
+        title: 'Gallery Legacy Published Flag Test',
+        authorUid: testUser.user.uid,
+        authorName: testUser.user.displayName,
+        status: 'draft',
+      })
+
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword
+      )
+      const response = await agent
+        .patch(`/api/galleries/${gallery.id}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
+        .send({
+          published: true,
+        })
+
+      expect(response.status).toBe(200)
+      expect(response.body.gallery.status).toBe('pending')
+      expect(response.body.gallery.published).toBe(false)
+
+      const updatedGallery = await prisma.gallery.findUnique({
+        where: { id: gallery.id },
+        select: { status: true, published: true },
+      })
+      expect(updatedGallery?.status).toBe('pending')
+      expect(updatedGallery?.published).toBe(false)
+    })
+
+    it('普通用户不能通过发布端点把已发布图集降回草稿', async () => {
+      const gallery = await createTestGallery({
+        title: 'Gallery Publish False Review Test',
+        authorUid: testUser.user.uid,
+        authorName: testUser.user.displayName,
+        status: 'published',
+      })
+
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword
+      )
+      const response = await agent
+        .patch(`/api/galleries/${gallery.id}/publish`)
+        .set('X-XSRF-TOKEN', xsrfToken)
+        .send({ published: false })
 
       expect(response.status).toBe(200)
       expect(response.body.gallery.status).toBe('pending')
