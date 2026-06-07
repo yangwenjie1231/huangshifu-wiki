@@ -1,9 +1,11 @@
-import { Clock, MapPin, Tag } from 'lucide-react'
+import { useState } from 'react'
+import { Clock, MapPin, Tag, User as UserIcon } from 'lucide-react'
 import { clsx } from 'clsx'
+import { Lightbox } from '../../components/Lightbox'
 import MarkdownRenderer from '../../components/MarkdownRenderer'
+import { SmartImage } from '../../components/SmartImage'
 import WikiMarkdown from '../wiki/WikiMarkdown'
-import { getStatusClassName, getStatusText } from '../../lib/contentUtils'
-import { formatDate } from '../../lib/dateUtils'
+import { formatDate, formatDateTime } from '../../lib/dateUtils'
 import type { AdminReviewQueueMergedItem } from '../../types/api'
 
 type AdminReviewContentPreviewProps = {
@@ -41,6 +43,12 @@ const getAuthorLabel = (item: AdminReviewQueueMergedItem) => {
   return item.authorName || item.authorUid || '匿名'
 }
 
+const getReviewTypeLabel = (item: AdminReviewQueueMergedItem) => {
+  if (item.reviewType === 'wiki') return '百科'
+  if (item.reviewType === 'gallery') return '图集'
+  return '帖子'
+}
+
 const renderTags = (tags: string[] | undefined) => {
   if (!tags?.length) return null
 
@@ -64,9 +72,183 @@ const renderTags = (tags: string[] | undefined) => {
   )
 }
 
+const renderLocation = (item: AdminReviewQueueMergedItem, border = false) => {
+  if (!item.locationDetail && !item.locationName) return null
+
+  return (
+    <div className={clsx('py-5', border && 'border-b border-border')}>
+      <h3 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-3.5">
+        地点
+      </h3>
+      <div className="flex items-center gap-2 text-sm text-text-secondary">
+        <MapPin size={14} className="text-brand-gold" />
+        <span>{item.locationDetail || item.locationName}</span>
+      </div>
+    </div>
+  )
+}
+
+const renderSidebar = (item: AdminReviewQueueMergedItem) => (
+  <aside className="lg:sticky lg:top-20">
+    <div className="py-5 border-b border-border">
+      <h3 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-3.5">
+        信息
+      </h3>
+      <div className="flex flex-col gap-2.5">
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <span className="text-text-muted">{item.reviewType === 'wiki' ? '编辑者' : '作者'}</span>
+          <span className="text-text-primary font-medium text-right">{getAuthorLabel(item)}</span>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-text-muted">创建</span>
+          <span className="text-text-primary font-medium">
+            {formatDateValue(item.createdAt, 'yyyy-MM-dd')}
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-text-muted">更新</span>
+          <span className="text-text-primary font-medium">
+            {formatDateValue(item.updatedAt, 'yyyy-MM-dd HH:mm')}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    {renderTags(item.tags)}
+    {renderLocation(item)}
+  </aside>
+)
+
+const renderArticlePreview = (item: AdminReviewQueueMergedItem) => (
+  <>
+    <header className="mb-7">
+      <div className="flex items-end justify-between flex-wrap gap-3">
+        <h1 className="text-[1.75rem] font-semibold tracking-[0.12em] text-text-primary">
+          {item.title || item.slug || item.id}
+        </h1>
+        <span className="px-3 py-1 rounded bg-surface-alt text-brand-gold text-xs font-medium">
+          {getReviewTypeLabel(item)}
+        </span>
+      </div>
+    </header>
+
+    <div className="flex items-end justify-between border-b border-border mb-5">
+      <div className="flex gap-5 items-center">
+        <span className="text-[1.125rem] pb-2 relative tracking-[0.05em] text-brand-gold font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[var(--color-theme-accent)] after:rounded-[1px]">
+          {getContentLabel(item)}
+        </span>
+      </div>
+      <div className="flex items-center gap-3 pb-2 text-[0.8125rem] text-text-muted">
+        <span className="flex items-center gap-1">
+          <Clock size={14} />
+          {formatDateValue(item.updatedAt, 'yyyy-MM-dd HH:mm')}
+        </span>
+      </div>
+    </div>
+
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8 items-start">
+      <div>
+        <div className="prose prose-lg max-w-none font-body leading-relaxed text-text-primary">
+          {item.reviewType === 'wiki' ? (
+            <WikiMarkdown content={item.content || ''} />
+          ) : (
+            <MarkdownRenderer content={item.content || ''} />
+          )}
+        </div>
+      </div>
+      {renderSidebar(item)}
+    </div>
+  </>
+)
+
+const renderGalleryPreview = (
+  item: AdminReviewQueueMergedItem,
+  onOpenLightbox: (index: number) => void
+) => {
+  const images = Array.isArray(item.images) ? item.images : []
+
+  return (
+    <>
+      <header className="mb-7">
+        <div className="flex items-end justify-between flex-wrap gap-3">
+          <h1 className="text-[1.75rem] font-semibold tracking-[0.12em] text-text-primary">
+            {item.title || item.id}
+          </h1>
+          <span className="px-3 py-1 rounded bg-surface-alt text-brand-gold text-xs font-medium">
+            {getReviewTypeLabel(item)}
+          </span>
+        </div>
+        <p className="mt-2 text-text-secondary leading-relaxed">
+          {item.description || '暂无描述'}
+        </p>
+        {item.copyright && (
+          <p className="text-xs text-text-muted mt-1">{item.copyright}</p>
+        )}
+      </header>
+
+      <div className="flex items-end justify-between border-b border-border mb-6 pb-2">
+        <div className="flex items-center gap-4 flex-wrap">
+          <span className="text-[1.125rem] pb-2 relative tracking-[0.05em] text-brand-gold font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[var(--color-theme-accent)] after:rounded-[1px]">
+            图片（{images.length}）
+          </span>
+        </div>
+        <div className="flex items-center gap-3 pb-2 text-[0.8125rem] text-text-muted">
+          <span className="flex items-center gap-1">
+            <Clock size={14} /> {formatDateTime(item.createdAt, 'N/A')}
+          </span>
+          <span className="flex items-center gap-1">
+            <UserIcon size={14} /> {getAuthorLabel(item)}
+          </span>
+        </div>
+      </div>
+
+      <section className="mb-10">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+          {images.map((image, index) => {
+            const previewSrc = image.thumbnailUrl || image.url || image.originalUrl || ''
+
+            return (
+              <button
+                key={image.id}
+                type="button"
+                onClick={() => onOpenLightbox(index)}
+                className="group relative aspect-[3/4] cursor-zoom-in overflow-hidden rounded"
+              >
+                <SmartImage
+                  src={previewSrc}
+                  alt={image.name || ''}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 pointer-events-none">
+                  <div className="absolute bottom-3 right-3 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 bg-black/40 text-white text-xs px-2 py-1 rounded">
+                    查看原图
+                  </div>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </section>
+
+      {(item.tags?.length || item.locationDetail || item.locationName) && (
+        <div className="grid grid-cols-1 gap-8 border-t border-border lg:grid-cols-[1fr_280px]">
+          <div />
+          <aside>{renderTags(item.tags)}{renderLocation(item)}</aside>
+        </div>
+      )}
+    </>
+  )
+}
+
 const AdminReviewContentPreview = ({ item }: AdminReviewContentPreviewProps) => {
-  const typeText = item.reviewType === 'wiki' ? '百科' : item.reviewType === 'gallery' ? '图集' : '帖子'
-  const authorText = item.reviewType === 'wiki' ? '编辑者' : '作者'
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [lightboxIndex, setLightboxIndex] = useState(0)
+  const images = Array.isArray(item.images) ? item.images : []
+
+  const handleOpenLightbox = (index: number) => {
+    setLightboxIndex(index)
+    setLightboxOpen(true)
+  }
 
   return (
     <div
@@ -77,142 +259,24 @@ const AdminReviewContentPreview = ({ item }: AdminReviewContentPreviewProps) => 
       }}
     >
       <div className="max-w-[1100px] mx-auto px-6 py-8 pb-16 wiki-detail-page">
-        <header className="mb-7">
-          <div className="flex items-end justify-between flex-wrap gap-3">
-            <h1 className="text-[1.75rem] font-semibold tracking-[0.12em] text-text-primary">
-              {item.title || item.slug || item.id}
-            </h1>
-            <div className="flex flex-wrap gap-2">
-              <span className="px-3 py-1 rounded theme-status-warning text-xs font-medium">
-                待审核
-              </span>
-              <span className="px-3 py-1 rounded bg-surface-alt text-brand-gold text-xs font-medium">
-                {typeText}
-              </span>
-            </div>
-          </div>
-        </header>
-
-        <div className="flex items-end justify-between border-b border-border mb-5">
-          <div className="flex gap-5 items-center">
-            <span className="text-[1.125rem] pb-2 relative tracking-[0.05em] text-brand-gold font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[var(--color-theme-accent)] after:rounded-[1px]">
-              {getContentLabel(item)}
-            </span>
-          </div>
-          <div className="flex items-center gap-3 pb-2 text-[0.8125rem] text-text-muted">
-            <span className="flex items-center gap-1">
-              <Clock size={14} />
-              {formatDateValue(item.updatedAt, 'yyyy-MM-dd HH:mm')}
-            </span>
-          </div>
-        </div>
-
-        {Array.isArray(item.sensitiveWords) && item.sensitiveWords.length > 0 && (
-          <div className="mb-5 p-3 theme-status-error rounded">
-            <span className="text-xs font-medium theme-text-error">检测到敏感词: </span>
-            {item.sensitiveWords.map((word) => (
-              <span key={word} className="text-xs theme-text-error mr-1">
-                #{word}
-              </span>
-            ))}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8 items-start">
-          <div>
-            <div className="prose prose-lg max-w-none font-body leading-relaxed text-text-primary">
-              {item.reviewType === 'gallery' ? (
-                <div className="not-prose space-y-6">
-                  <p className="text-base leading-8 text-text-primary whitespace-pre-wrap">
-                    {item.description || '暂无描述'}
-                  </p>
-                  {Array.isArray(item.images) && item.images.length > 0 && (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      {item.images.map((image) => (
-                        <a
-                          key={image.id}
-                          href={image.originalUrl || image.thumbnailUrl || image.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block aspect-square overflow-hidden rounded border border-border bg-surface"
-                        >
-                          <img
-                            src={image.thumbnailUrl || image.url || image.originalUrl || ''}
-                            alt={image.name}
-                            className="h-full w-full object-cover"
-                          />
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                  {item.copyright && (
-                    <p className="text-sm text-text-muted whitespace-pre-wrap">
-                      {item.copyright}
-                    </p>
-                  )}
-                </div>
-              ) : item.reviewType === 'wiki' ? (
-                <WikiMarkdown content={item.content || ''} />
-              ) : (
-                <MarkdownRenderer content={item.content || ''} />
-              )}
-            </div>
-          </div>
-
-          <aside className="lg:sticky lg:top-20">
-            <div className="py-5 border-b border-border">
-              <h3 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-3.5">
-                状态
-              </h3>
-              <div className="flex flex-col gap-2.5">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-text-muted">审核</span>
-                  <span
-                    className={clsx(
-                      'px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider',
-                      getStatusClassName(item.status)
-                    )}
-                  >
-                    {getStatusText(item.status)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-text-muted">{authorText}</span>
-                  <span className="text-text-primary font-medium text-right">
-                    {getAuthorLabel(item)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-text-muted">创建</span>
-                  <span className="text-text-primary font-medium">
-                    {formatDateValue(item.createdAt, 'yyyy-MM-dd')}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-text-muted">更新</span>
-                  <span className="text-text-primary font-medium">
-                    {formatDateValue(item.updatedAt, 'yyyy-MM-dd HH:mm')}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {renderTags(item.tags)}
-
-            {(item.locationDetail || item.locationName) && (
-              <div className="py-5">
-                <h3 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-3.5">
-                  地点
-                </h3>
-                <div className="flex items-center gap-2 text-sm text-text-secondary">
-                  <MapPin size={14} className="text-brand-gold" />
-                  <span>{item.locationDetail || item.locationName}</span>
-                </div>
-              </div>
-            )}
-          </aside>
-        </div>
+        {item.reviewType === 'gallery'
+          ? renderGalleryPreview(item, handleOpenLightbox)
+          : renderArticlePreview(item)}
       </div>
+
+      {item.reviewType === 'gallery' ? (
+        <Lightbox
+          open={lightboxOpen}
+          images={images.map((image) => ({
+            id: image.id,
+            url: image.thumbnailUrl || image.url,
+            originalUrl: image.originalUrl || image.url,
+            name: image.name,
+          }))}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxOpen(false)}
+        />
+      ) : null}
     </div>
   )
 }
