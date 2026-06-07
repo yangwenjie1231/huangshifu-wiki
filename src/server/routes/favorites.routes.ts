@@ -5,19 +5,12 @@ import {
   parseFavoriteType,
   canViewWikiPage,
   canViewPost,
+  canViewGallery,
   toWikiResponse,
   toPostResponse,
   toGalleryResponse,
 } from '../utils';
 import type { AuthenticatedRequest } from '../types';
-
-function canViewGallery(gallery: { published: boolean; authorUid: string; deletedAt?: Date | null }, authUser?: AuthenticatedRequest['authUser']) {
-  if (gallery.deletedAt) return false;
-  if (gallery.published) return true;
-  if (!authUser) return false;
-  if (authUser.role === 'admin' || authUser.role === 'super_admin') return true;
-  return gallery.authorUid === authUser.uid;
-}
 
 const router = Router();
 
@@ -201,6 +194,7 @@ router.post('/', requireAuth, requireActiveUser, async (req: AuthenticatedReques
         where: { id: targetId },
         select: {
           id: true,
+          status: true,
           published: true,
           authorUid: true,
           deletedAt: true,

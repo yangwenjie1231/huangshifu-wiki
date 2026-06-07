@@ -23,7 +23,7 @@ import { useDialog } from '../components/Dialog'
 import { useToast } from '../components/Toast'
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink'
 import { apiDelete, apiGet, apiPatch, apiPost, apiUpload } from '../lib/apiClient'
-import { splitTagsInput } from '../lib/contentUtils'
+import { getStatusClassName, getStatusText, splitTagsInput } from '../lib/contentUtils'
 import { useI18n } from '../lib/i18n'
 import { useHoveredCommentMenu } from '../hooks/useHoveredCommentMenu'
 import { formatDateTime, toDateValue } from '../lib/dateUtils'
@@ -238,6 +238,8 @@ const GalleryDetail = () => {
       console.error('Fetch gallery comments error:', error)
     }
   }
+  const isGalleryPublished =
+    gallery?.status !== undefined ? gallery.status === 'published' : Boolean(gallery?.published)
 
   useEffect(() => {
     if (isAdmin && location.hash.startsWith('#comment-') && !showDeletedComments) {
@@ -246,10 +248,10 @@ const GalleryDetail = () => {
   }, [isAdmin, location.hash, showDeletedComments])
 
   useEffect(() => {
-    if (gallery?.published && galleryId) {
+    if (isGalleryPublished && galleryId) {
       fetchComments()
     }
-  }, [gallery?.published, galleryId, isAdmin, showDeletedComments])
+  }, [isGalleryPublished, galleryId, isAdmin, showDeletedComments])
 
   useEffect(() => {
     if (!location.hash.startsWith('#comment-')) {
@@ -303,7 +305,7 @@ const GalleryDetail = () => {
   const canDeleteComment = (comment: CommentItem) =>
     Boolean(user && !comment.isDeleted && (comment.authorUid === user.uid || isAdmin))
   const canReplyComment = (comment: CommentItem) =>
-    Boolean(user && !isBanned && gallery?.published && (!comment.isDeleted || !comment.parentId))
+    Boolean(user && !isBanned && isGalleryPublished && (!comment.isDeleted || !comment.parentId))
   const focusCommentInput = () => {
     const input = commentInputRef.current
     if (!input) return
@@ -711,6 +713,7 @@ const GalleryDetail = () => {
         description: currentDraft.description,
         tags: splitTagsInput(currentDraft.tagsText),
         copyright: currentDraft.copyrightText.trim() || null,
+        status: currentDraft.published || gallery.status === 'pending' ? 'pending' : 'draft',
         published: currentDraft.published,
         images: currentDraft.images
           .map((image) =>
@@ -754,7 +757,7 @@ const GalleryDetail = () => {
       show(t('gallery.bannedCannotComment'), { variant: 'error' })
       return
     }
-    if (!gallery?.published) {
+    if (!isGalleryPublished) {
       show(t('gallery.onlyPublishedCanComment'), { variant: 'error' })
       return
     }
@@ -1079,9 +1082,19 @@ const GalleryDetail = () => {
             </Link>
 
             <header>
-              <h1 className="text-[1.75rem] font-semibold tracking-[0.12em] text-text-primary">
-                {editing && draft ? draft.title || gallery.title : gallery.title}
-              </h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-[1.75rem] font-semibold tracking-[0.12em] text-text-primary">
+                  {editing && draft ? draft.title || gallery.title : gallery.title}
+                </h1>
+                {gallery.status && gallery.status !== 'published' ? (
+                  <span className={clsx('px-2 py-0.5 text-xs font-medium rounded', getStatusClassName(gallery.status))}>
+                    {getStatusText(gallery.status)}
+                  </span>
+                ) : null}
+              </div>
+              {gallery.status === 'rejected' && gallery.reviewNote ? (
+                <p className="mt-2 text-sm theme-text-error">{gallery.reviewNote}</p>
+              ) : null}
               {!editing && (
                 <>
                   <p className="mt-2 text-text-secondary leading-relaxed">
@@ -1413,7 +1426,7 @@ const GalleryDetail = () => {
         </section>
 
         {/* Comments */}
-        {gallery.published && (
+        {isGalleryPublished && (
           <section className="border-t border-border pt-8">
             <h2 className="text-base font-semibold text-text-primary tracking-[0.12em] mb-6 pb-2.5 border-b border-border flex items-center gap-2">
               <span className="w-[3px] h-4 bg-brand-gold rounded-[1px] opacity-60 inline-block" />

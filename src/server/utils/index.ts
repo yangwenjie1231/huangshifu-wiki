@@ -38,6 +38,7 @@ export {
   parseContentStatus,
   normalizeWikiWriteStatus,
   normalizePostWriteStatus,
+  normalizeGalleryWriteStatus,
   parseFavoriteType,
   parseMusicPlatform,
   parseDisplayAlbumMode,

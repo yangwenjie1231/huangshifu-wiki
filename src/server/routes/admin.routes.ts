@@ -15,6 +15,7 @@ import {
   toWikiResponse,
   toPostResponse,
   toGalleryResponse,
+  toGalleryListResponse,
   toUserResponse,
   toEditLockResponse,
   toMusicResponse,
@@ -411,7 +412,7 @@ const uploadBackup = multer({
 });
 
 async function handleReviewAction(
-  targetType: 'wiki' | 'post',
+  targetType: 'wiki' | 'post' | 'gallery',
   targetId: string,
   action: 'approve' | 'reject',
   reqAuthUser: { uid: string; role: string },
@@ -446,22 +447,54 @@ async function handleReviewAction(
     return { item: { ...toWikiResponse(page), sensitiveWords: containsSensitive(page.content || '') }, targetType };
   }
 
-  const post = await prisma.post.update({
-    where: { id: targetId },
-    data: { status: action === 'approve' ? 'published' : 'rejected', reviewNote, reviewedBy: reqAuthUser.uid, reviewedAt },
-  });
+  if (targetType === 'post') {
+    const post = await prisma.post.update({
+      where: { id: targetId },
+      data: { status: action === 'approve' ? 'published' : 'rejected', reviewNote, reviewedBy: reqAuthUser.uid, reviewedAt },
+    });
 
-  await prisma.moderationLog.create({ data: { targetType: 'post', targetId, action, operatorUid: reqAuthUser.uid, note: reviewNote } });
+    await prisma.moderationLog.create({ data: { targetType: 'post', targetId, action, operatorUid: reqAuthUser.uid, note: reviewNote } });
 
-  if (post.authorUid && post.authorUid !== reqAuthUser.uid) {
-    await createNotification(post.authorUid, 'review_result', { approved: action === 'approve', targetType: 'post', targetId, title: post.title, note: reviewNote });
+    if (post.authorUid && post.authorUid !== reqAuthUser.uid) {
+      await createNotification(post.authorUid, 'review_result', { approved: action === 'approve', targetType: 'post', targetId, title: post.title, note: reviewNote });
+    }
+
+    return { item: action === 'approve' ? { ...toPostResponse(post), sensitiveWords: containsSensitive(post.content || '') } : toPostResponse(post), targetType };
   }
 
-  return { item: action === 'approve' ? { ...toPostResponse(post), sensitiveWords: containsSensitive(post.content || '') } : toPostResponse(post), targetType };
+  const nextStatus = action === 'approve' ? 'published' : 'rejected';
+  const gallery = await prisma.gallery.update({
+    where: { id: targetId },
+    data: {
+      status: nextStatus,
+      reviewNote,
+      reviewedBy: reqAuthUser.uid,
+      reviewedAt,
+      published: nextStatus === 'published',
+      publishedAt: nextStatus === 'published' ? reviewedAt : null,
+    },
+    include: {
+      images: {
+        include: {
+          asset: true,
+        },
+        orderBy: { sortOrder: 'asc' },
+      },
+      location: true,
+    },
+  });
+
+  await prisma.moderationLog.create({ data: { targetType: 'gallery', targetId, action, operatorUid: reqAuthUser.uid, note: reviewNote } });
+
+  if (gallery.authorUid && gallery.authorUid !== reqAuthUser.uid) {
+    await createNotification(gallery.authorUid, 'review_result', { approved: action === 'approve', targetType: 'gallery', targetId, title: gallery.title, note: reviewNote });
+  }
+
+  return { item: await toGalleryResponse(gallery), targetType };
 }
 
-function isReviewTargetType(value: unknown): value is 'wiki' | 'post' {
-  return value === 'wiki' || value === 'post';
+function isReviewTargetType(value: unknown): value is 'wiki' | 'post' | 'gallery' {
+  return value === 'wiki' || value === 'post' || value === 'gallery';
 }
 
 /**
@@ -476,21 +509,24 @@ router.get('/review-queue/count', requireAdmin, asyncHandler(async (req: Authent
     const type = normalizeModerationTargetType(req.query.type);
     const status = parseContentStatus(req.query.status) || 'pending';
 
-    if (type && type !== 'wiki' && type !== 'post') {
-      res.status(400).json({ error: 'type 必须为 wiki 或 posts' });
+    if (type && type !== 'wiki' && type !== 'post' && type !== 'gallery') {
+      res.status(400).json({ error: 'type 必须为 wiki、posts 或 galleries' });
       return;
     }
 
-    const [wiki, posts] = await Promise.all([
+    const [wiki, posts, galleries] = await Promise.all([
       type && type !== 'wiki'
         ? Promise.resolve(0)
         : prisma.wikiPage.count({ where: { status, deletedAt: null } }),
       type && type !== 'post'
         ? Promise.resolve(0)
         : prisma.post.count({ where: { status, deletedAt: null } }),
+      type && type !== 'gallery'
+        ? Promise.resolve(0)
+        : prisma.gallery.count({ where: { status, deletedAt: null } }),
     ]);
 
-    res.json({ status, counts: { wiki, posts }, total: wiki + posts });
+    res.json({ status, counts: { wiki, posts, galleries }, total: wiki + posts + galleries });
   } catch (error) {
     logger.error({ err: error }, 'Fetch review queue count error');
     res.status(500).json({ error: '获取审核队列数量失败' });
@@ -504,12 +540,12 @@ router.get('/review-queue', requireAdmin, asyncHandler(async (req: Authenticated
     const status = parseContentStatus(req.query.status) || 'pending';
 
     if (!type) {
-      res.status(400).json({ error: 'type 必须为 wiki 或 posts' });
+      res.status(400).json({ error: 'type 必须为 wiki、posts 或 galleries' });
       return;
     }
 
-    if (type !== 'wiki' && type !== 'post') {
-      res.status(400).json({ error: 'type 必须为 wiki 或 posts' });
+    if (type !== 'wiki' && type !== 'post' && type !== 'gallery') {
+      res.status(400).json({ error: 'type 必须为 wiki、posts 或 galleries' });
       return;
     }
 
@@ -530,6 +566,29 @@ router.get('/review-queue', requireAdmin, asyncHandler(async (req: Authenticated
           ...toWikiResponse(item),
           sensitiveWords: containsSensitive(item.content || ''),
         })),
+      });
+      return;
+    }
+
+    if (type === 'gallery') {
+      const items = await prisma.gallery.findMany({
+        where: { status, deletedAt: null },
+        include: {
+          images: {
+            include: {
+              asset: true,
+            },
+            orderBy: { sortOrder: 'asc' },
+          },
+          location: true,
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 200,
+      });
+      res.json({
+        type: 'galleries',
+        status,
+        items: await toGalleryListResponse(items),
       });
       return;
     }
@@ -586,16 +645,17 @@ router.put('/review-queue/:id/reject', requireAdmin, asyncHandler(async (req: Au
     const targetId = req.params.id;
     const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
     const reqAuthUser = req.authUser!;
+    if (!isReviewTargetType(targetType)) {
+      res.status(400).json({ error: '无效审核类型' });
+      return;
+    }
     if (!note) {
       res.status(400).json({ error: '驳回原因不能为空' });
       return;
     }
-    if (!ensureTextLimit(res, note, '审核备注', CONTENT_LIMITS.post.reviewNote)) {
-      return;
-    }
-
-    if (!isReviewTargetType(targetType)) {
-      res.status(400).json({ error: '无效审核类型' });
+    const reviewNoteLimit =
+      targetType === 'gallery' ? CONTENT_LIMITS.gallery.reviewNote : CONTENT_LIMITS.post.reviewNote;
+    if (!ensureTextLimit(res, note, '审核备注', reviewNoteLimit)) {
       return;
     }
 
@@ -625,15 +685,19 @@ router.post('/review/:type/:id/:action', requireAdmin, asyncHandler(async (req: 
         res.status(400).json({ error: '驳回原因不能为空' });
         return;
       }
-      if (!ensureTextLimit(res, rejectNote, '审核备注', CONTENT_LIMITS.post.reviewNote)) {
-        return;
-      }
     }
 
     const targetType = normalizeModerationTargetType(type);
     if (!isReviewTargetType(targetType)) {
       res.status(400).json({ error: '无效的类型' });
       return;
+    }
+    if (action === 'reject') {
+      const reviewNoteLimit =
+        targetType === 'gallery' ? CONTENT_LIMITS.gallery.reviewNote : CONTENT_LIMITS.post.reviewNote;
+      if (!ensureTextLimit(res, rejectNote, '审核备注', reviewNoteLimit)) {
+        return;
+      }
     }
 
     const result = await handleReviewAction(targetType, id, action, req.authUser!, rejectNote);

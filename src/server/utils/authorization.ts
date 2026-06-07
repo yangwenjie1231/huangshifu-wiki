@@ -26,9 +26,9 @@ export function canViewPost(post: { status: ContentStatus; authorUid: string; de
   return post.authorUid === authUser.uid;
 }
 
-export function canViewGallery(gallery: { published: boolean; authorUid: string; deletedAt?: Date | null }, authUser?: ApiUser) {
+export function canViewGallery(gallery: { status?: ContentStatus | string | null; published?: boolean; authorUid: string; deletedAt?: Date | null }, authUser?: ApiUser) {
   if (gallery.deletedAt) return false;
-  if (gallery.published) return true;
+  if (gallery.status === 'published' || (!gallery.status && gallery.published)) return true;
   if (!authUser) return false;
   if (isAdminRole(authUser.role)) return true;
   return gallery.authorUid === authUser.uid;
@@ -74,7 +74,7 @@ export function buildPostVisibilityWhere(authUser?: ApiUser) {
 
 export function buildGalleryVisibilityWhere(authUser?: ApiUser) {
   if (!authUser) {
-    return { published: true, deletedAt: null };
+    return { status: 'published' as ContentStatus, deletedAt: null };
   }
   if (isAdminRole(authUser.role)) {
     return { deletedAt: null };
@@ -82,7 +82,7 @@ export function buildGalleryVisibilityWhere(authUser?: ApiUser) {
   return {
     deletedAt: null,
     OR: [
-      { published: true },
+      { status: 'published' as ContentStatus },
       { authorUid: authUser.uid },
     ],
   };

@@ -13,19 +13,20 @@ import type {
 
 export type ReviewFilter = 'all' | AdminReviewQueueType
 
-const reviewQueueTypes: AdminReviewQueueType[] = ['wiki', 'posts']
+const reviewQueueTypes: AdminReviewQueueType[] = ['wiki', 'posts', 'galleries']
 
 export const REVIEW_FILTER_OPTIONS: { id: ReviewFilter; label: string }[] = [
   { id: 'all', label: '全部待审' },
   { id: 'wiki', label: '百科待审' },
   { id: 'posts', label: '帖子待审' },
+  { id: 'galleries', label: '图集待审' },
 ]
 
 export const getReviewFilterLabel = (filter: ReviewFilter) =>
   REVIEW_FILTER_OPTIONS.find((item) => item.id === filter)?.label || '全部待审'
 
 export const normalizeReviewFilter = (value: string | null): ReviewFilter => {
-  if (value === 'wiki' || value === 'posts') return value
+  if (value === 'wiki' || value === 'posts' || value === 'galleries') return value
   return 'all'
 }
 
@@ -36,7 +37,7 @@ export const invalidateReviewQueueCaches = () => {
 }
 
 const getReviewItemType = (queueType: AdminReviewQueueType): AdminReviewItemType =>
-  queueType === 'wiki' ? 'wiki' : 'post'
+  queueType === 'wiki' ? 'wiki' : queueType === 'galleries' ? 'gallery' : 'post'
 
 const getReviewId = (item: AdminReviewQueueResponse['items'][number], queueType: AdminReviewQueueType) =>
   queueType === 'wiki' ? item.slug || item.id : item.id

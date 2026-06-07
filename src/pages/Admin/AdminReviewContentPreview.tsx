@@ -26,6 +26,10 @@ const getContentLabel = (item: AdminReviewQueueMergedItem) => {
     return wikiCategoryLabels[item.category || ''] || item.category || '百科'
   }
 
+  if (item.reviewType === 'gallery') {
+    return '图集'
+  }
+
   return item.sectionName || item.section || '帖子'
 }
 
@@ -61,7 +65,7 @@ const renderTags = (tags: string[] | undefined) => {
 }
 
 const AdminReviewContentPreview = ({ item }: AdminReviewContentPreviewProps) => {
-  const typeText = item.reviewType === 'wiki' ? '百科' : '帖子'
+  const typeText = item.reviewType === 'wiki' ? '百科' : item.reviewType === 'gallery' ? '图集' : '帖子'
   const authorText = item.reviewType === 'wiki' ? '编辑者' : '作者'
 
   return (
@@ -117,7 +121,37 @@ const AdminReviewContentPreview = ({ item }: AdminReviewContentPreviewProps) => 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8 items-start">
           <div>
             <div className="prose prose-lg max-w-none font-body leading-relaxed text-text-primary">
-              {item.reviewType === 'wiki' ? (
+              {item.reviewType === 'gallery' ? (
+                <div className="not-prose space-y-6">
+                  <p className="text-base leading-8 text-text-primary whitespace-pre-wrap">
+                    {item.description || '暂无描述'}
+                  </p>
+                  {Array.isArray(item.images) && item.images.length > 0 && (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {item.images.map((image) => (
+                        <a
+                          key={image.id}
+                          href={image.originalUrl || image.thumbnailUrl || image.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block aspect-square overflow-hidden rounded border border-border bg-surface"
+                        >
+                          <img
+                            src={image.thumbnailUrl || image.url || image.originalUrl || ''}
+                            alt={image.name}
+                            className="h-full w-full object-cover"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  {item.copyright && (
+                    <p className="text-sm text-text-muted whitespace-pre-wrap">
+                      {item.copyright}
+                    </p>
+                  )}
+                </div>
+              ) : item.reviewType === 'wiki' ? (
                 <WikiMarkdown content={item.content || ''} />
               ) : (
                 <MarkdownRenderer content={item.content || ''} />

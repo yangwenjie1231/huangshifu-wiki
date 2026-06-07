@@ -1239,7 +1239,7 @@ router.get('/:userId/comments', asyncHandler(async (req: AuthenticatedRequest, r
     const galleryIds = [...new Set(comments.map((c) => c.galleryId).filter((id): id is string => Boolean(id)))];
     const commentIds = comments.map((comment) => comment.id);
     const postsMap = new Map<string, { id: string; title: string; status: string }>();
-    const galleriesMap = new Map<string, { id: string; title: string; published: boolean }>();
+    const galleriesMap = new Map<string, { id: string; title: string; status: string; published: boolean }>();
     const deletionReasonMap = new Map<string, string | null>();
 
     const [posts, galleries, deleteLogs] = await Promise.all([
@@ -1258,7 +1258,7 @@ router.get('/:userId/comments', asyncHandler(async (req: AuthenticatedRequest, r
               id: { in: galleryIds },
               ...galleryVisibilityWhere,
             },
-            select: { id: true, title: true, published: true },
+            select: { id: true, title: true, status: true, published: true },
           })
         : Promise.resolve([]),
       canViewPrivateUserContent && commentIds.length
@@ -1290,7 +1290,7 @@ router.get('/:userId/comments', asyncHandler(async (req: AuthenticatedRequest, r
           ...toCommentResponse(comment, { maskDeletedContent: !isAdmin }),
           targetType,
           target: gallery
-            ? { id: gallery.id, title: gallery.title, published: gallery.published }
+            ? { id: gallery.id, title: gallery.title, status: gallery.status, published: gallery.published }
             : post,
           post,
           gallery,

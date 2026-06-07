@@ -350,6 +350,7 @@ const GalleryEdit = () => {
 
   const handleSave = async (mode: 'draft' | 'publish') => {
     const targetPublished = mode === 'publish'
+    const targetStatus = mode === 'publish' ? 'pending' : 'draft'
     const currentDraft = draftRef.current
     if (!currentDraft || !canManage || savingMode || uploading) return
     if (!isCreating && (!gallery || !galleryId)) return
@@ -452,19 +453,14 @@ const GalleryEdit = () => {
           tags: splitTagsInput(currentDraft.tagsText),
           locationCode: currentDraft.locationCode,
           locationDetail: currentDraft.locationName,
+          copyright: currentDraft.copyrightText.trim() || null,
+          status: targetStatus,
           images: imagesPayload.filter((image) => image && 'url' in image),
         })
 
         const createdId = created.gallery?.id
         if (!createdId) {
           throw new Error('Create gallery failed')
-        }
-
-        if (targetPublished || currentDraft.copyrightText.trim()) {
-          await apiPatch<GalleryDetailResponse>(`/api/galleries/${createdId}`, {
-            copyright: currentDraft.copyrightText.trim() || null,
-            published: targetPublished,
-          })
         }
 
         releasePendingImageUrls(currentDraft.images)
@@ -481,6 +477,7 @@ const GalleryEdit = () => {
         locationCode: currentDraft.locationCode,
         locationDetail: currentDraft.locationName,
         copyright: currentDraft.copyrightText.trim() || null,
+        status: targetStatus,
         published: targetPublished,
         images: imagesPayload,
       })

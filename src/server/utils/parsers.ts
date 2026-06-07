@@ -170,7 +170,7 @@ export function parseContentStatus(value: unknown): ContentStatus | null {
  * 权限审查：管理员角色保存为草稿时保留草稿，其余情况直接发布；普通用户仅允许 pending/rejected/draft 状态
  * 安全评估：通过 isAdminRole 进行角色校验，防止未授权状态提升
  */
-export function normalizeWikiWriteStatus(rawStatus: unknown, authUser: ApiUser) {
+export function normalizeWikiWriteStatus(rawStatus: unknown, authUser: ApiUser): ContentStatus {
   const status = parseContentStatus(rawStatus);
   if (isAdminRole(authUser.role)) {
     if (status === 'draft') return 'draft';
@@ -181,7 +181,7 @@ export function normalizeWikiWriteStatus(rawStatus: unknown, authUser: ApiUser) 
   return 'draft';
 }
 
-export function normalizePostWriteStatus(rawStatus: unknown, authUser: ApiUser) {
+export function normalizePostWriteStatus(rawStatus: unknown, authUser: ApiUser): ContentStatus {
   const status = parseContentStatus(rawStatus);
   if (isAdminRole(authUser.role)) {
     if (status === 'draft') return 'draft';
@@ -190,6 +190,10 @@ export function normalizePostWriteStatus(rawStatus: unknown, authUser: ApiUser) 
   if (status === 'pending') return 'pending';
   if (status === 'rejected') return 'rejected';
   return 'draft';
+}
+
+export function normalizeGalleryWriteStatus(rawStatus: unknown, authUser: ApiUser): ContentStatus {
+  return normalizePostWriteStatus(rawStatus, authUser);
 }
 
 export function parseFavoriteType(value: unknown): FavoriteTargetType | null {

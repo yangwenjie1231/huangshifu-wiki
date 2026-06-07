@@ -206,6 +206,7 @@ async function findCommentLikeTarget(commentId: string) {
       },
       gallery: {
         select: {
+          status: true,
           published: true,
           authorUid: true,
         },

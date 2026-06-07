@@ -396,6 +396,10 @@ type GalleryInput = {
   locationCode?: string | null;
   locationDetail?: string | null;
   copyright?: string | null;
+  status: ContentStatus;
+  reviewNote?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: Date | null;
   published: boolean;
   publishedAt: Date | null;
   likesCount?: number;
@@ -526,6 +530,10 @@ export async function toGalleryResponse(gallery: GalleryInput, storageStrategy?:
     locationName: gallery.location?.fullName || null,
     locationDetail: gallery.locationDetail || null,
     copyright: gallery.copyright || null,
+    status: gallery.status,
+    reviewNote: gallery.reviewNote ?? null,
+    reviewedBy: gallery.reviewedBy ?? null,
+    reviewedAt: gallery.reviewedAt ? gallery.reviewedAt.toISOString() : null,
     published: gallery.published,
     publishedAt: gallery.publishedAt ? gallery.publishedAt.toISOString() : null,
     likesCount: gallery.likesCount ?? 0,
@@ -611,6 +619,10 @@ export async function toGalleryListResponse(galleries: GalleryInput[], storageSt
     locationName: gallery.location?.fullName || null,
     locationDetail: gallery.locationDetail || null,
     copyright: gallery.copyright || null,
+    status: gallery.status,
+    reviewNote: gallery.reviewNote ?? null,
+    reviewedBy: gallery.reviewedBy ?? null,
+    reviewedAt: gallery.reviewedAt ? gallery.reviewedAt.toISOString() : null,
     published: gallery.published,
     publishedAt: gallery.publishedAt ? gallery.publishedAt.toISOString() : null,
     likesCount: gallery.likesCount ?? 0,

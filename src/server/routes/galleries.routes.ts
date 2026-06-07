@@ -10,6 +10,9 @@ import {
   parseAssetIdList,
   parseBoolean,
   parsePagination,
+  normalizeGalleryWriteStatus,
+  buildGalleryVisibilityWhere,
+  canViewGallery,
   createUploadSessionExpiresAt,
   isUploadSessionExpired,
   safeDeleteUploadFileByStorageKey,
@@ -33,13 +36,6 @@ import { enqueueGalleryImageEmbeddings } from '../vector/embeddingSync'
 import { prisma } from '../prisma'
 import { syncGalleryImageToImageMapWithVariant } from '../services/galleryImageSyncService'
 import { cleanupUnusedMediaAssetById, cleanupUntrackedUploadImageByUrl } from '../services/mediaAssetCleanupService'
-
-function canViewGallery(gallery: { published: boolean; authorUid: string }, authUser?: ApiUser) {
-  if (gallery.published) return true
-  if (!authUser) return false
-  if (isAdminRole(authUser.role)) return true
-  return gallery.authorUid === authUser.uid
-}
 
 function ensureGalleryTextLimits(
   res: Parameters<typeof ensureTextLimit>[0],
@@ -74,6 +70,36 @@ function canCreateGallery(authUser?: ApiUser) {
 }
 
 const router = Router()
+
+function resolveGalleryRequestedStatus(
+  body: Record<string, unknown>,
+  authUser: ApiUser,
+  fallbackStatus?: unknown
+) {
+  const rawStatus =
+    body.status !== undefined
+      ? body.status
+      : body.published !== undefined
+        ? (parseBoolean(body.published, false) ? 'published' : 'draft')
+        : fallbackStatus
+  return normalizeGalleryWriteStatus(rawStatus, authUser)
+}
+
+function resolveGalleryPublishStatus(published: boolean, authUser: ApiUser) {
+  if (!published) return 'draft'
+  return isAdminRole(authUser.role) ? 'published' : 'pending'
+}
+
+function galleryStatusData(status: ReturnType<typeof normalizeGalleryWriteStatus>) {
+  return {
+    status,
+    reviewNote: null,
+    reviewedBy: null,
+    reviewedAt: null,
+    published: status === 'published',
+    publishedAt: status === 'published' ? new Date() : null,
+  }
+}
 
 async function attachGalleryInteractions<T extends { id: string }>(
   gallery: T,
@@ -194,17 +220,7 @@ router.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const { limit, page, offset: skip } = parsePagination(req.query)
 
-    const visibilityWhere = req.authUser
-      ? (isAdminRole(req.authUser.role)
-          ? { deletedAt: null }
-          : {
-              deletedAt: null,
-              OR: [
-                { published: true },
-                { authorUid: req.authUser.uid },
-              ],
-            })
-      : { published: true, deletedAt: null }
+    const visibilityWhere = buildGalleryVisibilityWhere(req.authUser)
 
     if (!req.authUser) {
       const cacheKey = `gallery_list_public:${page}:${limit}`
@@ -291,6 +307,7 @@ router.post('/:id/like', requireAuth, requireActiveUser, asyncHandler(async (req
       where: { id: galleryId },
       select: {
         id: true,
+        status: true,
         published: true,
         authorUid: true,
         deletedAt: true,
@@ -386,6 +403,7 @@ router.post('/:id/dislike', requireAuth, requireActiveUser, asyncHandler(async (
       where: { id: galleryId },
       select: {
         id: true,
+        status: true,
         published: true,
         authorUid: true,
         deletedAt: true,
@@ -472,7 +490,7 @@ router.post('/', galleryWriteLimiter, requireAuth, requireActiveUser, asyncHandl
       return
     }
 
-    const { title, description, tags, images, assetIds, uploadSessionId, locationCode, locationDetail } = req.body as {
+    const { title, description, tags, images, assetIds, uploadSessionId, locationCode, locationDetail, copyright } = req.body as {
       title?: string
       description?: string
       tags?: string[]
@@ -481,10 +499,13 @@ router.post('/', galleryWriteLimiter, requireAuth, requireActiveUser, asyncHandl
       uploadSessionId?: string
       locationCode?: string
       locationDetail?: string
+      copyright?: string
     }
 
     const normalizedAssetIds = parseAssetIdList(assetIds)
-    if (!ensureGalleryTextLimits(res, { title, description, locationCode, locationDetail })) {
+    const normalizedCopyright =
+      copyright !== undefined ? (typeof copyright === 'string' ? copyright.trim() : null) : undefined
+    if (!ensureGalleryTextLimits(res, { title, description, locationCode, locationDetail, copyright: normalizedCopyright })) {
       return
     }
 
@@ -492,6 +513,10 @@ router.post('/', galleryWriteLimiter, requireAuth, requireActiveUser, asyncHandl
       const finalTitle = typeof title === 'string' && title.trim() ? title.trim() : '默认图集'
       const finalDescription = typeof description === 'string' ? description.trim() : ''
       const finalTags = normalizeTagList(tags)
+      const nextStatus = resolveGalleryRequestedStatus(
+        req.body as Record<string, unknown>,
+        req.authUser!
+      )
 
       const assets = await prisma.mediaAsset.findMany({
         where: {
@@ -554,6 +579,8 @@ router.post('/', galleryWriteLimiter, requireAuth, requireActiveUser, asyncHandl
           tags: finalTags,
           locationCode: locationCode || null,
           locationDetail: locationDetail || null,
+          copyright: normalizedCopyright,
+          ...galleryStatusData(nextStatus),
           images: {
             create: orderedAssets.map((asset, index) => ({
               assetId: asset.id,
@@ -602,6 +629,7 @@ router.post('/', galleryWriteLimiter, requireAuth, requireActiveUser, asyncHandl
     const normalizedTitle = typeof title === 'string' && title.trim() ? title.trim() : '默认图集'
     const normalizedDescription = typeof description === 'string' ? description.trim() : ''
     const normalizedTags = normalizeTagList(tags)
+    const nextStatus = resolveGalleryRequestedStatus(req.body as Record<string, unknown>, req.authUser!)
 
     const normalizedImages = images
       .map((image, index) => {
@@ -656,6 +684,8 @@ router.post('/', galleryWriteLimiter, requireAuth, requireActiveUser, asyncHandl
         tags: normalizedTags,
         locationCode: locationCode || null,
         locationDetail: locationDetail || null,
+        copyright: normalizedCopyright,
+        ...galleryStatusData(nextStatus),
         images: {
           create: normalizedImages.map((image, index) => ({
             assetId: assetByUrl.get(image.url) || null,
@@ -716,6 +746,8 @@ router.patch('/:id', requireAuth, requireActiveUser, asyncHandler(async (req: Au
       select: {
         id: true,
         authorUid: true,
+        status: true,
+        published: true,
       },
     })
 
@@ -738,7 +770,10 @@ router.patch('/:id', requireAuth, requireActiveUser, asyncHandler(async (req: Au
     if (!ensureGalleryTextLimits(res, { title, description, locationCode, locationDetail, copyright })) {
       return
     }
-    const published = req.body?.published !== undefined ? parseBoolean(req.body.published, false) : undefined
+    const nextStatus =
+      req.body?.status !== undefined || req.body?.published !== undefined
+        ? resolveGalleryRequestedStatus(req.body as Record<string, unknown>, req.authUser!, gallery.status)
+        : undefined
     const imagesRaw = Array.isArray(req.body?.images) ? req.body.images : undefined
     const imageInstructions = imagesRaw?.map((item) => {
       if (!item || typeof item !== 'object') {
@@ -782,6 +817,10 @@ router.patch('/:id', requireAuth, requireActiveUser, asyncHandler(async (req: Au
       locationCode?: string | null
       locationDetail?: string | null
       copyright?: string | null
+      status?: ReturnType<typeof normalizeGalleryWriteStatus>
+      reviewNote?: string | null
+      reviewedBy?: string | null
+      reviewedAt?: Date | null
       published?: boolean
       publishedAt?: Date | null
     } = {}
@@ -804,9 +843,8 @@ router.patch('/:id', requireAuth, requireActiveUser, asyncHandler(async (req: Au
     if (copyright !== undefined) {
       data.copyright = copyright
     }
-    if (published !== undefined) {
-      data.published = published
-      data.publishedAt = published ? new Date() : null
+    if (nextStatus !== undefined) {
+      Object.assign(data, galleryStatusData(nextStatus))
     }
 
     if (imageInstructions !== undefined) {
@@ -1026,6 +1064,7 @@ router.patch('/:id/publish', requireAuth, requireActiveUser, asyncHandler(async 
       select: {
         id: true,
         authorUid: true,
+        status: true,
         published: true,
       },
     })
@@ -1040,13 +1079,11 @@ router.patch('/:id/publish', requireAuth, requireActiveUser, asyncHandler(async 
       return
     }
 
-    const nextPublished = parseBoolean(req.body?.published, !gallery.published)
+    const nextPublished = parseBoolean(req.body?.published, gallery.status !== 'published')
+    const nextStatus = resolveGalleryPublishStatus(nextPublished, req.authUser!)
     const updated = await prisma.gallery.update({
       where: { id: req.params.id },
-      data: {
-        published: nextPublished,
-        publishedAt: nextPublished ? new Date() : null,
-      },
+      data: galleryStatusData(nextStatus),
       include: {
         images: {
           include: {
@@ -1464,6 +1501,7 @@ router.get('/:id/comments', asyncHandler(async (req: AuthenticatedRequest, res) 
       where: { id: req.params.id },
       select: {
         id: true,
+        status: true,
         published: true,
         authorUid: true,
       },
@@ -1512,6 +1550,7 @@ router.post('/:id/comments', galleryWriteLimiter, requireAuth, requireActiveUser
       where: { id: req.params.id },
       select: {
         id: true,
+        status: true,
         published: true,
         authorUid: true,
       },
@@ -1522,7 +1561,7 @@ router.post('/:id/comments', galleryWriteLimiter, requireAuth, requireActiveUser
       return
     }
 
-    if (!gallery.published) {
+    if (gallery.status !== 'published') {
       res.status(403).json({ error: '仅已发布内容可评论' })
       return
     }

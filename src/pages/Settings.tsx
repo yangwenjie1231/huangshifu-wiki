@@ -485,7 +485,14 @@ const Settings = () => {
                 <div className="min-w-0 flex-1">
                   <div className={CONTENT_META_ROW_CLASS}>
                     <span className="min-w-0 text-text-muted">{gallery.images?.length || 0} 张</span>
-                    {!gallery.published ? (
+                    {gallery.status && gallery.status !== 'published' ? (
+                      <span className={clsx(CONTENT_STATUS_BADGE_CLASS, getStatusClassName(gallery.status))}>
+                        {getStatusText(gallery.status)}
+                        {gallery.status === 'rejected' && gallery.reviewNote
+                          ? `（原因：${gallery.reviewNote}）`
+                          : ''}
+                      </span>
+                    ) : !gallery.published ? (
                       <span className={clsx(CONTENT_STATUS_BADGE_CLASS, 'theme-status-warning')}>
                         未发布
                       </span>

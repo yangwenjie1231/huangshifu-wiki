@@ -289,6 +289,7 @@ export async function createTestGallery(input: CreateTestGalleryInput) {
   const description = input.description || 'Test gallery';
   const authorName = input.authorName || 'Test Gallery Author';
   const published = input.published ?? true;
+  const status = published ? 'published' : 'draft';
 
   return prisma.gallery.create({
     data: {
@@ -296,7 +297,9 @@ export async function createTestGallery(input: CreateTestGalleryInput) {
       description,
       authorUid: input.authorUid,
       authorName,
+      status,
       published,
+      publishedAt: published ? new Date() : null,
     },
   });
 }

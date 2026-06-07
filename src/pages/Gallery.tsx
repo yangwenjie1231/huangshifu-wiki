@@ -11,6 +11,7 @@ import { SmartImage } from '../components/SmartImage'
 import { useToast } from '../components/Toast'
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink'
 import { apiDelete, apiGet } from '../lib/apiClient'
+import { getStatusClassName, getStatusText } from '../lib/contentUtils'
 import { toDateValue } from '../lib/dateUtils'
 import Pagination from '../components/Pagination'
 import { usePagination } from '../hooks/usePagination'
@@ -68,6 +69,11 @@ const GalleryCard = React.memo(
                 <span className="px-1.5 py-0.5 bg-surface-alt text-text-muted text-[10px] font-medium rounded flex-shrink-0">
                   {Array.isArray(gallery.images) ? gallery.images.length : 0} 张
                 </span>
+                {gallery.status && gallery.status !== 'published' ? (
+                  <span className={clsx('px-1.5 py-0.5 text-[10px] font-medium rounded flex-shrink-0', getStatusClassName(gallery.status))}>
+                    {getStatusText(gallery.status)}
+                  </span>
+                ) : null}
               </div>
               <p className="text-text-muted text-xs line-clamp-1">
                 {gallery.description || '暂无描述'}
@@ -99,6 +105,11 @@ const GalleryCard = React.memo(
               <div className="absolute top-2 right-2 px-2 py-0.5 bg-black/40 text-white text-[10px] font-medium rounded">
                 {Array.isArray(gallery.images) ? gallery.images.length : 0} 张
               </div>
+              {gallery.status && gallery.status !== 'published' ? (
+                <div className={clsx('absolute left-2 top-2 px-2 py-0.5 text-[10px] font-medium rounded', getStatusClassName(gallery.status))}>
+                  {getStatusText(gallery.status)}
+                </div>
+              ) : null}
             </div>
             <div className="p-3">
               <h3 className="text-sm font-medium text-text-primary mb-1 group-hover:text-brand-gold transition-colors truncate">

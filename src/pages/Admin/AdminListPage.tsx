@@ -278,9 +278,13 @@ const renderStatus = (type: ListType, item: AdminDataItem) => {
     return renderBadge(item.active ? '启用中' : '已禁用', item.active ? 'theme-status-success' : 'bg-surface-alt text-text-muted')
   }
   if (type === 'galleries') {
+    const status = toOptionalText(item.status) as ContentStatus | null
+    const published = status ? status === 'published' : Boolean(item.published)
     return (
       <div className="space-y-1">
-        {renderBadge(item.published ? '已发布' : '未发布', item.published ? 'theme-status-success' : 'theme-status-warning')}
+        {status
+          ? renderBadge(getStatusText(status), getStatusClassName(status))
+          : renderBadge(published ? '已发布' : '未发布', published ? 'theme-status-success' : 'theme-status-warning')}
         {toOptionalText(item.publishedAt) && (
           <p className="text-xs text-text-muted">{formatDateTime(toOptionalText(item.publishedAt))}</p>
         )}

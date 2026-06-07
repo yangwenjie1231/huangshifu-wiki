@@ -599,6 +599,10 @@ model Gallery {
   locationCode  String?
   locationDetail String?
   copyright  String?
+  status     ContentStatus  @default(draft)
+  reviewNote String?
+  reviewedBy String?
+  reviewedAt DateTime?
   published  Boolean        @default(false)
   publishedAt DateTime?
   likesCount Int            @default(0)
@@ -618,6 +622,9 @@ model Gallery {
   @@index([createdAt])
   @@index([published, updatedAt], map: "Gallery_published_idx")
   @@index([published, createdAt(sort: Desc)])
+  @@index([status, authorUid])
+  @@index([status, updatedAt])
+  @@index([status, createdAt(sort: Desc)])
   @@index([authorUid])
   @@index([locationCode])
   @@index([deletedAt])

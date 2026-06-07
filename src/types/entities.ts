@@ -143,6 +143,10 @@ export interface GalleryItem {
   locationName: string | null;
   locationDetail: string | null;
   copyright: string | null;
+  status?: ContentStatus;
+  reviewNote?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
   published: boolean;
   publishedAt: string | null;
   likesCount?: number;

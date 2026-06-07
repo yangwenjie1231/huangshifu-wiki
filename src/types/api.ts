@@ -309,9 +309,9 @@ export interface AdminBackupsResponse {
   backups: AdminBackup[];
 }
 
-export type AdminReviewQueueType = 'wiki' | 'posts';
+export type AdminReviewQueueType = 'wiki' | 'posts' | 'galleries';
 
-export type AdminReviewItemType = 'wiki' | 'post';
+export type AdminReviewItemType = 'wiki' | 'post' | 'gallery';
 
 export type AdminReviewQueueItem = {
   id: string;
@@ -321,6 +321,8 @@ export type AdminReviewQueueItem = {
   section?: string;
   sectionName?: string;
   content?: string;
+  description?: string;
+  copyright?: string | null;
   tags?: string[];
   locationCode?: string | null;
   locationName?: string | null;
@@ -335,6 +337,8 @@ export type AdminReviewQueueItem = {
   dislikesCount?: number;
   commentsCount?: number;
   isPinned?: boolean;
+  published?: boolean;
+  publishedAt?: string | null;
   authorUid?: string;
   authorName?: string | null;
   lastEditorUid?: string;
@@ -342,6 +346,13 @@ export type AdminReviewQueueItem = {
   createdAt?: string;
   updatedAt?: string;
   sensitiveWords?: string[];
+  images?: {
+    id: string;
+    url: string;
+    originalUrl?: string | null;
+    thumbnailUrl?: string | null;
+    name: string;
+  }[];
 };
 
 export type AdminReviewQueueMergedItem = AdminReviewQueueItem & {
@@ -360,6 +371,7 @@ export interface AdminReviewQueueCountResponse {
   counts: {
     wiki: number;
     posts: number;
+    galleries: number;
   };
   total: number;
 }

@@ -97,6 +97,7 @@ async function cleanupPostTestData() {
       OR: [
         { title: { startsWith: 'Test Gallery ' } },
         { title: { startsWith: 'Gallery Delete Reason Test' } },
+        { title: { startsWith: 'Gallery Publish Review Test' } },
         { title: { startsWith: 'Gallery Comment Notification Test' } },
       ],
     },
@@ -1888,7 +1889,7 @@ describe('Posts API - 文章接口测试', () => {
   });
 
   describe('POST/PATCH /api/galleries - 图集描述', () => {
-    it('创建图集时未填写描述应保留为空串', async () => {
+    it('创建图集时未填写描述应保留为空串并保存版权信息', async () => {
       const asset = await prisma.mediaAsset.create({
         data: {
           ownerUid: testUser.user.uid,
@@ -1911,17 +1912,20 @@ describe('Posts API - 文章接口测试', () => {
         .send({
           title: `Test Gallery Empty Description ${Date.now()}`,
           description: '',
+          copyright: '摄影：测试用户',
           assetIds: [asset.id],
         })
 
       expect(response.status).toBe(201)
       expect(response.body.gallery.description).toBe('')
+      expect(response.body.gallery.copyright).toBe('摄影：测试用户')
 
       const createdGallery = await prisma.gallery.findUnique({
         where: { id: response.body.gallery.id },
-        select: { description: true },
+        select: { description: true, copyright: true },
       })
       expect(createdGallery?.description).toBe('')
+      expect(createdGallery?.copyright).toBe('摄影：测试用户')
     })
 
     it('更新图集时清空描述应保留为空串', async () => {
@@ -1951,6 +1955,36 @@ describe('Posts API - 文章接口测试', () => {
         select: { description: true },
       })
       expect(updatedGallery?.description).toBe('')
+    })
+
+    it('普通用户发布未发布图集时应提交审核而不是回到草稿', async () => {
+      const gallery = await createTestGallery({
+        title: 'Gallery Publish Review Test',
+        authorUid: testUser.user.uid,
+        authorName: testUser.user.displayName,
+        published: false,
+      })
+
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        testUser.user.email,
+        testUser.plainPassword
+      )
+      const response = await agent
+        .patch(`/api/galleries/${gallery.id}/publish`)
+        .set('X-XSRF-TOKEN', xsrfToken)
+        .send({})
+
+      expect(response.status).toBe(200)
+      expect(response.body.gallery.status).toBe('pending')
+      expect(response.body.gallery.published).toBe(false)
+
+      const updatedGallery = await prisma.gallery.findUnique({
+        where: { id: gallery.id },
+        select: { status: true, published: true, publishedAt: true },
+      })
+      expect(updatedGallery?.status).toBe('pending')
+      expect(updatedGallery?.published).toBe(false)
+      expect(updatedGallery?.publishedAt).toBeNull()
     })
   });
 
