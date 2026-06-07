@@ -35,7 +35,7 @@ const WikiEditorMetaSidebar = React.memo(({
 					onClick={onToggleAdvancedOptions}
 					aria-expanded={showAdvancedOptions}
 					aria-controls="wiki-advanced-options"
-					className="px-6 py-2.5 bg-surface-alt text-text-secondary border border-border rounded text-sm font-medium hover:border-brand-gold hover:text-brand-gold transition-all flex items-center gap-2 self-start"
+					className="mr-auto flex items-center gap-2 text-sm text-text-muted hover:text-brand-gold transition-colors"
 				>
 					<ChevronDown
 						size={16}
