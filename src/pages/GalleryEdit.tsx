@@ -261,18 +261,18 @@ const GalleryEdit = () => {
   }
 
   const handleAddImages = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const fileList = event.target.files
+    const files = Array.from(event.target.files || [])
     event.target.value = ''
-    if (!fileList?.length) return
+    if (!files.length) return
     if (isCreating && !draftRef.current?.title) {
       const firstPath =
-        (fileList[0] as File & { webkitRelativePath?: string }).webkitRelativePath || ''
+        (files[0] as File & { webkitRelativePath?: string }).webkitRelativePath || ''
       const folderName = firstPath.split('/')[0]
       if (folderName) {
         applyDraft((prev) => (prev ? { ...prev, title: folderName } : prev))
       }
     }
-    appendPendingFiles(fileList)
+    appendPendingFiles(files)
   }
 
   const handleDeleteImage = (index: number) => {

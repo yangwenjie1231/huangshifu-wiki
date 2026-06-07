@@ -935,11 +935,11 @@ const GalleryDetail = () => {
   }
 
   const handleAddImages = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const fileList = event.target.files
+    const files = Array.from(event.target.files || [])
     event.target.value = ''
 
-    if (!fileList?.length) return
-    appendPendingFiles(fileList)
+    if (!files.length) return
+    appendPendingFiles(files)
   }
 
   const handleDeleteImage = async (index: number) => {
