@@ -33,6 +33,12 @@ import {
 } from '../lib/contentLimits'
 import { apiGet, apiPatch, apiPut } from '../lib/apiClient'
 import { DEFAULT_AVATAR, handleAvatarError } from '../lib/defaultAvatar'
+import {
+  shouldWaitForGalleryThumbnail,
+  THUMBNAIL_POLL_DEDUP_OPTIONS,
+  THUMBNAIL_POLL_INTERVAL_MS,
+  THUMBNAIL_POLL_MAX_ATTEMPTS,
+} from '../lib/galleryThumbnails'
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '../lib/passwordRules'
 import { getStatusClassName, getStatusText } from '../lib/contentUtils'
 import type { CommentItem, GalleryItem, PostItem } from '../types/entities'
@@ -205,6 +211,7 @@ const Settings = () => {
   const [myPosts, setMyPosts] = useState<PostItem[]>([])
   const [myGalleries, setMyGalleries] = useState<GalleryItem[]>([])
   const [myComments, setMyComments] = useState<UserCommentItem[]>([])
+  const hasPendingGalleryThumbnails = myGalleries.some(shouldWaitForGalleryThumbnail)
 
   useEffect(() => {
     if (!user) return
@@ -266,6 +273,55 @@ const Settings = () => {
       cancelled = true
     }
   }, [activeContentTab, activeSection, show, user])
+
+  useEffect(() => {
+    if (
+      !user ||
+      activeSection !== 'content' ||
+      activeContentTab !== 'galleries' ||
+      !hasPendingGalleryThumbnails
+    ) {
+      return
+    }
+
+    const abortController = new AbortController()
+    let attempts = 0
+    let stopped = false
+    let timeoutId: number | undefined
+
+    const poll = async () => {
+      attempts += 1
+      try {
+        const data = await apiGet<{ galleries: GalleryItem[] }>(
+          `/api/users/${user.uid}/galleries`,
+          {
+            limit: 50,
+          },
+          THUMBNAIL_POLL_DEDUP_OPTIONS,
+          abortController.signal
+        )
+        if (!stopped) setMyGalleries(data.galleries || [])
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          console.error('Poll my gallery thumbnails error:', error)
+        }
+      }
+
+      if (!stopped && attempts < THUMBNAIL_POLL_MAX_ATTEMPTS) {
+        timeoutId = window.setTimeout(poll, THUMBNAIL_POLL_INTERVAL_MS)
+      }
+    }
+
+    timeoutId = window.setTimeout(poll, THUMBNAIL_POLL_INTERVAL_MS)
+
+    return () => {
+      stopped = true
+      abortController.abort()
+      if (timeoutId) {
+        window.clearTimeout(timeoutId)
+      }
+    }
+  }, [activeContentTab, activeSection, hasPendingGalleryThumbnails, user])
 
   if (!activeSection) {
     return <Navigate to="/settings/profile" replace />

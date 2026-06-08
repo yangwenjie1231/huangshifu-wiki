@@ -159,6 +159,30 @@ describe('VariantGenerator - 队列管理', () => {
     const maxConcurrent = generator.getMaxConcurrent();
     expect(maxConcurrent).toBe(2);
   });
+
+  it('重复 imageMapId 已在处理中时不应重复入队', async () => {
+    vi.useFakeTimers();
+    mockAccess.mockImplementation(() => new Promise(() => {}));
+
+    try {
+      const task = {
+        imageMapId: 'duplicate-1',
+        localFilePath: '/uploads/duplicate.png',
+        priority: 'normal' as const,
+      };
+
+      await Promise.all([generator.enqueue(task), generator.enqueue(task)]);
+
+      expect(generator.getQueueStats()).toMatchObject({
+        queueLength: 0,
+        processingCount: 1,
+      });
+    } finally {
+      generator.stop();
+      mockAccess.mockResolvedValue(undefined);
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('VariantGenerator - 统计信息', () => {

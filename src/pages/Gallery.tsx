@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Image as ImageIcon, Plus, Clock, User as UserIcon, Link2, Trash2 } from 'lucide-react'
@@ -10,9 +10,17 @@ import { format } from 'date-fns'
 import { SmartImage } from '../components/SmartImage'
 import { useToast } from '../components/Toast'
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink'
-import { apiDelete, apiGet } from '../lib/apiClient'
+import { apiDelete, apiGet, invalidateApiCacheByPrefix } from '../lib/apiClient'
 import { getStatusClassName, getStatusText } from '../lib/contentUtils'
 import { toDateValue } from '../lib/dateUtils'
+import {
+  getFirstGalleryImage,
+  getGalleryThumbnailPlaceholderLabel,
+  shouldWaitForGalleryThumbnail,
+  THUMBNAIL_POLL_DEDUP_OPTIONS,
+  THUMBNAIL_POLL_INTERVAL_MS,
+  THUMBNAIL_POLL_MAX_ATTEMPTS,
+} from '../lib/galleryThumbnails'
 import Pagination from '../components/Pagination'
 import { usePagination } from '../hooks/usePagination'
 import type { GalleryItem } from '../types/entities'
@@ -21,6 +29,34 @@ import { CONTENT_LIMITS } from '../lib/contentLimits'
 import { useFloatingPresence } from '../hooks/useFloatingPresence'
 
 const DEFAULT_PAGE_SIZE = 24
+
+interface GalleryCoverProps {
+  gallery: GalleryItem
+  className: string
+  imageClassName: string
+}
+
+const GalleryCover = ({ gallery, className, imageClassName }: GalleryCoverProps) => {
+  const image = getFirstGalleryImage(gallery)
+
+  if (image?.thumbnailUrl) {
+    return <SmartImage src={image.thumbnailUrl} alt={gallery.title} className={imageClassName} />
+  }
+
+  return (
+    <div
+      className={clsx(
+        'flex flex-col items-center justify-center gap-1 bg-surface-alt text-text-muted',
+        className
+      )}
+    >
+      <ImageIcon size={20} className="text-brand-gold/50" aria-hidden="true" />
+      <span className="px-1 text-center text-[10px] leading-tight">
+        {getGalleryThumbnailPlaceholderLabel(image)}
+      </span>
+    </div>
+  )
+}
 
 interface GalleryCardProps {
   gallery: GalleryItem
@@ -55,10 +91,10 @@ const GalleryCard = React.memo(
         {viewMode === 'list' ? (
           <>
             <div className="w-20 h-20 bg-surface-alt rounded overflow-hidden flex-shrink-0">
-              <SmartImage
-                src={(Array.isArray(gallery.images) && gallery.images[0]?.thumbnailUrl) || ''}
-                alt={gallery.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              <GalleryCover
+                gallery={gallery}
+                className="h-full w-full"
+                imageClassName="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               />
             </div>
             <div className="flex-1 min-w-0">
@@ -96,11 +132,10 @@ const GalleryCard = React.memo(
             <div
               className={clsx('relative overflow-hidden', VIEW_MODE_CONFIG[viewMode].cardHeight)}
             >
-              <SmartImage
-                src={(Array.isArray(gallery.images) && gallery.images[0]?.thumbnailUrl) || ''}
-                alt={gallery.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                useOriginal={false}
+              <GalleryCover
+                gallery={gallery}
+                className="h-full w-full"
+                imageClassName="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
               <div className="absolute top-2 right-2 px-2 py-0.5 bg-black/40 text-white text-[10px] font-medium rounded">
                 {Array.isArray(gallery.images) ? gallery.images.length : 0} 张
@@ -194,25 +229,72 @@ const GalleryList = () => {
     totalCount: totalGalleries,
     defaultPageSize: DEFAULT_PAGE_SIZE,
   })
+  const hasPendingThumbnails = galleries.some(shouldWaitForGalleryThumbnail)
 
-  useEffect(() => {
-    const fetchGalleries = async () => {
+  const fetchGalleries = useCallback(
+    async (options?: { bypassCache?: boolean; signal?: AbortSignal }) => {
       try {
-        const data = await apiGet<GalleryListResponse>('/api/galleries', {
+        const query = {
           page: galleryPagination.page,
           limit: galleryPagination.pageSize,
-        })
+          refreshThumbnails: options?.bypassCache ? true : undefined,
+        }
+        const data = await apiGet<GalleryListResponse>(
+          '/api/galleries',
+          query,
+          options?.bypassCache ? THUMBNAIL_POLL_DEDUP_OPTIONS : undefined,
+          options?.signal
+        )
         setGalleries(data.galleries || [])
         setTotalGalleries(data.total ?? 0)
+        if (options?.bypassCache) {
+          invalidateApiCacheByPrefix('/api/galleries')
+        }
       } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return
+        }
         console.error('Fetch galleries error:', error)
-        setGalleries([])
-        setTotalGalleries(0)
+        if (!options?.bypassCache) {
+          setGalleries([])
+          setTotalGalleries(0)
+        }
+      }
+    },
+    [galleryPagination.page, galleryPagination.pageSize]
+  )
+
+  useEffect(() => {
+    fetchGalleries()
+  }, [fetchGalleries])
+
+  useEffect(() => {
+    if (!hasPendingThumbnails) return
+
+    const abortController = new AbortController()
+    let attempts = 0
+    let stopped = false
+    let timeoutId: number | undefined
+
+    const poll = async () => {
+      attempts += 1
+      await fetchGalleries({ bypassCache: true, signal: abortController.signal })
+
+      if (!stopped && attempts < THUMBNAIL_POLL_MAX_ATTEMPTS) {
+        timeoutId = window.setTimeout(poll, THUMBNAIL_POLL_INTERVAL_MS)
       }
     }
 
-    fetchGalleries()
-  }, [galleryPagination.page, galleryPagination.pageSize])
+    timeoutId = window.setTimeout(poll, THUMBNAIL_POLL_INTERVAL_MS)
+
+    return () => {
+      stopped = true
+      abortController.abort()
+      if (timeoutId) {
+        window.clearTimeout(timeoutId)
+      }
+    }
+  }, [fetchGalleries, hasPendingThumbnails])
 
   useEffect(() => {
     const fetchGalleryAccess = async () => {

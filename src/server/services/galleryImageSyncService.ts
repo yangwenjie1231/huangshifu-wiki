@@ -66,6 +66,36 @@ function publicUrlToAbsoluteFile(publicUrl: string): string | null {
   return resolvedTarget;
 }
 
+function shouldEnqueueVariant(imageMap: {
+  thumbnailUrl: string | null;
+  variantStatus: string;
+}) {
+  return !imageMap.thumbnailUrl && imageMap.variantStatus !== 'completed';
+}
+
+async function enqueueVariantIfNeeded(
+  imageMap: {
+    id: string;
+    thumbnailUrl: string | null;
+    variantStatus: string;
+  },
+  filePath: string,
+  priority: 'high' | 'normal' | 'low' = 'normal'
+) {
+  if (!shouldEnqueueVariant(imageMap)) return;
+
+  try {
+    await variantGenerator.enqueue({
+      imageMapId: imageMap.id,
+      localFilePath: filePath,
+      priority,
+    });
+    console.log('[GalleryImageSync] 已入队缩略图生成任务:', imageMap.id);
+  } catch (error) {
+    console.error('[GalleryImageSync] 缩略图任务入队失败:', error);
+  }
+}
+
 /**
  * 同步单个图集图片到 ImageMap
  * @param publicUrl 图片的公开 URL (如 /uploads/galleries/xxx.jpg)
@@ -107,6 +137,9 @@ export async function syncGalleryImageToImageMap(
 
     if (existing && !existing.deletedAt) {
       console.log('[GalleryImageSync] ImageMap 记录已存在 (MD5 匹配):', existing.id);
+      if (options.enqueueVariant) {
+        await enqueueVariantIfNeeded(existing, filePath);
+      }
       return existing.id;
     }
 
@@ -117,6 +150,9 @@ export async function syncGalleryImageToImageMap(
 
     if (existingByUrl) {
       console.log('[GalleryImageSync] ImageMap 记录已存在 (URL 匹配):', existingByUrl.id);
+      if (options.enqueueVariant) {
+        await enqueueVariantIfNeeded(existingByUrl, filePath);
+      }
       return existingByUrl.id;
     }
 
@@ -133,20 +169,7 @@ export async function syncGalleryImageToImageMap(
     console.log('[GalleryImageSync] 成功创建 ImageMap 记录:', imageMap.id);
 
     if (options.enqueueVariant) {
-      const filePath = storageKeyToAbsoluteFile(storageKey) || publicUrlToAbsoluteFile(publicUrl);
-
-      if (filePath) {
-        try {
-          await variantGenerator.enqueue({
-            imageMapId: imageMap.id,
-            localFilePath: filePath,
-            priority: 'normal',
-          });
-          console.log('[GalleryImageSync] 已入队缩略图生成任务:', imageMap.id);
-        } catch (error) {
-          console.error('[GalleryImageSync] 缩略图任务入队失败:', error);
-        }
-      }
+      await enqueueVariantIfNeeded(imageMap, filePath);
     }
 
     return imageMap.id;

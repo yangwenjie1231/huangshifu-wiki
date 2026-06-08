@@ -19,10 +19,13 @@
 import { describe, beforeEach, afterEach, it, expect } from 'vitest';
 import request from 'supertest';
 import { app } from '../../server';
+import { enhancedCache } from '../../src/server/utils';
 import { prisma, createTestUser, createTestToken, createTestPost, createTestGallery } from './setup';
 import type { CreateTestPostInput } from './setup';
 
 async function cleanupPostTestData() {
+  enhancedCache.invalidateByPrefix('gallery_list_public:');
+
   // Defensive cleanup for legacy dirty test DBs that still contain orphaned rows
   // from older versions of this suite.
   await prisma.post.deleteMany({
@@ -106,6 +109,7 @@ async function cleanupPostTestData() {
         { title: { startsWith: 'Gallery Publish False Review Test' } },
         { title: { startsWith: 'Gallery Legacy Published Flag Test' } },
         { title: { startsWith: 'Gallery Comment Notification Test' } },
+        { title: { startsWith: 'Gallery Refresh Thumbnails Cache Test' } },
       ],
     },
   });
@@ -1892,6 +1896,41 @@ describe('Posts API - 文章接口测试', () => {
       const deletedItem = listResponse.body.data.find((item: { id: string }) => item.id === gallery.id);
       expect(deletedItem).toBeDefined();
       expect(deletedItem.deletionReason).toBe('管理员删除违规图集');
+    });
+  });
+
+  describe('GET /api/galleries - 公共列表缓存', () => {
+    it('refreshThumbnails=true 应绕过匿名公共列表缓存', async () => {
+      const firstResponse = await request(app).get('/api/galleries').query({ page: 1, limit: 1 });
+
+      expect(firstResponse.status).toBe(200);
+      const cachedTotal = firstResponse.body.total;
+
+      const gallery = await createTestGallery({
+        title: `Gallery Refresh Thumbnails Cache Test ${Date.now()}`,
+        authorUid: testUser.user.uid,
+        authorName: testUser.user.displayName,
+        status: 'published',
+      });
+
+      const cachedResponse = await request(app).get('/api/galleries').query({ page: 1, limit: 1 });
+      expect(cachedResponse.status).toBe(200);
+      expect(cachedResponse.body.total).toBe(cachedTotal);
+
+      const refreshResponse = await request(app)
+        .get('/api/galleries')
+        .query({ page: 1, limit: 1, refreshThumbnails: 'true' });
+
+      expect(refreshResponse.status).toBe(200);
+      expect(refreshResponse.body.total).toBe(cachedTotal + 1);
+      expect(refreshResponse.body.galleries.some((item: { id: string }) => item.id === gallery.id)).toBe(true);
+
+      const updatedCachedResponse = await request(app).get('/api/galleries').query({ page: 1, limit: 1 });
+      expect(updatedCachedResponse.status).toBe(200);
+      expect(updatedCachedResponse.body.total).toBe(cachedTotal + 1);
+      expect(
+        updatedCachedResponse.body.galleries.some((item: { id: string }) => item.id === gallery.id)
+      ).toBe(true);
     });
   });
 

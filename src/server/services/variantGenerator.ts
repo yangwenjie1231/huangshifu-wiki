@@ -136,6 +136,14 @@ export class VariantGenerator {
    * 入队变体生成任务
    */
   async enqueue(task: Omit<VariantTask, 'retryCount' | 'maxRetries' | 'createdAt'>): Promise<void> {
+    if (
+      this.processing.has(task.imageMapId) ||
+      this.queue.some((queuedTask) => queuedTask.imageMapId === task.imageMapId)
+    ) {
+      console.log(`[Variant] ⏭️ Task already queued or processing: ${task.imageMapId}`);
+      return;
+    }
+
     const fullTask: VariantTask = {
       ...task,
       retryCount: 0,

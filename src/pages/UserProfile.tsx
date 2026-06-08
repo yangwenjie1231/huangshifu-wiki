@@ -18,6 +18,12 @@ import { useAuth } from '../context/AuthContext'
 import { apiGet, apiPatch } from '../lib/apiClient'
 import { PROFILE_SIGNATURE_MAX_LENGTH } from '../lib/contentLimits'
 import { DEFAULT_AVATAR, handleAvatarError } from '../lib/defaultAvatar'
+import {
+  shouldWaitForGalleryThumbnail,
+  THUMBNAIL_POLL_DEDUP_OPTIONS,
+  THUMBNAIL_POLL_INTERVAL_MS,
+  THUMBNAIL_POLL_MAX_ATTEMPTS,
+} from '../lib/galleryThumbnails'
 import type { FavoriteItem, GalleryItem, HistoryItem, PostItem } from '../types/entities'
 
 type PublicUser = {
@@ -136,6 +142,7 @@ export default function UserProfile() {
   const signatureInputRef = useRef<HTMLDivElement | null>(null)
   const signatureComposingRef = useRef(false)
   const signatureClickPointRef = useRef<{ x: number; y: number } | null>(null)
+  const hasPendingGalleryThumbnails = galleries.some(shouldWaitForGalleryThumbnail)
 
   useEffect(() => {
     if (!userId) return
@@ -330,6 +337,51 @@ export default function UserProfile() {
       cancelled = true
     }
   }, [activeTab, profile, userId])
+
+  useEffect(() => {
+    if (!userId || activeTab !== 'galleries' || !hasPendingGalleryThumbnails) {
+      return
+    }
+
+    const abortController = new AbortController()
+    let attempts = 0
+    let stopped = false
+    let timeoutId: number | undefined
+
+    const poll = async () => {
+      attempts += 1
+      try {
+        const data = await apiGet<{ galleries: GalleryItem[] }>(
+          `/api/users/${userId}/galleries`,
+          {
+            limit: 50,
+            visibility: 'public',
+          },
+          THUMBNAIL_POLL_DEDUP_OPTIONS,
+          abortController.signal
+        )
+        if (!stopped) setGalleries(data.galleries || [])
+      } catch (err) {
+        if (!(err instanceof DOMException && err.name === 'AbortError')) {
+          console.error('Poll public user gallery thumbnails error:', err)
+        }
+      }
+
+      if (!stopped && attempts < THUMBNAIL_POLL_MAX_ATTEMPTS) {
+        timeoutId = window.setTimeout(poll, THUMBNAIL_POLL_INTERVAL_MS)
+      }
+    }
+
+    timeoutId = window.setTimeout(poll, THUMBNAIL_POLL_INTERVAL_MS)
+
+    return () => {
+      stopped = true
+      abortController.abort()
+      if (timeoutId) {
+        window.clearTimeout(timeoutId)
+      }
+    }
+  }, [activeTab, hasPendingGalleryThumbnails, userId])
 
   const visibleTabs = useMemo(() => {
     const tabs: Array<{ id: UserProfileTab; label: string; icon: React.ReactNode; path: string }> = [

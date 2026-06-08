@@ -160,4 +160,50 @@ describe('SearchResults', () => {
     expect(semanticCard).toHaveClass(cardHeight)
     expect(semanticCard?.className).not.toContain('w-full')
   })
+
+  it('shows a pending thumbnail placeholder for gallery results without using the original image', async () => {
+    const state: SearchState = {
+      ...baseState,
+      results: {
+        ...baseState.results,
+        galleries: [
+          {
+            id: 'gallery-1',
+            title: '生成中的图集',
+            description: '图集描述',
+            authorUid: 'user-1',
+            authorName: '测试用户',
+            tags: [],
+            locationCode: null,
+            locationName: null,
+            locationDetail: null,
+            copyright: null,
+            published: true,
+            publishedAt: null,
+            createdAt: new Date('2024-01-01').toISOString(),
+            updatedAt: new Date('2024-06-02').toISOString(),
+            images: [
+              {
+                id: 'image-1',
+                assetId: null,
+                url: '',
+                originalUrl: '/uploads/galleries/original.jpg',
+                thumbnailUrl: null,
+                thumbnailStatus: 'processing',
+                name: 'original.jpg',
+                mimeType: 'image/jpeg',
+                sizeBytes: 1024,
+              },
+            ],
+          },
+        ],
+      },
+    }
+
+    const { container } = renderSearchResults(state)
+
+    expect(await screen.findByText('生成中的图集')).toBeInTheDocument()
+    expect(screen.getByText('生成中...')).toBeInTheDocument()
+    expect(container.querySelector('img[src="/uploads/galleries/original.jpg"]')).toBeNull()
+  })
 })

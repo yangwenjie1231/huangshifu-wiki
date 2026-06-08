@@ -28,6 +28,12 @@ import { useHoveredCommentMenu } from '../hooks/useHoveredCommentMenu'
 import { formatDateTime } from '../lib/dateUtils'
 import { DEFAULT_AVATAR, handleAvatarError } from '../lib/defaultAvatar'
 import { submitFormOnModifierEnter } from '../lib/formShortcuts'
+import {
+  shouldWaitForAnyGalleryThumbnail,
+  THUMBNAIL_POLL_DEDUP_OPTIONS,
+  THUMBNAIL_POLL_INTERVAL_MS,
+  THUMBNAIL_POLL_MAX_ATTEMPTS,
+} from '../lib/galleryThumbnails'
 import { markCommentDeleted, restoreComment, updateCommentLike } from '../utils/commentState'
 import type { GalleryDetailResponse } from '../types/api'
 import type { GalleryImageItem, GalleryItem } from '../types/entities'
@@ -61,6 +67,10 @@ const toDisplayImage = (image: GalleryImageItem): DisplayGalleryImage => ({
   ...image,
   clientId: image.id,
 })
+
+const getThumbnailSrc = (image: Pick<GalleryImageItem, 'thumbnailUrl' | 'url'>) =>
+  image.thumbnailUrl || image.url || ''
+
 const COMMENT_HIGHLIGHT_DURATION_MS = 3200
 const HIGHLIGHTED_COMMENT_CLASS =
   'bg-[color-mix(in_srgb,var(--color-theme-accent)_18%,var(--color-surface))]'
@@ -99,6 +109,7 @@ const GalleryDetail = () => {
 
   const commentFormRef = useRef<HTMLFormElement | null>(null)
   const commentInputRef = useRef<HTMLTextAreaElement | null>(null)
+  const hasPendingThumbnails = shouldWaitForAnyGalleryThumbnail(gallery)
 
   const fetchGallery = async () => {
     if (!galleryId) return
@@ -117,6 +128,48 @@ const GalleryDetail = () => {
   useEffect(() => {
     fetchGallery()
   }, [galleryId])
+
+  useEffect(() => {
+    if (!galleryId || !hasPendingThumbnails) return
+
+    const abortController = new AbortController()
+    let attempts = 0
+    let stopped = false
+    let timeoutId: number | undefined
+
+    const poll = async () => {
+      attempts += 1
+      try {
+        const data = await apiGet<GalleryDetailResponse>(
+          `/api/galleries/${galleryId}`,
+          undefined,
+          THUMBNAIL_POLL_DEDUP_OPTIONS,
+          abortController.signal
+        )
+        if (!stopped) {
+          setGallery((prev) => (prev ? { ...prev, images: data.gallery.images } : data.gallery))
+        }
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          console.error('Poll gallery detail thumbnails error:', error)
+        }
+      }
+
+      if (!stopped && attempts < THUMBNAIL_POLL_MAX_ATTEMPTS) {
+        timeoutId = window.setTimeout(poll, THUMBNAIL_POLL_INTERVAL_MS)
+      }
+    }
+
+    timeoutId = window.setTimeout(poll, THUMBNAIL_POLL_INTERVAL_MS)
+
+    return () => {
+      stopped = true
+      abortController.abort()
+      if (timeoutId) {
+        window.clearTimeout(timeoutId)
+      }
+    }
+  }, [galleryId, hasPendingThumbnails])
 
   useEffect(() => {
     const fetchGalleryAccess = async () => {
@@ -846,12 +899,17 @@ const GalleryDetail = () => {
                   className="w-full h-full"
                   type="button"
                 >
-                  <SmartImage
-                    src={image.url}
-                    alt={image.name || ''}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                    useOriginal
-                  />
+                  {getThumbnailSrc(image) ? (
+                    <SmartImage
+                      src={getThumbnailSrc(image)}
+                      alt={image.name || ''}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-surface-alt px-2 text-center text-xs text-text-muted">
+                      {image.thumbnailStatus === 'failed' ? '缩略图生成失败' : '生成中...'}
+                    </div>
+                  )}
                 </button>
 
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 pointer-events-none">
@@ -1063,7 +1121,7 @@ const GalleryDetail = () => {
         open={lightboxOpen}
         images={images.map((img) => ({
           id: img.clientId || img.id,
-          url: img.thumbnailUrl || img.url,
+          url: getThumbnailSrc(img),
           originalUrl: img.originalUrl || img.url,
           name: img.name,
         }))}

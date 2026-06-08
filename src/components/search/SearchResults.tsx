@@ -11,6 +11,7 @@ import type { WikiItem, PostItem, GalleryItem, SongItem, AlbumItem } from "../..
 import type { TextSearchResult } from "../../types/api";
 import { MixedSearchResultCard } from "../MixedSearchResultCard";
 import { SearchResultCard } from "./SearchResultCard";
+import { getFirstGalleryImage, shouldWaitForGalleryThumbnail } from "../../lib/galleryThumbnails";
 
 interface SearchResultsProps {
   state: SearchState;
@@ -32,12 +33,15 @@ function wikiToConfig(page: WikiItem): import("./SearchResultCard").SearchResult
 }
 
 function galleryToConfig(gallery: GalleryItem): import("./SearchResultCard").SearchResultCardConfig {
+  const image = getFirstGalleryImage(gallery)
+
   return {
     id: gallery.id,
     title: gallery.title,
     description: gallery.description || undefined,
     link: `/gallery/${gallery.id}`,
-    image: (Array.isArray(gallery.images) && gallery.images[0]?.thumbnailUrl) || undefined,
+    image: image?.thumbnailUrl || undefined,
+    imagePlaceholder: shouldWaitForGalleryThumbnail(gallery) ? '生成中...' : undefined,
     meta: `${Array.isArray(gallery.images) ? gallery.images.length : 0} 张图片`,
     type: "gallery",
   };

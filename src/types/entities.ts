@@ -166,6 +166,7 @@ export interface GalleryImageItem {
   url: string;
   originalUrl?: string | null;
   thumbnailUrl?: string | null;
+  thumbnailStatus?: 'pending' | 'processing' | 'completed' | 'failed' | null;
   name: string;
   mimeType: string | null;
   sizeBytes: number | null;

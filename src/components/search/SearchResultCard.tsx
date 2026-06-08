@@ -14,6 +14,7 @@ export interface SearchResultCardConfig {
   description?: string;
   link: string;
   image?: string;
+  imagePlaceholder?: string;
   tags?: string[];
   meta?: string;
   type: SearchResultType;
@@ -49,6 +50,7 @@ const MATCH_SOURCE_STYLES: Record<string, string> = {
 
 export const SearchResultCard: React.FC<SearchResultCardProps> = React.memo(({ config, viewMode, cardHeight }) => {
   const isList = viewMode === "list";
+  const fallbackContent = config.imagePlaceholder || typeIconMap[config.type];
 
   return (
     <Link
@@ -66,7 +68,7 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = React.memo(({ c
                 </div>
               ) : (
             <div className={clsx(CARD.imageWrapperList, "flex items-center justify-center")}>
-              {typeIconMap[config.type]}
+              {fallbackContent}
             </div>
           )}
           <div className="flex-1 min-w-0">
@@ -106,16 +108,22 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = React.memo(({ c
         </>
       ) : (
         <>
-          {config.image && (
+          {(config.image || config.imagePlaceholder) && (
             <div className="overflow-hidden h-48 flex-shrink-0">
+              {config.image ? (
               <SmartImage
                 src={config.image}
                 alt=""
                 className={clsx(CARD.imageFill, CARD.imageHoverZoom)}
               />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-surface-alt px-2 text-center text-xs text-text-muted">
+                  {config.imagePlaceholder}
+                </div>
+              )}
             </div>
           )}
-          <div className={clsx("p-4", !config.image && "flex-1 flex flex-col")}>
+          <div className={clsx("p-4", !config.image && !config.imagePlaceholder && "flex-1 flex flex-col")}>
             <div className="flex items-center gap-2 mb-2">
               {config.tags && config.tags.length > 0 && config.tags.map((tag) => (
                 <span

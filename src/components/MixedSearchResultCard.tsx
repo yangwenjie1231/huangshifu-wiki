@@ -14,6 +14,10 @@ import type { GalleryItem, WikiItem, PostItem } from "../types/entities";
 import { format } from "date-fns";
 import { toDateValue } from "../lib/dateUtils";
 import { CARD } from "../styles/cardStyles";
+import {
+  getFirstGalleryImage,
+  shouldWaitForGalleryThumbnail,
+} from "../lib/galleryThumbnails";
 
 interface MixedSearchResultCardProps {
   result: MixedSearchResult;
@@ -58,10 +62,22 @@ export const MixedSearchResultCard = React.memo(
     const { sourceType, data, imageUrl, similarity } = result;
     const SourceIcon = getSourceTypeIcon(sourceType);
     const link = getResultLink(result);
-    const galleryThumb = sourceType === "gallery"
-      ? (Array.isArray((data as GalleryItem).images) && (data as GalleryItem).images[0]?.thumbnailUrl) || ""
-      : "";
-    const displayImageUrl = galleryThumb;
+    const gallery = sourceType === "gallery" ? (data as GalleryItem) : undefined;
+    const galleryImage = gallery ? getFirstGalleryImage(gallery) : undefined;
+    const galleryThumb = galleryImage?.thumbnailUrl || "";
+    const thumbnailPending = gallery ? shouldWaitForGalleryThumbnail(gallery) : false;
+    const displayImageUrl = sourceType === "gallery" ? galleryThumb : imageUrl;
+    const imageContent = displayImageUrl ? (
+      <SmartImage src={displayImageUrl} alt="" className={CARD.imageFill} />
+    ) : thumbnailPending ? (
+      <div className="flex h-full w-full items-center justify-center bg-surface-alt px-2 text-center text-xs text-text-muted">
+        生成中...
+      </div>
+    ) : (
+      <div className="flex h-full w-full items-center justify-center bg-surface-alt">
+        <SourceIcon size={20} className="text-brand-gold/40" />
+      </div>
+    );
 
     if (viewMode === "list") {
       return (
@@ -70,7 +86,7 @@ export const MixedSearchResultCard = React.memo(
           className={clsx(CARD.base, CARD.listLayout)}
         >
           <div className={CARD.imageWrapperList}>
-            <SmartImage src={displayImageUrl} alt="" className={CARD.imageFill} />
+            {imageContent}
           </div>
           <div className="flex-1 min-w-0 flex flex-col justify-center">
             <div className="flex items-center gap-2 mb-1">
@@ -110,7 +126,7 @@ export const MixedSearchResultCard = React.memo(
           className={clsx(CARD.base, CARD.compactLayout)}
         >
           <div className={CARD.imageWrapperCompact}>
-            <SmartImage src={displayImageUrl} alt="" className={CARD.imageFill} />
+            {imageContent}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -138,11 +154,21 @@ export const MixedSearchResultCard = React.memo(
         className={clsx(CARD.base, CARD.gridLayout, cardHeight)}
       >
         <div className="h-36 overflow-hidden relative flex-shrink-0">
-          <SmartImage
-            src={displayImageUrl}
-            alt=""
-            className={clsx(CARD.imageFill, CARD.imageHoverZoom)}
-          />
+          {displayImageUrl ? (
+            <SmartImage
+              src={displayImageUrl}
+              alt=""
+              className={clsx(CARD.imageFill, CARD.imageHoverZoom)}
+            />
+          ) : thumbnailPending ? (
+            <div className="flex h-full w-full items-center justify-center bg-surface-alt px-2 text-center text-xs text-text-muted">
+              生成中...
+            </div>
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-surface-alt">
+              <SourceIcon size={24} className="text-brand-gold/40" />
+            </div>
+          )}
           <div className="absolute top-2 left-2">
             <span className="px-2 py-0.5 bg-surface/90 text-brand-gold text-[10px] font-medium rounded">
               <SourceIcon size={10} className="inline mr-0.5" />

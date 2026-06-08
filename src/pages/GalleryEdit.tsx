@@ -20,6 +20,12 @@ import {
 import { CONTENT_LIMITS } from '../lib/contentLimits'
 import { splitTagsInput } from '../lib/contentUtils'
 import { useI18n } from '../lib/i18n'
+import {
+  shouldWaitForAnyGalleryThumbnail,
+  THUMBNAIL_POLL_DEDUP_OPTIONS,
+  THUMBNAIL_POLL_INTERVAL_MS,
+  THUMBNAIL_POLL_MAX_ATTEMPTS,
+} from '../lib/galleryThumbnails'
 import { formatUploadLimitWithSize, UPLOAD_MAX_FILE_SIZE_BYTES } from '../lib/uploadLimits'
 import { findExistingImageMapByMd5, getImagePreference } from '../services/imageService'
 import { runInBatches } from '../utils/asyncBatch'
@@ -55,6 +61,9 @@ const toEditableImage = (image: GalleryImageItem): EditableGalleryImage => ({
   ...image,
   clientId: image.id,
 })
+
+const getThumbnailSrc = (image: Pick<GalleryImageItem, 'thumbnailUrl' | 'url'>) =>
+  image.thumbnailUrl || image.url || ''
 
 const createPendingImage = (file: File): EditableGalleryImage => ({
   clientId: `pending-${Math.random().toString(36).slice(2, 10)}`,
@@ -96,6 +105,21 @@ const createEmptyDraft = (): GalleryDraft => ({
   images: [],
 })
 
+const mergeServerImagesIntoDraft = (
+  draft: GalleryDraft,
+  serverImages: GalleryImageItem[]
+): GalleryDraft => {
+  const serverImagesById = new Map(serverImages.map((image) => [image.id, toEditableImage(image)]))
+
+  return {
+    ...draft,
+    images: draft.images.map((image) => {
+      if (image.isPending || !image.id) return image
+      return serverImagesById.get(image.id) || image
+    }),
+  }
+}
+
 const hasDraggedFiles = (event: Pick<React.DragEvent<HTMLElement>, 'dataTransfer'>) =>
   Array.from(event.dataTransfer?.types || []).includes('Files')
 
@@ -124,6 +148,7 @@ const GalleryEdit = () => {
   const addImagesInputRef = useRef<HTMLInputElement>(null)
   const addFolderInputRef = useRef<HTMLInputElement>(null)
   const draftRef = useRef<GalleryDraft | null>(null)
+  const hasPendingThumbnails = shouldWaitForAnyGalleryThumbnail(gallery)
 
   const applyDraft = (
     updater: GalleryDraft | null | ((prev: GalleryDraft | null) => GalleryDraft | null)
@@ -187,6 +212,49 @@ const GalleryEdit = () => {
 
     fetchGallery()
   }, [galleryId])
+
+  useEffect(() => {
+    if (isCreating || !galleryId || !hasPendingThumbnails) return
+
+    const abortController = new AbortController()
+    let attempts = 0
+    let stopped = false
+    let timeoutId: number | undefined
+
+    const poll = async () => {
+      attempts += 1
+      try {
+        const data = await apiGet<GalleryDetailResponse>(
+          `/api/galleries/${galleryId}`,
+          undefined,
+          THUMBNAIL_POLL_DEDUP_OPTIONS,
+          abortController.signal
+        )
+        if (!stopped) {
+          setGallery((prev) => (prev ? { ...prev, images: data.gallery.images } : data.gallery))
+          applyDraft((prev) => (prev ? mergeServerImagesIntoDraft(prev, data.gallery.images) : prev))
+        }
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          console.error('Poll editable gallery thumbnails error:', error)
+        }
+      }
+
+      if (!stopped && attempts < THUMBNAIL_POLL_MAX_ATTEMPTS) {
+        timeoutId = window.setTimeout(poll, THUMBNAIL_POLL_INTERVAL_MS)
+      }
+    }
+
+    timeoutId = window.setTimeout(poll, THUMBNAIL_POLL_INTERVAL_MS)
+
+    return () => {
+      stopped = true
+      abortController.abort()
+      if (timeoutId) {
+        window.clearTimeout(timeoutId)
+      }
+    }
+  }, [galleryId, hasPendingThumbnails, isCreating])
 
   useEffect(
     () => () => {
@@ -844,11 +912,17 @@ const GalleryEdit = () => {
                     draggingIndex === index && 'opacity-60'
                   )}
                 >
-                  <SmartImage
-                    src={image.url}
-                    alt={image.name || ''}
-                    className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-                  />
+                  {getThumbnailSrc(image) ? (
+                    <SmartImage
+                      src={getThumbnailSrc(image)}
+                      alt={image.name || ''}
+                      className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-surface-alt px-2 text-center text-xs text-text-muted">
+                      {image.thumbnailStatus === 'failed' ? '缩略图生成失败' : '生成中...'}
+                    </div>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleDeleteImage(index)}

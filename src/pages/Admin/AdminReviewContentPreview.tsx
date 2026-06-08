@@ -205,7 +205,7 @@ const renderGalleryPreview = (
       <section className="mb-10">
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
           {images.map((image, index) => {
-            const previewSrc = image.thumbnailUrl || image.url || image.originalUrl || ''
+            const previewSrc = image.thumbnailUrl || image.url || ''
 
             return (
               <button
@@ -214,11 +214,17 @@ const renderGalleryPreview = (
                 onClick={() => onOpenLightbox(index)}
                 className="group relative aspect-[3/4] cursor-zoom-in overflow-hidden rounded"
               >
-                <SmartImage
-                  src={previewSrc}
-                  alt={image.name || ''}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                />
+                {previewSrc ? (
+                  <SmartImage
+                    src={previewSrc}
+                    alt={image.name || ''}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-surface-alt px-2 text-center text-xs text-text-muted">
+                    生成中...
+                  </div>
+                )}
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 pointer-events-none">
                   <div className="absolute bottom-3 right-3 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 bg-black/40 text-white text-xs px-2 py-1 rounded">
                     查看原图

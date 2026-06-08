@@ -12,6 +12,7 @@ import {
   Prisma,
   UserRole as PrismaUserRole,
 } from '@prisma/client';
+import type { VariantStatus } from '@prisma/client';
 import { RELATION_TYPE_LABELS } from '../../lib/relationConstants';
 
 import type {
@@ -431,15 +432,33 @@ type GalleryInput = {
   }[];
 };
 
+type GalleryImageMapEntry = {
+  localUrl: string;
+  externalUrl: string | null;
+  s3Url: string | null;
+  thumbnailUrl: string | null;
+  variantStatus: VariantStatus | null;
+};
+
+function resolveGalleryImageLocalUrl(image: GalleryInput['images'][number]) {
+  if (image.asset?.storageKey) {
+    return `/uploads/${image.asset.storageKey}`;
+  }
+  if (image.url?.startsWith('/uploads/')) {
+    return image.url;
+  }
+  return null;
+}
+
 function resolveImageUrl(
   image: GalleryInput['images'][number],
-  imageMapByLocalUrl: Map<string, { localUrl: string; externalUrl: string | null; s3Url: string | null; thumbnailUrl: string | null }>,
+  imageMapByLocalUrl: Map<string, GalleryImageMapEntry>,
   storageStrategy: 'local' | 's3' | 'external',
 ) {
   let url = image.asset?.publicUrl || image.url;
+  const localUrl = resolveGalleryImageLocalUrl(image);
 
-  if (image.asset?.storageKey) {
-    const localUrl = `/uploads/${image.asset.storageKey}`;
+  if (localUrl) {
     const imageMap = imageMapByLocalUrl.get(localUrl);
 
     if (imageMap) {
@@ -463,10 +482,10 @@ function resolveImageUrl(
 
 function resolveThumbnailUrl(
   image: GalleryInput['images'][number],
-  imageMapByLocalUrl: Map<string, { localUrl: string; externalUrl: string | null; s3Url: string | null; thumbnailUrl: string | null }>,
+  imageMapByLocalUrl: Map<string, GalleryImageMapEntry>,
 ): string | null {
-  if (image.asset?.storageKey) {
-    const localUrl = `/uploads/${image.asset.storageKey}`;
+  const localUrl = resolveGalleryImageLocalUrl(image);
+  if (localUrl) {
     const imageMap = imageMapByLocalUrl.get(localUrl);
 
     if (imageMap?.thumbnailUrl) {
@@ -475,6 +494,15 @@ function resolveThumbnailUrl(
   }
 
   return null;
+}
+
+function resolveThumbnailStatus(
+  image: GalleryInput['images'][number],
+  imageMapByLocalUrl: Map<string, GalleryImageMapEntry>,
+): VariantStatus | null {
+  const localUrl = resolveGalleryImageLocalUrl(image);
+  if (!localUrl) return null;
+  return imageMapByLocalUrl.get(localUrl)?.variantStatus ?? null;
 }
 
 export async function toGalleryResponse(gallery: GalleryInput, storageStrategy?: string) {
@@ -497,8 +525,9 @@ export async function toGalleryResponse(gallery: GalleryInput, storageStrategy?:
 
   const localUrls: string[] = [];
   for (const img of gallery.images) {
-    if (img.asset?.storageKey) {
-      localUrls.push(`/uploads/${img.asset.storageKey}`);
+    const localUrl = resolveGalleryImageLocalUrl(img);
+    if (localUrl) {
+      localUrls.push(localUrl);
     }
   }
 
@@ -513,6 +542,7 @@ export async function toGalleryResponse(gallery: GalleryInput, storageStrategy?:
           externalUrl: true,
           s3Url: true,
           thumbnailUrl: true,
+          variantStatus: true,
         },
       })
     : [];
@@ -555,6 +585,7 @@ export async function toGalleryResponse(gallery: GalleryInput, storageStrategy?:
         url: resolveThumbnailUrl(image, imageMapByLocalUrl) || '',
         originalUrl: resolveImageUrl(image, imageMapByLocalUrl, resolvedStorageStrategy),
         thumbnailUrl: resolveThumbnailUrl(image, imageMapByLocalUrl),
+        thumbnailStatus: resolveThumbnailStatus(image, imageMapByLocalUrl),
         name: image.asset?.fileName || image.name,
         mimeType: image.asset?.mimeType || null,
         sizeBytes: image.asset?.sizeBytes || null,
@@ -585,8 +616,9 @@ export async function toGalleryListResponse(galleries: GalleryInput[], storageSt
   const allLocalUrls: string[] = [];
   for (const gallery of galleries) {
     for (const img of gallery.images) {
-      if (img.asset?.storageKey) {
-        allLocalUrls.push(`/uploads/${img.asset.storageKey}`);
+      const localUrl = resolveGalleryImageLocalUrl(img);
+      if (localUrl) {
+        allLocalUrls.push(localUrl);
       }
     }
   }
@@ -602,6 +634,7 @@ export async function toGalleryListResponse(galleries: GalleryInput[], storageSt
           externalUrl: true,
           s3Url: true,
           thumbnailUrl: true,
+          variantStatus: true,
         },
       })
     : [];
@@ -644,6 +677,7 @@ export async function toGalleryListResponse(galleries: GalleryInput[], storageSt
         url: resolveThumbnailUrl(image, imageMapByLocalUrl) || '',
         originalUrl: resolveImageUrl(image, imageMapByLocalUrl, resolvedStorageStrategy),
         thumbnailUrl: resolveThumbnailUrl(image, imageMapByLocalUrl),
+        thumbnailStatus: resolveThumbnailStatus(image, imageMapByLocalUrl),
         name: image.asset?.fileName || image.name,
         mimeType: image.asset?.mimeType || null,
         sizeBytes: image.asset?.sizeBytes || null,

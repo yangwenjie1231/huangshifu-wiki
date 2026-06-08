@@ -287,10 +287,11 @@ function isString(value: string | null): value is string {
 router.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const { limit, page, offset: skip } = parsePagination(req.query)
+    const refreshThumbnails = parseBoolean(req.query.refreshThumbnails, false)
 
     const visibilityWhere = buildGalleryVisibilityWhere(req.authUser)
 
-    if (!req.authUser) {
+    if (!req.authUser && !refreshThumbnails) {
       const cacheKey = `gallery_list_public:${page}:${limit}`
       const cached = enhancedCache.get(cacheKey)
       if (cached) {

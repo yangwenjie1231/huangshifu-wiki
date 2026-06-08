@@ -8,8 +8,15 @@ import type {
   SearchMeta,
 } from "./useSearch";
 import { useMixedSearch, useTraditionalSearch } from "./useSearch";
-import type { TextSearchResult } from "../types/api";
+import type { GalleryDetailResponse, TextSearchResult } from "../types/api";
 import { useSearchHistory } from "./useSearchHistory";
+import { apiGet } from "../lib/apiClient";
+import {
+  shouldWaitForGalleryThumbnail,
+  THUMBNAIL_POLL_DEDUP_OPTIONS,
+  THUMBNAIL_POLL_INTERVAL_MS,
+  THUMBNAIL_POLL_MAX_ATTEMPTS,
+} from "../lib/galleryThumbnails";
 
 // 向后兼容：re-export SearchFilters，供 SearchFilters 组件使用
 export type { SearchFilters } from "./useSearch";
@@ -37,6 +44,19 @@ export interface SearchState {
   showFilters: boolean;
   searchMeta?: SearchMeta
   textSemanticResults: TextSearchResult[]
+}
+
+function getPendingGalleryIds(state: SearchState) {
+  const ids = new Set<string>()
+  state.results.galleries.forEach((gallery) => {
+    if (shouldWaitForGalleryThumbnail(gallery)) ids.add(gallery.id)
+  })
+  state.mixedResults.forEach((result) => {
+    if (result.sourceType !== 'gallery') return
+    const gallery = result.data as GalleryItem
+    if (shouldWaitForGalleryThumbnail(gallery)) ids.add(gallery.id)
+  })
+  return Array.from(ids)
 }
 
 export function useSearchPage() {
@@ -95,6 +115,70 @@ export function useSearchPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery]);
+
+  const hasPendingGalleryThumbnails = getPendingGalleryIds(state).length > 0
+
+  useEffect(() => {
+    if (!hasPendingGalleryThumbnails) return
+
+    const abortController = new AbortController()
+    let attempts = 0
+    let stopped = false
+    let timeoutId: number | undefined
+
+    const poll = async () => {
+      attempts += 1
+      const pendingIds = getPendingGalleryIds(stateRef.current)
+      if (pendingIds.length === 0) return
+
+      try {
+        const refreshed = await Promise.all(
+          pendingIds.map(async (galleryId) => {
+            const data = await apiGet<GalleryDetailResponse>(
+              `/api/galleries/${galleryId}`,
+              undefined,
+              THUMBNAIL_POLL_DEDUP_OPTIONS,
+              abortController.signal
+            )
+            return data.gallery
+          })
+        )
+        if (stopped) return
+
+        const refreshedById = new Map(refreshed.map((gallery) => [gallery.id, gallery]))
+        setState((prev) => ({
+          ...prev,
+          results: {
+            ...prev.results,
+            galleries: prev.results.galleries.map((gallery) => refreshedById.get(gallery.id) || gallery),
+          },
+          mixedResults: prev.mixedResults.map((result) => {
+            if (result.sourceType !== 'gallery') return result
+            const gallery = refreshedById.get((result.data as GalleryItem).id)
+            return gallery ? { ...result, data: gallery } : result
+          }),
+        }))
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          console.error('Poll search gallery thumbnails error:', error)
+        }
+      }
+
+      if (!stopped && attempts < THUMBNAIL_POLL_MAX_ATTEMPTS) {
+        timeoutId = window.setTimeout(poll, THUMBNAIL_POLL_INTERVAL_MS)
+      }
+    }
+
+    timeoutId = window.setTimeout(poll, THUMBNAIL_POLL_INTERVAL_MS)
+
+    return () => {
+      stopped = true
+      abortController.abort()
+      if (timeoutId) {
+        window.clearTimeout(timeoutId)
+      }
+    }
+  }, [hasPendingGalleryThumbnails])
 
   // 搜索建议 -- 委托给 traditionalSearch.getSuggestions()
   const fetchSuggestions = useCallback(async (q: string) => {
