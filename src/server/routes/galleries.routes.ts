@@ -11,7 +11,6 @@ import {
   parseBoolean,
   parsePagination,
   normalizeGalleryWriteStatus,
-  buildGalleryVisibilityWhere,
   canViewGallery,
   createUploadSessionExpiresAt,
   isUploadSessionExpired,
@@ -289,7 +288,10 @@ router.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
     const { limit, page, offset: skip } = parsePagination(req.query)
     const refreshThumbnails = parseBoolean(req.query.refreshThumbnails, false)
 
-    const visibilityWhere = buildGalleryVisibilityWhere(req.authUser)
+    const where = {
+      status: 'published' as ContentStatus,
+      deletedAt: null,
+    }
 
     if (!req.authUser && !refreshThumbnails) {
       const cacheKey = `gallery_list_public:${page}:${limit}`
@@ -302,7 +304,7 @@ router.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
 
     const [galleries, total] = await Promise.all([
       prisma.gallery.findMany({
-        where: visibilityWhere,
+        where,
         include: {
           images: {
             include: {
@@ -315,7 +317,7 @@ router.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
         take: limit,
         skip,
       }),
-      prisma.gallery.count({ where: visibilityWhere }),
+      prisma.gallery.count({ where }),
     ])
 
     const result = {

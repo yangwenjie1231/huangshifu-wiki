@@ -110,6 +110,7 @@ async function cleanupPostTestData() {
         { title: { startsWith: 'Gallery Legacy Published Flag Test' } },
         { title: { startsWith: 'Gallery Comment Notification Test' } },
         { title: { startsWith: 'Gallery Refresh Thumbnails Cache Test' } },
+        { title: { startsWith: 'Gallery List Visibility Test' } },
       ],
     },
   });
@@ -1900,6 +1901,76 @@ describe('Posts API - 文章接口测试', () => {
   });
 
   describe('GET /api/galleries - 公共列表缓存', () => {
+    it('登录作者访问公共图集列表时也只返回已发布图集', async () => {
+      const publishedGallery = await createTestGallery({
+        title: `Gallery List Visibility Test Published ${Date.now()}`,
+        authorUid: testUser.user.uid,
+        authorName: testUser.user.displayName,
+        status: 'published',
+      });
+      const draftGallery = await createTestGallery({
+        title: `Gallery List Visibility Test Draft ${Date.now()}`,
+        authorUid: testUser.user.uid,
+        authorName: testUser.user.displayName,
+        status: 'draft',
+      });
+      const pendingGallery = await createTestGallery({
+        title: `Gallery List Visibility Test Pending ${Date.now()}`,
+        authorUid: testUser.user.uid,
+        authorName: testUser.user.displayName,
+        status: 'pending',
+      });
+      const rejectedGallery = await createTestGallery({
+        title: `Gallery List Visibility Test Rejected ${Date.now()}`,
+        authorUid: testUser.user.uid,
+        authorName: testUser.user.displayName,
+        status: 'rejected',
+      });
+
+      const response = await request(app)
+        .get('/api/galleries')
+        .query({ page: 1, limit: 50 })
+        .set('Authorization', `Bearer ${userToken}`);
+
+      expect(response.status).toBe(200);
+      const galleryIds = response.body.galleries.map((gallery: { id: string }) => gallery.id);
+      expect(galleryIds).toContain(publishedGallery.id);
+      expect(galleryIds).not.toContain(draftGallery.id);
+      expect(galleryIds).not.toContain(pendingGallery.id);
+      expect(galleryIds).not.toContain(rejectedGallery.id);
+      expect(response.body.galleries.every((gallery: { status: string }) => gallery.status === 'published')).toBe(
+        true
+      );
+    });
+
+    it('管理员访问公共图集列表时也不返回非发布图集', async () => {
+      const publishedGallery = await createTestGallery({
+        title: `Gallery List Visibility Test Admin Published ${Date.now()}`,
+        authorUid: testUser.user.uid,
+        authorName: testUser.user.displayName,
+        status: 'published',
+      });
+      const pendingGallery = await createTestGallery({
+        title: `Gallery List Visibility Test Admin Pending ${Date.now()}`,
+        authorUid: testUser.user.uid,
+        authorName: testUser.user.displayName,
+        status: 'pending',
+      });
+
+      const response = await request(app)
+        .get('/api/galleries')
+        .query({ page: 1, limit: 50 })
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(response.status).toBe(200);
+      const galleryIds = response.body.galleries.map((gallery: { id: string }) => gallery.id);
+      expect(galleryIds).toContain(publishedGallery.id);
+      expect(galleryIds).not.toContain(pendingGallery.id);
+      expect(response.body.galleries.every((gallery: { status: string }) => gallery.status === 'published')).toBe(
+        true
+      );
+    });
+
     it('refreshThumbnails=true 应绕过匿名公共列表缓存', async () => {
       const firstResponse = await request(app).get('/api/galleries').query({ page: 1, limit: 1 });
 
