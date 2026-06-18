@@ -15,6 +15,7 @@ interface Song {
   audioUrl: string;
   playUrl?: string;
   lyric?: string | null;
+  description?: string | null;
   primaryPlatform?: Platform | null;
   platformIds?: PlatformIds;
 }
@@ -30,6 +31,7 @@ interface MusicSongApiResponse {
   audioUrl: string;
   playUrl?: string;
   lyric?: string | null;
+  description?: string | null;
   primaryPlatform?: Platform | null;
   platformIds?: PlatformIds;
 }
@@ -57,6 +59,7 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
           audioUrl: apiSong.playUrl || apiSong.audioUrl || '',
           playUrl: apiSong.playUrl,
           lyric: apiSong.lyric || null,
+          description: apiSong.description || null,
           primaryPlatform: apiSong.primaryPlatform,
           platformIds: apiSong.platformIds,
         });

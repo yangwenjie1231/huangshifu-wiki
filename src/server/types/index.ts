@@ -59,6 +59,7 @@ type MusicTrackWithRelations = {
   cover: string;
   audioUrl: string;
   lyric: string | null;
+  description: string | null;
   primaryPlatform: MusicPlatform;
   enabledPlatform: MusicPlatform | null;
   neteaseId: string | null;

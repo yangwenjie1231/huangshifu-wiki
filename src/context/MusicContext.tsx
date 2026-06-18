@@ -11,6 +11,7 @@ interface Song {
   audioUrl: string;
   playUrl?: string;
   lyric?: string | null;
+  description?: string | null;
   primaryPlatform?: Platform | null;
   platformIds?: PlatformIds;
 }

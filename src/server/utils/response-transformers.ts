@@ -833,7 +833,10 @@ export function toMediaAssetResponse(asset: {
   };
 }
 
-export function toSongResponse(song: MusicTrackWithRelations, options?: { favoritedByMe?: boolean; excludeLyric?: boolean }) {
+export function toSongResponse(
+  song: MusicTrackWithRelations,
+  options?: { favoritedByMe?: boolean; excludeLyric?: boolean; excludeDescription?: boolean },
+) {
   const displayAlbum = resolveSongDisplayAlbum(song);
   const coverUrl = resolveSongCoverUrl(song);
   const customPlatformLinks = normalizeSongCustomPlatformLinks(song.customPlatformLinks);
@@ -881,8 +884,13 @@ export function toSongResponse(song: MusicTrackWithRelations, options?: { favori
     updatedAt: song.updatedAt.toISOString(),
   }
 
-  if (options?.excludeLyric) return base
-  return { ...base, lyric: song.lyric }
+  const withOptionalFields = {
+    ...base,
+    ...(options?.excludeLyric ? {} : { lyric: song.lyric }),
+    ...(options?.excludeDescription ? {} : { description: song.description }),
+  }
+
+  return withOptionalFields
 }
 
 export function toAlbumResponse(album: {

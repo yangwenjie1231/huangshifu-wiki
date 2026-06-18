@@ -32,6 +32,7 @@ export interface SongItem {
   audioUrl: string;
   primaryPlatform?: Platform | null;
   lyric?: string | null;
+  description?: string | null;
   favoritedByMe?: boolean;
   platformIds?: PlatformIds;
   createdAt?: string;

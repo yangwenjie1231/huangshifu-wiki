@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Clock, ExternalLink, Heart, Link2, MessageSquare, Play, ChevronDown, ChevronUp, Music as MusicIcon, Trash2 } from 'lucide-react';
+import { ArrowLeft, Clock, ExternalLink, Heart, Link2, MessageSquare, Play, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 
@@ -15,6 +15,7 @@ import { CoverManager } from '../components/CoverManager';
 import { SmartImage } from '../components/SmartImage';
 import { SongEditModal } from '../components/SongEditModal';
 import { LyricsDisplay } from '../components/LyricsDisplay';
+import MarkdownRenderer from '../components/MarkdownRenderer';
 import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
 import { getPlatformExternalUrl } from '../lib/musicPlatformUrls';
 import { Platform, PlatformIds } from '../types/PlatformIds';
@@ -320,21 +321,24 @@ const MusicDetail = () => {
                   <span className="w-[3px] h-4 bg-brand-gold rounded-[1px] opacity-60 inline-block" />
                   歌曲描述
                 </h2>
-                <div className={clsx('text-text-secondary leading-relaxed whitespace-pre-wrap', !descExpanded && 'line-clamp-6')}>
-                  {song.description}
+                <div
+                  className={clsx(
+                    'prose max-w-none text-text-secondary overflow-hidden transition-all',
+                    !descExpanded && 'max-h-[16rem]',
+                  )}
+                >
+                  <MarkdownRenderer content={song.description || ''} />
                 </div>
-                {song.description.length > 200 ? (
-                  <button
-                    onClick={() => setDescExpanded(!descExpanded)}
-                    className="text-xs px-3 py-1.5 border border-border text-text-muted hover:text-brand-gold hover:border-brand-gold rounded transition-all duration-300 mt-3 inline-flex items-center gap-1"
-                  >
-                    {descExpanded ? (
-                      <>收起 <ChevronUp size={14} /></>
-                    ) : (
-                      <>展开 <ChevronDown size={14} /></>
-                    )}
-                  </button>
-                ) : null}
+                <button
+                  onClick={() => setDescExpanded(!descExpanded)}
+                  className="text-xs px-3 py-1.5 border border-border text-text-muted hover:text-brand-gold hover:border-brand-gold rounded transition-all duration-300 mt-3 inline-flex items-center gap-1"
+                >
+                  {descExpanded ? (
+                    <>收起 <ChevronUp size={14} /></>
+                  ) : (
+                    <>展开 <ChevronDown size={14} /></>
+                  )}
+                </button>
               </div>
             )}
 

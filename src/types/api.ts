@@ -247,6 +247,7 @@ export interface MusicListResponse {
     title: string;
     artist: string;
     album?: string;
+    description?: string | null;
     coverUrl?: string;
     playUrl?: string;
     duration?: number;
@@ -262,6 +263,7 @@ export interface MusicDetailResponse {
     title: string;
     artist: string;
     album?: string;
+    description?: string | null;
     coverUrl?: string;
     playUrl?: string;
     duration?: number;

@@ -58,6 +58,19 @@ function ensureMusicTextLimits(res: Parameters<typeof ensureTextLimit>[0], input
   )
 }
 
+function normalizeNullableText(value: unknown) {
+  if (value === null) return null;
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function normalizeNullableMarkdown(value: unknown) {
+  if (value === null) return null;
+  if (typeof value !== 'string') return undefined;
+  return value.trim() ? value : null;
+}
+
 // Music list
 router.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
@@ -117,7 +130,13 @@ router.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
     }
 
     const result = {
-      songs: songs.map((song) => toSongResponse(song, { favoritedByMe: favoritedMusicSet.has(song.docId), excludeLyric: true })),
+      songs: songs.map((song) =>
+        toSongResponse(song, {
+          favoritedByMe: favoritedMusicSet.has(song.docId),
+          excludeLyric: true,
+          excludeDescription: true,
+        }),
+      ),
       total,
       page,
       limit,
@@ -147,6 +166,7 @@ router.post('/', requireAdmin, asyncHandler(async (req: AuthenticatedRequest, re
     const cover = typeof body.cover === 'string' ? body.cover.trim() : '';
     const audioUrl = typeof body.audioUrl === 'string' ? body.audioUrl.trim() : '';
     const lyric = typeof body.lyric === 'string' ? body.lyric : null;
+    const description = normalizeNullableMarkdown(body.description);
     const primaryPlatform = parseMusicPlatform(body.primaryPlatform || body.platform) || 'netease';
     const enabledPlatform = parseMusicPlatform(body.enabledPlatform) || primaryPlatform;
     if (!ensureMusicTextLimits(res, body)) {
@@ -174,6 +194,7 @@ router.post('/', requireAdmin, asyncHandler(async (req: AuthenticatedRequest, re
         cover,
         audioUrl,
         lyric,
+        description: description ?? null,
         primaryPlatform,
         enabledPlatform,
         [sourceField]: id,
@@ -605,6 +626,9 @@ router.patch('/:docId', requireAdmin, asyncHandler(async (req: AuthenticatedRequ
     if (typeof body.cover === 'string') updateData.cover = body.cover.trim();
     if (typeof body.audioUrl === 'string') updateData.audioUrl = body.audioUrl.trim();
     if (typeof body.lyric === 'string' || body.lyric === null) updateData.lyric = body.lyric;
+    if (typeof body.description === 'string' || body.description === null) {
+      updateData.description = normalizeNullableMarkdown(body.description);
+    }
     if (!ensureMusicTextLimits(res, body)) {
       return;
     }

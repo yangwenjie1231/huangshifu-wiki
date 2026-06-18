@@ -210,7 +210,10 @@ router.get('/:id', async (req: AuthenticatedRequest, res) => {
     }
 
     const tracks = relations.map((relation) => ({
-      ...toSongResponse(relation.song, { favoritedByMe: favoritedMusicSet.has(relation.songDocId) }),
+      ...toSongResponse(relation.song, {
+        favoritedByMe: favoritedMusicSet.has(relation.songDocId),
+        excludeDescription: true,
+      }),
       trackOrder: relation.trackOrder,
       discNumber: relation.discNumber,
     }));

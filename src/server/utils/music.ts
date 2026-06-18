@@ -587,6 +587,7 @@ export async function createOrUpdateImportedSong(params: {
         cover: resolvedCover || '',
         audioUrl: resolvedAudioUrl || '',
         lyric: resolvedLyric || null,
+        description: existingByPlatformId.description ?? null,
         primaryPlatform: platform,
         enabledPlatform: platform,
         [sourceField]: platformId,
@@ -631,18 +632,19 @@ export async function createOrUpdateImportedSong(params: {
     const conflictPlatformId = (existingByTitleArtist as unknown as Record<string, string | null>)[sourceField];
     if (conflictPlatformId) {
       const song = await prisma.musicTrack.create({
-        data: {
-          id: track.sourceId,
-          title,
-          artist,
-          album,
-          cover: resolvedCover || '',
-          audioUrl: resolvedAudioUrl || '',
-          lyric: resolvedLyric || null,
-          primaryPlatform: platform,
-          enabledPlatform: platform,
-          [sourceField]: platformId,
-          addedBy: userUid,
+      data: {
+        id: track.sourceId,
+        title,
+        artist,
+        album,
+        cover: resolvedCover || '',
+        audioUrl: resolvedAudioUrl || '',
+        lyric: resolvedLyric || null,
+        description: null,
+        primaryPlatform: platform,
+        enabledPlatform: platform,
+        [sourceField]: platformId,
+        addedBy: userUid,
         },
       });
       return {
@@ -662,6 +664,7 @@ export async function createOrUpdateImportedSong(params: {
         cover: resolvedCover || '',
         audioUrl: resolvedAudioUrl || '',
         lyric: resolvedLyric || null,
+        description: existingByTitleArtist.description ?? null,
         primaryPlatform: platform,
         enabledPlatform: platform,
         [sourceField]: platformId,
@@ -680,18 +683,19 @@ export async function createOrUpdateImportedSong(params: {
   }
 
   const song = await prisma.musicTrack.create({
-    data: {
-      id: track.sourceId,
-      title,
-      artist,
-      album,
-      cover: resolvedCover || '',
-      audioUrl: resolvedAudioUrl || '',
-      lyric: resolvedLyric || null,
-      primaryPlatform: platform,
-      enabledPlatform: platform,
-      [sourceField]: platformId,
-      addedBy: userUid,
+      data: {
+        id: track.sourceId,
+        title,
+        artist,
+        album,
+        cover: resolvedCover || '',
+        audioUrl: resolvedAudioUrl || '',
+        lyric: resolvedLyric || null,
+        description: null,
+        primaryPlatform: platform,
+        enabledPlatform: platform,
+        [sourceField]: platformId,
+        addedBy: userUid,
     },
   });
 

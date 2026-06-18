@@ -77,6 +77,7 @@ router.get('/song/:id', async (req, res) => {
       title: track.title || preview.title,
       artist: track.artist || preview.artist,
       album: track.album || preview.title,
+      description: null,
       cover: track.cover || preview.cover,
       audioUrl: audioUrl || '',
       playUrl: audioUrl || '',

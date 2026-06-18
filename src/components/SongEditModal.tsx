@@ -9,6 +9,7 @@ import { useToast } from './Toast';
 import { MatchSuggestionModal } from './MatchSuggestionModal';
 import { FormModal } from './Modal/FormModal';
 import { CharacterCount } from './CharacterCount';
+import MarkdownEditor from './MarkdownEditor';
 
 type CustomPlatformConfig = {
   key: string;
@@ -154,13 +155,17 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
     }
 
     setSaving(true);
+    const description =
+      typeof formData.description === 'string' && formData.description.trim()
+        ? formData.description
+        : null;
     try {
       await apiPatch(`/api/music/${song.docId}`, {
         title: formData.title.trim(),
         artist: formData.artist.trim(),
         album: formData.album.trim(),
         lyric: formData.lyric?.trim() || null,
-        description: formData.description?.trim() || null,
+        description,
         neteaseId: platformIds.neteaseId || null,
         tencentId: platformIds.tencentId || null,
         kugouId: platformIds.kugouId || null,
@@ -219,7 +224,7 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
         onSubmit={handleSubmit}
         submitText="保存"
         loading={saving}
-        maxWidth="max-w-lg"
+        maxWidth="max-w-3xl"
       >
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-3">
@@ -285,13 +290,13 @@ export const SongEditModal = ({ open, onClose, onSuccess, song }: SongEditModalP
               max={CONTENT_LIMITS.music.description}
             />
           </div>
-          <textarea
+          <MarkdownEditor
             value={formData.description || ''}
-            onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-            maxLength={CONTENT_LIMITS.music.description}
+            onChange={(value) => setFormData((prev) => ({ ...prev, description: value }))}
+            height="260px"
             placeholder="创作者的话、创作背景等（可选，支持 Markdown）"
-            rows={3}
-            className="theme-input w-full px-3 py-2 text-sm rounded resize-none"
+            ariaLabel="歌曲描述（支持 Markdown）"
+            maxLength={CONTENT_LIMITS.music.description}
           />
         </div>
 

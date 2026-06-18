@@ -328,12 +328,14 @@ describe('apiTypes', () => {
       const songWithOptional = {
         ...validSong,
         album: '专辑',
+        description: '歌曲描述',
         coverUrl: 'https://example.com/cover.png',
         playUrl: 'https://example.com/song.mp3',
         duration: 240,
       };
       const result = songSchema.parse(songWithOptional);
       expect(result.album).toBe('专辑');
+      expect(result.description).toBe('歌曲描述');
       expect(result.duration).toBe(240);
     });
 
@@ -386,11 +388,13 @@ describe('apiTypes', () => {
           docId: 'doc-1',
           title: '歌曲',
           artist: '歌手',
+          description: '描述',
           createdAt: '2024-01-01',
         },
       };
       const result = musicDetailResponseSchema.parse(data);
       expect(result.song.title).toBe('歌曲');
+      expect(result.song.description).toBe('描述');
     });
   });
 
