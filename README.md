@@ -15,7 +15,7 @@
 
 **Prerequisites:**
 
-- Node.js 20+
+- Node.js 22+
 - PostgreSQL
 
 ### 1) 安装依赖
@@ -98,57 +98,37 @@ WECHAT_LOGIN_MOCK="true"
 
 更多细节见：`docs/p2-wechat-mini-program.md`
 
-## 生产部署（你的服务器）
+## 生产部署（Docker）
 
-以服务器 `23.224.49.72` 为例：
-
-### 1) 连接服务器
-
-```bash
-ssh root@23.224.49.72
-```
-
-### 2) 安装环境（一次）
-
-- 安装 Node.js 20+
-- 安装 PostgreSQL
-- 创建数据库：`huangshifu_wiki`
-
-### 3) 上传并准备项目
+推荐使用 Docker Compose 快速部署。默认会启动应用和 PostgreSQL；图片语义搜索默认关闭，避免首次部署被 Qdrant/CLIP 模型下载阻塞。
 
 ```bash
 git clone <your-repo-url> huangshifu-wiki
 cd huangshifu-wiki
-npm install
+cp .env.docker.example .env
+# 按需修改 .env 中的 CORS_ORIGIN、管理员账号、对象存储等配置
+./scripts/deploy-docker.sh
 ```
 
-创建 `.env.local`（按上面的变量填写生产值）。
-
-### 4) 初始化数据库
+部署完成后本机访问：
 
 ```bash
-npm run db:generate
-npx prisma db execute --file prisma/migrate.sql --schema prisma/schema.prisma
-npm run db:seed
+curl http://127.0.0.1:3003/healthz
 ```
 
-### 5) 构建并启动
+常用选项：
 
 ```bash
-npm run build
-NODE_ENV=production npx tsx server.ts
+PULL_LATEST=1 ./scripts/deploy-docker.sh
+SKIP_SEED=1 ./scripts/deploy-docker.sh
+SKIP_MIGRATE=1 ./scripts/deploy-docker.sh
 ```
 
-建议使用 `pm2` 守护：
+如需启用图片语义搜索，将 `.env` 中 `ENABLE_SEMANTIC_SEARCH` 改为 `true` 后重新运行部署脚本。脚本会通过 Compose profile 启动 Qdrant。
 
-```bash
-pm2 start "NODE_ENV=production npx tsx server.ts" --name huangshifu-wiki
-pm2 save
-```
+### 反向代理（Nginx）
 
-### 6) 反向代理（Nginx）
-
-将域名代理到 `http://127.0.0.1:3000`，并开放 80/443。
+将域名代理到 `http://127.0.0.1:3003`，并开放 80/443。生产环境建议在 `.env` 中配置明确的 `CORS_ORIGIN`，例如 `https://wiki.example.com`。
 
 ## 默认管理员
 
