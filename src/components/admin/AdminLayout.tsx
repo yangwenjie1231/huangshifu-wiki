@@ -33,6 +33,7 @@ import { logoutRequest } from '../../lib/auth'
 import { HeaderUserControls } from '../HeaderUserControls'
 import { useToast } from '../Toast'
 import { usePendingReviewCount } from '../../hooks/usePendingReviewCount'
+import { usePublicFeatures } from '../../hooks/usePublicFeatures'
 
 type AdminNavItem = {
   id: string
@@ -67,13 +68,25 @@ const siteNav: AdminNavItem[] = [
   { id: 'moderation_logs', label: '操作日志', path: '/admin/moderation_logs', icon: FileText },
   { id: 'ban_logs', label: '封禁日志', path: '/admin/ban_logs', icon: Shield },
   { id: 'embeddings', label: '向量管理', path: '/admin/embeddings', icon: Cpu },
-  { id: 'backups', label: '数据库备份', path: '/admin/backups', icon: Database, superAdminOnly: true },
+  {
+    id: 'backups',
+    label: '数据库备份',
+    path: '/admin/backups',
+    icon: Database,
+    superAdminOnly: true,
+  },
   { id: 'images', label: '图片管理', path: '/admin/images', icon: Image },
   { id: 'sensitive_check', label: '敏感词检测', path: '/admin/sensitive_check', icon: ShieldCheck },
   { id: 'markdown_links', label: '链接更新', path: '/admin/markdown_links', icon: LinkIcon },
   { id: 'disk-monitor', label: '磁盘监控', path: '/admin/disk-monitor', icon: HardDrive },
   { id: 'variant-manager', label: '变体管理', path: '/admin/variant-manager', icon: RefreshCw },
-  { id: 'settings', label: '站点设置', path: '/admin/settings', icon: SettingsIcon, superAdminOnly: true },
+  {
+    id: 'settings',
+    label: '站点设置',
+    path: '/admin/settings',
+    icon: SettingsIcon,
+    superAdminOnly: true,
+  },
 ]
 
 const SidebarNavLink = ({
@@ -181,6 +194,7 @@ export const AdminLayout = () => {
   const location = useLocation()
   const navigate = useNavigate()
   const { show } = useToast()
+  const { features } = usePublicFeatures()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const pendingReviewCount = usePendingReviewCount(isAdmin)
@@ -188,7 +202,9 @@ export const AdminLayout = () => {
   const currentPath = location.pathname
   const closeMobileMenu = () => setMobileOpen(false)
   const visibleSiteNav = siteNav.filter(
-    (item) => !item.superAdminOnly || user?.role === 'super_admin'
+    (item) =>
+      (!item.superAdminOnly || user?.role === 'super_admin') &&
+      (item.id !== 'embeddings' || features.semanticSearch)
   )
 
   const handleLogout = async () => {
@@ -317,7 +333,10 @@ export const AdminLayout = () => {
         </aside>
 
         {/* Main Content */}
-        <main data-admin-scroll-container className="flex-1 overflow-y-auto bg-[var(--color-bg-antique)]">
+        <main
+          data-admin-scroll-container
+          className="flex-1 overflow-y-auto bg-[var(--color-bg-antique)]"
+        >
           <div className="p-4 md:p-6 lg:p-8 min-h-full">
             <Outlet />
           </div>

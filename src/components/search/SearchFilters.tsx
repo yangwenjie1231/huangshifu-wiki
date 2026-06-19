@@ -1,34 +1,36 @@
-import React from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { clsx } from "clsx";
-import { Tag, Calendar, Book, Sparkles, Filter } from "lucide-react";
-import type { SearchFilters as SearchFiltersType } from "../../hooks/useSearchPage";
+import React from 'react'
+import { motion, AnimatePresence } from 'motion/react'
+import { clsx } from 'clsx'
+import { Tag, Calendar, Book, Sparkles, Filter } from 'lucide-react'
+import type { SearchFilters as SearchFiltersType } from '../../hooks/useSearchPage'
 
 interface SearchFiltersProps {
-  filters: SearchFiltersType;
-  hotKeywords: string[];
-  showFilters: boolean;
-  onToggleShowFilters: () => void;
-  onToggleTag: (tag: string) => void;
-  onUpdateFilters: (filters: Partial<SearchFiltersType>) => void;
-  onResetFilters: () => void;
-  onApplyFilters: () => void;
-  onSearchKeyword: (keyword: string) => void;
+  filters: SearchFiltersType
+  hotKeywords: string[]
+  showFilters: boolean
+  semanticSearchEnabled?: boolean
+  onToggleShowFilters: () => void
+  onToggleTag: (tag: string) => void
+  onUpdateFilters: (filters: Partial<SearchFiltersType>) => void
+  onResetFilters: () => void
+  onApplyFilters: () => void
+  onSearchKeyword: (keyword: string) => void
 }
 
 const contentTypeLabels: Record<string, string> = {
-  all: "全部",
-  wiki: "百科",
-  posts: "帖子",
-  galleries: "图集",
-  music: "音乐",
-  albums: "专辑",
-};
+  all: '全部',
+  wiki: '百科',
+  posts: '帖子',
+  galleries: '图集',
+  music: '音乐',
+  albums: '专辑',
+}
 
 export const SearchFilters: React.FC<SearchFiltersProps> = ({
   filters,
   hotKeywords,
   showFilters,
+  semanticSearchEnabled = true,
   onToggleShowFilters,
   onToggleTag,
   onUpdateFilters,
@@ -54,13 +56,11 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
         <button
           onClick={onToggleShowFilters}
           className={clsx(
-            "flex items-center gap-2 text-sm transition-colors",
-            showFilters
-              ? "text-brand-gold"
-              : "text-text-muted hover:text-brand-gold"
+            'flex items-center gap-2 text-sm transition-colors',
+            showFilters ? 'text-brand-gold' : 'text-text-muted hover:text-brand-gold'
           )}
         >
-          <Filter size={16} /> {showFilters ? "隐藏筛选" : "高级筛选"}
+          <Filter size={16} /> {showFilters ? '隐藏筛选' : '高级筛选'}
         </button>
       </div>
 
@@ -68,7 +68,7 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
         {showFilters && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
+            animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden mt-5 pt-5 border-t border-border"
           >
@@ -84,10 +84,10 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
                       key={tag}
                       onClick={() => onToggleTag(tag)}
                       className={clsx(
-                        "px-3 py-1 rounded text-xs transition-all",
+                        'px-3 py-1 rounded text-xs transition-all',
                         filters.selectedTags.includes(tag)
-                          ? "theme-button-primary border border-transparent"
-                          : "theme-button-secondary"
+                          ? 'theme-button-primary border border-transparent'
+                          : 'theme-button-secondary'
                       )}
                     >
                       {tag}
@@ -131,15 +131,17 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
                   <Book size={12} /> 内容类型
                 </h4>
                 <div className="flex flex-wrap gap-2">
-                  {["all", "wiki", "posts", "galleries", "music", "albums"].map((type) => (
+                  {['all', 'wiki', 'posts', 'galleries', 'music', 'albums'].map((type) => (
                     <button
                       key={type}
-                      onClick={() => onUpdateFilters({ contentType: type as SearchFiltersType["contentType"] })}
+                      onClick={() =>
+                        onUpdateFilters({ contentType: type as SearchFiltersType['contentType'] })
+                      }
                       className={clsx(
-                        "px-3 py-1 rounded text-xs transition-all capitalize",
+                        'px-3 py-1 rounded text-xs transition-all capitalize',
                         filters.contentType === type
-                          ? "theme-button-primary border border-transparent"
-                          : "theme-button-secondary"
+                          ? 'theme-button-primary border border-transparent'
+                          : 'theme-button-secondary'
                       )}
                     >
                       {contentTypeLabels[type]}
@@ -148,31 +150,30 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
                 </div>
               </div>
 
-              {/* AI 搜图 */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-semibold text-text-secondary tracking-[0.12em] uppercase flex items-center gap-2">
-                  <Sparkles size={12} /> AI 搜图
-                </h4>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() =>
-                      onUpdateFilters({ semanticImageSearch: !filters.semanticImageSearch })
-                    }
-                    className={clsx(
-                      "px-3 py-1 rounded text-xs transition-all flex items-center gap-1.5",
-                      filters.semanticImageSearch
-                        ? "theme-button-primary border border-transparent"
-                        : "theme-button-secondary"
-                    )}
-                  >
-                    <Sparkles size={12} />
-                    智能混合搜索
-                  </button>
+              {semanticSearchEnabled && (
+                <div className="space-y-3">
+                  <h4 className="text-xs font-semibold text-text-secondary tracking-[0.12em] uppercase flex items-center gap-2">
+                    <Sparkles size={12} /> AI 搜图
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() =>
+                        onUpdateFilters({ semanticImageSearch: !filters.semanticImageSearch })
+                      }
+                      className={clsx(
+                        'px-3 py-1 rounded text-xs transition-all flex items-center gap-1.5',
+                        filters.semanticImageSearch
+                          ? 'theme-button-primary border border-transparent'
+                          : 'theme-button-secondary'
+                      )}
+                    >
+                      <Sparkles size={12} />
+                      智能混合搜索
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-text-muted">关键词+语义向量融合搜索</p>
                 </div>
-                <p className="text-[10px] text-text-muted">
-                  关键词+语义向量融合搜索
-                </p>
-              </div>
+              )}
             </div>
 
             <div className="mt-5 flex justify-end gap-3">
@@ -193,5 +194,5 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
         )}
       </AnimatePresence>
     </div>
-  );
-};
+  )
+}

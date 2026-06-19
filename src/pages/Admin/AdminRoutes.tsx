@@ -14,6 +14,21 @@ import AdminDiskMonitor from './AdminDiskMonitor'
 import AdminVariantManager from './AdminVariantManager'
 import AdminSettings from './AdminSettings'
 import NotFound from '../NotFound'
+import { usePublicFeatures } from '../../hooks/usePublicFeatures'
+
+const AdminEmbeddingsRoute = () => {
+  const { features, loading } = usePublicFeatures()
+
+  if (loading) {
+    return null
+  }
+
+  if (!features.semanticSearch) {
+    return <NotFound homePath="/admin" homeLabel="返回后台首页" />
+  }
+
+  return <AdminToolPage type="embeddings" />
+}
 
 export const AdminRoutes = () => (
   <Routes>
@@ -42,7 +57,7 @@ export const AdminRoutes = () => (
       <Route path="locks" element={<AdminLocks />} />
       <Route path="moderation_logs" element={<AdminLogs type="moderation_logs" />} />
       <Route path="ban_logs" element={<AdminLogs type="ban_logs" />} />
-      <Route path="embeddings" element={<AdminToolPage type="embeddings" />} />
+      <Route path="embeddings" element={<AdminEmbeddingsRoute />} />
       <Route
         path="backups"
         element={

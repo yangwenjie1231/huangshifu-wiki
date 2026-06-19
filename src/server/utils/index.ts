@@ -18,7 +18,8 @@ export {
   PLAY_URL_CACHE_TTL_MS,
   playUrlCache,
   defaultUploadsDir,
-} from './config';
+  isSemanticSearchEnabled,
+} from './config'
 
 // === 通用解析与验证 ===
 export {
@@ -48,7 +49,7 @@ export {
   normalizeModerationTargetType,
   parsePostSort,
   parsePagination,
-} from './parsers';
+} from './parsers'
 
 export {
   limitedString,
@@ -57,7 +58,7 @@ export {
   limitedStringArray,
   ensureTextLimit,
   trimText,
-} from './textLimits';
+} from './textLimits'
 
 // === Wiki 关系引擎 ===
 export {
@@ -75,7 +76,7 @@ export {
   findWikiRelationCenterPage,
   buildWikiRelationBundle,
   clearWikiRelationCache,
-} from './wiki-relations';
+} from './wiki-relations'
 
 // === 权限与可见性 ===
 export {
@@ -87,7 +88,7 @@ export {
   buildPostVisibilityWhere,
   buildGalleryVisibilityWhere,
   canManageWikiPullRequest,
-} from './authorization';
+} from './authorization'
 
 export {
   SOFT_DELETE_TABS,
@@ -99,7 +100,7 @@ export {
   SELF_DELETE_REASON,
   normalizeDeleteReason,
   resolveDeleteReason,
-} from './soft-delete';
+} from './soft-delete'
 
 // === API 响应转换器 ===
 export {
@@ -118,7 +119,7 @@ export {
   toMediaAssetResponse,
   toSongResponse,
   toAlbumResponse,
-} from './response-transformers';
+} from './response-transformers'
 
 export {
   buildCommentResponses,
@@ -128,7 +129,7 @@ export {
   resolveCommentReplyTarget,
   createCommentLike,
   deleteCommentLike,
-} from './comments';
+} from './comments'
 
 // === 音乐全链路 ===
 export {
@@ -153,7 +154,7 @@ export {
   fetchSongsWithRelations,
   fetchSongWithRelationsByDocId,
   ensureDisplayRelation,
-} from './music';
+} from './music'
 
 // === 通知与用户行为 ===
 export {
@@ -162,13 +163,10 @@ export {
   notifyCommentReply,
   recordBrowsingHistory,
   increaseSearchKeywordCount,
-} from './notifications';
+} from './notifications'
 
 // === 帖子热度 ===
-export {
-  calculatePostHotScore,
-  refreshPostHotScore,
-} from './post-scoring';
+export { calculatePostHotScore, refreshPostHotScore } from './post-scoring'
 
 // === 微信登录 ===
 export {
@@ -176,7 +174,7 @@ export {
   isWechatPlaceholderEmail,
   exchangeWechatLoginCode,
   buildUniqueWechatEmail,
-} from './wechat';
+} from './wechat'
 
 // === 邮箱验证 ===
 export {
@@ -191,7 +189,7 @@ export {
   createAndSendPasswordReset,
   hashEmailVerificationToken,
   verifyEmailVerificationToken,
-} from './email-verification';
+} from './email-verification'
 
 // === 文件上传与存储 ===
 export {
@@ -212,7 +210,7 @@ export {
   validateUploadedImage,
   detectImageMimeType,
   getUploadFileStorageKey,
-} from './upload';
+} from './upload'
 
 // === 备份与安全工具 ===
 export {
@@ -224,13 +222,13 @@ export {
   encryptBuffer,
   decryptBuffer,
   validateSqlContent,
-} from './backup';
+} from './backup'
 
 // === 日志 ===
-export { logger } from './logger';
-export { doesPublicTableExist, isPrismaTableMissingError } from './prisma-schema';
-export { getPasswordSaltRounds } from './password';
+export { logger } from './logger'
+export { doesPublicTableExist, isPrismaTableMissingError } from './prisma-schema'
+export { getPasswordSaltRounds } from './password'
 
 // === 已有独立模块（保持原导出方式）===
-export * from './cache';
-export { calculateFileMD5, calculateBufferMD5 } from './hash';
+export * from './cache'
+export { calculateFileMD5, calculateBufferMD5 } from './hash'

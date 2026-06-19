@@ -1,14 +1,17 @@
-import React from "react";
-import { ViewModeSelector } from "../components/ViewModeSelector";
-import { useUserPreferences } from "../context/UserPreferencesContext";
-import { useSearchPage } from "../hooks/useSearchPage";
-import { SearchBox } from "../components/search/SearchBox";
-import { SearchFilters } from "../components/search/SearchFilters";
-import { SearchResults } from "../components/search/SearchResults";
+import React from 'react'
+import { ViewModeSelector } from '../components/ViewModeSelector'
+import { useUserPreferences } from '../context/UserPreferencesContext'
+import { useSearchPage } from '../hooks/useSearchPage'
+import { SearchBox } from '../components/search/SearchBox'
+import { SearchFilters } from '../components/search/SearchFilters'
+import { SearchResults } from '../components/search/SearchResults'
+import { usePublicFeatures } from '../hooks/usePublicFeatures'
 
 const Search: React.FC = () => {
-  const { preferences, setViewMode } = useUserPreferences();
-  const viewMode = preferences.viewMode;
+  const { preferences, setViewMode } = useUserPreferences()
+  const viewMode = preferences.viewMode
+  const { features } = usePublicFeatures()
+  const semanticSearchEnabled = features.semanticSearch
 
   const {
     state,
@@ -22,7 +25,13 @@ const Search: React.FC = () => {
     setActiveTab,
     setShowFilters,
     dismissSuggestions,
-  } = useSearchPage();
+  } = useSearchPage()
+
+  React.useEffect(() => {
+    if (!semanticSearchEnabled && state.filters.semanticImageSearch) {
+      updateFilters({ semanticImageSearch: false })
+    }
+  }, [semanticSearchEnabled, state.filters.semanticImageSearch, updateFilters])
 
   return (
     <div
@@ -49,10 +58,15 @@ const Search: React.FC = () => {
           suggestions={state.suggestions}
           aiSearching={state.aiSearching}
           semanticImageSearch={state.filters.semanticImageSearch}
+          semanticSearchEnabled={semanticSearchEnabled}
           onQueryChange={handleQueryChange}
           onSearch={performSearch}
           onImageSearch={handleImageSearch}
-          onToggleSemanticSearch={() => updateFilters({ semanticImageSearch: !state.filters.semanticImageSearch })}
+          onToggleSemanticSearch={() => {
+            if (semanticSearchEnabled) {
+              updateFilters({ semanticImageSearch: !state.filters.semanticImageSearch })
+            }
+          }}
           onDismissSuggestions={dismissSuggestions}
         />
 
@@ -61,6 +75,7 @@ const Search: React.FC = () => {
           filters={state.filters}
           hotKeywords={state.hotKeywords}
           showFilters={state.showFilters}
+          semanticSearchEnabled={semanticSearchEnabled}
           onToggleShowFilters={() => setShowFilters(!state.showFilters)}
           onToggleTag={toggleTag}
           onUpdateFilters={updateFilters}
@@ -78,7 +93,7 @@ const Search: React.FC = () => {
         />
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default Search;
+export default Search
