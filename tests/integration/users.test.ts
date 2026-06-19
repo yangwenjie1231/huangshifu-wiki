@@ -28,6 +28,10 @@ import {
 } from './setup';
 import type { CreateTestPostInput } from './setup';
 import { WIKI_MAX_CONTENT_SIZE } from '../../src/lib/contentLimits';
+import {
+  EmailVerificationPurpose,
+  hashEmailVerificationToken,
+} from '../../src/server/utils/email-verification';
 
 describe('Users API - 用户接口测试', () => {
   let testUser: Awaited<ReturnType<typeof createTestUser>>;
@@ -231,6 +235,78 @@ describe('Users API - 用户接口测试', () => {
 
       expect(resetResponse.status).toBe(200);
       expect(resetResponse.body).toEqual({ success: true });
+
+      const staleSessionResponse = await request(app)
+        .get('/api/users/me')
+        .set('Authorization', `Bearer ${oldToken}`);
+
+      expect(staleSessionResponse.status).toBe(401);
+      expect(staleSessionResponse.body.error).toBe('请先登录');
+    });
+  });
+
+  describe('PATCH /api/users/:userId - 管理员编辑用户', () => {
+    it('管理员修改邮箱后应该清空验证状态并作废旧邮箱验证 token', async () => {
+      const verifiedAt = new Date();
+      await prisma.user.update({
+        where: { uid: testUser.user.uid },
+        data: { emailVerifiedAt: verifiedAt },
+      });
+      await prisma.emailVerificationToken.create({
+        data: {
+          userUid: testUser.user.uid,
+          email: testUser.user.email,
+          tokenHash: hashEmailVerificationToken('admin-old-email-token'),
+          purpose: EmailVerificationPurpose.register,
+          expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        },
+      });
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        adminUser.user.email,
+        adminUser.plainPassword,
+      );
+      const newEmail = `test_admin_update_${Date.now()}@example.com`;
+
+      const response = await agent
+        .patch(`/api/users/${testUser.user.uid}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
+        .send({ email: newEmail });
+
+      expect(response.status).toBe(200);
+      expect(response.body.user.email).toBe(newEmail);
+      expect(response.body.user.emailVerified).toBe(false);
+
+      const changedUser = await prisma.user.findUnique({ where: { uid: testUser.user.uid } });
+      expect(changedUser?.email).toBe(newEmail);
+      expect(changedUser?.emailVerifiedAt).toBeNull();
+
+      const oldToken = await prisma.emailVerificationToken.findFirst({
+        where: {
+          userUid: testUser.user.uid,
+          tokenHash: hashEmailVerificationToken('admin-old-email-token'),
+        },
+      });
+      expect(oldToken?.usedAt).toBeInstanceOf(Date);
+
+      const oldTokenVerifyResponse = await request(app)
+        .post('/api/auth/verify-email')
+        .send({ token: 'admin-old-email-token' });
+      expect(oldTokenVerifyResponse.status).toBe(400);
+    });
+
+    it('管理员设置新密码后目标用户旧 token 应该失效', async () => {
+      const oldToken = await createTestToken(testUser.user.uid, testUser.user.role);
+      const { agent, xsrfToken } = await createAuthenticatedAgent(
+        adminUser.user.email,
+        adminUser.plainPassword,
+      );
+
+      const response = await agent
+        .patch(`/api/users/${testUser.user.uid}`)
+        .set('X-XSRF-TOKEN', xsrfToken)
+        .send({ newPassword: 'AdminUpdatedPassword123!' });
+
+      expect(response.status).toBe(200);
 
       const staleSessionResponse = await request(app)
         .get('/api/users/me')

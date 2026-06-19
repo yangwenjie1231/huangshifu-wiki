@@ -273,8 +273,12 @@ export interface AdminDataItem {
   displayName?: string;
   name?: string;
   email?: string;
+  emailVerified?: boolean;
+  emailVerifiedAt?: string | null;
   role?: string;
   status?: string;
+  signature?: string;
+  bio?: string;
   photoURL?: string;
   cover?: string;
   content?: string;

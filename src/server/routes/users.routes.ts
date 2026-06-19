@@ -4,7 +4,13 @@ import bcrypt from 'bcryptjs';
 import { requireAuth, requireActiveUser, requireAdmin, requireSuperAdmin, userToApiUser, clearUserCache, issueUserSession, isBearerAuthRequest } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { profileLimiter } from '../middleware/rateLimiter';
-import { validateBody, adminResetUserPasswordSchema, passwordSchema, userEmailUpdateSchema } from '../schemas';
+import {
+  validateBody,
+  adminResetUserPasswordSchema,
+  adminUpdateUserSchema,
+  passwordSchema,
+  userEmailUpdateSchema,
+} from '../schemas';
 import {
   CONTENT_LIMITS,
   PROFILE_DISPLAY_NAME_MAX_LENGTH,
@@ -896,6 +902,121 @@ const updateUserRoleHandler = asyncHandler(async (req: AuthenticatedRequest, res
 router.route('/:userId/role')
   .put(requireSuperAdmin, updateUserRoleHandler)
   .patch(requireSuperAdmin, updateUserRoleHandler)
+
+router.patch('/:userId', requireAdmin, validateBody(adminUpdateUserSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  try {
+    const targetUid = req.params.userId;
+    if (!targetUid) {
+      res.status(400).json({ error: '无效用户' });
+      return;
+    }
+
+    if (req.authUser?.uid === targetUid) {
+      res.status(400).json({ error: '不能编辑自己的资料' });
+      return;
+    }
+
+    const {
+      displayName,
+      signature,
+      bio,
+      email,
+      emailVerified,
+      newPassword,
+    } = req.body as {
+      displayName?: string;
+      signature?: string;
+      bio?: string;
+      email?: string;
+      emailVerified?: boolean;
+      newPassword?: string;
+    };
+
+    const targetUser = await prisma.user.findUnique({
+      where: { uid: targetUid },
+      select: {
+        uid: true,
+        email: true,
+        role: true,
+        emailVerifiedAt: true,
+      },
+    });
+
+    if (!targetUser) {
+      res.status(404).json({ error: '用户不存在' });
+      return;
+    }
+
+    if (!canManageTargetUserRole(req.authUser?.role, targetUser.role)) {
+      res.status(403).json({ error: '只能编辑普通用户' });
+      return;
+    }
+
+    const emailChanged = email !== undefined && email !== targetUser.email;
+    if (emailChanged) {
+      const existing = await prisma.user.findUnique({
+        where: { email },
+        select: { uid: true },
+      });
+      if (existing && existing.uid !== targetUid) {
+        res.status(409).json({ error: '该邮箱已注册' });
+        return;
+      }
+    }
+
+    const updateData: Prisma.UserUpdateInput = {};
+    if (displayName !== undefined) updateData.displayName = displayName;
+    if (signature !== undefined) updateData.signature = signature;
+    if (bio !== undefined) updateData.bio = bio;
+    if (email !== undefined) updateData.email = email;
+
+    const now = new Date();
+    if (emailVerified !== undefined) {
+      updateData.emailVerifiedAt = emailVerified
+        ? emailChanged
+          ? now
+          : targetUser.emailVerifiedAt || now
+        : null;
+    } else if (emailChanged) {
+      updateData.emailVerifiedAt = null;
+    }
+
+    if (newPassword) {
+      updateData.passwordHash = await bcrypt.hash(newPassword, PASSWORD_SALT_ROUNDS);
+    }
+
+    const verificationChanged =
+      emailVerified !== undefined && emailVerified !== Boolean(targetUser.emailVerifiedAt);
+    const shouldInvalidateEmailTokens = emailChanged || verificationChanged;
+    const updateUserOperation = prisma.user.update({
+      where: { uid: targetUid },
+      data: updateData,
+      select: ADMIN_USER_SELECT,
+    });
+
+    const user = shouldInvalidateEmailTokens
+      ? (
+          await prisma.$transaction([
+            prisma.emailVerificationToken.updateMany({
+              where: {
+                userUid: targetUid,
+                usedAt: null,
+              },
+              data: { usedAt: now },
+            }),
+            updateUserOperation,
+          ])
+        )[1]
+      : await updateUserOperation;
+
+    clearUserCache(targetUid);
+
+    res.json({ user: toUserResponse(user) });
+  } catch (error) {
+    console.error('Admin update user error:', error);
+    res.status(500).json({ error: '更新用户资料失败' });
+  }
+}));
 
 router.put('/:userId/reset-password', requireAdmin, validateBody(adminResetUserPasswordSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {

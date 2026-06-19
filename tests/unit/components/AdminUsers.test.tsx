@@ -6,6 +6,7 @@ import { PASSWORD_MAX_LENGTH } from '../../../src/lib/passwordRules'
 
 const mockApiGet = vi.hoisted(() => vi.fn())
 const mockApiPut = vi.hoisted(() => vi.fn())
+const mockApiPatch = vi.hoisted(() => vi.fn())
 const mockApiDelete = vi.hoisted(() => vi.fn())
 const mockInvalidateApiCacheByPrefix = vi.hoisted(() => vi.fn())
 const mockShow = vi.hoisted(() => vi.fn())
@@ -16,6 +17,7 @@ const mockPromptDialog = vi.hoisted(() => vi.fn())
 vi.mock('../../../src/lib/apiClient', () => ({
   apiGet: mockApiGet,
   apiPut: mockApiPut,
+  apiPatch: mockApiPatch,
   apiDelete: mockApiDelete,
   invalidateApiCacheByPrefix: mockInvalidateApiCacheByPrefix,
 }))
@@ -111,6 +113,9 @@ describe('AdminUsers', () => {
           photoURL: null,
           role: 'user',
           status: 'active',
+          emailVerified: true,
+          signature: '旧签名',
+          bio: '旧简介',
         },
         {
           uid: 'admin-2',
@@ -119,6 +124,9 @@ describe('AdminUsers', () => {
           photoURL: null,
           role: 'admin',
           status: 'active',
+          emailVerified: false,
+          signature: '',
+          bio: '',
         },
         {
           uid: 'super-admin-1',
@@ -127,8 +135,24 @@ describe('AdminUsers', () => {
           photoURL: null,
           role: 'super_admin',
           status: 'active',
+          emailVerified: true,
+          signature: '',
+          bio: '',
         },
       ],
+    })
+    mockApiPatch.mockResolvedValue({
+      user: {
+        uid: 'user-1',
+        displayName: '新昵称',
+        email: 'new@example.com',
+        photoURL: null,
+        role: 'user',
+        status: 'active',
+        emailVerified: true,
+        signature: '新签名',
+        bio: '新简介',
+      },
     })
   })
 
@@ -136,40 +160,87 @@ describe('AdminUsers', () => {
     cleanup()
   })
 
-  it('allows resetting a regular user password from the modal', async () => {
+  it('allows editing a regular user profile and password from the modal', async () => {
     render(<AdminUsers />)
 
     await waitFor(() => {
       expect(screen.getByText('user@example.com')).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getByTitle('重置密码'))
+    fireEvent.click(screen.getByTitle('编辑用户'))
 
-    expect(screen.getByRole('dialog', { name: '重置用户密码' })).toBeInTheDocument()
-    expect(screen.getByLabelText('新密码')).toHaveAttribute('maxlength', String(PASSWORD_MAX_LENGTH))
-    expect(screen.getByText(`0 / ${PASSWORD_MAX_LENGTH} 字符`)).toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('新密码'), {
+    expect(screen.getByRole('dialog', { name: '编辑用户' })).toBeInTheDocument()
+    expect(screen.getByLabelText(/昵称/)).toHaveValue('普通用户')
+    expect(screen.getByLabelText('邮箱')).toHaveValue('user@example.com')
+    expect(screen.getByRole('switch', { name: '邮箱验证状态' })).toHaveAttribute('aria-checked', 'true')
+
+    fireEvent.change(screen.getByLabelText(/昵称/), {
+      target: { value: '新昵称' },
+    })
+    fireEvent.change(screen.getByLabelText('邮箱'), {
+      target: { value: 'new@example.com' },
+    })
+    expect(screen.getByRole('switch', { name: '邮箱验证状态' })).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(screen.getByRole('switch', { name: '邮箱验证状态' }))
+    expect(screen.getByRole('switch', { name: '邮箱验证状态' })).toHaveAttribute('aria-checked', 'true')
+    fireEvent.change(screen.getByLabelText(/签名/), {
+      target: { value: '新签名' },
+    })
+    fireEvent.change(screen.getByLabelText(/个人简介/), {
+      target: { value: '新简介' },
+    })
+    expect(screen.getByLabelText(/^新密码/)).toHaveAttribute('maxlength', String(PASSWORD_MAX_LENGTH))
+    fireEvent.change(screen.getByLabelText(/^新密码/), {
       target: { value: 'NewPassword123!' },
     })
     expect(screen.getByText(`15 / ${PASSWORD_MAX_LENGTH} 字符`)).toBeInTheDocument()
-    fireEvent.click(screen.getByText('确认重置'))
+    fireEvent.change(screen.getByLabelText('确认新密码'), {
+      target: { value: 'NewPassword123!' },
+    })
+    fireEvent.click(screen.getByText('保存修改'))
 
     await waitFor(() => {
-      expect(mockApiPut).toHaveBeenCalledWith('/api/users/user-1/reset-password', {
+      expect(mockApiPatch).toHaveBeenCalledWith('/api/users/user-1', {
+        displayName: '新昵称',
+        email: 'new@example.com',
+        emailVerified: true,
+        signature: '新签名',
+        bio: '新简介',
         newPassword: 'NewPassword123!',
       })
     })
-    expect(mockShow).toHaveBeenCalledWith('已重置 普通用户 的密码', { variant: 'success' })
+    expect(mockShow).toHaveBeenCalledWith('已更新 新昵称 的资料', { variant: 'success' })
   })
 
-  it('hides reset password action for admin targets when current user is not super admin', async () => {
+  it('does not submit a password when the password fields are blank', async () => {
+    render(<AdminUsers />)
+
+    await waitFor(() => {
+      expect(screen.getByText('user@example.com')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTitle('编辑用户'))
+    fireEvent.click(screen.getByText('保存修改'))
+
+    await waitFor(() => {
+      expect(mockApiPatch).toHaveBeenCalledWith('/api/users/user-1', {
+        displayName: '普通用户',
+        email: 'user@example.com',
+        emailVerified: true,
+        signature: '旧签名',
+        bio: '旧简介',
+      })
+    })
+  })
+
+  it('hides edit action for admin targets when current user is not super admin', async () => {
     render(<AdminUsers />)
 
     await waitFor(() => {
       expect(screen.getByText('admin2@example.com')).toBeInTheDocument()
     })
 
-    expect(screen.getAllByTitle('重置密码')).toHaveLength(1)
+    expect(screen.getAllByTitle('编辑用户')).toHaveLength(1)
     expect(screen.queryByText('为 管理员 设置新的登录密码')).not.toBeInTheDocument()
   })
 
@@ -196,7 +267,7 @@ describe('AdminUsers', () => {
       expect(screen.getByText('super@example.com')).toBeInTheDocument()
     })
 
-    expect(screen.getAllByTitle('重置密码')).toHaveLength(2)
+    expect(screen.getAllByTitle('编辑用户')).toHaveLength(2)
     expect(screen.getAllByTitle('封禁')).toHaveLength(2)
     expect(screen.getAllByTitle('删除')).toHaveLength(2)
   })

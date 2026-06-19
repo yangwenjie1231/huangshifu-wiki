@@ -15,4 +15,4 @@ export {
 } from './wiki.schema'
 export { postCreateSchema, postUpdateSchema, postDeleteSchema, postCommentSchema } from './post.schema'
 export { galleryDeleteSchema } from './gallery.schema'
-export { backupRestoreSchema, adminResetUserPasswordSchema } from './admin.schema'
+export { backupRestoreSchema, adminResetUserPasswordSchema, adminUpdateUserSchema } from './admin.schema'

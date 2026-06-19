@@ -10,6 +10,10 @@ const mockPrisma = vi.hoisted(() => ({
   userBanLog: {
     create: vi.fn(),
   },
+  emailVerificationToken: {
+    updateMany: vi.fn(),
+  },
+  $transaction: vi.fn(),
 }))
 
 const mockClearUserCache = vi.hoisted(() => vi.fn())
@@ -83,6 +87,9 @@ describe('users routes reset password', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockHash.mockResolvedValue('hashed-password')
+    mockPrisma.$transaction.mockImplementation(async (operations: Array<Promise<unknown>>) =>
+      Promise.all(operations)
+    )
   })
 
   async function createApp(authUser: { uid: string; role: string }) {
@@ -197,6 +204,141 @@ describe('users routes reset password', () => {
 
     expect(response.status).toBe(400)
     expect(response.body.error).toBe('不能重置自己的密码')
+    expect(mockPrisma.user.findUnique).not.toHaveBeenCalled()
+  })
+
+  it('allows admin to update a regular user profile and password', async () => {
+    const emailVerifiedAt = new Date('2026-06-19T01:00:00.000Z')
+    mockPrisma.user.findUnique
+      .mockResolvedValueOnce({
+        uid: 'target-user',
+        role: 'user',
+        email: 'old@example.com',
+        emailVerifiedAt: null,
+      })
+      .mockResolvedValueOnce(null)
+    mockPrisma.emailVerificationToken.updateMany.mockResolvedValue({ count: 1 })
+    mockPrisma.user.update.mockResolvedValue({
+      uid: 'target-user',
+      email: 'new@example.com',
+      displayName: '新昵称',
+      photoURL: null,
+      role: 'user',
+      status: 'active',
+      banReason: null,
+      bannedAt: null,
+      emailVerifiedAt,
+      level: 1,
+      signature: '新签名',
+      bio: '新简介',
+      createdAt: new Date('2026-06-19T00:00:00.000Z'),
+      updatedAt: new Date('2026-06-19T01:00:00.000Z'),
+    })
+
+    const app = await createApp({ uid: 'admin-1', role: 'admin' })
+    const response = await request(app)
+      .patch('/api/users/target-user')
+      .send({
+        displayName: '新昵称',
+        signature: '新签名',
+        bio: '新简介',
+        email: 'NEW@EXAMPLE.COM',
+        emailVerified: true,
+        newPassword: 'NewPassword123!',
+      })
+
+    expect(response.status).toBe(200)
+    expect(mockPrisma.user.findUnique).toHaveBeenNthCalledWith(2, {
+      where: { email: 'new@example.com' },
+      select: { uid: true },
+    })
+    expect(mockHash).toHaveBeenCalledWith('NewPassword123!', 12)
+    expect(mockPrisma.emailVerificationToken.updateMany).toHaveBeenCalledWith({
+      where: {
+        userUid: 'target-user',
+        usedAt: null,
+      },
+      data: { usedAt: expect.any(Date) },
+    })
+    expect(mockPrisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { uid: 'target-user' },
+      data: expect.objectContaining({
+        displayName: '新昵称',
+        signature: '新签名',
+        bio: '新简介',
+        email: 'new@example.com',
+        emailVerifiedAt: expect.any(Date),
+        passwordHash: 'hashed-password',
+      }),
+    }))
+    expect(mockPrisma.$transaction).toHaveBeenCalled()
+    expect(mockClearUserCache).toHaveBeenCalledWith('target-user')
+    expect(response.body.user.displayName).toBe('新昵称')
+  })
+
+  it('blocks admin from editing another admin profile', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({
+      uid: 'target-admin',
+      role: 'admin',
+      email: 'admin@example.com',
+      emailVerifiedAt: null,
+    })
+
+    const app = await createApp({ uid: 'admin-1', role: 'admin' })
+    const response = await request(app)
+      .patch('/api/users/target-admin')
+      .send({ displayName: '新昵称' })
+
+    expect(response.status).toBe(403)
+    expect(response.body.error).toBe('只能编辑普通用户')
+    expect(mockPrisma.user.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects duplicate email when admin updates a user', async () => {
+    mockPrisma.user.findUnique
+      .mockResolvedValueOnce({
+        uid: 'target-user',
+        role: 'user',
+        email: 'old@example.com',
+        emailVerifiedAt: null,
+      })
+      .mockResolvedValueOnce({ uid: 'other-user' })
+
+    const app = await createApp({ uid: 'admin-1', role: 'admin' })
+    const response = await request(app)
+      .patch('/api/users/target-user')
+      .send({ email: 'taken@example.com' })
+
+    expect(response.status).toBe(409)
+    expect(response.body.error).toBe('该邮箱已注册')
+    expect(mockPrisma.user.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects editing own profile from admin route', async () => {
+    const app = await createApp({ uid: 'admin-1', role: 'super_admin' })
+    const response = await request(app)
+      .patch('/api/users/admin-1')
+      .send({ displayName: '新昵称' })
+
+    expect(response.status).toBe(400)
+    expect(response.body.error).toBe('不能编辑自己的资料')
+    expect(mockPrisma.user.findUnique).not.toHaveBeenCalled()
+  })
+
+  it('rejects invalid admin user update payloads', async () => {
+    const app = await createApp({ uid: 'admin-1', role: 'admin' })
+    const response = await request(app)
+      .patch('/api/users/target-user')
+      .send({ email: 'bad-email', newPassword: 'short' })
+
+    expect(response.status).toBe(400)
+    expect(response.body).toEqual({
+      error: 'Validation failed',
+      fields: {
+        email: '邮箱格式无效',
+        newPassword: '密码至少8个字符',
+      },
+    })
     expect(mockPrisma.user.findUnique).not.toHaveBeenCalled()
   })
 

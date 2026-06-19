@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Trash2, CheckCircle, XCircle, AlertTriangle, RefreshCw, KeyRound, Loader2 } from 'lucide-react';
+import { Trash2, CheckCircle, XCircle, AlertTriangle, RefreshCw, Pencil } from 'lucide-react';
 import { clsx } from 'clsx';
 import { CharacterCount } from '../../components/CharacterCount';
-import { apiDelete, apiGet, apiPut, invalidateApiCacheByPrefix } from '../../lib/apiClient';
+import { apiDelete, apiGet, apiPatch, apiPut, invalidateApiCacheByPrefix } from '../../lib/apiClient';
 import { useDialog } from '../../components/Dialog';
 import { useToast } from '../../components/Toast';
 import { SmartImage } from '../../components/SmartImage';
@@ -11,18 +11,43 @@ import { DEFAULT_AVATAR } from '../../lib/defaultAvatar';
 import { formatAdminRole } from '../../lib/formatUtils';
 import { FormModal } from '../../components/Modal';
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '../../lib/passwordRules';
+import {
+  PROFILE_DISPLAY_NAME_MAX_LENGTH,
+  PROFILE_SIGNATURE_MAX_LENGTH,
+  WIKI_MAX_CONTENT_SIZE,
+} from '../../lib/contentLimits';
 import type { AdminDataItem } from '../../types/entities';
 
 const ADMIN_USERS_API_PREFIX = '/api/admin/users'
+
+type AdminUserEditForm = {
+  displayName: string
+  email: string
+  emailVerified: boolean
+  signature: string
+  bio: string
+  newPassword: string
+  confirmPassword: string
+}
+
+const EMPTY_EDIT_FORM: AdminUserEditForm = {
+  displayName: '',
+  email: '',
+  emailVerified: false,
+  signature: '',
+  bio: '',
+  newPassword: '',
+  confirmPassword: '',
+}
 
 export const AdminUsers = () => {
   const { user: currentUser, profile } = useAuth();
   const isSuperAdmin = profile?.role === 'super_admin';
   const [data, setData] = useState<AdminDataItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [resetTarget, setResetTarget] = useState<AdminDataItem | null>(null);
-  const [newPassword, setNewPassword] = useState('');
-  const [resetLoading, setResetLoading] = useState(false);
+  const [editTarget, setEditTarget] = useState<AdminDataItem | null>(null);
+  const [editForm, setEditForm] = useState<AdminUserEditForm>(EMPTY_EDIT_FORM);
+  const [editLoading, setEditLoading] = useState(false);
   const dialog = useDialog();
   const { show } = useToast();
 
@@ -122,7 +147,7 @@ export const AdminUsers = () => {
     }
   };
 
-  const canResetPassword = (target: AdminDataItem) => {
+  const canEditUser = (target: AdminDataItem) => {
     return canManageUser(target);
   }
 
@@ -152,49 +177,116 @@ export const AdminUsers = () => {
     }
   }
 
-  const closeResetModal = () => {
-    if (resetLoading) {
+  const closeEditModal = () => {
+    if (editLoading) {
       return;
     }
 
-    setResetTarget(null);
-    setNewPassword('');
+    setEditTarget(null);
+    setEditForm(EMPTY_EDIT_FORM);
   }
 
-  const openResetModal = (target: AdminDataItem) => {
-    if (!canResetPassword(target)) {
-      show('当前权限不能重置该用户密码', { variant: 'error' });
+  const openEditModal = (target: AdminDataItem) => {
+    if (!canEditUser(target)) {
+      show('当前权限不能编辑该用户', { variant: 'error' });
       return;
     }
 
-    setResetTarget(target);
-    setNewPassword('');
+    setEditTarget(target);
+    setEditForm({
+      displayName: target.displayName || '',
+      email: target.email || '',
+      emailVerified: Boolean(target.emailVerified),
+      signature: target.signature || '',
+      bio: target.bio || '',
+      newPassword: '',
+      confirmPassword: '',
+    });
   }
 
-  const handleResetPassword = async () => {
-    if (!resetTarget?.uid) {
+  const updateEditForm = <K extends keyof AdminUserEditForm>(
+    field: K,
+    value: AdminUserEditForm[K]
+  ) => {
+    setEditForm((prev) => {
+      const next = { ...prev, [field]: value }
+      if (field === 'email') {
+        const originalEmail = (editTarget?.email || '').trim().toLowerCase()
+        const nextEmail = String(value).trim().toLowerCase()
+        next.emailVerified = nextEmail === originalEmail ? Boolean(editTarget?.emailVerified) : false
+      }
+      return next
+    })
+  }
+
+  const handleUpdateUser = async () => {
+    if (!editTarget?.uid) {
       return;
     }
 
-    if (newPassword.length < PASSWORD_MIN_LENGTH) {
-      show(`新密码至少${PASSWORD_MIN_LENGTH}个字符`, { variant: 'error' });
+    if (editForm.displayName.length > PROFILE_DISPLAY_NAME_MAX_LENGTH) {
+      show(`昵称不能超过${PROFILE_DISPLAY_NAME_MAX_LENGTH}个字符`, { variant: 'error' });
       return;
     }
-    if (newPassword.length > PASSWORD_MAX_LENGTH) {
-      show(`新密码最多${PASSWORD_MAX_LENGTH}个字符`, { variant: 'error' });
+    if (!editForm.email.trim()) {
+      show('邮箱不能为空', { variant: 'error' });
       return;
+    }
+    if (editForm.signature.length > PROFILE_SIGNATURE_MAX_LENGTH) {
+      show(`签名不能超过${PROFILE_SIGNATURE_MAX_LENGTH}个字符`, { variant: 'error' });
+      return;
+    }
+    if (editForm.bio.length > WIKI_MAX_CONTENT_SIZE) {
+      show('个人简介不能超过500KB', { variant: 'error' });
+      return;
+    }
+    if (editForm.newPassword || editForm.confirmPassword) {
+      if (editForm.newPassword !== editForm.confirmPassword) {
+        show('两次输入的新密码不一致', { variant: 'error' });
+        return;
+      }
+      if (editForm.newPassword.length < PASSWORD_MIN_LENGTH) {
+        show(`新密码至少${PASSWORD_MIN_LENGTH}个字符`, { variant: 'error' });
+        return;
+      }
+      if (editForm.newPassword.length > PASSWORD_MAX_LENGTH) {
+        show(`新密码最多${PASSWORD_MAX_LENGTH}个字符`, { variant: 'error' });
+        return;
+      }
     }
 
-    setResetLoading(true);
+    setEditLoading(true);
     try {
-      await apiPut<{ success: boolean }>(`/api/users/${resetTarget.uid}/reset-password`, { newPassword });
-      setResetTarget(null);
-      setNewPassword('');
-      show(`已重置 ${resetTarget.displayName || resetTarget.uid} 的密码`, { variant: 'success' });
+      const payload: {
+        displayName: string
+        email: string
+        emailVerified: boolean
+        signature: string
+        bio: string
+        newPassword?: string
+      } = {
+        displayName: editForm.displayName,
+        email: editForm.email,
+        emailVerified: editForm.emailVerified,
+        signature: editForm.signature,
+        bio: editForm.bio,
+      }
+      if (editForm.newPassword) {
+        payload.newPassword = editForm.newPassword
+      }
+
+      const result = await apiPatch<{ user: AdminDataItem }>(`/api/users/${editTarget.uid}`, payload);
+      invalidateAdminUsersCache();
+      setData((prev) => prev.map((item) => (item.uid === editTarget.uid ? { ...item, ...result.user } : item)));
+      setEditTarget(null);
+      setEditForm(EMPTY_EDIT_FORM);
+      show(`已更新 ${result.user.displayName || editTarget.displayName || editTarget.uid} 的资料`, {
+        variant: 'success',
+      });
     } catch (error) {
-      show(error instanceof Error ? error.message : '重置密码失败', { variant: 'error' });
+      show(error instanceof Error ? error.message : '更新用户资料失败', { variant: 'error' });
     } finally {
-      setResetLoading(false);
+      setEditLoading(false);
     }
   }
 
@@ -232,7 +324,17 @@ export const AdminUsers = () => {
                         <SmartImage src={item.photoURL || DEFAULT_AVATAR} alt="" className="w-10 h-10 rounded-full object-cover bg-surface-alt" />
                         <div>
                           <p className="text-sm font-medium text-text-primary">{item.displayName || item.uid}</p>
-                          <p className="text-xs text-text-muted">{item.email}</p>
+                          <p className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
+                            <span>{item.email}</span>
+                            <span
+                              className={clsx(
+                                'rounded px-1.5 py-0.5 text-[10px] font-medium',
+                                item.emailVerified ? 'theme-status-success' : 'bg-surface-alt text-text-muted'
+                              )}
+                            >
+                              {item.emailVerified ? '已验证' : '未验证'}
+                            </span>
+                          </p>
                         </div>
                       </div>
                     </td>
@@ -248,13 +350,13 @@ export const AdminUsers = () => {
                     </td>
                     <td className="px-5 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {canResetPassword(item) && (
+                        {canEditUser(item) && (
                           <button
-                            onClick={() => openResetModal(item)}
+                            onClick={() => openEditModal(item)}
                             className="p-1.5 text-text-secondary hover:text-brand-gold hover:bg-surface-alt rounded transition-all"
-                            title="重置密码"
+                            title="编辑用户"
                           >
-                            <KeyRound size={16} />
+                            <Pencil size={16} />
                           </button>
                         )}
                         {isSuperAdmin && !isCurrentUser(item.uid) && (
@@ -285,44 +387,124 @@ export const AdminUsers = () => {
       </div>
 
       <FormModal
-        open={Boolean(resetTarget)}
-        onClose={closeResetModal}
-        title="重置用户密码"
-        subtitle={resetTarget ? `为 ${resetTarget.displayName || resetTarget.uid} 设置新的登录密码` : undefined}
+        open={Boolean(editTarget)}
+        onClose={closeEditModal}
+        title="编辑用户"
+        subtitle={editTarget ? editTarget.displayName || editTarget.uid : undefined}
         onSubmit={(e) => {
           e.preventDefault()
-          void handleResetPassword()
+          void handleUpdateUser()
         }}
-        submitText="确认重置"
-        loading={resetLoading}
+        submitText="保存修改"
+        loading={editLoading}
+        maxWidth="max-w-2xl"
       >
-        <div className="space-y-4">
-          <div className="rounded border border-border bg-surface-alt px-4 py-3 text-sm text-text-secondary leading-6">
-            新密码将立即生效。普通管理员只能重置普通用户密码；超级管理员可重置除自己外的所有账号密码。
-          </div>
-          <div className="space-y-2">
-            <label htmlFor="admin-reset-password" className="block text-sm font-medium text-text-secondary">
-              新密码
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="space-y-2">
+            <span className="flex items-center justify-between gap-3 text-sm font-medium text-text-secondary">
+              昵称
+              <CharacterCount
+                current={editForm.displayName.length}
+                max={PROFILE_DISPLAY_NAME_MAX_LENGTH}
+              />
+            </span>
+            <input
+              type="text"
+              value={editForm.displayName}
+              onChange={(e) => updateEditForm('displayName', e.target.value)}
+              maxLength={PROFILE_DISPLAY_NAME_MAX_LENGTH}
+              className="w-full rounded border border-border bg-bg-primary px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-brand-gold"
+            />
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-text-secondary">邮箱</span>
+            <input
+              type="email"
+              value={editForm.email}
+              onChange={(e) => updateEditForm('email', e.target.value)}
+              className="w-full rounded border border-border bg-bg-primary px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-brand-gold"
+            />
+          </label>
+
+          <div className="flex items-center justify-between gap-4 rounded border border-border bg-surface-alt px-4 py-3 md:col-span-2">
+            <label htmlFor="admin-edit-email-verified" className="text-sm font-medium text-text-primary">
+              邮箱验证状态
             </label>
-            <div className="relative">
+            <button
+              type="button"
+              id="admin-edit-email-verified"
+              role="switch"
+              aria-checked={editForm.emailVerified}
+              onClick={() => updateEditForm('emailVerified', !editForm.emailVerified)}
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-gold focus:ring-offset-2 ${
+                editForm.emailVerified ? 'bg-[var(--color-theme-accent)]' : 'bg-border'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                  editForm.emailVerified ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          <label className="space-y-2 md:col-span-2">
+            <span className="flex items-center justify-between gap-3 text-sm font-medium text-text-secondary">
+              签名
+              <CharacterCount current={editForm.signature.length} max={PROFILE_SIGNATURE_MAX_LENGTH} />
+            </span>
+            <input
+              type="text"
+              value={editForm.signature}
+              onChange={(e) => updateEditForm('signature', e.target.value)}
+              maxLength={PROFILE_SIGNATURE_MAX_LENGTH}
+              className="w-full rounded border border-border bg-bg-primary px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-brand-gold"
+            />
+          </label>
+
+          <label className="space-y-2 md:col-span-2">
+            <span className="flex items-center justify-between gap-3 text-sm font-medium text-text-secondary">
+              个人简介
+              <CharacterCount current={editForm.bio.length} max={WIKI_MAX_CONTENT_SIZE} />
+            </span>
+            <textarea
+              value={editForm.bio}
+              onChange={(e) => updateEditForm('bio', e.target.value)}
+              maxLength={WIKI_MAX_CONTENT_SIZE}
+              rows={6}
+              className="w-full resize-y rounded border border-border bg-bg-primary px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-brand-gold"
+            />
+          </label>
+
+          <label className="space-y-2">
+            <span className="flex items-center justify-between gap-3 text-sm font-medium text-text-secondary">
+              新密码（可选）
+              <CharacterCount current={editForm.newPassword.length} max={PASSWORD_MAX_LENGTH} />
+            </span>
               <input
-                id="admin-reset-password"
                 type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder={`请输入 ${PASSWORD_MIN_LENGTH} 到 ${PASSWORD_MAX_LENGTH} 位的新密码`}
+                value={editForm.newPassword}
+                onChange={(e) => updateEditForm('newPassword', e.target.value)}
                 autoComplete="new-password"
                 minLength={PASSWORD_MIN_LENGTH}
                 maxLength={PASSWORD_MAX_LENGTH}
-                className="w-full rounded border border-border bg-bg-primary px-4 py-2.5 pr-10 text-sm text-text-primary focus:outline-none focus:border-brand-gold"
+                className="w-full rounded border border-border bg-bg-primary px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-brand-gold"
               />
-              {resetLoading && <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-text-muted" />}
-            </div>
-            <div className="flex items-center justify-between gap-3 text-xs text-text-muted">
-              <span>密码长度需为 {PASSWORD_MIN_LENGTH} 到 {PASSWORD_MAX_LENGTH} 个字符。</span>
-              <CharacterCount current={newPassword.length} max={PASSWORD_MAX_LENGTH} />
-            </div>
-          </div>
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-text-secondary">确认新密码</span>
+            <input
+              type="password"
+              value={editForm.confirmPassword}
+              onChange={(e) => updateEditForm('confirmPassword', e.target.value)}
+              autoComplete="new-password"
+              minLength={PASSWORD_MIN_LENGTH}
+              maxLength={PASSWORD_MAX_LENGTH}
+              className="w-full rounded border border-border bg-bg-primary px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-brand-gold"
+            />
+          </label>
         </div>
       </FormModal>
     </div>
