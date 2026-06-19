@@ -65,17 +65,17 @@ export const Navbar = () => {
 					</Link>
 
 					<div className="hidden md:flex items-center" style={{ gap: '28px' }}>
+						<NavLink to="/music" className={styles.navLink}>
+							{t('nav.music')}
+						</NavLink>
+						<NavLink to="/gallery" className={styles.navLink}>
+							{t('nav.gallery')}
+						</NavLink>
 						<NavLink to="/wiki" className={styles.navLink}>
 							{t('nav.wiki')}
 						</NavLink>
 						<NavLink to="/forum" className={styles.navLink}>
 							{t('nav.forum')}
-						</NavLink>
-						<NavLink to="/gallery" className={styles.navLink}>
-							{t('nav.gallery')}
-						</NavLink>
-						<NavLink to="/music" className={styles.navLink}>
-							{t('nav.music')}
 						</NavLink>
 						<NavLink to="/search" className={styles.navLink}>
 							搜索
