@@ -2,18 +2,25 @@ import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import { UserRole as PrismaUserRole } from '@prisma/client'
 import { userToApiUser, issueUserSession, clearAuthCookie, clearUserCache } from '../middleware/auth'
-import { authRateLimiter, emailVerificationLimiter } from '../middleware/rateLimiter'
+import {
+  authRateLimiter,
+  emailVerificationLimiter,
+  passwordResetConfirmLimiter,
+  passwordResetRequestLimiter,
+} from '../middleware/rateLimiter'
 import { asyncHandler } from '../middleware/asyncHandler'
 import {
   EmailVerificationError,
   EmailVerificationPurpose,
   createAndSendEmailVerification,
+  createAndSendPasswordReset,
   exchangeWechatLoginCode,
   buildUniqueWechatEmail,
   logger,
   getPasswordSaltRounds,
   isWechatPlaceholderEmail,
   isEmailVerificationEnabled,
+  hashEmailVerificationToken,
   verifyEmailVerificationToken,
 } from '../utils'
 import { prisma } from '../prisma'
@@ -23,6 +30,8 @@ import {
   loginSchema,
   verifyEmailSchema,
   resendEmailVerificationSchema,
+  passwordResetRequestSchema,
+  passwordResetConfirmSchema,
 } from '../schemas'
 import { AUTH_DISPLAY_NAME_MAX_LENGTH } from '../schemas/auth.schema'
 import type { AuthenticatedRequest } from '../types'
@@ -31,6 +40,7 @@ const router = Router()
 
 const SUPER_ADMIN_EMAIL = process.env.SEED_SUPER_ADMIN_EMAIL || ''
 const PASSWORD_SALT_ROUNDS = getPasswordSaltRounds()
+const PASSWORD_RESET_REQUEST_MESSAGE = '如果该邮箱存在，我们会发送一封密码重置邮件'
 
 function sanitizeWechatPhotoUrl(value: string): string | null {
   if (!value) return null
@@ -238,6 +248,150 @@ router.post(
         return
       }
       res.status(500).json({ error: '验证邮件发送失败，请稍后重试' })
+    }
+  })
+)
+
+router.post(
+  '/password-reset/request',
+  passwordResetRequestLimiter,
+  validateBody(passwordResetRequestSchema),
+  asyncHandler(async (req, res) => {
+    try {
+      if (!(await isEmailVerificationEnabled())) {
+        res.status(400).json({ error: '密码找回功能未开启', code: 'PASSWORD_RESET_DISABLED' })
+        return
+      }
+
+      const { email } = req.body as { email: string }
+      const normalizedEmail = email.toLowerCase().trim()
+
+      if (!isWechatPlaceholderEmail(normalizedEmail)) {
+        const user = await prisma.user.findUnique({
+          where: { email: normalizedEmail },
+          select: {
+            uid: true,
+            email: true,
+            displayName: true,
+            deletedAt: true,
+          },
+        })
+
+        if (user && !user.deletedAt) {
+          try {
+            await createAndSendPasswordReset({ user })
+          } catch (error) {
+            logger.error(
+              { err: error, uid: user.uid },
+              'Password reset email send failed'
+            )
+            if (!(error instanceof EmailVerificationError)) {
+              throw error
+            }
+          }
+        }
+      }
+
+      res.json({ success: true, message: PASSWORD_RESET_REQUEST_MESSAGE })
+    } catch (error) {
+      logger.error({
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        body: { ...req.body, email: req.body?.email ? '[REDACTED]' : undefined },
+      }, 'Password reset request error')
+      res.status(500).json({ error: '密码重置邮件发送失败，请稍后重试' })
+    }
+  })
+)
+
+router.post(
+  '/password-reset/confirm',
+  passwordResetConfirmLimiter,
+  validateBody(passwordResetConfirmSchema),
+  asyncHandler(async (req, res) => {
+    try {
+      const { token, newPassword } = req.body as { token: string; newPassword: string }
+      const tokenHash = hashEmailVerificationToken(token)
+      const record = await prisma.emailVerificationToken.findUnique({
+        where: { tokenHash },
+        include: {
+          user: {
+            select: {
+              uid: true,
+              email: true,
+              emailVerifiedAt: true,
+              deletedAt: true,
+            },
+          },
+        },
+      })
+
+      if (
+        !record ||
+        record.user.deletedAt ||
+        record.purpose !== EmailVerificationPurpose.reset_password ||
+        record.user.email !== record.email
+      ) {
+        throw new EmailVerificationError('INVALID_TOKEN', '重置链接无效')
+      }
+
+      if (record.usedAt) {
+        throw new EmailVerificationError('INVALID_TOKEN', '重置链接无效')
+      }
+
+      if (record.expiresAt.getTime() < Date.now()) {
+        throw new EmailVerificationError('TOKEN_EXPIRED', '重置链接已过期')
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, PASSWORD_SALT_ROUNDS)
+      const usedAt = new Date()
+
+      await prisma.$transaction(async (tx) => {
+        const used = await tx.emailVerificationToken.updateMany({
+          where: {
+            id: record.id,
+            usedAt: null,
+          },
+          data: { usedAt },
+        })
+
+        if (used.count !== 1) {
+          throw new EmailVerificationError('INVALID_TOKEN', '重置链接无效')
+        }
+
+        await tx.emailVerificationToken.updateMany({
+          where: {
+            userUid: record.userUid,
+            purpose: EmailVerificationPurpose.reset_password,
+            usedAt: null,
+          },
+          data: { usedAt },
+        })
+
+        await tx.user.update({
+          where: { uid: record.userUid },
+          data: {
+            passwordHash,
+            ...(record.user.emailVerifiedAt ? {} : { emailVerifiedAt: usedAt }),
+          },
+        })
+      })
+
+      clearUserCache(record.userUid)
+      logger.info({ uid: record.userUid }, 'Password reset success')
+      res.json({ success: true })
+    } catch (error) {
+      if (error instanceof EmailVerificationError) {
+        res.status(400).json({ error: error.message, code: error.code })
+        return
+      }
+
+      logger.error({
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        body: { token: req.body?.token ? '[REDACTED]' : undefined, newPassword: '[REDACTED]' },
+      }, 'Password reset confirm error')
+      res.status(500).json({ error: '密码重置失败，请稍后重试' })
     }
   })
 )

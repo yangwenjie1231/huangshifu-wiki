@@ -187,6 +187,21 @@ export async function resendEmailVerification(email: string) {
   return apiPost<{ success: boolean; message?: string }>('/api/auth/resend-verification', { email });
 }
 
+export async function requestPasswordReset(email: string) {
+  return apiPost<{ success: boolean; message?: string }>('/api/auth/password-reset/request', {
+    email,
+  })
+}
+
+export async function confirmPasswordReset(token: string, newPassword: string) {
+  const result = await apiPost<{ success: boolean }>('/api/auth/password-reset/confirm', {
+    token,
+    newPassword,
+  })
+  await refreshAuthState()
+  return result
+}
+
 export async function loginWithWeChat<T = unknown>(code: string, profile?: { displayName?: string; photoURL?: string }) {
   const response = await fetch('/api/auth/wechat/login', {
     method: 'POST',

@@ -56,6 +56,24 @@ export const emailVerificationLimiter = createRateLimiter({
   keyGenerator: extractUidOrIp,
 });
 
+export const passwordResetRequestLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: '密码找回请求过于频繁，请15分钟后再试' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: extractUidOrIp,
+});
+
+export const passwordResetConfirmLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: '密码重置确认过于频繁，请15分钟后再试' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: extractUidOrIp,
+});
+
 export const globalLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   max: 200,

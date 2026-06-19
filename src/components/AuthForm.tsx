@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { login, loginWithWeChat, register } from '../lib/auth'
+import { login, loginWithWeChat, register, requestPasswordReset } from '../lib/auth'
 import { PROFILE_DISPLAY_NAME_MAX_LENGTH } from '../lib/contentLimits'
 import { useI18n } from '../lib/i18n'
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '../lib/passwordRules'
@@ -28,6 +28,7 @@ export const AuthForm = ({
   const { show } = useToast()
   const { t } = useI18n()
   const isRegisterMode = authMode === 'register'
+  const isForgotPasswordMode = authMode === 'forgot-password'
 
   useEffect(() => {
     setAuthMode(initialMode)
@@ -38,6 +39,8 @@ export const AuthForm = ({
 
     if (authMode === 'wechat') {
       if (!wechatCode.trim()) return
+    } else if (isForgotPasswordMode) {
+      if (!email) return
     } else if (!email || !password) {
       return
     }
@@ -57,6 +60,11 @@ export const AuthForm = ({
             : '注册成功，请使用邮箱和密码登录',
           { duration: 4000 }
         )
+      } else if (authMode === 'forgot-password') {
+        const result = await requestPasswordReset(email)
+        setAuthMode('login')
+        setPassword('')
+        show(result.message || '如果该邮箱存在，我们会发送一封密码重置邮件', { duration: 5000 })
       } else {
         await loginWithWeChat(wechatCode, {
           displayName: displayName || undefined,
@@ -80,9 +88,11 @@ export const AuthForm = ({
         <h1 className="text-lg font-bold text-text-primary">
           {authMode === 'wechat'
             ? t('auth.wechatLogin')
-            : authMode === 'login'
-              ? t('auth.accountLogin')
-              : t('auth.accountRegister')}
+            : authMode === 'forgot-password'
+              ? t('auth.passwordReset')
+              : authMode === 'login'
+                ? t('auth.accountLogin')
+                : t('auth.accountRegister')}
         </h1>
       </div>
 
@@ -163,32 +173,34 @@ export const AuthForm = ({
                 className="theme-input w-full rounded px-4 py-2.5 text-sm"
               />
             </div>
-            <div>
-              <label htmlFor="auth-password" className="sr-only">
-                {t('auth.labelPassword')}
-              </label>
-              <input
-                id="auth-password"
-                type="password"
-                required
-                minLength={isRegisterMode ? PASSWORD_MIN_LENGTH : undefined}
-                maxLength={isRegisterMode ? PASSWORD_MAX_LENGTH : undefined}
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={
-                  isRegisterMode
-                    ? t('auth.placeholderRegisterPassword')
-                    : t('auth.placeholderPassword')
-                }
-                className="theme-input w-full rounded px-4 py-2.5 text-sm"
-              />
-              {isRegisterMode && (
-                <div className="mt-1 flex justify-end">
-                  <CharacterCount current={password.length} max={PASSWORD_MAX_LENGTH} />
-                </div>
-              )}
-            </div>
+            {!isForgotPasswordMode && (
+              <div>
+                <label htmlFor="auth-password" className="sr-only">
+                  {t('auth.labelPassword')}
+                </label>
+                <input
+                  id="auth-password"
+                  type="password"
+                  required
+                  minLength={isRegisterMode ? PASSWORD_MIN_LENGTH : undefined}
+                  maxLength={isRegisterMode ? PASSWORD_MAX_LENGTH : undefined}
+                  autoComplete={isRegisterMode ? 'new-password' : 'current-password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={
+                    isRegisterMode
+                      ? t('auth.placeholderRegisterPassword')
+                      : t('auth.placeholderPassword')
+                  }
+                  className="theme-input w-full rounded px-4 py-2.5 text-sm"
+                />
+                {isRegisterMode && (
+                  <div className="mt-1 flex justify-end">
+                    <CharacterCount current={password.length} max={PASSWORD_MAX_LENGTH} />
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
 
@@ -202,31 +214,56 @@ export const AuthForm = ({
               ? t('auth.loggingIn')
               : authMode === 'register'
                 ? t('auth.registering')
-                : t('auth.loggingIn')
+                : authMode === 'forgot-password'
+                  ? t('auth.sendingResetEmail')
+                  : t('auth.loggingIn')
             : authMode === 'login'
               ? t('auth.login')
               : authMode === 'register'
                 ? t('auth.register')
-                : t('auth.wechatLogin')}
+                : authMode === 'forgot-password'
+                  ? t('auth.sendResetEmail')
+                  : t('auth.wechatLogin')}
         </button>
       </form>
 
-      <div className="mt-4 flex items-center justify-between gap-2 text-sm pb-safe">
-        <button
-          type="button"
-          onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
-          className="font-medium text-brand-gold hover:underline"
-        >
-          {authMode === 'login' ? t('auth.noAccountGoRegister') : t('auth.hasAccountGoLogin')}
-        </button>
-        <button
-          type="button"
-          onClick={() => setAuthMode(authMode === 'wechat' ? 'login' : 'wechat')}
-          className="font-medium text-brand-gold hover:underline"
-        >
-          {authMode === 'wechat' ? t('auth.switchToAccount') : t('auth.switchToWechat')}
-        </button>
-      </div>
+      {isForgotPasswordMode ? (
+        <div className="mt-4 flex items-center justify-start text-sm pb-safe">
+          <button
+            type="button"
+            onClick={() => setAuthMode('login')}
+            className="font-medium text-brand-gold hover:underline"
+          >
+            {t('auth.backToLogin')}
+          </button>
+        </div>
+      ) : (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm pb-safe">
+          <button
+            type="button"
+            onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
+            className="font-medium text-brand-gold hover:underline"
+          >
+            {authMode === 'login' ? t('auth.noAccountGoRegister') : t('auth.hasAccountGoLogin')}
+          </button>
+          {authMode === 'login' && (
+            <button
+              type="button"
+              onClick={() => setAuthMode('forgot-password')}
+              className="font-medium text-brand-gold hover:underline"
+            >
+              {t('auth.forgotPassword')}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setAuthMode(authMode === 'wechat' ? 'login' : 'wechat')}
+            className="font-medium text-brand-gold hover:underline"
+          >
+            {authMode === 'wechat' ? t('auth.switchToAccount') : t('auth.switchToWechat')}
+          </button>
+        </div>
+      )}
     </>
   )
 }

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { Prisma, UserRole as PrismaUserRole } from '@prisma/client';
+import { EmailVerificationPurpose, Prisma, UserRole as PrismaUserRole } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { requireAuth, requireActiveUser, requireAdmin, requireSuperAdmin, userToApiUser, clearUserCache, issueUserSession, isBearerAuthRequest } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
@@ -626,25 +626,35 @@ router.put('/password', requireAuth, requireActiveUser, asyncHandler(async (req:
     }
 
     const passwordHash = await bcrypt.hash(newPassword, PASSWORD_SALT_ROUNDS);
-    const updatedUser = await prisma.user.update({
-      where: { uid: req.authUser!.uid },
-      data: { passwordHash },
-      select: {
-        uid: true,
-        email: true,
-        displayName: true,
-        photoURL: true,
-        wechatOpenId: true,
-        role: true,
-        status: true,
-        banReason: true,
-        bannedAt: true,
-        emailVerifiedAt: true,
-        level: true,
-        signature: true,
-        bio: true,
-      },
-    });
+    const [, updatedUser] = await prisma.$transaction([
+      prisma.emailVerificationToken.updateMany({
+        where: {
+          userUid: req.authUser!.uid,
+          purpose: EmailVerificationPurpose.reset_password,
+          usedAt: null,
+        },
+        data: { usedAt: new Date() },
+      }),
+      prisma.user.update({
+        where: { uid: req.authUser!.uid },
+        data: { passwordHash },
+        select: {
+          uid: true,
+          email: true,
+          displayName: true,
+          photoURL: true,
+          wechatOpenId: true,
+          role: true,
+          status: true,
+          banReason: true,
+          bannedAt: true,
+          emailVerifiedAt: true,
+          level: true,
+          signature: true,
+          bio: true,
+        },
+      }),
+    ]);
     clearUserCache(req.authUser!.uid);
     const { token } = issueUserSession(req, res, {
       ...updatedUser,
@@ -988,19 +998,23 @@ router.patch('/:userId', requireAdmin, validateBody(adminUpdateUserSchema), asyn
     const verificationChanged =
       emailVerified !== undefined && emailVerified !== Boolean(targetUser.emailVerifiedAt);
     const shouldInvalidateEmailTokens = emailChanged || verificationChanged;
+    const shouldInvalidatePasswordResetTokens = Boolean(newPassword);
     const updateUserOperation = prisma.user.update({
       where: { uid: targetUid },
       data: updateData,
       select: ADMIN_USER_SELECT,
     });
 
-    const user = shouldInvalidateEmailTokens
+    const user = shouldInvalidateEmailTokens || shouldInvalidatePasswordResetTokens
       ? (
           await prisma.$transaction([
             prisma.emailVerificationToken.updateMany({
               where: {
                 userUid: targetUid,
                 usedAt: null,
+                ...(shouldInvalidateEmailTokens
+                  ? {}
+                  : { purpose: EmailVerificationPurpose.reset_password }),
               },
               data: { usedAt: now },
             }),
@@ -1052,10 +1066,20 @@ router.put('/:userId/reset-password', requireAdmin, validateBody(adminResetUserP
     }
 
     const passwordHash = await bcrypt.hash(newPassword, PASSWORD_SALT_ROUNDS);
-    await prisma.user.update({
-      where: { uid: targetUid },
-      data: { passwordHash },
-    });
+    await prisma.$transaction([
+      prisma.emailVerificationToken.updateMany({
+        where: {
+          userUid: targetUid,
+          purpose: EmailVerificationPurpose.reset_password,
+          usedAt: null,
+        },
+        data: { usedAt: new Date() },
+      }),
+      prisma.user.update({
+        where: { uid: targetUid },
+        data: { passwordHash },
+      }),
+    ]);
     clearUserCache(targetUid);
 
     res.json({ success: true });

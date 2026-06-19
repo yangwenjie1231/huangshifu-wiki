@@ -1039,7 +1039,7 @@ const Settings = () => {
                             {user.emailVerified ? '已验证' : '未验证'}
                           </span>
                           {!emailVerificationConfig.enabled && (
-                            <span className="text-text-muted">邮箱验证功能未开启</span>
+                            <span className="text-text-muted">账号邮件功能未开启</span>
                           )}
                           {emailVerificationConfig.enabled &&
                             !user.emailVerified &&

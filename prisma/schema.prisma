@@ -21,6 +21,7 @@ enum UserStatus {
 enum EmailVerificationPurpose {
   register
   change_email
+  reset_password
 }
 
 enum ContentStatus {

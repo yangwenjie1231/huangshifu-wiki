@@ -35,13 +35,13 @@ describe('AdminSettings', () => {
     cleanup()
   })
 
-  it('does not render a savable form when email verification config fails to load', async () => {
+  it('does not render a savable form when mail service config fails to load', async () => {
     mockApiRequest.mockRejectedValue(new Error('network failed'))
 
     render(<AdminSettings />)
 
     expect(
-      await screen.findByText('邮箱验证配置加载失败，未加载成功前无法保存设置。')
+      await screen.findByText('邮件服务配置加载失败，未加载成功前无法保存设置。')
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '保存' })).not.toBeInTheDocument()

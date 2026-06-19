@@ -848,6 +848,213 @@ describe('Auth API - 认证接口测试', () => {
     });
   });
 
+  describe('POST /api/auth/password-reset', () => {
+    async function enableEmailFeature() {
+      await prisma.siteConfig.create({
+        data: {
+          key: 'email_verification',
+          value: {
+            enabled: true,
+            publicBaseUrl: 'https://example.com',
+            tokenTtlMinutes: 30,
+          },
+        },
+      });
+    }
+
+    it('默认关闭时应该拒绝发送密码重置邮件', async () => {
+      const response = await request(app)
+        .post('/api/auth/password-reset/request')
+        .send({ email: 'test_password_reset_disabled@example.com' });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toMatchObject({
+        code: 'PASSWORD_RESET_DISABLED',
+      });
+    });
+
+    it('请求密码重置不应该暴露邮箱是否存在', async () => {
+      await enableEmailFeature();
+      const { user } = await createTestUser({
+        email: 'test_password_reset_request@example.com',
+      });
+
+      const existingResponse = await request(app)
+        .post('/api/auth/password-reset/request')
+        .send({ email: 'TEST_PASSWORD_RESET_REQUEST@EXAMPLE.COM' });
+      expect(existingResponse.status).toBe(200);
+      expect(existingResponse.body).toMatchObject({ success: true });
+
+      const existingTokenCount = await prisma.emailVerificationToken.count({
+        where: {
+          userUid: user.uid,
+          email: 'test_password_reset_request@example.com',
+          purpose: EmailVerificationPurpose.reset_password,
+          usedAt: null,
+        },
+      });
+      expect(existingTokenCount).toBe(1);
+
+      const missingResponse = await request(app)
+        .post('/api/auth/password-reset/request')
+        .send({ email: 'test_password_reset_missing@example.com' });
+      expect(missingResponse.status).toBe(200);
+      expect(missingResponse.body).toEqual(existingResponse.body);
+
+      const missingTokenCount = await prisma.emailVerificationToken.count({
+        where: {
+          email: 'test_password_reset_missing@example.com',
+          purpose: EmailVerificationPurpose.reset_password,
+        },
+      });
+      expect(missingTokenCount).toBe(0);
+    });
+
+    it('有效重置 token 应该更新密码并使旧密码失效', async () => {
+      const { user, plainPassword } = await createTestUser({
+        email: 'test_password_reset_confirm@example.com',
+        password: 'OldPassword123!',
+      });
+      await prisma.user.update({
+        where: { uid: user.uid },
+        data: { emailVerifiedAt: null },
+      });
+      await createEmailVerificationToken({
+        userUid: user.uid,
+        email: user.email,
+        token: 'older-reset-token',
+        purpose: EmailVerificationPurpose.reset_password,
+      });
+      await createEmailVerificationToken({
+        userUid: user.uid,
+        email: user.email,
+        token: 'valid-reset-token',
+        purpose: EmailVerificationPurpose.reset_password,
+      });
+
+      const response = await request(app)
+        .post('/api/auth/password-reset/confirm')
+        .send({
+          token: 'valid-reset-token',
+          newPassword: 'NewPassword123!',
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ success: true });
+
+      const pendingResetTokenCount = await prisma.emailVerificationToken.count({
+        where: {
+          userUid: user.uid,
+          purpose: EmailVerificationPurpose.reset_password,
+          usedAt: null,
+        },
+      });
+      expect(pendingResetTokenCount).toBe(0);
+
+      const resetToken = await prisma.emailVerificationToken.findUnique({
+        where: { tokenHash: hashEmailVerificationToken('valid-reset-token') },
+      });
+      expect(resetToken?.usedAt).toBeInstanceOf(Date);
+
+      const updatedUser = await prisma.user.findUnique({ where: { uid: user.uid } });
+      expect(updatedUser?.emailVerifiedAt).toBeInstanceOf(Date);
+
+      const oldLoginResponse = await request(app)
+        .post('/api/auth/login')
+        .send({ email: user.email, password: plainPassword });
+      expect(oldLoginResponse.status).toBe(401);
+
+      const newLoginResponse = await request(app)
+        .post('/api/auth/login')
+        .send({ email: user.email, password: 'NewPassword123!' });
+      expect(newLoginResponse.status).toBe(200);
+      expect(pickCookie(newLoginResponse.headers['set-cookie'], 'hsf_token')).toBeTruthy();
+    });
+
+    it('过期重置 token 应该返回错误', async () => {
+      const { user } = await createTestUser({
+        email: 'test_password_reset_expired@example.com',
+      });
+      await createEmailVerificationToken({
+        userUid: user.uid,
+        email: user.email,
+        token: 'expired-reset-token',
+        purpose: EmailVerificationPurpose.reset_password,
+        expiresAt: new Date(Date.now() - 60 * 1000),
+      });
+
+      const response = await request(app)
+        .post('/api/auth/password-reset/confirm')
+        .send({
+          token: 'expired-reset-token',
+          newPassword: 'NewPassword123!',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toMatchObject({
+        code: 'TOKEN_EXPIRED',
+      });
+    });
+
+    it('非重置用途 token 不能用于重置密码', async () => {
+      const { user, plainPassword } = await createTestUser({
+        email: 'test_password_reset_wrong_purpose@example.com',
+        password: 'OldPassword123!',
+      });
+      await createEmailVerificationToken({
+        userUid: user.uid,
+        email: user.email,
+        token: 'register-token-for-reset',
+        purpose: EmailVerificationPurpose.register,
+      });
+
+      const response = await request(app)
+        .post('/api/auth/password-reset/confirm')
+        .send({
+          token: 'register-token-for-reset',
+          newPassword: 'NewPassword123!',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toMatchObject({
+        code: 'INVALID_TOKEN',
+      });
+
+      const loginResponse = await request(app)
+        .post('/api/auth/login')
+        .send({ email: user.email, password: plainPassword });
+      expect(loginResponse.status).toBe(200);
+    });
+
+    it('邮箱变更后旧邮箱的重置 token 应该失效', async () => {
+      const { user } = await createTestUser({
+        email: 'test_password_reset_old_email@example.com',
+      });
+      await createEmailVerificationToken({
+        userUid: user.uid,
+        email: user.email,
+        token: 'old-email-reset-token',
+        purpose: EmailVerificationPurpose.reset_password,
+      });
+      await prisma.user.update({
+        where: { uid: user.uid },
+        data: { email: 'test_password_reset_new_email@example.com' },
+      });
+
+      const response = await request(app)
+        .post('/api/auth/password-reset/confirm')
+        .send({
+          token: 'old-email-reset-token',
+          newPassword: 'NewPassword123!',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toMatchObject({
+        code: 'INVALID_TOKEN',
+      });
+    });
+  });
+
   describe('邮箱验证配置', () => {
     it('默认关闭且只有超级管理员可以更新', async () => {
       const defaultResponse = await request(app).get('/api/config/email-verification');

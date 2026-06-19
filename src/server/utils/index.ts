@@ -188,6 +188,7 @@ export {
   toEmailVerificationPublicConfig,
   toEmailVerificationAdminConfig,
   createAndSendEmailVerification,
+  createAndSendPasswordReset,
   hashEmailVerificationToken,
   verifyEmailVerificationToken,
 } from './email-verification';

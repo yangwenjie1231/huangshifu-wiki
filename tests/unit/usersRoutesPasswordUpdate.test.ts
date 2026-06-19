@@ -7,6 +7,10 @@ const mockPrisma = vi.hoisted(() => ({
     findUnique: vi.fn(),
     update: vi.fn(),
   },
+  emailVerificationToken: {
+    updateMany: vi.fn(),
+  },
+  $transaction: vi.fn(),
 }))
 
 const mockClearUserCache = vi.hoisted(() => vi.fn())
@@ -66,6 +70,10 @@ describe('users routes password update', () => {
     vi.clearAllMocks()
     mockHash.mockResolvedValue('hashed-new-password')
     mockCompare.mockResolvedValue(true)
+    mockPrisma.emailVerificationToken.updateMany.mockResolvedValue({ count: 0 })
+    mockPrisma.$transaction.mockImplementation(async (operations: Array<Promise<unknown>>) =>
+      Promise.all(operations)
+    )
     mockIssueUserSession.mockReturnValue({
       apiUser: {
         uid: 'user-1',
@@ -139,6 +147,15 @@ describe('users routes password update', () => {
         bio: true,
       },
     })
+    expect(mockPrisma.emailVerificationToken.updateMany).toHaveBeenCalledWith({
+      where: {
+        userUid: 'user-1',
+        purpose: 'reset_password',
+        usedAt: null,
+      },
+      data: { usedAt: expect.any(Date) },
+    })
+    expect(mockPrisma.$transaction).toHaveBeenCalled()
     expect(mockClearUserCache).toHaveBeenCalledWith('user-1')
     expect(mockIssueUserSession).toHaveBeenCalledWith(expect.any(Object), expect.any(Object), expect.objectContaining({
       uid: 'user-1',

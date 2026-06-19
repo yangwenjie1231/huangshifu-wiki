@@ -63,7 +63,16 @@ export const resendEmailVerificationSchema = z.object({
   email: authEmailSchema,
 })
 
+export const passwordResetRequestSchema = z.object({
+  email: authEmailSchema,
+})
+
 export const passwordSchema = z
   .string({ error: '密码不能为空' })
   .min(PASSWORD_MIN_LENGTH, `密码至少${PASSWORD_MIN_LENGTH}个字符`)
   .max(PASSWORD_MAX_LENGTH, `密码最多${PASSWORD_MAX_LENGTH}个字符`)
+
+export const passwordResetConfirmSchema = z.object({
+  token: z.string({ error: '重置 token 不能为空' }).trim().min(1, '重置 token 不能为空'),
+  newPassword: passwordSchema,
+})

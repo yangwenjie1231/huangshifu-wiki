@@ -35,6 +35,12 @@ const MusicDetail = lazy(() => import('./pages/MusicDetail').then((m) => ({ defa
 const MusicLinks = lazy(() => import('./pages/MusicLinks').then((m) => ({ default: m.default })))
 const Search = lazy(() => import('./pages/Search').then((m) => ({ default: m.default })))
 const Login = lazy(() => import('./pages/Login').then((m) => ({ default: m.default })))
+const ForgotPassword = lazy(() =>
+  import('./pages/ForgotPassword').then((m) => ({ default: m.default }))
+)
+const ResetPassword = lazy(() =>
+  import('./pages/ResetPassword').then((m) => ({ default: m.default }))
+)
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail').then((m) => ({ default: m.default })))
 const NotFound = lazy(() => import('./pages/NotFound').then((m) => ({ default: m.default })))
 const AdminRoutes = lazy(() =>
@@ -95,6 +101,8 @@ const MainLayout = () => {
               <Route path="/album/:albumId" element={<AlbumDetail />} />
               <Route path="/search" element={<Search />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/verify-email" element={<VerifyEmail />} />
               <Route path="/users/:userId/:tab?" element={<UserProfile />} />
               <Route

@@ -73,6 +73,8 @@ const DEFAULT_EMAIL_VERIFICATION_CONFIG: EmailVerificationConfig = {
 }
 const EMAIL_VERIFICATION_SUBJECT = '请验证你的账号邮箱'
 const EMAIL_VERIFICATION_INTRO = '你正在验证黄诗扶 Wiki 账号邮箱。点击下方链接完成验证。'
+const PASSWORD_RESET_SUBJECT = '重置你的黄诗扶 Wiki 密码'
+const PASSWORD_RESET_INTRO = '你正在重置黄诗扶 Wiki 账号密码。点击下方链接设置新密码。'
 
 function normalizeUrl(value: unknown) {
   if (typeof value !== 'string') return ''
@@ -186,6 +188,16 @@ function getVerificationUrl(token: string, publicBaseUrl: string) {
   }
 }
 
+function getPasswordResetUrl(token: string, publicBaseUrl: string) {
+  try {
+    const url = new URL('/reset-password', publicBaseUrl)
+    url.searchParams.set('token', token)
+    return url.toString()
+  } catch {
+    throw new EmailVerificationError('MAIL_NOT_CONFIGURED', '站点公网地址未配置')
+  }
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, '&amp;')
@@ -217,10 +229,16 @@ async function sendVerificationEmail(options: {
   purpose: EmailVerificationPurpose
   config: EmailVerificationConfig
 }) {
-  const verificationUrl = getVerificationUrl(options.token, options.config.publicBaseUrl)
+  const isPasswordReset = options.purpose === EmailVerificationPurpose.reset_password
+  const verificationUrl = isPasswordReset
+    ? getPasswordResetUrl(options.token, options.config.publicBaseUrl)
+    : getVerificationUrl(options.token, options.config.publicBaseUrl)
+  const subject = isPasswordReset ? PASSWORD_RESET_SUBJECT : EMAIL_VERIFICATION_SUBJECT
+  const intro = isPasswordReset ? PASSWORD_RESET_INTRO : EMAIL_VERIFICATION_INTRO
+  const actionText = isPasswordReset ? '重置密码' : '完成邮箱验证'
   const displayName = options.displayName || options.email
   const escapedDisplayName = escapeHtml(displayName)
-  const escapedIntro = escapeHtml(EMAIL_VERIFICATION_INTRO)
+  const escapedIntro = escapeHtml(intro)
   const escapedVerificationUrl = escapeHtml(verificationUrl)
   const transporter = getTransporter(options.config)
 
@@ -245,11 +263,11 @@ async function sendVerificationEmail(options: {
     await transporter.sendMail({
       from: options.config.smtpFrom,
       to: options.email,
-      subject: EMAIL_VERIFICATION_SUBJECT,
+      subject,
       text: [
         `${displayName}，你好：`,
         '',
-        EMAIL_VERIFICATION_INTRO,
+        intro,
         '',
         verificationUrl,
         '',
@@ -258,13 +276,16 @@ async function sendVerificationEmail(options: {
       html: `
         <p>${escapedDisplayName}，你好：</p>
         <p>${escapedIntro}</p>
-        <p><a href="${escapedVerificationUrl}">完成邮箱验证</a></p>
+        <p><a href="${escapedVerificationUrl}">${actionText}</a></p>
         <p>链接有效期为 ${options.config.tokenTtlMinutes} 分钟。如果不是你本人操作，请忽略此邮件。</p>
       `,
     })
   } catch (error) {
     logger.error({ err: error, email: options.email, purpose: options.purpose }, 'Send verification email failed')
-    throw new EmailVerificationError('MAIL_SEND_FAILED', '验证邮件发送失败')
+    throw new EmailVerificationError(
+      'MAIL_SEND_FAILED',
+      isPasswordReset ? '密码重置邮件发送失败' : '验证邮件发送失败'
+    )
   }
 }
 
@@ -322,6 +343,15 @@ export async function createAndSendEmailVerification(options: {
   return { expiresAt }
 }
 
+export async function createAndSendPasswordReset(options: {
+  user: EmailVerificationUser
+}) {
+  return createAndSendEmailVerification({
+    user: options.user,
+    purpose: EmailVerificationPurpose.reset_password,
+  })
+}
+
 export async function verifyEmailVerificationToken(token: string) {
   const normalizedToken = token.trim()
   if (!normalizedToken) {
@@ -355,6 +385,10 @@ export async function verifyEmailVerificationToken(token: string) {
   })
 
   if (!record || record.user.deletedAt) {
+    throw new EmailVerificationError('INVALID_TOKEN', '验证链接无效')
+  }
+
+  if (record.purpose === EmailVerificationPurpose.reset_password) {
     throw new EmailVerificationError('INVALID_TOKEN', '验证链接无效')
   }
 

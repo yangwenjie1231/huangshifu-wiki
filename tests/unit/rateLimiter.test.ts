@@ -115,4 +115,26 @@ describe('rateLimiter', () => {
     const [{ skip }] = rateLimitMock.mock.calls.at(-1)!;
     expect(skip({}, {})).toBe(true);
   });
+
+  it('uses separate limiter instances for password reset request and confirmation', async () => {
+    const {
+      passwordResetConfirmLimiter,
+      passwordResetRequestLimiter,
+    } = await import('../../src/server/middleware/rateLimiter');
+
+    expect(passwordResetRequestLimiter).toBeDefined();
+    expect(passwordResetConfirmLimiter).toBeDefined();
+    expect(passwordResetRequestLimiter).not.toBe(passwordResetConfirmLimiter);
+
+    const requestLimiterOptions = rateLimitMock.mock.calls
+      .map(([options]) => options)
+      .find((options) => options.message?.error === '密码找回请求过于频繁，请15分钟后再试');
+    const confirmLimiterOptions = rateLimitMock.mock.calls
+      .map(([options]) => options)
+      .find((options) => options.message?.error === '密码重置确认过于频繁，请15分钟后再试');
+
+    expect(requestLimiterOptions).toBeDefined();
+    expect(confirmLimiterOptions).toBeDefined();
+    expect(requestLimiterOptions).not.toBe(confirmLimiterOptions);
+  });
 });

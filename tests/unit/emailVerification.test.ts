@@ -123,4 +123,36 @@ describe('email verification utility', () => {
       mockPrisma.emailVerificationToken.updateMany.mock.invocationCallOrder[0]
     )
   })
+
+  it('creates password reset email with reset link and invalidates old reset tokens', async () => {
+    const { createAndSendPasswordReset, EmailVerificationPurpose } = await import(
+      '../../src/server/utils/email-verification'
+    )
+    mockSendMail.mockResolvedValueOnce({})
+
+    await createAndSendPasswordReset({ user })
+
+    expect(mockPrisma.emailVerificationToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userUid: user.uid,
+        email: user.email,
+        purpose: EmailVerificationPurpose.reset_password,
+      }),
+    })
+    expect(mockSendMail).toHaveBeenCalledWith(expect.objectContaining({
+      subject: '重置你的黄诗扶 Wiki 密码',
+      text: expect.stringContaining('/reset-password?token='),
+      html: expect.stringContaining('/reset-password?token='),
+    }))
+    expect(mockPrisma.emailVerificationToken.updateMany).toHaveBeenCalledWith({
+      where: {
+        userUid: user.uid,
+        purpose: EmailVerificationPurpose.reset_password,
+        usedAt: null,
+        createdAt: { lte: tokenCreatedAt },
+        id: { not: 'new-token-id' },
+      },
+      data: { usedAt: expect.any(Date) },
+    })
+  })
 })

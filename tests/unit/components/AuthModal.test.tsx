@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import userEvent from '@testing-library/user-event'
 import { ToastProvider } from '../../../src/components/Toast'
 import { AuthModal } from '../../../src/components/Navbar/AuthModal'
-import { register } from '../../../src/lib/auth'
+import { register, requestPasswordReset } from '../../../src/lib/auth'
 
 vi.mock('../../../src/lib/i18n', () => ({
   useI18n: () => ({
@@ -33,8 +33,13 @@ vi.mock('../../../src/lib/i18n', () => ({
         'auth.switchToWechat': '切换到微信登录',
         'auth.loggingIn': '登录中',
         'auth.registering': '注册中',
+        'auth.sendingResetEmail': '发送中',
         'auth.login': '登录',
         'auth.register': '注册',
+        'auth.passwordReset': '找回密码',
+        'auth.sendResetEmail': '发送重置邮件',
+        'auth.forgotPassword': '忘记密码？',
+        'auth.backToLogin': '返回登录',
         'auth.mockCodeHint': 'mock code hint',
         'auth.loginFailed': '登录失败',
         'auth.anonymousUser': '匿名用户',
@@ -48,6 +53,7 @@ vi.mock('../../../src/lib/auth', () => ({
   login: vi.fn(),
   register: vi.fn(),
   loginWithWeChat: vi.fn(),
+  requestPasswordReset: vi.fn(),
 }))
 
 const renderAuthModal = (
@@ -140,5 +146,30 @@ describe('AuthModal', () => {
     await waitFor(() => {
       expect(registerMock).toHaveBeenCalledWith('averylonglocalpart@example.com', 'ValidPassword123!', '')
     })
+  })
+
+  it('requests password reset from login mode', async () => {
+    const user = userEvent.setup()
+    const requestPasswordResetMock = vi.mocked(requestPasswordReset)
+    requestPasswordResetMock.mockResolvedValueOnce({
+      success: true,
+      message: '如果该邮箱存在，我们会发送一封密码重置邮件',
+    })
+
+    renderAuthModal(true, 'login')
+
+    await user.click(screen.getByRole('button', { name: '忘记密码？' }))
+    expect(screen.getByRole('heading', { name: '找回密码' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('密码')).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('邮箱'), {
+      target: { value: 'reset@example.com' },
+    })
+    fireEvent.submit(screen.getByRole('button', { name: '发送重置邮件' }).closest('form')!)
+
+    await waitFor(() => {
+      expect(requestPasswordResetMock).toHaveBeenCalledWith('reset@example.com')
+    })
+    expect(await screen.findByRole('heading', { name: '账号登录' })).toBeInTheDocument()
   })
 })

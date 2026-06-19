@@ -64,7 +64,7 @@ const AdminSettings = () => {
         if (!isActive()) return
         console.error('Load email verification config failed:', error)
         setLoadError(true)
-        show('邮箱验证配置加载失败', { variant: 'error' })
+        show('邮件服务配置加载失败', { variant: 'error' })
       } finally {
         if (isActive()) setLoading(false)
       }
@@ -133,7 +133,7 @@ const AdminSettings = () => {
       <section className="space-y-5 border border-border bg-surface p-5">
         <div className="flex items-center gap-2 border-b border-border pb-3">
           <MailCheck size={18} className="text-brand-gold" />
-          <h2 className="text-base font-semibold text-text-primary">邮箱验证</h2>
+          <h2 className="text-base font-semibold text-text-primary">邮件服务</h2>
         </div>
 
         {loading ? (
@@ -143,7 +143,7 @@ const AdminSettings = () => {
           </div>
         ) : loadError ? (
           <div className="flex flex-col gap-3 text-sm text-text-secondary" role="alert">
-            <p>邮箱验证配置加载失败，未加载成功前无法保存设置。</p>
+            <p>邮件服务配置加载失败，未加载成功前无法保存设置。</p>
             <button
               type="button"
               onClick={() => void loadConfig()}
@@ -157,9 +157,9 @@ const AdminSettings = () => {
           <div className="space-y-5">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="space-y-1">
-                <p className="text-sm font-medium text-text-primary">允许用户验证邮箱</p>
+                <p className="text-sm font-medium text-text-primary">启用账号邮件</p>
                 <p className="text-sm leading-6 text-text-secondary">
-                  开启后注册会尝试发送验证邮件，用户也可以在设置中自行发送验证邮件。
+                  开启后可发送邮箱验证和密码找回邮件。
                 </p>
               </div>
 
@@ -167,7 +167,7 @@ const AdminSettings = () => {
                 type="button"
                 role="switch"
                 aria-checked={form.enabled}
-                aria-label="允许用户验证邮箱"
+                aria-label="启用账号邮件"
                 onClick={() => setField('enabled', !form.enabled)}
                 className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors ${
                   form.enabled ? 'bg-brand-gold' : 'bg-border'

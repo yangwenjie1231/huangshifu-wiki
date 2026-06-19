@@ -4,6 +4,8 @@ export {
   loginSchema,
   verifyEmailSchema,
   resendEmailVerificationSchema,
+  passwordResetRequestSchema,
+  passwordResetConfirmSchema,
   passwordSchema,
 } from './auth.schema'
 export { userEmailUpdateSchema, userPasswordUpdateSchema } from './user.schema'

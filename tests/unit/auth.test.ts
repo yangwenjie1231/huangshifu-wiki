@@ -176,6 +176,70 @@ describe('auth module', () => {
     expect(result.purpose).toBe('change_email');
   });
 
+  it('requestPasswordReset sends XSRF token when available', async () => {
+    const { requestPasswordReset } = await loadAuthModule();
+    vi.stubGlobal('document', {
+      cookie: 'XSRF-TOKEN=test-xsrf-token',
+    });
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: true, message: 'sent' }), { status: 200 }),
+    );
+
+    const result = await requestPasswordReset('user@example.com');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/auth/password-reset/request',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-XSRF-TOKEN': 'test-xsrf-token',
+        },
+        body: JSON.stringify({ email: 'user@example.com' }),
+      }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it('confirmPasswordReset sends token and refreshes auth state after success', async () => {
+    const { auth, confirmPasswordReset, refreshAuthState } = await loadAuthModule();
+    vi.stubGlobal('document', {
+      cookie: 'XSRF-TOKEN=test-xsrf-token',
+    });
+    const user = createMockUser({ uid: 'stale-user' });
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ user }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ user: null }), { status: 200 }));
+
+    await refreshAuthState();
+    expect(auth.currentUser?.uid).toBe('stale-user');
+
+    const result = await confirmPasswordReset('reset-token', 'NewPassword123!');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/auth/password-reset/confirm',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-XSRF-TOKEN': 'test-xsrf-token',
+        },
+        body: JSON.stringify({ token: 'reset-token', newPassword: 'NewPassword123!' }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      '/api/auth/me',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+    expect(result.success).toBe(true);
+    expect(auth.currentUser).toBeNull();
+  });
+
   it('logoutRequest clears auth state via refresh', async () => {
     const { auth, logoutRequest, refreshAuthState } = await loadAuthModule();
     const user = createMockUser({ uid: 'u_before_logout' });
