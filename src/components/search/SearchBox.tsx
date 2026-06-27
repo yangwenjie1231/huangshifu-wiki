@@ -1,13 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search as SearchIcon, Camera, Sparkles } from 'lucide-react'
+import { Search as SearchIcon, Camera, Clock, Sparkles, Trash2, X } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useFloatingPresence } from '../../hooks/useFloatingPresence'
 import type { SearchSuggestion } from '../../hooks/useSearch'
+import type { SearchHistoryItem } from '../../hooks/useSearchHistory'
 
 interface SearchBoxProps {
   query: string
   suggestions: SearchSuggestion[]
+  searchHistory?: SearchHistoryItem[]
   aiSearching: boolean
   semanticImageSearch: boolean
   semanticSearchEnabled?: boolean
@@ -16,11 +18,18 @@ interface SearchBoxProps {
   onImageSearch: (file: File) => void
   onToggleSemanticSearch: () => void
   onDismissSuggestions: () => void
+  onRemoveSearchHistoryItem?: (query: string) => void
+  onClearSearchHistory?: () => void
 }
+
+type SearchDropdown =
+  | { type: 'suggestions'; items: SearchSuggestion[] }
+  | { type: 'history'; items: SearchHistoryItem[] }
 
 export const SearchBox: React.FC<SearchBoxProps> = ({
   query,
   suggestions,
+  searchHistory = [],
   aiSearching,
   semanticImageSearch,
   semanticSearchEnabled = true,
@@ -29,6 +38,8 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
   onImageSearch,
   onToggleSemanticSearch,
   onDismissSuggestions,
+  onRemoveSearchHistoryItem,
+  onClearSearchHistory,
 }) => {
   const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -37,25 +48,43 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
 
   // 建议列表键盘导航状态
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
-  const suggestionsPresence = useFloatingPresence(suggestions.length > 0)
-  const lastSuggestionsRef = useRef<SearchSuggestion[]>([])
+  const [inputFocused, setInputFocused] = useState(false)
+  const trimmedQuery = query.trim()
+  const matchingHistory = useMemo(() => {
+    if (trimmedQuery.length === 1) return []
+    const normalizedQuery = trimmedQuery.toLowerCase()
+    return searchHistory.filter((item) =>
+      normalizedQuery ? item.query.toLowerCase().includes(normalizedQuery) : true
+    )
+  }, [searchHistory, trimmedQuery])
 
-  if (suggestions.length > 0) {
-    lastSuggestionsRef.current = suggestions
+  const currentDropdown: SearchDropdown | null =
+    trimmedQuery.length >= 2 && suggestions.length > 0
+      ? { type: 'suggestions', items: suggestions }
+      : inputFocused && matchingHistory.length > 0
+        ? { type: 'history', items: matchingHistory }
+        : null
+
+  const dropdownPresence = useFloatingPresence(Boolean(currentDropdown))
+  const lastDropdownRef = useRef<SearchDropdown | null>(null)
+
+  if (currentDropdown) {
+    lastDropdownRef.current = currentDropdown
   }
 
-  const visibleSuggestions = suggestions.length > 0 ? suggestions : lastSuggestionsRef.current
+  const visibleDropdown = currentDropdown || lastDropdownRef.current
 
   useEffect(() => {
-    if (!suggestions.length) return
+    if (!currentDropdown) return
     const handleClickOutside = (e: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setInputFocused(false)
         onDismissSuggestions()
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [suggestions.length, onDismissSuggestions])
+  }, [currentDropdown, onDismissSuggestions])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -102,6 +131,7 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
 
   const handleSuggestionClick = (s: SearchSuggestion) => {
     setHighlightedIndex(-1)
+    setInputFocused(false)
     if (s.type === 'keyword') {
       onSearch(s.text)
     } else {
@@ -117,20 +147,36 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
     }
   }
 
-  // 建议列表变化时重置高亮索引
+  const handleHistoryClick = (historyQuery: string) => {
+    setHighlightedIndex(-1)
+    setInputFocused(false)
+    onSearch(historyQuery)
+  }
+
+  const handleRemoveHistoryItem = (e: React.MouseEvent, historyQuery: string) => {
+    e.stopPropagation()
+    onRemoveSearchHistoryItem?.(historyQuery)
+  }
+
+  const handleClearHistory = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setHighlightedIndex(-1)
+    onClearSearchHistory?.()
+  }
+
+  // 列表变化时重置高亮索引
   useEffect(() => {
     setHighlightedIndex(-1)
-  }, [suggestions])
+  }, [currentDropdown?.type, suggestions, matchingHistory])
 
-  // 建议列表键盘导航处理
+  // 下拉列表键盘导航处理
   const handleListboxKeyDown = (e: React.KeyboardEvent) => {
-    const showSuggestions = suggestions.length > 0
-    if (!showSuggestions) return
+    if (!currentDropdown) return
 
     switch (e.key) {
       case 'ArrowDown': {
         e.preventDefault()
-        setHighlightedIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : prev))
+        setHighlightedIndex((prev) => (prev < currentDropdown.items.length - 1 ? prev + 1 : prev))
         break
       }
       case 'ArrowUp': {
@@ -140,14 +186,19 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
       }
       case 'Enter': {
         if (e.nativeEvent.isComposing) return
-        if (highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
+        if (highlightedIndex >= 0 && highlightedIndex < currentDropdown.items.length) {
           e.preventDefault()
-          handleSuggestionClick(suggestions[highlightedIndex])
+          if (currentDropdown.type === 'suggestions') {
+            handleSuggestionClick(currentDropdown.items[highlightedIndex])
+          } else {
+            handleHistoryClick(currentDropdown.items[highlightedIndex].query)
+          }
         }
         break
       }
       case 'Escape': {
         onDismissSuggestions()
+        setInputFocused(false)
         setHighlightedIndex(-1)
         break
       }
@@ -166,9 +217,13 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
           type="text"
           value={query}
           onChange={(e) => {
+            setInputFocused(true)
             onQueryChange(e.target.value)
           }}
-          onFocus={() => query.length >= 2 && onQueryChange(query)}
+          onFocus={() => {
+            setInputFocused(true)
+            if (query.length >= 2) onQueryChange(query)
+          }}
           onCompositionStart={() => {
             isComposingRef.current = true
           }}
@@ -179,7 +234,7 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
           aria-label="搜索百科、帖子、图集、音乐或专辑"
           autoComplete="off"
           aria-owns="search-suggestions"
-          aria-expanded={suggestions.length > 0}
+          aria-expanded={Boolean(currentDropdown)}
           className="theme-input w-full px-12 py-4 rounded transition-all text-base"
         />
         <SearchIcon
@@ -187,43 +242,127 @@ export const SearchBox: React.FC<SearchBoxProps> = ({
           size={20}
         />
 
-        {suggestionsPresence.mounted && visibleSuggestions.length > 0 && (
+        {dropdownPresence.mounted && visibleDropdown && visibleDropdown.items.length > 0 && (
           <div
             className="floating-dropdown absolute left-0 right-0 top-full mt-2 bg-surface border border-border rounded z-50 overflow-hidden"
-            data-state={suggestionsPresence.state}
+            data-state={dropdownPresence.state}
             role="listbox"
             id="search-suggestions"
-            aria-hidden={suggestions.length === 0}
+            aria-hidden={!currentDropdown}
           >
-            {visibleSuggestions.map((s, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => handleSuggestionClick(s)}
-                className={clsx(
-                  'w-full text-left px-4 py-2.5 transition-colors border-b border-border last:border-0',
-                  i === highlightedIndex
-                    ? 'bg-[var(--color-theme-accent)] text-white'
-                    : 'hover:bg-surface-alt'
-                )}
-                role="option"
-                aria-selected={i === highlightedIndex}
-                id={`suggestion-${i}`}
-              >
-                <div className="flex items-center gap-3">
-                  <span
-                    className={clsx(
-                      'px-2 py-0.5 rounded text-[10px] font-medium',
-                      getSuggestionTypeClass(s.type)
-                    )}
-                  >
-                    {getSuggestionTypeLabel(s.type)}
-                  </span>
-                  <span className="text-sm text-text-primary">{s.text}</span>
-                  {s.subtext && <span className="text-xs text-text-muted">{s.subtext}</span>}
+            {visibleDropdown.type === 'history' && (
+              <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-surface-alt">
+                <div className="flex items-center gap-2 text-xs font-medium text-text-muted">
+                  <Clock size={14} />
+                  <span>搜索历史</span>
                 </div>
-              </button>
-            ))}
+                <button
+                  type="button"
+                  onClick={handleClearHistory}
+                  className="p-1.5 rounded text-text-muted hover:text-brand-gold hover:bg-surface transition-colors"
+                  title="清空搜索历史"
+                  aria-label="清空搜索历史"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            )}
+
+            {visibleDropdown.type === 'suggestions'
+              ? visibleDropdown.items.map((s, i) => (
+                  <button
+                    key={`${s.type}-${s.id || s.text}-${i}`}
+                    type="button"
+                    onClick={() => handleSuggestionClick(s)}
+                    className={clsx(
+                      'w-full text-left px-4 py-2.5 transition-colors border-b border-border last:border-0',
+                      i === highlightedIndex
+                        ? 'bg-[var(--color-theme-accent)] text-white'
+                        : 'hover:bg-surface-alt'
+                    )}
+                    role="option"
+                    aria-selected={i === highlightedIndex}
+                    id={`suggestion-${i}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={clsx(
+                          'px-2 py-0.5 rounded text-[10px] font-medium',
+                          getSuggestionTypeClass(s.type)
+                        )}
+                      >
+                        {getSuggestionTypeLabel(s.type)}
+                      </span>
+                      <span
+                        className={clsx(
+                          'text-sm',
+                          i === highlightedIndex ? 'text-white' : 'text-text-primary'
+                        )}
+                      >
+                        {s.text}
+                      </span>
+                      {s.subtext && (
+                        <span
+                          className={clsx(
+                            'text-xs',
+                            i === highlightedIndex ? 'text-white/80' : 'text-text-muted'
+                          )}
+                        >
+                          {s.subtext}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ))
+              : visibleDropdown.items.map((item, i) => (
+                  <div
+                    key={item.query}
+                    className={clsx(
+                      'flex items-center border-b border-border last:border-0 transition-colors',
+                      i === highlightedIndex
+                        ? 'bg-[var(--color-theme-accent)] text-white'
+                        : 'hover:bg-surface-alt'
+                    )}
+                    role="option"
+                    aria-selected={i === highlightedIndex}
+                    id={`suggestion-${i}`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleHistoryClick(item.query)}
+                      className="min-w-0 flex-1 px-4 py-2.5 text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Clock
+                          size={15}
+                          className={i === highlightedIndex ? 'text-white/80' : 'text-text-muted'}
+                        />
+                        <span
+                          className={clsx(
+                            'truncate text-sm',
+                            i === highlightedIndex ? 'text-white' : 'text-text-primary'
+                          )}
+                        >
+                          {item.query}
+                        </span>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleRemoveHistoryItem(e, item.query)}
+                      className={clsx(
+                        'mr-2 p-1.5 rounded transition-colors',
+                        i === highlightedIndex
+                          ? 'text-white/80 hover:text-white hover:bg-white/10'
+                          : 'text-text-muted hover:text-brand-gold hover:bg-surface'
+                      )}
+                      title={`删除搜索历史：${item.query}`}
+                      aria-label={`删除搜索历史：${item.query}`}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
           </div>
         )}
 

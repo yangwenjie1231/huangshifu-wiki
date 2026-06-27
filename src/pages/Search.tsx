@@ -15,6 +15,7 @@ const Search: React.FC = () => {
 
   const {
     state,
+    searchHistory,
     tabItems,
     performSearch,
     handleQueryChange,
@@ -25,6 +26,8 @@ const Search: React.FC = () => {
     setActiveTab,
     setShowFilters,
     dismissSuggestions,
+    removeSearchHistoryItem,
+    clearSearchHistory,
   } = useSearchPage()
 
   React.useEffect(() => {
@@ -59,6 +62,7 @@ const Search: React.FC = () => {
           aiSearching={state.aiSearching}
           semanticImageSearch={state.filters.semanticImageSearch}
           semanticSearchEnabled={semanticSearchEnabled}
+          searchHistory={searchHistory}
           onQueryChange={handleQueryChange}
           onSearch={performSearch}
           onImageSearch={handleImageSearch}
@@ -68,6 +72,8 @@ const Search: React.FC = () => {
             }
           }}
           onDismissSuggestions={dismissSuggestions}
+          onRemoveSearchHistoryItem={removeSearchHistoryItem}
+          onClearSearchHistory={clearSearchHistory}
         />
 
         {/* Search Filters */}
