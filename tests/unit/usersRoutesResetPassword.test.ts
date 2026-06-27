@@ -18,6 +18,7 @@ const mockPrisma = vi.hoisted(() => ({
 
 const mockClearUserCache = vi.hoisted(() => vi.fn())
 const mockHash = vi.hoisted(() => vi.fn())
+const mockValidateUserDisplayName = vi.hoisted(() => vi.fn())
 
 vi.mock('bcryptjs', () => ({
   default: {
@@ -79,6 +80,7 @@ vi.mock('../../src/server/utils', async () => {
     toCommentResponse: vi.fn((comment) => comment),
     safeDeleteUploadFileByUrl: vi.fn(),
     parsePagination: vi.fn(() => ({ limit: 20, offset: 0 })),
+    validateUserDisplayName: mockValidateUserDisplayName,
     logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
   }
 })
@@ -90,6 +92,10 @@ describe('users routes reset password', () => {
     mockPrisma.$transaction.mockImplementation(async (operations: Array<Promise<unknown>>) =>
       Promise.all(operations)
     )
+    mockValidateUserDisplayName.mockImplementation((displayName: string) => ({
+      ok: true,
+      displayName: displayName.trim(),
+    }))
   })
 
   async function createApp(authUser: { uid: string; role: string }) {
