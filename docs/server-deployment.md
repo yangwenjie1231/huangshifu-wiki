@@ -183,6 +183,7 @@ SKIP_NETWORK_PROBE="false"
 # WeChat mini-program auth
 WECHAT_MP_APPID=""
 WECHAT_MP_APP_SECRET=""
+# 生产环境必须保持 false 或留空，否则服务会拒绝启动
 WECHAT_LOGIN_MOCK="false"
 
 # S3 对象存储配置
@@ -253,7 +254,7 @@ EOF
 | `SEED_SUPER_ADMIN_NAME`         | 种子超级管理员显示名称                          |
 | `WECHAT_MP_APPID`               | 微信小程序 AppID                           |
 | `WECHAT_MP_APP_SECRET`          | 微信小程序 AppSecret                       |
-| `WECHAT_LOGIN_MOCK`             | 联调阶段可设 `true`，正式环境必须设 `false`          |
+| `WECHAT_LOGIN_MOCK`             | 仅开发/测试联调可设 `true`，正式环境必须为 `false` 或留空，否则服务拒绝启动 |
 
 #### 向量检索（Qdrant + ChineseCLIP）
 
@@ -386,7 +387,7 @@ EOF
 
 - 小程序端流程：`wx.login()` 获取 `code` → 打开 `<web-view>`。
 - WebView URL 会追加 `wx_code` 查询参数，Web 端自动调用 `POST /api/auth/wechat/login` 完成登录。
-- 生产环境必须配置：`WECHAT_MP_APPID`、`WECHAT_MP_APP_SECRET`，并确保 `WECHAT_LOGIN_MOCK=false`。
+- 生产环境必须配置：`WECHAT_MP_APPID`、`WECHAT_MP_APP_SECRET`，并确保 `WECHAT_LOGIN_MOCK=false` 或留空；若误设为 `true`，服务会拒绝启动。
 - 小程序后台需完成：业务域名配置（HTTPS）、request 合法域名配置（后端 API 域名）。
 
 开发调试可将 `WECHAT_LOGIN_MOCK=true`，并在 Web 端直接访问：

@@ -9,6 +9,7 @@ import { prisma } from '../prisma'
 export { prisma }
 import { enhancedCache, CACHE_KEYS } from './cache'
 import { parseBoolean } from './parsers'
+import { isWechatLoginMockEnabled } from './runtimeEnv'
 import type { MusicPlatform, PlayUrlCacheValue } from '../types'
 
 // axios 默认配置
@@ -36,8 +37,7 @@ export const WECHAT_MP_APP_SECRET =
   process.env.WECHAT_MP_APPSECRET ||
   process.env.WECHAT_APP_SECRET ||
   ''
-export const WECHAT_LOGIN_MOCK =
-  process.env.NODE_ENV !== 'production' && process.env.WECHAT_LOGIN_MOCK === 'true'
+export const WECHAT_LOGIN_MOCK = isWechatLoginMockEnabled()
 export const UPLOAD_SESSION_TTL_MINUTES = Math.max(
   5,
   Number(process.env.UPLOAD_SESSION_TTL_MINUTES || 45)

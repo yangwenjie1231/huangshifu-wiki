@@ -1,16 +1,7 @@
-import dotenv from 'dotenv'
-import { isProductionRuntime, isTestRuntime } from './src/server/utils/runtimeEnv'
+import './src/server/env'
+import { isTestRuntime } from './src/server/utils/runtimeEnv'
 
 const isTestEnv = isTestRuntime()
-
-// 立即加载环境变量，确保在导入其他模块之前
-// 其他模块可能依赖于 process.env
-if (!isTestEnv && !isProductionRuntime()) {
-  dotenv.config({ path: '.env.local' })
-}
-if (!isTestEnv) {
-  dotenv.config()
-}
 
 import express, { Request, Response, NextFunction } from 'express'
 import compression from 'compression'

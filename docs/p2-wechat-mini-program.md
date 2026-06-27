@@ -23,7 +23,7 @@ WECHAT_LOGIN_MOCK="false"
 说明：
 
 - `WECHAT_MP_APPID` / `WECHAT_MP_APP_SECRET`：微信小程序凭据，用于 `code2session`。
-- `WECHAT_LOGIN_MOCK=true`：开发调试模式，不调用微信网关，可使用 mock code 登录。
+- `WECHAT_LOGIN_MOCK=true`：仅开发/测试调试使用，不调用微信网关，可使用 mock code 登录；生产环境设置为 `true` 会导致服务拒绝启动。
 
 ## 3. 微信登录接口
 
@@ -41,7 +41,7 @@ WECHAT_LOGIN_MOCK="false"
 
 ### 3.2 开发模式（mock）
 
-当 `WECHAT_LOGIN_MOCK=true` 时：
+当非生产环境 `WECHAT_LOGIN_MOCK=true` 时：
 
 - `code = "mock:openId"`
 - `code = "mock:openId:unionId"`
