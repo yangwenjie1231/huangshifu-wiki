@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Loader2, Trash2, Star, Upload, X } from 'lucide-react';
 import { clsx } from 'clsx';
 
-import { apiDelete, apiGet, apiPatch, apiPost } from '../lib/apiClient';
+import { apiDelete, apiGet, apiPatch, apiPost, invalidateApiCacheByPrefix } from '../lib/apiClient';
 import { useDialog } from './Dialog';
 import { useToast } from './Toast';
 import { uploadImageWithStrategy, type UploadImageResult } from '../services/imageService';
@@ -13,7 +13,8 @@ type CoverItem = {
   id: string;
   url: string;
   isDefault: boolean;
-  createdAt: string;
+  createdAt?: string;
+  sortOrder?: number;
 };
 
 type CoversResponse = {
@@ -56,6 +57,8 @@ export const CoverManager = ({
   const [uploading, setUploading] = useState(false);
   const [settingDefault, setSettingDefault] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [batchDeleting, setBatchDeleting] = useState(false);
+  const [selectedCoverIds, setSelectedCoverIds] = useState<Set<string>>(new Set());
   const [isOpen, setIsOpen] = useState(false);
   const presence = useFloatingPresence(isOpen);
   const dialog = useDialog();
@@ -66,12 +69,23 @@ export const CoverManager = ({
     setLoading(true);
     try {
       const response = await apiGet<CoversResponse>(`${config.apiPrefix}/${resourceId}/covers`);
-      setCovers(response.covers || []);
+      const nextCovers = response.covers || [];
+      setCovers(nextCovers);
+      setSelectedCoverIds((prev) => {
+        const existingIds = new Set(nextCovers.map((cover) => cover.id));
+        return new Set([...prev].filter((coverId) => existingIds.has(coverId)));
+      });
+      return nextCovers;
     } catch (error) {
       console.error('Fetch covers failed:', error);
+      return [];
     } finally {
       setLoading(false);
     }
+  }, [config.apiPrefix, resourceId]);
+
+  const invalidateCoversCache = React.useCallback(() => {
+    invalidateApiCacheByPrefix(`${config.apiPrefix}/${resourceId}/covers`);
   }, [config.apiPrefix, resourceId]);
 
   React.useEffect(() => {
@@ -130,13 +144,75 @@ export const CoverManager = ({
     setDeleting(coverId);
     try {
       await apiDelete(`${config.apiPrefix}/${resourceId}/covers/${coverId}`);
-      setCovers((prev) => prev.filter((c) => c.id !== coverId));
+      invalidateCoversCache();
+      const nextCovers = await fetchCovers();
+      setSelectedCoverIds((prev) => {
+        const next = new Set(prev);
+        next.delete(coverId);
+        return next;
+      });
+      const deletedCover = covers.find((cover) => cover.id === coverId);
+      if (deletedCover?.url === currentCover && onCoverUpdated) {
+        const nextDefaultCover = nextCovers.find((cover) => cover.isDefault) || nextCovers[0];
+        onCoverUpdated(nextDefaultCover?.url || '');
+      }
       show('封面已删除');
     } catch (error) {
       console.error('Delete cover failed:', error);
       show('删除封面失败', { variant: 'error' });
     } finally {
       setDeleting(null);
+    }
+  };
+
+  const toggleSelectedCover = (coverId: string) => {
+    setSelectedCoverIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(coverId)) {
+        next.delete(coverId);
+      } else {
+        next.add(coverId);
+      }
+      return next;
+    });
+  };
+
+  const selectAllCovers = () => {
+    setSelectedCoverIds((prev) =>
+      prev.size === covers.length ? new Set() : new Set(covers.map((cover) => cover.id))
+    );
+  };
+
+  const handleBatchDelete = async () => {
+    if (!selectedCoverIds.size || batchDeleting) return;
+    const selectedIds = [...selectedCoverIds];
+    const confirmed = await dialog.confirm({
+      title: '批量删除封面',
+      message: `确定要删除选中的 ${selectedIds.length} 张封面吗？默认封面被删除时会自动回退到剩余封面。`,
+      confirmText: '批量删除',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
+    setBatchDeleting(true);
+    try {
+      await apiDelete(`${config.apiPrefix}/${resourceId}/covers`, { coverIds: selectedIds });
+      invalidateCoversCache();
+      const removedCurrentCover = covers.some(
+        (cover) => selectedIds.includes(cover.id) && cover.url === currentCover
+      );
+      const nextCovers = await fetchCovers();
+      setSelectedCoverIds(new Set());
+      if (removedCurrentCover && onCoverUpdated) {
+        const nextDefaultCover = nextCovers.find((cover) => cover.isDefault) || nextCovers[0];
+        onCoverUpdated(nextDefaultCover?.url || '');
+      }
+      show('封面已批量删除');
+    } catch (error) {
+      console.error('Batch delete covers failed:', error);
+      show(error instanceof Error ? error.message : '批量删除封面失败', { variant: 'error' });
+    } finally {
+      setBatchDeleting(false);
     }
   };
 
@@ -234,7 +310,27 @@ export const CoverManager = ({
             </div>
           ) : covers.length > 0 ? (
             <div className="space-y-3">
-              <span className="text-sm font-medium text-text-primary">已上传的封面 ({covers.length})</span>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-medium text-text-primary">已上传的封面 ({covers.length})</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={selectAllCovers}
+                    className="px-3 py-1.5 rounded border border-border text-xs text-text-secondary hover:text-brand-gold hover:border-brand-gold transition-all"
+                  >
+                    {selectedCoverIds.size === covers.length ? '取消全选' : '全选'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBatchDelete}
+                    disabled={!selectedCoverIds.size || batchDeleting}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded theme-button-danger text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {batchDeleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                    删除 {selectedCoverIds.size || ''}
+                  </button>
+                </div>
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {covers.map((cover) => (
                   <div
@@ -252,6 +348,15 @@ export const CoverManager = ({
                         <Star size={10} /> 默认
                       </div>
                     )}
+                    <label className="absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded bg-black/55 text-white shadow-sm">
+                      <input
+                        type="checkbox"
+                        checked={selectedCoverIds.has(cover.id)}
+                        onChange={() => toggleSelectedCover(cover.id)}
+                        className="h-4 w-4 accent-brand-gold"
+                        aria-label="选择封面"
+                      />
+                    </label>
                     <div className="absolute inset-0 bg-black/0 hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 hover:opacity-100">
                       {!cover.isDefault && (
                         <button

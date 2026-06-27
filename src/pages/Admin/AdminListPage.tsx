@@ -16,9 +16,10 @@ import {
   XCircle,
 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { apiDelete, apiGet, apiPatch, apiPost } from '../../lib/apiClient'
+import { apiDelete, apiGet, apiPatch, apiPost, invalidateApiCacheByPrefix } from '../../lib/apiClient'
 import { formatDateTime } from '../../lib/dateUtils'
 import { getStatusClassName, getStatusText } from '../../lib/contentUtils'
+import { CONTENT_LIMITS } from '../../lib/contentLimits'
 import { useDialog } from '../../components/Dialog'
 import { useToast } from '../../components/Toast'
 import { SmartImage } from '../../components/SmartImage'
@@ -420,12 +421,22 @@ const renderCell = (type: ListType, item: AdminDataItem, key: ColumnKey, Icon: R
   return null
 }
 
+const getAdminItemId = (item: AdminDataItem) => String(item.docId || item.id || item.uid || '')
+
 export const AdminListPage = ({ type }: { type: ListType }) => {
   const cfg = configMap[type]
   const Icon = cfg.icon
   const [data, setData] = useState<AdminDataItem[]>([])
   const [loading, setLoading] = useState(true)
   const [pendingActions, setPendingActions] = useState<Record<string, 'delete' | 'restore' | 'permanentDelete'>>({})
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set())
+  const [batchDisplayOpen, setBatchDisplayOpen] = useState(false)
+  const [batchDisplaySaving, setBatchDisplaySaving] = useState(false)
+  const [batchDisplayForm, setBatchDisplayForm] = useState({
+    displayAlbumMode: 'linked' as 'linked' | 'manual' | 'none',
+    manualAlbumName: '',
+    displayAlbumDocId: '',
+  })
   const [showDeleted, setShowDeleted] = useState(false)
   const dialog = useDialog()
   const { show } = useToast()
@@ -437,7 +448,12 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
       const result = await apiGet<{ data: AdminDataItem[] }>(`/api/admin/${cfg.apiPath}`, {
         includeDeleted: showDeleted ? 'true' : undefined,
       })
-      setData(result.data || [])
+      const nextData = result.data || []
+      setData(nextData)
+      setSelectedRowIds((prev) => {
+        const rowIds = new Set(nextData.map(getAdminItemId))
+        return new Set([...prev].filter((rowId) => rowIds.has(rowId)))
+      })
     } catch (e) {
       console.error(e)
       setData([])
@@ -462,6 +478,66 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
   useEffect(() => {
     fetchData()
   }, [type, showDeleted])
+
+  useEffect(() => {
+    setSelectedRowIds(new Set())
+    setBatchDisplayOpen(false)
+  }, [type])
+
+  const isSelectableList = type === 'music'
+  const selectedCount = selectedRowIds.size
+
+  const toggleSelectedRow = (rowId: string) => {
+    setSelectedRowIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(rowId)) {
+        next.delete(rowId)
+      } else {
+        next.add(rowId)
+      }
+      return next
+    })
+  }
+
+  const toggleAllRows = () => {
+    const selectableIds = data.map(getAdminItemId).filter(Boolean)
+    setSelectedRowIds((prev) =>
+      prev.size === selectableIds.length ? new Set() : new Set(selectableIds)
+    )
+  }
+
+  const handleBatchDisplaySubmit = async () => {
+    if (type !== 'music' || !selectedRowIds.size || batchDisplaySaving) return
+    if (batchDisplayForm.displayAlbumMode === 'manual' && !batchDisplayForm.manualAlbumName.trim()) {
+      show('手动专辑名不能为空', { variant: 'error' })
+      return
+    }
+
+    setBatchDisplaySaving(true)
+    try {
+      await apiPatch('/api/admin/music/batch-display', {
+        songDocIds: [...selectedRowIds],
+        displayAlbumMode: batchDisplayForm.displayAlbumMode,
+        manualAlbumName:
+          batchDisplayForm.displayAlbumMode === 'manual'
+            ? batchDisplayForm.manualAlbumName.trim()
+            : null,
+        displayAlbumDocId:
+          batchDisplayForm.displayAlbumMode === 'linked' && batchDisplayForm.displayAlbumDocId.trim()
+            ? batchDisplayForm.displayAlbumDocId.trim()
+            : null,
+      })
+      show('歌曲展示信息已批量更新', { variant: 'success' })
+      setSelectedRowIds(new Set())
+      setBatchDisplayOpen(false)
+      invalidateApiCacheByPrefix('/api/admin/music')
+      await fetchData()
+    } catch (error) {
+      show(error instanceof Error ? error.message : '批量更新展示信息失败', { variant: 'error' })
+    } finally {
+      setBatchDisplaySaving(false)
+    }
+  }
 
   const handleDelete = async (id: string) => {
     const requiresReason = type === 'wiki' || type === 'posts' || type === 'galleries'
@@ -708,6 +784,82 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
         </div>
       </div>
 
+      {isSelectableList && (
+        <div className="rounded border border-border bg-surface p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-text-secondary">
+              已选择 <span className="font-semibold text-brand-gold">{selectedCount}</span> 首歌曲
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleAllRows}
+                disabled={!data.length}
+                className="rounded border border-border px-3 py-1.5 text-xs text-text-secondary transition-all hover:border-brand-gold hover:text-brand-gold disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {selectedCount === data.length && data.length ? '取消全选' : '全选'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setBatchDisplayOpen((value) => !value)}
+                disabled={!selectedCount}
+                className="rounded theme-button-secondary px-3 py-1.5 text-xs transition-all disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                批量更新展示
+              </button>
+            </div>
+          </div>
+
+          {batchDisplayOpen && selectedCount > 0 && (
+            <div className="mt-4 grid grid-cols-1 gap-3 border-t border-border pt-4 md:grid-cols-[160px_1fr_1fr_auto]">
+              <select
+                value={batchDisplayForm.displayAlbumMode}
+                onChange={(event) =>
+                  setBatchDisplayForm((prev) => ({
+                    ...prev,
+                    displayAlbumMode: event.target.value as 'linked' | 'manual' | 'none',
+                  }))
+                }
+                className="rounded border border-border bg-surface-alt px-3 py-2 text-sm text-text-primary focus:border-brand-gold focus:outline-none"
+              >
+                <option value="linked">显示关联专辑</option>
+                <option value="manual">显示手动专辑</option>
+                <option value="none">不显示专辑</option>
+              </select>
+              <input
+                type="text"
+                value={batchDisplayForm.manualAlbumName}
+                onChange={(event) =>
+                  setBatchDisplayForm((prev) => ({ ...prev, manualAlbumName: event.target.value }))
+                }
+                disabled={batchDisplayForm.displayAlbumMode !== 'manual'}
+                maxLength={CONTENT_LIMITS.music.manualAlbumName}
+                placeholder="手动专辑名"
+                className="rounded border border-border bg-surface-alt px-3 py-2 text-sm text-text-primary focus:border-brand-gold focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              <input
+                type="text"
+                value={batchDisplayForm.displayAlbumDocId}
+                onChange={(event) =>
+                  setBatchDisplayForm((prev) => ({ ...prev, displayAlbumDocId: event.target.value }))
+                }
+                disabled={batchDisplayForm.displayAlbumMode !== 'linked'}
+                placeholder="展示专辑 docId（可选）"
+                className="rounded border border-border bg-surface-alt px-3 py-2 text-sm text-text-primary focus:border-brand-gold focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              <button
+                type="button"
+                onClick={() => void handleBatchDisplaySubmit()}
+                disabled={batchDisplaySaving}
+                className="rounded theme-button-primary px-4 py-2 text-sm transition-all disabled:cursor-wait disabled:opacity-50"
+              >
+                {batchDisplaySaving ? '保存中...' : '保存'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {cfg.hasCreate && (
         <div className="rounded border border-border bg-surface p-5">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-primary">
@@ -772,6 +924,17 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
           <table className="w-full border-collapse text-left">
             <thead>
               <tr className="border-b border-border bg-surface-alt">
+                {isSelectableList && (
+                  <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+                    <input
+                      type="checkbox"
+                      checked={data.length > 0 && selectedCount === data.length}
+                      onChange={toggleAllRows}
+                      className="accent-brand-gold"
+                      aria-label="选择全部歌曲"
+                    />
+                  </th>
+                )}
                 {cfg.columns.map((col) => (
                   <th
                     key={col.key}
@@ -786,19 +949,30 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
               {loading ? (
                 [1, 2, 3].map((i) => (
                   <tr key={i} className="animate-pulse">
-                    <td colSpan={cfg.columns.length} className="px-5 py-4">
+                    <td colSpan={cfg.columns.length + (isSelectableList ? 1 : 0)} className="px-5 py-4">
                       <div className="h-6 rounded bg-surface-alt" />
                     </td>
                   </tr>
                 ))
               ) : data.length > 0 ? (
                 data.map((item) => {
-                  const rowId = String(item.docId || item.id || item.uid || '')
+                  const rowId = getAdminItemId(item)
                   return (
                     <tr
                       key={rowId}
                       className={clsx('transition-colors hover:bg-surface-alt', item.isDeleted && 'opacity-70')}
                     >
+                      {isSelectableList && (
+                        <td className="px-5 py-4 align-top">
+                          <input
+                            type="checkbox"
+                            checked={selectedRowIds.has(rowId)}
+                            onChange={() => toggleSelectedRow(rowId)}
+                            className="accent-brand-gold"
+                            aria-label={`选择 ${toText(item.title || item.id || rowId)}`}
+                          />
+                        </td>
+                      )}
                       {cfg.columns.map((col) => (
                         <td
                           key={col.key}
@@ -815,7 +989,7 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
                 })
               ) : (
                 <tr>
-                  <td colSpan={cfg.columns.length} className="px-5 py-16 text-center italic text-text-muted">
+                  <td colSpan={cfg.columns.length + (isSelectableList ? 1 : 0)} className="px-5 py-16 text-center italic text-text-muted">
                     暂无数据
                   </td>
                 </tr>

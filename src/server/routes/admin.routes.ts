@@ -8,7 +8,12 @@ import {
   clearUserCache,
 } from '../middleware/auth';
 import { asyncHandler } from '../middleware/asyncHandler';
-import { validateBody, backupRestoreSchema } from '../schemas';
+import {
+  validateBody,
+  backupRestoreSchema,
+  adminBatchEditLocksSchema,
+  adminBatchMusicDisplaySchema,
+} from '../schemas';
 import type { AuthenticatedRequest } from '../types';
 import {
   prisma,
@@ -20,6 +25,7 @@ import {
   toEditLockResponse,
   toMusicResponse,
   parseContentStatus,
+  parseDisplayAlbumMode,
   normalizeModerationTargetType,
   createNotification,
   parseDatabaseUrl,
@@ -996,6 +1002,27 @@ router.delete('/locks/:id', requireAuth, requireActiveUser, asyncHandler(async (
   }
 }));
 
+router.delete(
+  '/locks',
+  requireAdmin,
+  validateBody(adminBatchEditLocksSchema),
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    try {
+      const lockIds = req.body.lockIds as string[];
+      const result = await prisma.editLock.deleteMany({
+        where: {
+          id: { in: lockIds },
+        },
+      });
+
+      res.json({ success: true, deleted: result.count });
+    } catch (error) {
+      logger.error({ err: error }, 'Batch release edit locks error');
+      res.status(500).json({ error: '批量释放编辑锁失败' });
+    }
+  })
+);
+
 /**
  * ==========================
  * Moderation Logs
@@ -1072,6 +1099,93 @@ router.get('/ban_logs', requireAdmin, asyncHandler(async (_req, res) => {
  * Batch Operations Routes
  * ==========================
  */
+
+router.patch(
+  '/music/batch-display',
+  requireAdmin,
+  validateBody(adminBatchMusicDisplaySchema),
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    try {
+      const songDocIds = req.body.songDocIds as string[];
+      const displayAlbumMode = parseDisplayAlbumMode(req.body.displayAlbumMode);
+      const manualAlbumName =
+        typeof req.body.manualAlbumName === 'string' ? req.body.manualAlbumName.trim() : null;
+      const displayAlbumDocId =
+        typeof req.body.displayAlbumDocId === 'string' ? req.body.displayAlbumDocId.trim() : null;
+
+      if (!displayAlbumMode) {
+        res.status(400).json({ error: '展示模式无效' });
+        return;
+      }
+
+      if (!ensureTextLimit(res, manualAlbumName, '手动专辑名', CONTENT_LIMITS.music.manualAlbumName)) {
+        return;
+      }
+
+      const songs = await prisma.musicTrack.findMany({
+        where: {
+          docId: { in: songDocIds },
+          deletedAt: null,
+        },
+        select: { docId: true },
+      });
+      if (songs.length !== songDocIds.length) {
+        res.status(400).json({ error: '歌曲列表包含无效歌曲' });
+        return;
+      }
+
+      if (displayAlbumMode === 'manual' && !manualAlbumName) {
+        res.status(400).json({ error: '手动专辑名不能为空' });
+        return;
+      }
+
+      if (displayAlbumMode === 'linked' && displayAlbumDocId) {
+        const relations = await prisma.songAlbumRelation.findMany({
+          where: {
+            albumDocId: displayAlbumDocId,
+            songDocId: { in: songDocIds },
+          },
+          select: { songDocId: true },
+        });
+        const relatedSongDocIds = new Set(relations.map((relation) => relation.songDocId));
+        if (songDocIds.some((songDocId) => !relatedSongDocIds.has(songDocId))) {
+          res.status(400).json({ error: '展示专辑必须已关联所有选中歌曲' });
+          return;
+        }
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.musicTrack.updateMany({
+          where: { docId: { in: songDocIds } },
+          data: {
+            displayAlbumMode,
+            manualAlbumName: displayAlbumMode === 'manual' ? manualAlbumName : null,
+          },
+        });
+
+        if (displayAlbumMode === 'linked' && displayAlbumDocId) {
+          await tx.songAlbumRelation.updateMany({
+            where: { songDocId: { in: songDocIds } },
+            data: { isDisplay: false },
+          });
+          await tx.songAlbumRelation.updateMany({
+            where: {
+              songDocId: { in: songDocIds },
+              albumDocId: displayAlbumDocId,
+            },
+            data: { isDisplay: true },
+          });
+        }
+      });
+
+      enhancedCache.invalidateByPrefix('music_list:');
+      res.json({ success: true, updated: songDocIds.length });
+    } catch (error) {
+      logger.error({ err: error }, 'Batch update music display error');
+      res.status(500).json({ error: '批量更新歌曲展示信息失败' });
+    }
+  })
+);
 
 // POST /api/admin/batch-delete-posts - Batch delete posts
 router.post('/batch-delete-posts', requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res) => {

@@ -42,6 +42,8 @@ vi.mock('../../src/server/schemas', () => ({
     next()
   ),
   backupRestoreSchema: {},
+  adminBatchEditLocksSchema: {},
+  adminBatchMusicDisplaySchema: {},
 }))
 
 vi.mock('../../src/server/wiki/markdownLinkUpdater', () => ({

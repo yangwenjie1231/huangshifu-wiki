@@ -68,3 +68,57 @@ export const adminUpdateUserSchema = z
       value.newPassword !== undefined,
     '没有要更新的字段'
   )
+
+const idListSchema = (fieldName: string) =>
+  z
+    .array(z.string({ error: `${fieldName} 必须是字符串` }).trim().min(1, `${fieldName} 不能为空`), {
+      error: `${fieldName} 必须是数组`,
+    })
+    .min(1, `请选择${fieldName}`)
+    .max(200, `一次最多处理 200 个${fieldName}`)
+    .transform((items) => [...new Set(items)])
+
+export const adminBatchGalleryImagesSchema = z.object({
+  imageIds: idListSchema('图片 ID'),
+})
+
+export const adminBatchSongCoversSchema = z.object({
+  coverIds: idListSchema('封面 ID'),
+})
+
+export const adminBatchAlbumCoversSchema = z.object({
+  coverIds: idListSchema('封面 ID'),
+})
+
+export const adminBatchEditLocksSchema = z.object({
+  lockIds: idListSchema('编辑锁 ID'),
+})
+
+export const adminBatchMusicDisplaySchema = z
+  .object({
+    songDocIds: idListSchema('歌曲 ID'),
+    displayAlbumMode: z.enum(['linked', 'manual', 'none'], {
+      error: '展示模式无效',
+    }),
+    manualAlbumName: z
+      .string({ error: '手动专辑名必须是字符串' })
+      .trim()
+      .max(200, '手动专辑名过长')
+      .nullable()
+      .optional(),
+    displayAlbumDocId: z
+      .string({ error: '展示专辑 ID 必须是字符串' })
+      .trim()
+      .min(1, '展示专辑 ID 不能为空')
+      .nullable()
+      .optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.displayAlbumMode === 'manual' && !value.manualAlbumName) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['manualAlbumName'],
+        message: '手动专辑名不能为空',
+      })
+    }
+  })

@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { requireAdmin } from '../middleware/auth';
+import { adminBatchAlbumCoversSchema, validateBody } from '../schemas';
 import {
   prisma,
   toAlbumResponse,
   toSongResponse,
   toPostResponse,
   addAlbumCoverFromAsset,
-  safeDeleteUploadFileByStorageKey,
   buildPostVisibilityWhere,
   parsePostSort,
   parseMusicPlatform,
@@ -19,6 +19,7 @@ import {
   ensureTextLimit,
   softDeleteData,
 } from '../utils';
+import { cleanupUnusedMediaAssetById } from '../services/mediaAssetCleanupService';
 import type { AuthenticatedRequest } from '../types';
 import type { AlbumCover } from '@prisma/client';
 import { CONTENT_LIMITS } from '../../lib/contentLimits';
@@ -37,6 +38,56 @@ function ensureAlbumTextLimits(res: Parameters<typeof ensureTextLimit>[0], input
     ensureTextLimit(res, input.defaultCoverSource, '默认封面来源', CONTENT_LIMITS.album.defaultCoverSource) &&
     ensureTextLimit(res, input.name, 'Disc 名称', CONTENT_LIMITS.album.discName)
   )
+}
+
+async function deleteAlbumCoverById(albumDocId: string, coverId: string) {
+  const cover = await prisma.albumCover.findFirst({
+    where: {
+      id: coverId,
+      albumDocId,
+    },
+  });
+
+  if (!cover) return false;
+
+  await prisma.albumCover.delete({ where: { id: cover.id } });
+
+  if (cover.assetId) {
+    await cleanupUnusedMediaAssetById(cover.assetId);
+  }
+
+  const remaining = await prisma.albumCover.findMany({
+    where: { albumDocId },
+    orderBy: { sortOrder: 'asc' },
+  });
+
+  if (!remaining.length) {
+    await prisma.album.update({
+      where: { docId: albumDocId },
+      data: {
+        defaultCoverSource: 'old_cover',
+        cover: '',
+      },
+    });
+  } else {
+    const hasDefault = remaining.some((item) => item.isDefault);
+    const first = remaining[0];
+    if (!hasDefault) {
+      await prisma.albumCover.update({
+        where: { id: first.id },
+        data: { isDefault: true },
+      });
+      await prisma.album.update({
+        where: { docId: albumDocId },
+        data: {
+          defaultCoverSource: `album_cover:${first.id}`,
+          cover: first.publicUrl,
+        },
+      });
+    }
+  }
+
+  return true;
 }
 
 // Albums list
@@ -569,71 +620,50 @@ router.post('/:docId/covers', requireAdmin, async (req, res) => {
 });
 
 // Delete album cover
-router.delete('/:docId/covers/:coverId', requireAdmin, async (req, res) => {
+router.delete('/:docId/covers', requireAdmin, validateBody(adminBatchAlbumCoversSchema), async (req, res) => {
   try {
-    const { docId: albumDocId, coverId } = req.params;
-    const cover = await prisma.albumCover.findFirst({
-      where: {
-        id: coverId,
-        albumDocId,
-      },
+    const albumDocId = req.params.docId;
+    const album = await prisma.album.findUnique({
+      where: { docId: albumDocId },
+      select: { docId: true },
     });
+    if (!album) {
+      res.status(404).json({ error: '专辑不存在' });
+      return;
+    }
 
-    if (!cover) {
+    let deleted = 0;
+    for (const coverId of req.body.coverIds as string[]) {
+      if (await deleteAlbumCoverById(albumDocId, coverId)) {
+        deleted++;
+      }
+    }
+
+    if (deleted === 0) {
       res.status(404).json({ error: '封面不存在' });
       return;
     }
 
-    await prisma.albumCover.delete({ where: { id: cover.id } });
+    enhancedCache.invalidateByPrefix('album_list:');
+    enhancedCache.invalidateByPrefix('music_list:');
+    res.json({ success: true, deleted });
+  } catch (error) {
+    console.error('Batch delete album covers error:', error);
+    res.status(500).json({ error: '批量删除专辑封面失败' });
+  }
+});
 
-    if (cover.assetId) {
-      const [songLinked, albumLinked, galleryLinked] = await Promise.all([
-        prisma.songCover.count({ where: { assetId: cover.assetId } }),
-        prisma.albumCover.count({ where: { assetId: cover.assetId } }),
-        prisma.galleryImage.count({ where: { assetId: cover.assetId } }),
-      ]);
-      if (songLinked + albumLinked + galleryLinked === 0) {
-        const asset = await prisma.mediaAsset.findUnique({ where: { id: cover.assetId } });
-        if (asset) {
-          await safeDeleteUploadFileByStorageKey(asset.storageKey);
-          await prisma.mediaAsset.update({
-            where: { id: asset.id },
-            data: { status: 'deleted' },
-          });
-        }
-      }
+router.delete('/:docId/covers/:coverId', requireAdmin, async (req, res) => {
+  try {
+    const { docId: albumDocId, coverId } = req.params;
+    const deleted = await deleteAlbumCoverById(albumDocId, coverId);
+    if (!deleted) {
+      res.status(404).json({ error: '封面不存在' });
+      return;
     }
 
-    const remaining = await prisma.albumCover.findMany({
-      where: { albumDocId },
-      orderBy: { sortOrder: 'asc' },
-    });
-
-    if (!remaining.length) {
-      await prisma.album.update({
-        where: { docId: albumDocId },
-        data: {
-          defaultCoverSource: 'old_cover',
-        },
-      });
-    } else {
-      const hasDefault = remaining.some((item) => item.isDefault);
-      const first = remaining[0];
-      if (!hasDefault) {
-        await prisma.albumCover.update({
-          where: { id: first.id },
-          data: { isDefault: true },
-        });
-        await prisma.album.update({
-          where: { docId: albumDocId },
-          data: {
-            defaultCoverSource: `album_cover:${first.id}`,
-            cover: first.publicUrl,
-          },
-        });
-      }
-    }
-
+    enhancedCache.invalidateByPrefix('album_list:');
+    enhancedCache.invalidateByPrefix('music_list:');
     res.json({ success: true });
   } catch (error) {
     console.error('Delete album cover error:', error);

@@ -513,16 +513,19 @@ const GalleryEdit = () => {
             : { imageId: image.id }
         )
         .filter((image) => image && ('imageId' in image || 'assetId' in image || 'url' in image))
+      const galleryMetadataPayload = {
+        title: currentDraft.title,
+        description: currentDraft.description,
+        tags: splitTagsInput(currentDraft.tagsText),
+        locationCode: currentDraft.locationCode,
+        locationDetail: currentDraft.locationName,
+        copyright: currentDraft.copyrightText.trim() || null,
+        status,
+      }
 
       if (isCreating) {
         const created = await apiPost<GalleryCreateResponse>('/api/galleries', {
-          title: currentDraft.title,
-          description: currentDraft.description,
-          tags: splitTagsInput(currentDraft.tagsText),
-          locationCode: currentDraft.locationCode,
-          locationDetail: currentDraft.locationName,
-          copyright: currentDraft.copyrightText.trim() || null,
-          status,
+          ...galleryMetadataPayload,
           images: imagesPayload.filter((image) => image && 'url' in image),
         })
 
@@ -544,16 +547,9 @@ const GalleryEdit = () => {
         redirectTarget = `/gallery/${savedGallery.id}`
       } else {
         const result = await apiPatch<GalleryDetailResponse>(`/api/galleries/${galleryId}`, {
-          title: currentDraft.title,
-          description: currentDraft.description,
-          tags: splitTagsInput(currentDraft.tagsText),
-          locationCode: currentDraft.locationCode,
-          locationDetail: currentDraft.locationName,
-          copyright: currentDraft.copyrightText.trim() || null,
-          status,
+          ...galleryMetadataPayload,
           images: imagesPayload,
         })
-
         const savedGallery = result.gallery
         releasePendingImageUrls(currentDraft.images)
         setGallery(savedGallery)

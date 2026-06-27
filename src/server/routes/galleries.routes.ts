@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { requireAuth, requireActiveUser, requireAdmin, isAdminRole } from '../middleware/auth'
 import { asyncHandler } from '../middleware/asyncHandler'
 import { galleryWriteLimiter } from '../middleware/rateLimiter'
-import { galleryDeleteSchema, validateBody } from '../schemas'
+import { adminBatchGalleryImagesSchema, galleryDeleteSchema, validateBody } from '../schemas'
 import type { ApiUser, AuthenticatedRequest, ContentStatus } from '../types'
 import {
   serializeTags,
@@ -71,6 +71,44 @@ function canCreateGallery(authUser?: ApiUser) {
 }
 
 const router = Router()
+
+async function cleanupRemovedGalleryImages(
+  images: Array<{ assetId: string | null; url: string }>
+) {
+  await Promise.all(
+    images.map(async (image) => {
+      if (image.assetId) {
+        await cleanupUnusedMediaAssetById(image.assetId)
+        return
+      }
+      await cleanupUntrackedUploadImageByUrl(image.url)
+    })
+  )
+}
+
+async function fetchGalleryForResponse(galleryId: string) {
+  return prisma.gallery.findUnique({
+    where: { id: galleryId },
+    include: {
+      images: {
+        include: {
+          asset: true,
+        },
+        orderBy: { sortOrder: 'asc' },
+      },
+    },
+  })
+}
+
+function parseAppendAssetIdList(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [] as string[]
+  }
+
+  return value
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean)
+}
 
 function resolveGalleryRequestedStatus(
   body: Record<string, unknown>,
@@ -1156,15 +1194,7 @@ router.patch('/:id', requireAuth, requireActiveUser, asyncHandler(async (req: Au
     }
 
     if (removedImages.length) {
-      await Promise.all(
-        removedImages.map(async (item) => {
-          if (item.assetId) {
-            await cleanupUnusedMediaAssetById(item.assetId)
-          } else {
-            await cleanupUntrackedUploadImageByUrl(item.url)
-          }
-        }),
-      )
+      await cleanupRemovedGalleryImages(removedImages)
     }
 
     res.json({ gallery: await toGalleryResponse(updated) })
@@ -1365,7 +1395,7 @@ router.post('/:id/images', requireAuth, requireActiveUser, asyncHandler(async (r
       return
     }
 
-    const assetIds = parseAssetIdList(req.body?.assetIds)
+    const assetIds = parseAppendAssetIdList(req.body?.assetIds)
     if (!assetIds.length) {
       res.status(400).json({ error: '请提供至少一个图片资源' })
       return
@@ -1402,16 +1432,17 @@ router.post('/:id/images', requireAuth, requireActiveUser, asyncHandler(async (r
       }
     }
 
+    const uniqueAssetIds = [...new Set(assetIds)]
     const assets = await prisma.mediaAsset.findMany({
       where: {
-        id: { in: assetIds },
+        id: { in: uniqueAssetIds },
         ownerUid: req.authUser!.uid,
         status: 'ready',
       },
       orderBy: { createdAt: 'asc' },
     })
 
-    if (assets.length !== assetIds.length) {
+    if (assets.length !== uniqueAssetIds.length) {
       res.status(400).json({ error: '包含无效或无权限的图片资源' })
       return
     }
@@ -1438,17 +1469,7 @@ router.post('/:id/images', requireAuth, requireActiveUser, asyncHandler(async (r
       },
     })
 
-    const updated = await prisma.gallery.findUnique({
-      where: { id: gallery.id },
-      include: {
-        images: {
-          include: {
-            asset: true,
-          },
-          orderBy: { sortOrder: 'asc' },
-        },
-      },
-    })
+    const updated = await fetchGalleryForResponse(gallery.id)
 
     if (updated) {
       try {
@@ -1461,9 +1482,9 @@ router.post('/:id/images', requireAuth, requireActiveUser, asyncHandler(async (r
       }
 
       try {
-      for (const asset of orderedAssets) {
-        await syncGalleryImageToImageMapWithVariant(asset.publicUrl, asset.storageKey)
-      }
+        for (const asset of orderedAssets) {
+          await syncGalleryImageToImageMapWithVariant(asset.publicUrl, asset.storageKey)
+        }
       } catch (error) {
         console.error('Sync gallery images to ImageMap error:', error)
       }
@@ -1478,6 +1499,98 @@ router.post('/:id/images', requireAuth, requireActiveUser, asyncHandler(async (r
     res.status(500).json({ error: '追加图集图片失败' })
   }
 }))
+
+router.delete(
+  '/:id/images',
+  requireAuth,
+  requireActiveUser,
+  validateBody(adminBatchGalleryImagesSchema),
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    try {
+      if (GALLERY_ADMIN_ONLY && !isAdminRole(req.authUser?.role)) {
+        res.status(403).json({ error: '当前图集已临时限制为仅管理员可操作' })
+        return
+      }
+
+      const gallery = await prisma.gallery.findUnique({
+        where: { id: req.params.id },
+        select: {
+          id: true,
+          authorUid: true,
+        },
+      })
+
+      if (!gallery) {
+        res.status(404).json({ error: '图集不存在' })
+        return
+      }
+
+      if (!canManageGallery(gallery, req.authUser)) {
+        res.status(403).json({ error: '无权限编辑该图集' })
+        return
+      }
+
+      const imageIds = req.body.imageIds as string[]
+      const existingImages = await prisma.galleryImage.findMany({
+        where: { galleryId: gallery.id },
+        orderBy: { sortOrder: 'asc' },
+        select: {
+          id: true,
+          assetId: true,
+          url: true,
+        },
+      })
+      const existingIdSet = new Set(existingImages.map((image) => image.id))
+      if (imageIds.some((imageId) => !existingIdSet.has(imageId))) {
+        res.status(400).json({ error: '图片列表包含无效图片' })
+        return
+      }
+
+      const deleteIdSet = new Set(imageIds)
+      const removedImages = existingImages.filter((image) => deleteIdSet.has(image.id))
+      if (existingImages.length - removedImages.length <= 0) {
+        res.status(400).json({ error: '图集至少需要保留一张图片' })
+        return
+      }
+
+      await prisma.galleryImage.deleteMany({
+        where: {
+          galleryId: gallery.id,
+          id: { in: imageIds },
+        },
+      })
+
+      await cleanupRemovedGalleryImages(removedImages)
+
+      const remaining = await prisma.galleryImage.findMany({
+        where: { galleryId: gallery.id },
+        orderBy: { sortOrder: 'asc' },
+        select: { id: true },
+      })
+
+      await prisma.$transaction(
+        remaining.map((image, index) =>
+          prisma.galleryImage.update({
+            where: { id: image.id },
+            data: { sortOrder: index },
+          })
+        )
+      )
+
+      const updated = await fetchGalleryForResponse(gallery.id)
+      if (!updated) {
+        res.status(404).json({ error: '图集不存在' })
+        return
+      }
+
+      enhancedCache.invalidateByPrefix('gallery_list_public:')
+      res.json({ deleted: removedImages.length, gallery: await toGalleryResponse(updated) })
+    } catch (error) {
+      console.error('Batch delete gallery images error:', error)
+      res.status(500).json({ error: '批量删除图集图片失败' })
+    }
+  })
+)
 
 router.delete('/:id/images/:imageId', requireAuth, requireActiveUser, asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
@@ -1527,11 +1640,7 @@ router.delete('/:id/images/:imageId', requireAuth, requireActiveUser, asyncHandl
 
     await prisma.galleryImage.delete({ where: { id: image.id } })
 
-    if (image.assetId) {
-      await cleanupUnusedMediaAssetById(image.assetId)
-    } else {
-      await cleanupUntrackedUploadImageByUrl(image.url)
-    }
+    await cleanupRemovedGalleryImages([image])
 
     const remaining = await prisma.galleryImage.findMany({
       where: { galleryId: gallery.id },
@@ -1548,23 +1657,14 @@ router.delete('/:id/images/:imageId', requireAuth, requireActiveUser, asyncHandl
       ),
     )
 
-    const updated = await prisma.gallery.findUnique({
-      where: { id: gallery.id },
-      include: {
-        images: {
-          include: {
-            asset: true,
-          },
-          orderBy: { sortOrder: 'asc' },
-        },
-      },
-    })
+    const updated = await fetchGalleryForResponse(gallery.id)
 
     if (!updated) {
       res.status(404).json({ error: '图集不存在' })
       return
     }
 
+    enhancedCache.invalidateByPrefix('gallery_list_public:')
     res.json({ gallery: await toGalleryResponse(updated) })
   } catch (error) {
     console.error('Delete gallery image error:', error)
@@ -1632,23 +1732,14 @@ router.patch('/:id/images/reorder', requireAuth, requireActiveUser, asyncHandler
       ),
     )
 
-    const updated = await prisma.gallery.findUnique({
-      where: { id: gallery.id },
-      include: {
-        images: {
-          include: {
-            asset: true,
-          },
-          orderBy: { sortOrder: 'asc' },
-        },
-      },
-    })
+    const updated = await fetchGalleryForResponse(gallery.id)
 
     if (!updated) {
       res.status(404).json({ error: '图集不存在' })
       return
     }
 
+    enhancedCache.invalidateByPrefix('gallery_list_public:')
     res.json({ gallery: await toGalleryResponse(updated) })
   } catch (error) {
     console.error('Reorder gallery images error:', error)
