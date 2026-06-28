@@ -3,7 +3,6 @@ import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { Prisma, UserRole as PrismaUserRole } from '@prisma/client'
 
 import { prisma } from '../prisma'
 export { prisma }
@@ -27,7 +26,6 @@ export const backupsDir = path.join(__dirname, '..', '..', '..', 'backups')
 fs.mkdirSync(backupsDir, { recursive: true })
 
 // 环境变量常量
-export const SUPER_ADMIN_EMAIL = process.env.SEED_SUPER_ADMIN_EMAIL || ''
 export const BACKUP_PASSWORD = process.env.BACKUP_PASSWORD || ''
 export const BACKUP_RETAIN_COUNT = Math.max(1, Number(process.env.BACKUP_RETAIN_COUNT || 20))
 export const GALLERY_ADMIN_ONLY = process.env.GALLERY_ADMIN_ONLY === 'true'

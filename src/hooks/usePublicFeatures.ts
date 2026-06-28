@@ -3,10 +3,12 @@ import { apiGet } from '../lib/apiClient'
 
 export interface PublicFeatureConfig {
   semanticSearch: boolean
+  registrationEnabled: boolean
 }
 
 const DEFAULT_FEATURES: PublicFeatureConfig = {
   semanticSearch: true,
+  registrationEnabled: true,
 }
 
 export function usePublicFeatures() {

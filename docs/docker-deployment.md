@@ -35,7 +35,6 @@ cp .env.docker.example .env
 编辑 `.env`：
 
 - `CORS_ORIGIN`：生产域名，例如 `https://wiki.example.com`
-- `SEED_SUPER_ADMIN_EMAIL` / `SEED_SUPER_ADMIN_PASSWORD`：首次管理员账号
 - `JWT_SECRET`、`POSTGRES_PASSWORD`、`BACKUP_PASSWORD`：部署脚本会自动替换模板占位值，也可以手动改为自己的强密钥
 - `S3_*`、`WECHAT_MP_*`、`AMAP_*`：按实际功能启用
 
@@ -54,6 +53,8 @@ chmod +x scripts/deploy-docker.sh
 - 执行 `npm run db:seed`
 - 启动应用容器
 - 检查 `http://127.0.0.1:3003/healthz`
+
+空数据库首次访问站点时，会进入 `/setup` 页面创建超级管理员账号。
 
 ## 3. 常用操作
 

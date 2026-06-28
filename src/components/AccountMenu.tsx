@@ -13,9 +13,10 @@ import styles from './AccountMenu.module.css'
 interface AccountMenuProps {
   onLogout: () => void | Promise<void>
   onOpenAuth?: (mode: AuthMode) => void
+  allowRegister?: boolean
 }
 
-export const AccountMenu = ({ onLogout, onOpenAuth }: AccountMenuProps) => {
+export const AccountMenu = ({ onLogout, onOpenAuth, allowRegister = true }: AccountMenuProps) => {
   const { user, profile, isAdmin, isBanned, loading } = useAuth()
   const location = useLocation()
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
@@ -189,16 +190,18 @@ export const AccountMenu = ({ onLogout, onOpenAuth }: AccountMenuProps) => {
                   >
                     登录
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      closeAccountMenu()
-                      onOpenAuth('register')
-                    }}
-                    className={styles.menuSecondaryAction}
-                  >
-                    注册
-                  </button>
+                  {allowRegister ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeAccountMenu()
+                        onOpenAuth('register')
+                      }}
+                      className={styles.menuSecondaryAction}
+                    >
+                      注册
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ) : null}

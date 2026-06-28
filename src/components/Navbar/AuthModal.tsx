@@ -11,6 +11,7 @@ interface AuthModalProps {
   onClose: () => void
   onAuthSuccess: () => void
   initialMode?: AuthMode
+  allowRegister?: boolean
 }
 
 export const AuthModal = ({
@@ -18,6 +19,7 @@ export const AuthModal = ({
   onClose,
   onAuthSuccess,
   initialMode = 'login',
+  allowRegister = true,
 }: AuthModalProps) => {
   const [authMode, setAuthMode] = useState<AuthMode>(initialMode)
   const { t } = useI18n()
@@ -82,6 +84,7 @@ export const AuthModal = ({
         <AuthForm
           initialMode={authMode}
           autoFocus
+          allowRegister={allowRegister}
           onAuthSuccess={() => {
             onClose()
             onAuthSuccess()

@@ -6,6 +6,13 @@ import { MemoryRouter } from 'react-router-dom';
 import { Navbar } from '../../../src/components/Navbar';
 import { ToastProvider } from '../../../src/components/Toast';
 
+const { mockUsePublicFeatures } = vi.hoisted(() => ({
+  mockUsePublicFeatures: vi.fn(() => ({
+    features: { semanticSearch: true, registrationEnabled: true },
+    loading: false,
+  })),
+}));
+
 vi.mock('../../../src/lib/i18n', () => ({
   useI18n: () => ({
     t: (key: string) => {
@@ -24,6 +31,10 @@ vi.mock('../../../src/lib/i18n', () => ({
   }),
 }));
 
+vi.mock('../../../src/hooks/usePublicFeatures', () => ({
+  usePublicFeatures: mockUsePublicFeatures,
+}));
+
 vi.mock('../../../src/context/AuthContext', () => ({
   useAuth: () => ({
     user: null,
@@ -39,6 +50,10 @@ vi.mock('../../../src/context/AuthContext', () => ({
 describe('Navbar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUsePublicFeatures.mockReturnValue({
+      features: { semanticSearch: true, registrationEnabled: true },
+      loading: false,
+    });
   });
 
   const renderWithRouter = (ui: React.ReactElement) => {
@@ -108,6 +123,25 @@ describe('Navbar', () => {
     }
     expect(foundLogin).toBe(true);
     expect(foundRegister).toBe(true);
+  });
+
+  it('hides register action when registration is disabled', async () => {
+    mockUsePublicFeatures.mockReturnValue({
+      features: { semanticSearch: true, registrationEnabled: false },
+      loading: false,
+    });
+    const user = userEvent.setup();
+    const { container } = renderWithRouter(<Navbar />);
+
+    const menuButton = container.querySelector('[aria-label="打开账户菜单"]') as HTMLButtonElement | null;
+    expect(menuButton).not.toBeNull();
+    if (!menuButton) {
+      return;
+    }
+    await user.click(menuButton);
+
+    expect(container.innerHTML).toContain('登录');
+    expect(container.innerHTML).not.toContain('注册');
   });
 
   it('renders mobile menu toggle button', () => {

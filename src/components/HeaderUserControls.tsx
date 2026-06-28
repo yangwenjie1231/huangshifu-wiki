@@ -7,16 +7,21 @@ import { NotificationPanel } from './Navbar/NotificationPanel'
 interface HeaderUserControlsProps {
   onLogout: () => void | Promise<void>
   onOpenAuth?: (mode: AuthMode) => void
+  allowRegister?: boolean
 }
 
-export const HeaderUserControls = ({ onLogout, onOpenAuth }: HeaderUserControlsProps) => {
+export const HeaderUserControls = ({
+  onLogout,
+  onOpenAuth,
+  allowRegister = true,
+}: HeaderUserControlsProps) => {
   const { user } = useAuth()
   const navigate = useNavigate()
 
   return (
     <div className="flex items-center gap-4">
       {user ? <NotificationPanel onNavigate={navigate} /> : null}
-      <AccountMenu onLogout={onLogout} onOpenAuth={onOpenAuth} />
+      <AccountMenu onLogout={onLogout} onOpenAuth={onOpenAuth} allowRegister={allowRegister} />
     </div>
   )
 }

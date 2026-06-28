@@ -58,13 +58,15 @@ vi.mock('../../../src/lib/auth', () => ({
 
 const renderAuthModal = (
   open: boolean,
-  initialMode: 'login' | 'register' | 'wechat' = 'login'
+  initialMode: 'login' | 'register' | 'wechat' = 'login',
+  allowRegister = true
 ) =>
   render(
     <ToastProvider>
       <AuthModal
         open={open}
         initialMode={initialMode}
+        allowRegister={allowRegister}
         onClose={vi.fn()}
         onAuthSuccess={vi.fn()}
       />
@@ -124,6 +126,14 @@ describe('AuthModal', () => {
     const registerPasswordInput = screen.getByLabelText('密码') as HTMLInputElement
     expect(registerPasswordInput).toHaveAttribute('minLength', '8')
     expect(registerPasswordInput).toHaveAttribute('placeholder', '密码（至少 8 位）')
+  })
+
+  it('falls back to login and hides register switch when registration is disabled', () => {
+    renderAuthModal(true, 'register', false)
+
+    expect(screen.getByRole('heading', { name: '账号登录' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '没有账号，去注册' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('显示名称')).not.toBeInTheDocument()
   })
 
   it('submits register without synthesizing a display name', async () => {

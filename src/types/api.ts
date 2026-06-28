@@ -118,6 +118,10 @@ export interface EmailVerificationAdminConfig extends EmailVerificationPublicCon
   smtpPassSet: boolean;
 }
 
+export interface RegistrationConfig {
+  enabled: boolean;
+}
+
 // ============================================================================
 // 错误类型定义
 // ============================================================================

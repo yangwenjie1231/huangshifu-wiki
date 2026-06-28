@@ -1,6 +1,5 @@
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
-import { UserRole as PrismaUserRole } from '@prisma/client'
 import { userToApiUser, issueUserSession, clearAuthCookie, clearUserCache } from '../middleware/auth'
 import {
   authRateLimiter,
@@ -25,6 +24,7 @@ import {
   buildUniqueDisplayNameFallback,
   normalizeDisplayNameFallback,
   validateUserDisplayName,
+  isRegistrationOpen,
 } from '../utils'
 import { prisma } from '../prisma'
 import {
@@ -40,7 +40,6 @@ import type { AuthenticatedRequest } from '../types'
 
 const router = Router()
 
-const SUPER_ADMIN_EMAIL = process.env.SEED_SUPER_ADMIN_EMAIL || ''
 const PASSWORD_SALT_ROUNDS = getPasswordSaltRounds()
 const PASSWORD_RESET_REQUEST_MESSAGE = '如果该邮箱存在，我们会发送一封密码重置邮件'
 
@@ -74,6 +73,18 @@ async function buildWechatDisplayNameForCreate(displayNameRaw: string, openId: s
     'WeChat displayName rejected for new user, using fallback'
   )
   return buildUniqueDisplayNameFallback(fallbackBase)
+}
+
+async function getRegistrationClosedPayload() {
+  if (await isRegistrationOpen()) {
+    return null
+  }
+
+  const userCount = await prisma.user.count()
+  return {
+    error: userCount === 0 ? '系统尚未完成初始化，请先创建超级管理员' : '注册暂未开放',
+    code: userCount === 0 ? 'SETUP_REQUIRED' : 'REGISTRATION_DISABLED',
+  }
 }
 
 router.get('/health', (_req, res) => {
@@ -116,6 +127,12 @@ router.post('/register', authRateLimiter, validateBody(registerSchema), asyncHan
       return
     }
 
+    const registrationClosedPayload = await getRegistrationClosedPayload()
+    if (registrationClosedPayload) {
+      res.status(403).json(registrationClosedPayload)
+      return
+    }
+
     const normalizedEmail = email.toLowerCase().trim()
     const existing = await prisma.user.findUnique({
       where: { email: normalizedEmail },
@@ -143,16 +160,15 @@ router.post('/register', authRateLimiter, validateBody(registerSchema), asyncHan
     logger.info({ email: normalizedEmail, name }, 'Register attempt')
 
     const passwordHash = await bcrypt.hash(password, PASSWORD_SALT_ROUNDS)
-    const role = SUPER_ADMIN_EMAIL && normalizedEmail === SUPER_ADMIN_EMAIL ? PrismaUserRole.super_admin : PrismaUserRole.user
 
-    logger.info({ email: normalizedEmail, role }, 'Creating user')
+    logger.info({ email: normalizedEmail, role: 'user' }, 'Creating user')
 
     const user = await prisma.user.create({
       data: {
         email: normalizedEmail,
         passwordHash,
         displayName: name,
-        role,
+        role: 'user',
         signature: '',
         bio: '',
       },
@@ -504,6 +520,12 @@ router.post('/wechat/login', authRateLimiter, asyncHandler(async (req, res) => {
     })
 
     if (!user) {
+      const registrationClosedPayload = await getRegistrationClosedPayload()
+      if (registrationClosedPayload) {
+        res.status(403).json(registrationClosedPayload)
+        return
+      }
+
       const generatedEmail = await buildUniqueWechatEmail(openId)
       const generatedPassword = `wx_${openId}_${Date.now()}`
       const passwordHash = await bcrypt.hash(generatedPassword, PASSWORD_SALT_ROUNDS)

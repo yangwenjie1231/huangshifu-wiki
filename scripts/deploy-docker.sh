@@ -70,17 +70,14 @@ bootstrap_env() {
 fill_env_placeholders() {
   local postgres_password
   local jwt_secret
-  local admin_password
   local backup_password
 
   postgres_password="$(random_hex 24)"
   jwt_secret="$(random_hex 32)"
-  admin_password="$(random_hex 18)"
   backup_password="$(random_hex 24)"
 
   replace_literal 'replace_with_random_postgres_password' "$postgres_password"
   replace_literal 'replace_with_random_long_secret_at_least_32_chars' "$jwt_secret"
-  replace_literal 'replace_with_strong_admin_password' "$admin_password"
   replace_literal 'replace_with_backup_password' "$backup_password"
 }
 
@@ -97,8 +94,6 @@ validate_env() {
   [[ -n "${POSTGRES_PASSWORD:-}" ]] || missing+=('POSTGRES_PASSWORD')
   [[ -n "${DATABASE_URL:-}" ]] || missing+=('DATABASE_URL')
   [[ -n "${JWT_SECRET:-}" ]] || missing+=('JWT_SECRET')
-  [[ -n "${SEED_SUPER_ADMIN_EMAIL:-}" ]] || missing+=('SEED_SUPER_ADMIN_EMAIL')
-  [[ -n "${SEED_SUPER_ADMIN_PASSWORD:-}" ]] || missing+=('SEED_SUPER_ADMIN_PASSWORD')
   [[ -n "${BACKUP_PASSWORD:-}" ]] || missing+=('BACKUP_PASSWORD')
 
   if (( ${#missing[@]} > 0 )); then

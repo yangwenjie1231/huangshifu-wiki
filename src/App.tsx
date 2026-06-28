@@ -1,6 +1,6 @@
 import React, { lazy, Suspense } from 'react'
-import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom'
-import { AuthProvider } from './context/AuthContext'
+import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import { MusicProvider, useMusic } from './context/MusicContext'
 import { useNetworkStatus } from './hooks/useNetworkStatus'
 
@@ -18,6 +18,7 @@ import {
   getMiniProgramLoginPayload,
   isMiniProgramWebView,
 } from './lib/miniProgram'
+import { getSetupStatus, type SetupStatus } from './lib/setup'
 
 const Home = lazy(() => import('./pages/Home').then((m) => ({ default: m.default })))
 const Wiki = lazy(() => import('./pages/wiki').then((m) => ({ default: m.default })))
@@ -42,6 +43,7 @@ const ResetPassword = lazy(() =>
   import('./pages/ResetPassword').then((m) => ({ default: m.default }))
 )
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail').then((m) => ({ default: m.default })))
+const Setup = lazy(() => import('./pages/Setup').then((m) => ({ default: m.default })))
 const NotFound = lazy(() => import('./pages/NotFound').then((m) => ({ default: m.default })))
 const AdminRoutes = lazy(() =>
   import('./pages/Admin/AdminRoutes').then((m) => ({ default: m.default }))
@@ -49,9 +51,66 @@ const AdminRoutes = lazy(() =>
 
 const MainLayout = () => {
   const { currentSong } = useMusic()
+  const { user } = useAuth()
   const { isOnline } = useNetworkStatus()
   const location = useLocation()
   const path = location.pathname
+  const [setupStatus, setSetupStatus] = React.useState<SetupStatus | null>(null)
+  const [setupStatusLoaded, setSetupStatusLoaded] = React.useState(false)
+
+  React.useEffect(() => {
+    let cancelled = false
+
+    getSetupStatus()
+      .then((status) => {
+        if (!cancelled) {
+          setSetupStatus(status)
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load setup status:', error)
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setSetupStatusLoaded(true)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  React.useEffect(() => {
+    const handleSetupComplete = () => {
+      setSetupStatus({
+        initialized: true,
+        requiresSetup: false,
+      })
+      setSetupStatusLoaded(true)
+    }
+
+    window.addEventListener('hsf:setup-complete', handleSetupComplete)
+    return () => {
+      window.removeEventListener('hsf:setup-complete', handleSetupComplete)
+    }
+  }, [])
+
+  if (path === '/setup') {
+    return (
+      <Suspense fallback={<PageSkeleton />}>
+        <Setup />
+      </Suspense>
+    )
+  }
+
+  if (!setupStatusLoaded) {
+    return <PageSkeleton />
+  }
+
+  if (setupStatus?.requiresSetup && !user) {
+    return <Navigate to="/setup" replace />
+  }
 
   if (path === '/admin' || path.startsWith('/admin/')) {
     return (
@@ -146,13 +205,30 @@ export default function App() {
       return
     }
 
-    clearMiniProgramLoginParams()
-    loginWithWeChat(payload.code, {
-      displayName: payload.displayName,
-      photoURL: payload.photoURL,
-    }).catch((error) => {
-      console.error('Mini program auto login error:', error)
-    })
+    let cancelled = false
+
+    getSetupStatus()
+      .then((status) => {
+        if (cancelled || status.requiresSetup) {
+          return
+        }
+
+        clearMiniProgramLoginParams()
+        return loginWithWeChat(payload.code, {
+          displayName: payload.displayName,
+          photoURL: payload.photoURL,
+        })
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return
+        }
+        console.error('Mini program auto login error:', error)
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   return (

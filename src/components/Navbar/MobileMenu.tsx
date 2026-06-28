@@ -27,6 +27,7 @@ interface MobileMenuProps {
 	onClose: () => void;
 	onOpenAuth: (mode: AuthMode) => void;
 	onLogout: () => void;
+	allowRegister?: boolean;
 }
 
 export const MobileMenu = ({
@@ -34,6 +35,7 @@ export const MobileMenu = ({
 	onClose,
 	onOpenAuth,
 	onLogout,
+	allowRegister = true,
 }: MobileMenuProps) => {
 	const { user, profile, isAdmin, isBanned } = useAuth();
 	const { t } = useI18n();
@@ -197,16 +199,18 @@ export const MobileMenu = ({
 								</div>
 							) : (
 								<div className="space-y-3">
-									<button
-										type="button"
-										onClick={() => {
-											onOpenAuth("register");
-										}}
-										className="w-full flex items-center justify-center gap-2 py-4 theme-button-primary rounded font-bold"
-									>
-										<MessageCircle size={20} />
-										账号注册
-									</button>
+									{allowRegister && (
+										<button
+											type="button"
+											onClick={() => {
+												onOpenAuth("register");
+											}}
+											className="w-full flex items-center justify-center gap-2 py-4 theme-button-primary rounded font-bold"
+										>
+											<MessageCircle size={20} />
+											账号注册
+										</button>
+									)}
 									<button
 										type="button"
 										onClick={() => {

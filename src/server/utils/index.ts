@@ -7,7 +7,6 @@ export {
   uploadsDir,
   backupsDir,
   DEFAULT_MUSIC_PLATFORMS,
-  SUPER_ADMIN_EMAIL,
   BACKUP_PASSWORD,
   BACKUP_RETAIN_COUNT,
   GALLERY_ADMIN_ONLY,
@@ -246,6 +245,13 @@ export {
 export { logger } from './logger'
 export { doesPublicTableExist, isPrismaTableMissingError } from './prisma-schema'
 export { getPasswordSaltRounds } from './password'
+
+export {
+  REGISTRATION_CONFIG_KEY,
+  getRegistrationConfig,
+  setRegistrationConfig,
+  isRegistrationOpen,
+} from './registration'
 
 // === 已有独立模块（保持原导出方式）===
 export * from './cache'

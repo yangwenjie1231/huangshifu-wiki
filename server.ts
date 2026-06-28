@@ -45,6 +45,7 @@ import { registerConfigRoutes } from './src/server/routes/config.routes'
 import { registerS3Routes } from './src/server/routes/s3.routes'
 import { registerMusicSongRoutes } from './src/server/routes/music-song.routes'
 import { registerUploadRoutes } from './src/server/routes/uploads.routes'
+import { registerSetupRoutes } from './src/server/routes/setup.routes'
 import { UPLOAD_MAX_FILE_SIZE_MB } from './src/lib/uploadLimits'
 import { registerAdminSystemRoutes } from './src/server/routes/admin.system.routes'
 import { registerAdminVariantsRoutes } from './src/server/routes/admin.variants.routes'
@@ -310,6 +311,7 @@ app.use('/uploads', (_req, res) => {
 
 registerRegionRoutes(app)
 registerExifRoutes(app)
+registerSetupRoutes(app)
 registerAuthRoutes(app)
 registerUsersRoutes(app)
 registerWikiRoutes(app)

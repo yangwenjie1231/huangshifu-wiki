@@ -45,15 +45,19 @@ const AUTH_TEST_EMAILS = [
   'change_email_new@example.com',
   'email_config_super@example.com',
   'email_config_admin@example.com',
+  'registration_config_super@example.com',
+  'registration_config_admin@example.com',
+  'auth_suite_admin@example.com',
   'mock-openid@wechat.local',
   'wechat_common_nick@wechat.local',
   'wechat_reserved_name@wechat.local',
+  'wechat_registration_disabled@wechat.local',
 ];
 const PASSWORD_SALT_ROUNDS = getPasswordSaltRounds();
 
 async function cleanupAuthTestData() {
   await prisma.siteConfig.deleteMany({
-    where: { key: 'email_verification' },
+    where: { key: { in: ['email_verification', 'registration'] } },
   });
   await prisma.user.deleteMany({
     where: {
@@ -98,6 +102,10 @@ describe('Auth API - 认证接口测试', () => {
    */
   beforeEach(async () => {
     await cleanupAuthTestData();
+    await createTestUser({
+      email: 'auth_suite_admin@example.com',
+      role: 'super_admin',
+    });
   });
 
   /**
@@ -996,6 +1004,51 @@ describe('Auth API - 认证接口测试', () => {
       expect(updatedUser?.displayName).toBe('KeepName');
       expect(updatedUser?.photoURL).toBe('https://example.com/avatar.png');
     });
+
+    it('注册关闭时应该拒绝微信新用户但允许已有微信用户登录', async () => {
+      await prisma.siteConfig.create({
+        data: {
+          key: 'registration',
+          value: { enabled: false },
+        },
+      });
+
+      const newUserResponse = await request(app)
+        .post('/api/auth/wechat/login')
+        .send({
+          code: 'mock:wechat_registration_disabled',
+          displayName: '新微信用户',
+        });
+
+      expect(newUserResponse.status).toBe(403);
+      expect(newUserResponse.body).toMatchObject({
+        code: 'REGISTRATION_DISABLED',
+        error: '注册暂未开放',
+      });
+      await expect(
+        prisma.user.findUnique({ where: { email: 'wechat_registration_disabled@wechat.local' } })
+      ).resolves.toBeNull();
+
+      const { user } = await createTestUser({
+        email: 'test_wechat_registration_existing@example.com',
+        displayName: 'ExistingWechat',
+      });
+      await prisma.user.update({
+        where: { uid: user.uid },
+        data: { wechatOpenId: 'wechat_registration_existing' },
+      });
+
+      const existingUserResponse = await request(app)
+        .post('/api/auth/wechat/login')
+        .send({
+          code: 'mock:wechat_registration_existing',
+          displayName: 'ExistingWechatRenamed',
+        });
+
+      expect(existingUserResponse.status).toBe(200);
+      expect(existingUserResponse.body.user.uid).toBe(user.uid);
+      expect(existingUserResponse.body.user.displayName).toBe('ExistingWechatRenamed');
+    });
   });
 
   describe('POST /api/auth/password-reset', () => {
@@ -1278,6 +1331,92 @@ describe('Auth API - 认证接口测试', () => {
         .set('X-XSRF-TOKEN', superXsrf!);
       expect(adminConfigResponse.status).toBe(200);
       expect(adminConfigResponse.body).toEqual(updateResponse.body.config);
+    });
+  });
+
+  describe('开放注册配置', () => {
+    it('默认开启且只有超级管理员可以更新', async () => {
+      const defaultFeaturesResponse = await request(app).get('/api/config/features');
+      expect(defaultFeaturesResponse.status).toBe(200);
+      expect(defaultFeaturesResponse.body.registrationEnabled).toBe(true);
+
+      const adminAgent = request.agent(app);
+      const { plainPassword: adminPassword } = await createTestUser({
+        email: 'registration_config_admin@example.com',
+        password: 'CorrectPassword123!',
+        role: 'admin',
+      });
+      const adminLogin = await adminAgent
+        .post('/api/auth/login')
+        .send({ email: 'registration_config_admin@example.com', password: adminPassword });
+      const adminXsrf = pickCookie(adminLogin.headers['set-cookie'], 'XSRF-TOKEN')
+        ?.split(';')[0]
+        .split('=')[1];
+      expect(adminXsrf).toBeTruthy();
+
+      const forbiddenResponse = await adminAgent
+        .patch('/api/config/registration')
+        .set('X-XSRF-TOKEN', adminXsrf!)
+        .send({ enabled: false });
+      expect(forbiddenResponse.status).toBe(403);
+
+      const superAgent = request.agent(app);
+      const { plainPassword: superPassword } = await createTestUser({
+        email: 'registration_config_super@example.com',
+        password: 'CorrectPassword123!',
+        role: 'super_admin',
+      });
+      const superLogin = await superAgent
+        .post('/api/auth/login')
+        .send({ email: 'registration_config_super@example.com', password: superPassword });
+      const superXsrf = pickCookie(superLogin.headers['set-cookie'], 'XSRF-TOKEN')
+        ?.split(';')[0]
+        .split('=')[1];
+      expect(superXsrf).toBeTruthy();
+
+      const disableResponse = await superAgent
+        .patch('/api/config/registration')
+        .set('X-XSRF-TOKEN', superXsrf!)
+        .send({ enabled: false });
+      expect(disableResponse.status).toBe(200);
+      expect(disableResponse.body.config).toEqual({ enabled: false });
+
+      const disabledFeaturesResponse = await request(app).get('/api/config/features');
+      expect(disabledFeaturesResponse.status).toBe(200);
+      expect(disabledFeaturesResponse.body.registrationEnabled).toBe(false);
+
+      const disabledRegisterResponse = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: 'new_user@example.com',
+          password: 'ValidPassword123!',
+          displayName: 'NewUser',
+        });
+      expect(disabledRegisterResponse.status).toBe(403);
+      expect(disabledRegisterResponse.body).toMatchObject({
+        code: 'REGISTRATION_DISABLED',
+        error: '注册暂未开放',
+      });
+
+      const enableResponse = await superAgent
+        .patch('/api/config/registration')
+        .set('X-XSRF-TOKEN', superXsrf!)
+        .send({ enabled: true });
+      expect(enableResponse.status).toBe(200);
+      expect(enableResponse.body.config).toEqual({ enabled: true });
+
+      const enabledRegisterResponse = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: 'new_user@example.com',
+          password: 'ValidPassword123!',
+          displayName: 'NewUser',
+        });
+      expect(enabledRegisterResponse.status).toBe(201);
+      expect(enabledRegisterResponse.body.user).toMatchObject({
+        email: 'new_user@example.com',
+        role: 'user',
+      });
     });
   });
 

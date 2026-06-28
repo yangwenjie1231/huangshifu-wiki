@@ -141,11 +141,6 @@ AMAP_API_KEY=""
 DATABASE_URL="postgresql://hsf_app:请替换为强密码@127.0.0.1:5432/huangshifu_wiki"
 JWT_SECRET="请替换为至少32位随机字符串"
 
-# Admin seed account
-SEED_SUPER_ADMIN_EMAIL="admin@example.com"
-SEED_SUPER_ADMIN_PASSWORD="请替换为强密码"
-SEED_SUPER_ADMIN_NAME="诗扶小筑管理员"
-
 # Optional
 CORS_ORIGIN="https://你的域名"
 UPLOAD_SESSION_TTL_MINUTES="45"
@@ -249,9 +244,6 @@ EOF
 
 | 变量                              | 说明                                    |
 | --------------------------------- | ------------------------------------- |
-| `SEED_SUPER_ADMIN_EMAIL`        | 种子超级管理员邮箱                            |
-| `SEED_SUPER_ADMIN_PASSWORD`     | 种子超级管理员密码                            |
-| `SEED_SUPER_ADMIN_NAME`         | 种子超级管理员显示名称                          |
 | `WECHAT_MP_APPID`               | 微信小程序 AppID                           |
 | `WECHAT_MP_APP_SECRET`          | 微信小程序 AppSecret                       |
 | `WECHAT_LOGIN_MOCK`             | 仅开发/测试联调可设 `true`，正式环境必须为 `false` 或留空，否则服务拒绝启动 |

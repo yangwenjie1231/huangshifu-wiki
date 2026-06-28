@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { AuthForm } from '../components/AuthForm'
 import { useAuth } from '../context/AuthContext'
+import { usePublicFeatures } from '../hooks/usePublicFeatures'
 
 function getSafeRedirectTarget(redirect: string | null): string {
   if (!redirect || !redirect.startsWith('/') || redirect.startsWith('//')) {
@@ -16,6 +17,7 @@ const Login = () => {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const redirectTarget = getSafeRedirectTarget(searchParams.get('redirect'))
+  const { features } = usePublicFeatures()
 
   useEffect(() => {
     void ensureInitialized()
@@ -36,6 +38,7 @@ const Login = () => {
         <AuthForm
           initialMode="login"
           autoFocus
+          allowRegister={features.registrationEnabled}
           onAuthSuccess={() => {
             navigate(redirectTarget, { replace: true })
           }}

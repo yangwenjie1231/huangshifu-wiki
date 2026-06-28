@@ -9,6 +9,7 @@ import { AuthModal } from './Navbar/AuthModal'
 import type { AuthMode } from './Navbar/types'
 import { MobileMenu } from './Navbar/MobileMenu'
 import styles from './Navbar.module.css'
+import { usePublicFeatures } from '../hooks/usePublicFeatures'
 
 export const Navbar = () => {
 	const { t } = useI18n()
@@ -16,9 +17,11 @@ export const Navbar = () => {
 	const [authModalOpen, setAuthModalOpen] = useState(false)
 	const [authInitialMode, setAuthInitialMode] = useState<AuthMode>('login')
 	const { show } = useToast()
+	const { features } = usePublicFeatures()
+	const allowRegister = features.registrationEnabled
 
 	const openAuthModal = (mode: AuthMode) => {
-		setAuthInitialMode(mode)
+		setAuthInitialMode(mode === 'register' && !allowRegister ? 'login' : mode)
 		setAuthModalOpen(true)
 	}
 
@@ -85,7 +88,11 @@ export const Navbar = () => {
 
 				<div className="flex items-center" style={{ gap: '16px' }}>
 					<div className="hidden md:block">
-						<HeaderUserControls onLogout={handleLogout} onOpenAuth={openAuthModal} />
+						<HeaderUserControls
+							onLogout={handleLogout}
+							onOpenAuth={openAuthModal}
+							allowRegister={allowRegister}
+						/>
 					</div>
 
 					<button
@@ -104,6 +111,7 @@ export const Navbar = () => {
 				onClose={() => setIsMenuOpen(false)}
 				onOpenAuth={openAuthModal}
 				onLogout={handleLogout}
+				allowRegister={allowRegister}
 			/>
 
 			{(
@@ -112,6 +120,7 @@ export const Navbar = () => {
 					onClose={() => setAuthModalOpen(false)}
 					onAuthSuccess={() => setIsMenuOpen(false)}
 					initialMode={authInitialMode}
+					allowRegister={allowRegister}
 				/>
 			)}
 		</nav>

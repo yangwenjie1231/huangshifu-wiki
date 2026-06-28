@@ -11,14 +11,18 @@ interface AuthFormProps {
   initialMode?: AuthMode
   autoFocus?: boolean
   onAuthSuccess: () => void
+  allowRegister?: boolean
 }
 
 export const AuthForm = ({
   initialMode = 'login',
   autoFocus = false,
   onAuthSuccess,
+  allowRegister = true,
 }: AuthFormProps) => {
-  const [authMode, setAuthMode] = useState<AuthMode>(initialMode)
+  const [authMode, setAuthMode] = useState<AuthMode>(
+    initialMode === 'register' && !allowRegister ? 'login' : initialMode
+  )
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -27,12 +31,12 @@ export const AuthForm = ({
   const [authLoading, setAuthLoading] = useState(false)
   const { show } = useToast()
   const { t } = useI18n()
-  const isRegisterMode = authMode === 'register'
+  const isRegisterMode = authMode === 'register' && allowRegister
   const isForgotPasswordMode = authMode === 'forgot-password'
 
   useEffect(() => {
-    setAuthMode(initialMode)
-  }, [initialMode])
+    setAuthMode(initialMode === 'register' && !allowRegister ? 'login' : initialMode)
+  }, [allowRegister, initialMode])
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -50,7 +54,7 @@ export const AuthForm = ({
       if (authMode === 'login') {
         await login(email, password)
         onAuthSuccess()
-      } else if (authMode === 'register') {
+      } else if (isRegisterMode) {
         const result = await register(email, password, displayName)
         setAuthMode('login')
         setPassword('')
@@ -97,7 +101,7 @@ export const AuthForm = ({
       </div>
 
       <form onSubmit={handleAuthSubmit} className="space-y-3">
-        {(authMode === 'register' || authMode === 'wechat') && (
+        {(isRegisterMode || authMode === 'wechat') && (
           <div>
             <label htmlFor="auth-display-name" className="sr-only">
               {t('auth.labelDisplayName')}
@@ -239,13 +243,15 @@ export const AuthForm = ({
         </div>
       ) : (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm pb-safe">
-          <button
-            type="button"
-            onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
-            className="font-medium text-brand-gold hover:underline"
-          >
-            {authMode === 'login' ? t('auth.noAccountGoRegister') : t('auth.hasAccountGoLogin')}
-          </button>
+          {(allowRegister || authMode !== 'login') && (
+            <button
+              type="button"
+              onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
+              className="font-medium text-brand-gold hover:underline"
+            >
+              {authMode === 'login' ? t('auth.noAccountGoRegister') : t('auth.hasAccountGoLogin')}
+            </button>
+          )}
           {authMode === 'login' && (
             <button
               type="button"

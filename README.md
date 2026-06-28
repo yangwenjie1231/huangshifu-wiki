@@ -51,9 +51,6 @@ cp .env.example .env.local
 ```env
 DATABASE_URL="postgresql://postgres:password@127.0.0.1:5432/huangshifu_wiki"
 JWT_SECRET="replace_with_random_long_secret"
-SEED_SUPER_ADMIN_EMAIL="admin@example.com"
-SEED_SUPER_ADMIN_PASSWORD="replace_with_strong_password"
-SEED_SUPER_ADMIN_NAME="诗扶小筑管理员"
 ```
 
 初始化数据库并启动开发服务：
@@ -66,6 +63,8 @@ npm run dev
 ```
 
 默认访问地址：`http://localhost:3003`
+
+首次打开空数据库站点时，会进入 `/setup` 页面创建超级管理员账号。
 
 ## 常用脚本
 

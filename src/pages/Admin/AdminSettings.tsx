@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Loader2, MailCheck, RefreshCw, Save, Settings } from 'lucide-react'
+import { Loader2, MailCheck, RefreshCw, Save, Settings, UserPlus } from 'lucide-react'
 import { apiPatch, apiRequest, clearApiCache, generateApiCacheKey } from '../../lib/apiClient'
 import { useToast } from '../../components/Toast'
-import type { EmailVerificationAdminConfig } from '../../types/api'
+import type { EmailVerificationAdminConfig, RegistrationConfig } from '../../types/api'
 
 type EmailVerificationForm = EmailVerificationAdminConfig & {
   smtpPass: string
@@ -28,6 +28,11 @@ const EMAIL_VERIFICATION_ADMIN_CONFIG_CACHE_KEY = generateApiCacheKey(
   'GET',
   EMAIL_VERIFICATION_ADMIN_CONFIG_PATH
 )
+const REGISTRATION_ADMIN_CONFIG_PATH = '/api/config/registration/admin'
+const REGISTRATION_ADMIN_CONFIG_CACHE_KEY = generateApiCacheKey(
+  'GET',
+  REGISTRATION_ADMIN_CONFIG_PATH
+)
 
 function toForm(config: EmailVerificationAdminConfig): EmailVerificationForm {
   return {
@@ -43,6 +48,12 @@ const AdminSettings = () => {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [registrationConfig, setRegistrationConfig] = useState<RegistrationConfig>({
+    enabled: true,
+  })
+  const [registrationLoading, setRegistrationLoading] = useState(true)
+  const [registrationLoadError, setRegistrationLoadError] = useState(false)
+  const [registrationSaving, setRegistrationSaving] = useState(false)
 
   const loadConfig = useCallback(
     async (isActive: () => boolean = () => true) => {
@@ -81,6 +92,40 @@ const AdminSettings = () => {
     }
   }, [loadConfig])
 
+  const loadRegistrationConfig = useCallback(
+    async (isActive: () => boolean = () => true) => {
+      setRegistrationLoading(true)
+      setRegistrationLoadError(false)
+
+      try {
+        const data = await apiRequest<RegistrationConfig>(REGISTRATION_ADMIN_CONFIG_PATH, {
+          method: 'GET',
+          dedup: false,
+        })
+
+        if (!isActive()) return
+        setRegistrationConfig(data)
+      } catch (error) {
+        if (!isActive()) return
+        console.error('Load registration config failed:', error)
+        setRegistrationLoadError(true)
+        show('注册配置加载失败', { variant: 'error' })
+      } finally {
+        if (isActive()) setRegistrationLoading(false)
+      }
+    },
+    [show]
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    void loadRegistrationConfig(() => !cancelled)
+
+    return () => {
+      cancelled = true
+    }
+  }, [loadRegistrationConfig])
+
   const saveConfig = async () => {
     if (loading || loadError) {
       show('请先成功加载站点设置后再保存', { variant: 'error' })
@@ -115,6 +160,31 @@ const AdminSettings = () => {
     }
   }
 
+  const saveRegistrationConfig = async () => {
+    if (registrationLoading || registrationLoadError) {
+      show('请先成功加载注册设置后再保存', { variant: 'error' })
+      return
+    }
+
+    setRegistrationSaving(true)
+    try {
+      const result = await apiPatch<{
+        success: boolean
+        config: RegistrationConfig
+      }>('/api/config/registration', {
+        enabled: registrationConfig.enabled,
+      })
+      clearApiCache(REGISTRATION_ADMIN_CONFIG_CACHE_KEY)
+      setRegistrationConfig(result.config)
+      show('注册设置已保存')
+    } catch (error) {
+      console.error('Save registration config failed:', error)
+      show(error instanceof Error ? error.message : '注册设置保存失败', { variant: 'error' })
+    } finally {
+      setRegistrationSaving(false)
+    }
+  }
+
   const setField = <K extends keyof EmailVerificationForm>(
     key: K,
     value: EmailVerificationForm[K]
@@ -129,6 +199,79 @@ const AdminSettings = () => {
           <Settings size={24} className="text-brand-gold" /> 站点设置
         </h1>
       </div>
+
+      <section className="space-y-5 border border-border bg-surface p-5">
+        <div className="flex items-center gap-2 border-b border-border pb-3">
+          <UserPlus size={18} className="text-brand-gold" />
+          <h2 className="text-base font-semibold text-text-primary">账号注册</h2>
+        </div>
+
+        {registrationLoading ? (
+          <div className="flex items-center gap-2 text-sm text-text-secondary">
+            <Loader2 size={16} className="animate-spin" />
+            正在加载注册配置...
+          </div>
+        ) : registrationLoadError ? (
+          <div className="flex flex-col gap-3 text-sm text-text-secondary" role="alert">
+            <p>注册配置加载失败，未加载成功前无法保存设置。</p>
+            <button
+              type="button"
+              onClick={() => void loadRegistrationConfig()}
+              className="theme-button-secondary inline-flex w-fit items-center gap-2 rounded px-4 py-2 text-sm font-medium transition-all"
+            >
+              <RefreshCw size={14} />
+              重试
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-text-primary">开放账号注册</p>
+              <p className="text-sm leading-6 text-text-secondary">
+                关闭后新用户无法注册，已有用户仍可登录。
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={registrationConfig.enabled}
+                aria-label="开放账号注册"
+                onClick={() =>
+                  setRegistrationConfig((current) => ({
+                    ...current,
+                    enabled: !current.enabled,
+                  }))
+                }
+                className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors ${
+                  registrationConfig.enabled ? 'bg-brand-gold' : 'bg-border'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                    registrationConfig.enabled ? 'translate-x-7' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+
+              <button
+                type="button"
+                onClick={saveRegistrationConfig}
+                disabled={registrationSaving}
+                className="theme-button-primary inline-flex items-center justify-center gap-2 rounded px-4 py-2 text-sm font-medium transition-all disabled:opacity-50"
+              >
+                {registrationSaving ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Save size={14} />
+                )}
+                {registrationSaving ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
 
       <section className="space-y-5 border border-border bg-surface p-5">
         <div className="flex items-center gap-2 border-b border-border pb-3">

@@ -7,6 +7,7 @@ export {
   passwordResetRequestSchema,
   passwordResetConfirmSchema,
   passwordSchema,
+  setupInitializeSchema,
 } from './auth.schema'
 export { userEmailUpdateSchema, userPasswordUpdateSchema } from './user.schema'
 export {

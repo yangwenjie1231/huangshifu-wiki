@@ -39,6 +39,20 @@ const optionalDisplayNameSchema = z.preprocess(
     .optional()
 )
 
+const requiredDisplayNameSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== 'string') {
+      return value
+    }
+
+    return value.trim()
+  },
+  z
+    .string({ error: '显示名称不能为空' })
+    .min(1, '显示名称不能为空')
+    .max(AUTH_DISPLAY_NAME_MAX_LENGTH, `显示名称过长，最多${AUTH_DISPLAY_NAME_MAX_LENGTH}个字符`)
+)
+
 export const registerSchema = z.object({
   email: authEmailSchema,
   password: z
@@ -75,4 +89,10 @@ export const passwordSchema = z
 export const passwordResetConfirmSchema = z.object({
   token: z.string({ error: '重置 token 不能为空' }).trim().min(1, '重置 token 不能为空'),
   newPassword: passwordSchema,
+})
+
+export const setupInitializeSchema = z.object({
+  email: authEmailSchema,
+  displayName: requiredDisplayNameSchema,
+  password: passwordSchema,
 })

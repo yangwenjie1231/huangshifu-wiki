@@ -10,6 +10,9 @@ import {
   toEmailVerificationPublicConfig,
   toEmailVerificationAdminConfig,
   isSemanticSearchEnabled,
+  getRegistrationConfig,
+  setRegistrationConfig,
+  isRegistrationOpen,
   parseQueryString,
   parseRouteParam,
 } from '../utils'
@@ -42,9 +45,43 @@ router.get('/gallery-access', async (_req, res) => {
 
 // GET /api/config/features - Get public runtime feature flags
 router.get('/features', async (_req, res) => {
-  res.json({
-    semanticSearch: isSemanticSearchEnabled(),
-  })
+  try {
+    res.json({
+      semanticSearch: isSemanticSearchEnabled(),
+      registrationEnabled: await isRegistrationOpen(),
+    })
+  } catch (error) {
+    console.error('Get public features error:', error)
+    res.status(500).json({ error: '获取站点功能配置失败' })
+  }
+})
+
+// GET /api/config/registration/admin - Get account registration config
+router.get('/registration/admin', requireAuth, requireSuperAdmin, async (_req, res) => {
+  try {
+    const config = await getRegistrationConfig()
+    res.json(config)
+  } catch (error) {
+    console.error('Get registration config error:', error)
+    res.status(500).json({ error: '获取注册配置失败' })
+  }
+})
+
+// PATCH /api/config/registration - Update account registration config
+router.patch('/registration', requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const { enabled } = req.body as { enabled?: unknown }
+    if (typeof enabled !== 'boolean') {
+      res.status(400).json({ error: 'enabled 必须是布尔值' })
+      return
+    }
+
+    const config = await setRegistrationConfig({ enabled })
+    res.json({ success: true, config })
+  } catch (error) {
+    console.error('Update registration config error:', error)
+    res.status(500).json({ error: '更新注册配置失败' })
+  }
 })
 
 // GET /api/config/email-verification - Get email verification feature config
