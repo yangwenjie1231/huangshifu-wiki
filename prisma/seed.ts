@@ -16,15 +16,6 @@ async function main() {
     })
   }
 
-  const announcementCount = await prisma.announcement.count()
-  if (announcementCount === 0) {
-    await prisma.announcement.create({
-      data: {
-        content: '欢迎来到诗扶小筑，本地后端已启用。',
-        active: true,
-      },
-    })
-  }
 }
 
 main()
