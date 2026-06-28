@@ -116,7 +116,7 @@
     "jsdom": "^29.1.1",
     "lucide-react": "^0.546.0",
     "motion": "^12.42.0",
-    "prettier": "^3.8.5",
+    "prettier": "^3.9.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-image-crop": "^11.1.2",
