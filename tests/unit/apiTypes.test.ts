@@ -591,17 +591,18 @@ describe('apiTypes', () => {
         filename: 'backup-2024-01-01.sql',
         size: 1024000,
         createdAt: '2024-01-01T00:00:00.000Z',
+        note: '发布前备份',
       };
       const result = adminBackupSchema.parse(data);
       expect(result).toEqual(data);
     });
 
     it('should fail when filename is missing', () => {
-      expect(() => adminBackupSchema.parse({ size: 1024, createdAt: '2024-01-01' })).toThrow(ZodError);
+      expect(() => adminBackupSchema.parse({ size: 1024, createdAt: '2024-01-01', note: '' })).toThrow(ZodError);
     });
 
     it('should fail when size is not a number', () => {
-      const data = { filename: 'backup.sql', size: '1024', createdAt: '2024-01-01' };
+      const data = { filename: 'backup.sql', size: '1024', createdAt: '2024-01-01', note: '' };
       expect(() => adminBackupSchema.parse(data)).toThrow(ZodError);
     });
   });
@@ -610,8 +611,8 @@ describe('apiTypes', () => {
     it('should parse valid admin backups response', () => {
       const data = {
         backups: [
-          { filename: 'backup1.sql', size: 1024, createdAt: '2024-01-01' },
-          { filename: 'backup2.sql', size: 2048, createdAt: '2024-01-02' },
+          { filename: 'backup1.sql', size: 1024, createdAt: '2024-01-01', note: '' },
+          { filename: 'backup2.sql', size: 2048, createdAt: '2024-01-02', note: '恢复前备份' },
         ],
       };
       const result = adminBackupsResponseSchema.parse(data);

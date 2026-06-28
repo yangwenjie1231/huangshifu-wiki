@@ -333,6 +333,7 @@ export interface AdminBackup {
   filename: string;
   size: number;
   createdAt: string;
+  note: string;
 }
 
 export interface AdminBackupsResponse {

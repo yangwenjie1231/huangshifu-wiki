@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { passwordSchema } from './auth.schema'
 import {
+  CONTENT_LIMITS,
   PROFILE_DISPLAY_NAME_MAX_LENGTH,
   PROFILE_SIGNATURE_MAX_LENGTH,
   WIKI_MAX_CONTENT_SIZE,
@@ -10,6 +11,16 @@ export const backupRestoreSchema = z.object({
   confirm: z.preprocess((value) => value === true || value === 'true', z.literal(true)),
   legacyPassword: z.string().optional(),
 })
+
+export const backupNoteSchema = z
+  .object({
+    note: z
+      .string()
+      .max(CONTENT_LIMITS.admin.backupNote, `备份备注不能超过${CONTENT_LIMITS.admin.backupNote}个字符`),
+  })
+  .strip()
+
+export const backupCreateSchema = z.preprocess((value) => value ?? {}, backupNoteSchema.partial().strip())
 
 export const adminResetUserPasswordSchema = z.object({
   newPassword: passwordSchema,

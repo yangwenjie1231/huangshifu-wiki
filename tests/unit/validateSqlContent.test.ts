@@ -1,17 +1,27 @@
-import { afterEach, describe, it, expect } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import fs from 'fs'
+import path from 'path'
 import {
+  deleteBackupNote,
   parseBackupMetadata,
+  readBackupNote,
   sanitizeFilename,
   serializeBackupMetadata,
   formatPostgresClientMissingError,
   formatBackupTimestamp,
   getPostgresClientExecutable,
   isPostgresClientMissingError,
+  writeBackupNote,
   validateSqlContent,
 } from '../../src/server/utils/backup'
+import { backupsDir } from '../../src/server/utils/config'
 
 const originalPgDumpPath = process.env.PG_DUMP_PATH
 const originalPsqlPath = process.env.PSQL_PATH
+const originalBackupRetainCount = process.env.BACKUP_RETAIN_COUNT
+const noteTestFilename = 'backup_2026-06-28_10-20-00-000.zip'
+const cleanupKeepFilename = 'backup_2026-06-28_10-30-00-000.zip'
+const cleanupDeleteFilename = 'backup_2026-06-28_10-29-00-000.zip'
 
 function restoreEnvValue(name: string, value: string | undefined) {
   if (value === undefined) {
@@ -25,6 +35,13 @@ function restoreEnvValue(name: string, value: string | undefined) {
 afterEach(() => {
   restoreEnvValue('PG_DUMP_PATH', originalPgDumpPath)
   restoreEnvValue('PSQL_PATH', originalPsqlPath)
+  restoreEnvValue('BACKUP_RETAIN_COUNT', originalBackupRetainCount)
+  fs.rmSync(path.join(backupsDir, `${noteTestFilename}.meta.json`), { force: true })
+  fs.rmSync(path.join(backupsDir, cleanupKeepFilename), { force: true })
+  fs.rmSync(path.join(backupsDir, `${cleanupKeepFilename}.meta.json`), { force: true })
+  fs.rmSync(path.join(backupsDir, cleanupDeleteFilename), { force: true })
+  fs.rmSync(path.join(backupsDir, `${cleanupDeleteFilename}.meta.json`), { force: true })
+  vi.resetModules()
 })
 
 describe('validateSqlContent', () => {
@@ -209,5 +226,49 @@ CREATE FUNCTION "trigger_function"() RETURNS trigger AS $$ BEGIN RETURN NEW; END
       encryption: 'aes-256-gcm',
     })
     expect(parseBackupMetadata(Buffer.from('not json'))).toBeNull()
+  })
+
+  it('should round-trip backup note sidecar metadata', async () => {
+    await expect(writeBackupNote(noteTestFilename, '  版本升级前\r\n手动备份  ')).resolves.toBe(
+      '版本升级前\n手动备份'
+    )
+
+    await expect(readBackupNote(noteTestFilename)).resolves.toBe('版本升级前\n手动备份')
+  })
+
+  it('should clear empty backup notes and tolerate missing sidecars', async () => {
+    await writeBackupNote(noteTestFilename, '临时备注')
+    await expect(writeBackupNote(noteTestFilename, '   ')).resolves.toBe('')
+    await expect(readBackupNote(noteTestFilename)).resolves.toBe('')
+
+    await expect(deleteBackupNote(noteTestFilename)).resolves.toBeUndefined()
+  })
+
+  it('should ignore invalid backup note sidecar metadata', async () => {
+    fs.writeFileSync(path.join(backupsDir, `${noteTestFilename}.meta.json`), 'not json')
+
+    await expect(readBackupNote(noteTestFilename)).resolves.toBe('')
+  })
+
+  it('should remove old backup sidecars during retention cleanup', async () => {
+    process.env.BACKUP_RETAIN_COUNT = '1'
+    vi.resetModules()
+    const { cleanupOldBackups: cleanupWithSingleRetention, writeBackupNote: writeNoteWithSingleRetention } =
+      await import('../../src/server/utils/backup')
+
+    fs.writeFileSync(path.join(backupsDir, cleanupDeleteFilename), 'old')
+    fs.writeFileSync(path.join(backupsDir, cleanupKeepFilename), 'new')
+    await writeNoteWithSingleRetention(cleanupDeleteFilename, '旧备份备注')
+
+    const oldDate = new Date('2026-06-28T10:29:00.000Z')
+    const newDate = new Date('2026-06-28T10:30:00.000Z')
+    fs.utimesSync(path.join(backupsDir, cleanupDeleteFilename), oldDate, oldDate)
+    fs.utimesSync(path.join(backupsDir, cleanupKeepFilename), newDate, newDate)
+
+    await cleanupWithSingleRetention()
+
+    expect(fs.existsSync(path.join(backupsDir, cleanupKeepFilename))).toBe(true)
+    expect(fs.existsSync(path.join(backupsDir, cleanupDeleteFilename))).toBe(false)
+    expect(fs.existsSync(path.join(backupsDir, `${cleanupDeleteFilename}.meta.json`))).toBe(false)
   })
 })

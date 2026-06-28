@@ -28,6 +28,7 @@ const initialBackup = {
   size: 1024,
   sizeFormatted: '1 KB',
   createdAt: '2026-06-28T10:00:00.000Z',
+  note: '发布前备份',
 }
 
 describe('AdminBackups', () => {
@@ -59,6 +60,7 @@ describe('AdminBackups', () => {
     await waitFor(() => {
       expect(screen.getByText(initialBackup.filename)).toBeInTheDocument()
     })
+    expect(screen.getByText(initialBackup.note)).toBeInTheDocument()
 
     fireEvent.click(screen.getByTitle('下载'))
 
@@ -80,6 +82,7 @@ describe('AdminBackups', () => {
       size: 2048,
       sizeFormatted: '2 KB',
       createdAt: '2026-06-28T10:01:00.000Z',
+      note: '',
     }
     mockApiPost.mockResolvedValueOnce({ backup: createdBackup })
     mockApiGet
@@ -106,6 +109,65 @@ describe('AdminBackups', () => {
     expect(mockApiGet).toHaveBeenLastCalledWith('/api/admin/backup/list', undefined, {
       staleTime: 0,
       swr: false,
+    })
+  })
+
+  it('creates a backup with an optional note', async () => {
+    const createdBackup = {
+      filename: 'backup_2026-06-28_10-02-00-000.zip',
+      size: 2048,
+      sizeFormatted: '2 KB',
+      createdAt: '2026-06-28T10:02:00.000Z',
+      note: '升级前备份',
+    }
+    mockApiPost.mockResolvedValueOnce({ backup: createdBackup })
+    mockApiGet
+      .mockResolvedValueOnce({ backups: [initialBackup] })
+      .mockResolvedValueOnce({ backups: [createdBackup, initialBackup] })
+
+    render(<AdminBackups />)
+
+    await waitFor(() => {
+      expect(screen.getByText(initialBackup.filename)).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('创建备份'))
+    fireEvent.change(screen.getByLabelText('备份备注（可选）'), {
+      target: { value: '升级前备份' },
+    })
+    fireEvent.click(screen.getAllByText('创建备份').at(-1)!)
+
+    await waitFor(() => {
+      expect(mockApiPost).toHaveBeenCalledWith('/api/admin/backup/create', {
+        note: '升级前备份',
+      })
+    })
+  })
+
+  it('updates a backup note from the table', async () => {
+    mockApiPost.mockResolvedValueOnce({ success: true, note: '新的备注' })
+
+    render(<AdminBackups />)
+
+    await waitFor(() => {
+      expect(screen.getByText(initialBackup.filename)).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTitle('编辑备注'))
+    fireEvent.change(screen.getByLabelText('备份备注'), {
+      target: { value: '新的备注' },
+    })
+    fireEvent.click(screen.getByText('保存备注'))
+
+    await waitFor(() => {
+      expect(mockApiPost).toHaveBeenCalledWith(
+        `/api/admin/backup/${encodeURIComponent(initialBackup.filename)}/note`,
+        { note: '新的备注' }
+      )
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('新的备注')).toBeInTheDocument()
     })
   })
 

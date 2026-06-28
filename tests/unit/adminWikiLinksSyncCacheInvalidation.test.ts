@@ -41,6 +41,8 @@ vi.mock('../../src/server/schemas', () => ({
   validateBody: vi.fn(() => (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
     next()
   ),
+  backupCreateSchema: {},
+  backupNoteSchema: {},
   backupRestoreSchema: {},
   adminBatchEditLocksSchema: {},
   adminBatchMusicDisplaySchema: {},

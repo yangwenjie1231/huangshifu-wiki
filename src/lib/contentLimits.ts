@@ -91,6 +91,7 @@ export const CONTENT_LIMITS = {
   },
   admin: {
     sensitiveWord: 100,
+    backupNote: 1000,
     backupPassword: 128,
     editLockRecordId: 191,
   },

@@ -190,6 +190,7 @@ export const adminBackupSchema = z.object({
   filename: z.string(),
   size: z.number(),
   createdAt: z.string(),
+  note: z.string(),
 });
 
 export const adminBackupsResponseSchema = z.object({

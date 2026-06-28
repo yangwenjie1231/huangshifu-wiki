@@ -14,6 +14,12 @@ export interface BackupArchiveMetadata {
   encryption?: 'aes-256-gcm';
 }
 
+interface BackupNoteMetadata {
+  version: 1;
+  note: string;
+  updatedAt: string;
+}
+
 // ─── 解析与验证 ─────────────────────────────────────────────────────
 
 type PostgresClientTool = 'pg_dump' | 'psql'
@@ -74,6 +80,68 @@ export function sanitizeFilename(name: string): boolean {
   const currentFormat = /^backup_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:-\d{3})?\.zip$/;
   const legacyIsoFormat = /^backup_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.zip$/;
   return currentFormat.test(name) || legacyIsoFormat.test(name);
+}
+
+function getBackupNoteMetadataPath(filename: string): string {
+  if (!sanitizeFilename(filename)) {
+    throw new Error('Invalid backup filename');
+  }
+
+  return path.join(backupsDir, `${filename}.meta.json`);
+}
+
+export function normalizeBackupNote(note: string): string {
+  return note.replace(/\r\n?/g, '\n').trim();
+}
+
+export async function readBackupNote(filename: string): Promise<string> {
+  try {
+    const content = await fs.promises.readFile(getBackupNoteMetadataPath(filename), 'utf-8');
+    const parsed = JSON.parse(content) as Partial<BackupNoteMetadata>;
+
+    if (parsed.version !== 1 || typeof parsed.note !== 'string') {
+      return '';
+    }
+
+    return parsed.note;
+  } catch (error) {
+    const errnoError = error as NodeJS.ErrnoException;
+    if (errnoError.code !== 'ENOENT') {
+      console.warn(`Failed to read backup note metadata for ${filename}:`, error);
+    }
+    return '';
+  }
+}
+
+export async function writeBackupNote(filename: string, note: string): Promise<string> {
+  const normalizedNote = normalizeBackupNote(note);
+  const metadataPath = getBackupNoteMetadataPath(filename);
+
+  if (!normalizedNote) {
+    await fs.promises.unlink(metadataPath).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'ENOENT') {
+        throw error;
+      }
+    });
+    return '';
+  }
+
+  const metadata: BackupNoteMetadata = {
+    version: 1,
+    note: normalizedNote,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await fs.promises.writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
+  return normalizedNote;
+}
+
+export async function deleteBackupNote(filename: string): Promise<void> {
+  await fs.promises.unlink(getBackupNoteMetadataPath(filename)).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== 'ENOENT') {
+      throw error;
+    }
+  });
 }
 
 export function serializeBackupMetadata(metadata: BackupArchiveMetadata): Buffer {
@@ -166,19 +234,24 @@ export function formatFileSize(bytes: number): string {
 
 export async function cleanupOldBackups(): Promise<void> {
   try {
-    const files = fs.readdirSync(backupsDir)
-      .filter((f) => f.startsWith('backup_') && f.endsWith('.zip'))
-      .map((f) => {
+    const backupFilenames = (await fs.promises.readdir(backupsDir))
+      .filter((f) => f.startsWith('backup_') && f.endsWith('.zip'));
+    const files = (await Promise.all(
+      backupFilenames.map(async (f) => {
         const filePath = path.join(backupsDir, f);
-        const stat = fs.statSync(filePath);
+        const stat = await fs.promises.stat(filePath);
         return { name: f, mtime: stat.mtime.getTime() };
       })
+    ))
       .sort((a, b) => b.mtime - a.mtime);
 
     if (files.length > BACKUP_RETAIN_COUNT) {
       const toDelete = files.slice(BACKUP_RETAIN_COUNT);
       for (const file of toDelete) {
-        fs.unlinkSync(path.join(backupsDir, file.name));
+        await fs.promises.unlink(path.join(backupsDir, file.name));
+        if (sanitizeFilename(file.name)) {
+          await deleteBackupNote(file.name);
+        }
         console.log(`Cleaned up old backup: ${file.name}`);
       }
     }

@@ -10,6 +10,8 @@ import {
 import { asyncHandler } from '../middleware/asyncHandler';
 import {
   validateBody,
+  backupCreateSchema,
+  backupNoteSchema,
   backupRestoreSchema,
   adminBatchEditLocksSchema,
   adminBatchMusicDisplaySchema,
@@ -33,6 +35,9 @@ import {
   formatBackupTimestamp,
   formatFileSize,
   cleanupOldBackups,
+  readBackupNote,
+  writeBackupNote,
+  deleteBackupNote,
   BACKUP_METADATA_ENTRY,
   serializeBackupMetadata,
   parseBackupMetadata,
@@ -154,18 +159,28 @@ if (!BACKUP_PASSWORD) {
   logger.warn('BACKUP_PASSWORD 未配置或为空 — 新备份将以明文 SQL 写入 zip 文件');
 }
 
+async function mapBackupFile(filename: string) {
+  const filePath = path.join(backupsDir, filename);
+  const stat = await fs.promises.stat(filePath);
+  return {
+    filename,
+    size: stat.size,
+    sizeFormatted: formatFileSize(stat.size),
+    createdAt: stat.mtime.toISOString(),
+    note: await readBackupNote(filename),
+  };
+}
+
+async function listBackupFiles() {
+  const files = (await fs.promises.readdir(backupsDir))
+    .filter((f) => f.startsWith('backup_') && f.endsWith('.zip'));
+  return (await Promise.all(files.map(mapBackupFile)))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
 async function handleBackupList(_req: Request, res: Response) {
   try {
-    const allFiles = await fs.promises.readdir(backupsDir);
-    const files = allFiles.filter((f) => f.startsWith('backup_') && f.endsWith('.zip'));
-    const results = [];
-    for (const f of files) {
-      const filePath = path.join(backupsDir, f);
-      const stat = await fs.promises.stat(filePath);
-      results.push({ filename: f, size: stat.size, sizeFormatted: formatFileSize(stat.size), createdAt: stat.mtime.toISOString() });
-    }
-    results.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    res.json({ backups: results });
+    res.json({ backups: await listBackupFiles() });
   } catch (error) {
     logger.error({ err: error }, 'List backups error');
     res.status(500).json({ error: '获取备份列表失败' });
@@ -191,6 +206,7 @@ async function handleBackupDelete(req: AuthenticatedRequest, res: Response) {
     }
 
     await fs.promises.unlink(filePath);
+    await deleteBackupNote(normalized);
     res.json({ success: true });
   } catch (error) {
     logger.error({ err: error }, 'Delete backup error');
@@ -1490,8 +1506,9 @@ router.post('/wiki-links/sync-with-imagemap', requireAuth, requireAdmin, asyncHa
  */
 
 // POST /api/admin/backup/create - Create backup
-router.post('/backup/create', requireSuperAdmin, asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.post('/backup/create', requireSuperAdmin, validateBody(backupCreateSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
+    const { note = '' } = req.body as { note?: string };
     const dbConfig = parseDatabaseUrl(process.env.DATABASE_URL || '');
     if (!dbConfig) {
       res.status(500).json({ error: 'DATABASE_URL 格式无效' });
@@ -1554,6 +1571,7 @@ router.post('/backup/create', requireSuperAdmin, asyncHandler(async (req: Authen
     });
 
     const stat = await fs.promises.stat(zipFilePath);
+    const savedNote = note.trim() ? await writeBackupNote(zipFilename, note) : '';
 
     await cleanupOldBackups();
 
@@ -1563,6 +1581,7 @@ router.post('/backup/create', requireSuperAdmin, asyncHandler(async (req: Authen
         size: stat.size,
         sizeFormatted: formatFileSize(stat.size),
         createdAt: new Date().toISOString(),
+        note: savedNote,
       },
     });
   } catch (error) {
@@ -1576,27 +1595,33 @@ router.post('/backup/create', requireSuperAdmin, asyncHandler(async (req: Authen
 }));
 
 // GET /api/admin/backup/list - List backups (frontend compatible)
-router.get('/backup/list', requireSuperAdmin, asyncHandler(async (_req, res) => {
-  try {
-    const files = (await fs.promises.readdir(backupsDir))
-      .filter((f) => f.startsWith('backup_') && f.endsWith('.zip'));
-    const mapped = (await Promise.all(
-      files.map(async (f) => {
-        const filePath = path.join(backupsDir, f);
-        const stat = await fs.promises.stat(filePath);
-        return {
-          filename: f,
-          size: stat.size,
-          sizeFormatted: formatFileSize(stat.size),
-          createdAt: stat.mtime.toISOString(),
-        };
-      }),
-    ))
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+router.get('/backup/list', requireSuperAdmin, asyncHandler(handleBackupList));
 
-    res.json({ backups: mapped });
+// POST /api/admin/backup/:filename/note - Update backup note
+router.post('/backup/:filename/note', requireSuperAdmin, validateBody(backupNoteSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  try {
+    const filename = req.params.filename;
+    const normalized = path.normalize(filename);
+
+    if (normalized.includes('..') || !sanitizeFilename(filename)) {
+      res.status(400).json({ error: '无效的文件名' });
+      return;
+    }
+
+    const filePath = path.join(backupsDir, normalized);
+    try {
+      await fs.promises.access(filePath);
+    } catch {
+      res.status(404).json({ error: '备份文件不存在' });
+      return;
+    }
+
+    const { note } = req.body as { note: string };
+    const savedNote = await writeBackupNote(normalized, note);
+    res.json({ success: true, note: savedNote });
   } catch (error) {
-    logger.error({ err: error }, 'List backups error');
+    logger.error({ err: error }, 'Update backup note error');
+    res.status(500).json({ error: '更新备份备注失败' });
   }
 }));
 
@@ -1849,84 +1874,13 @@ router.post('/backup/restore', requireSuperAdmin, uploadBackup.single('file'), v
 }));
 
 // GET /api/admin/backups - List backups
-router.get('/backups', requireSuperAdmin, asyncHandler(async (_req, res) => {
-  try {
-    const files = (await fs.promises.readdir(backupsDir))
-      .filter((f) => f.startsWith('backup_') && f.endsWith('.zip'));
-    const mapped = (await Promise.all(
-      files.map(async (f) => {
-        const filePath = path.join(backupsDir, f);
-        const stat = await fs.promises.stat(filePath);
-        return {
-          filename: f,
-          size: stat.size,
-          sizeFormatted: formatFileSize(stat.size),
-          createdAt: stat.mtime.toISOString(),
-        };
-      }),
-    ))
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    res.json({ backups: mapped });
-  } catch (error) {
-    logger.error({ err: error }, 'List backups error');
-    res.status(500).json({ error: '获取备份列表失败' });
-  }
-}));
+router.get('/backups', requireSuperAdmin, asyncHandler(handleBackupList));
 
 // DELETE /api/admin/backup/:filename - Delete backup (legacy compatible)
-router.post('/backup/:filename/delete', requireSuperAdmin, asyncHandler(async (req: AuthenticatedRequest, res) => {
-  try {
-    const filename = req.params.filename;
-    const normalized = path.normalize(filename);
-
-    if (normalized.includes('..') || !sanitizeFilename(filename)) {
-      res.status(400).json({ error: '无效的文件名' });
-      return;
-    }
-
-    const filePath = path.join(backupsDir, normalized);
-    try {
-      await fs.promises.access(filePath);
-    } catch {
-      res.status(404).json({ error: '备份文件不存在' });
-      return;
-    }
-
-    await fs.promises.unlink(filePath);
-    res.json({ success: true });
-  } catch (error) {
-    logger.error({ err: error }, 'Delete backup error');
-    res.status(500).json({ error: '删除备份失败' });
-  }
-}));
+router.post('/backup/:filename/delete', requireSuperAdmin, asyncHandler(handleBackupDelete));
 
 // DELETE /api/admin/backups/:filename - Delete backup
-router.post('/backups/:filename/delete', requireSuperAdmin, asyncHandler(async (req: AuthenticatedRequest, res) => {
-  try {
-    const filename = req.params.filename;
-    const normalized = path.normalize(filename);
-
-    if (normalized.includes('..') || !sanitizeFilename(filename)) {
-      res.status(400).json({ error: '无效的文件名' });
-      return;
-    }
-
-    const filePath = path.join(backupsDir, normalized);
-    try {
-      await fs.promises.access(filePath);
-    } catch {
-      res.status(404).json({ error: '备份文件不存在' });
-      return;
-    }
-
-    await fs.promises.unlink(filePath);
-    res.json({ success: true });
-  } catch (error) {
-    logger.error({ err: error }, 'Delete backup error');
-    res.status(500).json({ error: '删除备份失败' });
-  }
-}));
+router.post('/backups/:filename/delete', requireSuperAdmin, asyncHandler(handleBackupDelete));
 
 /**
  * ==========================
