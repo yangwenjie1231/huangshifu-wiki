@@ -871,6 +871,9 @@ npm run build
 1. 服务器已安装 `pg_dump` 和 `psql`（PostgreSQL 客户端工具，安装 PostgreSQL 时自带）
 2. 在 `.env` 中配置 `BACKUP_PASSWORD`（备份加密密码）
 
+如果客户端工具不在服务进程的 `PATH` 中，可在 `.env` 中通过 `PG_DUMP_PATH` 和 `PSQL_PATH`
+配置可执行文件的绝对路径。
+
 **使用方法**：
 
 1. 使用超级管理员账号登录

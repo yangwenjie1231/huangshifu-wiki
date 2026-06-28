@@ -179,6 +179,9 @@ mkdir -p /root/backup
 docker exec hsf-postgres pg_dump -U hsf_wiki huangshifu_wiki > /root/backup/huangshifu-wiki_$(date +%F).sql
 ```
 
+管理后台的内置备份在应用容器内执行，镜像已包含 `pg_dump` 和 `psql`。如使用自定义镜像，
+请确认应用容器内能执行 `pg_dump --version` 和 `psql --version`。
+
 恢复前请先停应用并确认备份文件来源可信。
 
 ## 7. 排错

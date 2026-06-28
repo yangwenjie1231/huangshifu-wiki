@@ -36,6 +36,9 @@ import {
   encryptBuffer,
   decryptBuffer,
   validateSqlContent,
+  getPostgresClientExecutable,
+  isPostgresClientMissingError,
+  formatPostgresClientMissingError,
   logger,
   ensureTextLimit,
   includeDeletedFromQuery,
@@ -1533,7 +1536,10 @@ router.post('/backup/create', requireSuperAdmin, asyncHandler(async (req: Authen
 
     const pgDumpEnv = { ...process.env, PGPASSWORD: dbConfig.password };
 
-    await execFileAsync('pg_dump', pgDumpArgs, { env: pgDumpEnv, timeout: 300000 });
+    await execFileAsync(getPostgresClientExecutable('pg_dump'), pgDumpArgs, {
+      env: pgDumpEnv,
+      timeout: 300000,
+    });
 
     const sqlContent = await fs.promises.readFile(sqlFilePath);
     await fs.promises.unlink(sqlFilePath);
@@ -1566,6 +1572,10 @@ router.post('/backup/create', requireSuperAdmin, asyncHandler(async (req: Authen
     });
   } catch (error) {
     logger.error({ err: error }, 'Create backup error');
+    if (isPostgresClientMissingError(error)) {
+      res.status(500).json({ error: formatPostgresClientMissingError('pg_dump') });
+      return;
+    }
     res.status(500).json({ error: '创建备份失败，请查看服务器日志' });
   }
 }));
@@ -1737,7 +1747,10 @@ router.post('/backup/restore', requireSuperAdmin, uploadBackup.single('file'), v
       ];
       const pgDumpEnv = { ...process.env, PGPASSWORD: dbConfig.password };
 
-      await execFileAsync('pg_dump', pgDumpArgs, { env: pgDumpEnv, timeout: 300000 });
+      await execFileAsync(getPostgresClientExecutable('pg_dump'), pgDumpArgs, {
+        env: pgDumpEnv,
+        timeout: 300000,
+      });
 
       const preRestoreSqlContent = await fs.promises.readFile(preRestoreSqlFilePath);
       await fs.promises.unlink(preRestoreSqlFilePath);
@@ -1761,6 +1774,10 @@ router.post('/backup/restore', requireSuperAdmin, uploadBackup.single('file'), v
     } catch (preBackupError) {
       logger.error({ err: preBackupError }, 'Pre-restore backup creation failed, aborting restore');
       await fs.promises.unlink(file.path).catch((err) => logger.warn({ err }, 'Cleanup failed'));
+      if (isPostgresClientMissingError(preBackupError)) {
+        res.status(500).json({ error: formatPostgresClientMissingError('pg_dump') });
+        return;
+      }
       res.status(500).json({ error: '预备份创建失败，恢复操作已中止，请查看服务器日志' });
       return;
     }
@@ -1780,7 +1797,10 @@ router.post('/backup/restore', requireSuperAdmin, uploadBackup.single('file'), v
       ];
       const psqlEnv = { ...process.env, PGPASSWORD: dbConfig.password };
 
-      await execFileAsync('psql', psqlArgs, { env: psqlEnv, timeout: 600000 });
+      await execFileAsync(getPostgresClientExecutable('psql'), psqlArgs, {
+        env: psqlEnv,
+        timeout: 600000,
+      });
     } finally {
       await fs.promises.unlink(tempSqlPath).catch((err) => logger.warn({ err }, 'Cleanup failed'));
       await fs.promises.unlink(file.path).catch((err) => logger.warn({ err }, 'Cleanup failed'));
@@ -1792,6 +1812,10 @@ router.post('/backup/restore', requireSuperAdmin, uploadBackup.single('file'), v
     if (req.file) {
       try { await fs.promises.access(req.file.path); } catch { /* already gone */ }
       await fs.promises.unlink(req.file.path).catch((err) => logger.warn({ err }, 'Cleanup failed'));
+    }
+    if (isPostgresClientMissingError(error)) {
+      res.status(500).json({ error: formatPostgresClientMissingError('psql') });
+      return;
     }
     res.status(500).json({ error: '恢复数据库失败，请查看服务器日志' });
   }

@@ -7,6 +7,35 @@ import { backupsDir, BACKUP_PASSWORD, BACKUP_RETAIN_COUNT } from './config';
 
 // ─── 解析与验证 ─────────────────────────────────────────────────────
 
+type PostgresClientTool = 'pg_dump' | 'psql'
+
+const POSTGRES_CLIENT_ENV: Record<PostgresClientTool, string> = {
+  pg_dump: 'PG_DUMP_PATH',
+  psql: 'PSQL_PATH',
+}
+
+export function getPostgresClientExecutable(tool: PostgresClientTool): string {
+  const configuredPath = process.env[POSTGRES_CLIENT_ENV[tool]]?.trim()
+  return configuredPath || tool
+}
+
+export function isPostgresClientMissingError(error: unknown): boolean {
+  const errnoError = error as NodeJS.ErrnoException
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    errnoError.code === 'ENOENT' &&
+    typeof errnoError.syscall === 'string' &&
+    errnoError.syscall.startsWith('spawn')
+  )
+}
+
+export function formatPostgresClientMissingError(tool: PostgresClientTool): string {
+  const envName = POSTGRES_CLIENT_ENV[tool]
+  return `服务器缺少 PostgreSQL 客户端工具 ${tool}，请安装 postgresql-client 或通过 ${envName} 配置可执行文件路径`
+}
+
 export function parseDatabaseUrl(url: string): { host: string; port: string; user: string; password: string; database: string } | null {
   try {
     const parsed = new URL(url);

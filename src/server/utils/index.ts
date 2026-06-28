@@ -239,6 +239,9 @@ export {
   encryptBuffer,
   decryptBuffer,
   validateSqlContent,
+  getPostgresClientExecutable,
+  isPostgresClientMissingError,
+  formatPostgresClientMissingError,
 } from './backup'
 
 // === 日志 ===

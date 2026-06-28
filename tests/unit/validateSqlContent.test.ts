@@ -1,5 +1,27 @@
-import { describe, it, expect } from 'vitest'
-import { validateSqlContent } from '../../src/server/utils/backup'
+import { afterEach, describe, it, expect } from 'vitest'
+import {
+  formatPostgresClientMissingError,
+  getPostgresClientExecutable,
+  isPostgresClientMissingError,
+  validateSqlContent,
+} from '../../src/server/utils/backup'
+
+const originalPgDumpPath = process.env.PG_DUMP_PATH
+const originalPsqlPath = process.env.PSQL_PATH
+
+function restoreEnvValue(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name]
+    return
+  }
+
+  process.env[name] = value
+}
+
+afterEach(() => {
+  restoreEnvValue('PG_DUMP_PATH', originalPgDumpPath)
+  restoreEnvValue('PSQL_PATH', originalPsqlPath)
+})
 
 describe('validateSqlContent', () => {
   it('should allow valid pg_dump output statements', () => {
@@ -117,5 +139,40 @@ CREATE FUNCTION "trigger_function"() RETURNS trigger AS $$ BEGIN RETURN NEW; END
     const sql = `CREATE FUNCTION trigger_set_timestamp() RETURNS trigger AS $$ BEGIN NEW.updated_at = now(); RETURN NEW; END; $$ LANGUAGE plpgsql;`
     const result = validateSqlContent(sql)
     expect(result.valid).toBe(true)
+  })
+
+  it('should use default PostgreSQL client executable names', () => {
+    delete process.env.PG_DUMP_PATH
+    delete process.env.PSQL_PATH
+
+    expect(getPostgresClientExecutable('pg_dump')).toBe('pg_dump')
+    expect(getPostgresClientExecutable('psql')).toBe('psql')
+  })
+
+  it('should allow PostgreSQL client executable paths to be configured', () => {
+    process.env.PG_DUMP_PATH = '/usr/lib/postgresql/16/bin/pg_dump'
+    process.env.PSQL_PATH = '/usr/lib/postgresql/16/bin/psql'
+
+    expect(getPostgresClientExecutable('pg_dump')).toBe('/usr/lib/postgresql/16/bin/pg_dump')
+    expect(getPostgresClientExecutable('psql')).toBe('/usr/lib/postgresql/16/bin/psql')
+  })
+
+  it('should detect missing PostgreSQL client executable errors', () => {
+    const error = Object.assign(new Error('spawn pg_dump ENOENT'), {
+      code: 'ENOENT',
+      syscall: 'spawn pg_dump',
+    })
+
+    expect(isPostgresClientMissingError(error)).toBe(true)
+    expect(formatPostgresClientMissingError('pg_dump')).toContain('PG_DUMP_PATH')
+  })
+
+  it('should not treat file ENOENT errors as missing PostgreSQL clients', () => {
+    const error = Object.assign(new Error('ENOENT: no such file or directory'), {
+      code: 'ENOENT',
+      syscall: 'open',
+    })
+
+    expect(isPostgresClientMissingError(error)).toBe(false)
   })
 })
