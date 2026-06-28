@@ -13,7 +13,6 @@ import net from 'net'
 import path from 'path'
 import crypto from 'crypto'
 import { fileURLToPath } from 'url'
-import { createServer as createViteServer } from 'vite'
 import multer from 'multer'
 import { initSensitiveWords } from './src/lib/sensitiveWordFilter'
 import { prisma } from './src/server/prisma'
@@ -407,6 +406,7 @@ async function startServer() {
   })
 
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite')
     const vite = await createViteServer({
       server: {
         middlewareMode: true,

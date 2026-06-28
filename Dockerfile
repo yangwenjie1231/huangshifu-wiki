@@ -13,6 +13,14 @@ ARG NPM_REGISTRY=https://registry.npmjs.org
 COPY package.json package-lock.json ./
 RUN npm ci --registry="${NPM_REGISTRY}"
 
+FROM base AS prod-deps
+
+ARG NPM_REGISTRY=https://registry.npmjs.org
+COPY package.json package-lock.json ./
+COPY prisma ./prisma
+RUN npm ci --omit=dev --registry="${NPM_REGISTRY}"
+RUN npm run db:generate
+
 FROM base AS builder
 
 COPY --from=deps /app/node_modules ./node_modules
@@ -27,7 +35,16 @@ ENV NODE_ENV=production
 RUN groupadd --system --gid 1001 nodejs \
   && useradd --system --uid 1001 --gid nodejs --home-dir /app appuser
 
-COPY --from=builder --chown=appuser:nodejs /app ./
+COPY --from=prod-deps --chown=appuser:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=appuser:nodejs /app/dist ./dist
+COPY --chown=appuser:nodejs package.json package-lock.json tsconfig.json server.ts ./
+COPY --chown=appuser:nodejs prisma ./prisma
+COPY --chown=appuser:nodejs config ./config
+COPY --chown=appuser:nodejs public/sensitive-words ./public/sensitive-words
+COPY --chown=appuser:nodejs src/lib ./src/lib
+COPY --chown=appuser:nodejs src/server ./src/server
+COPY --chown=appuser:nodejs src/services ./src/services
+COPY --chown=appuser:nodejs src/types ./src/types
 
 RUN mkdir -p /app/uploads /app/backups /app/models/transformers \
   && chown -R appuser:nodejs /app/uploads /app/backups /app/models
