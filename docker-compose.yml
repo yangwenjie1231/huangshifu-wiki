@@ -29,7 +29,7 @@ services:
       - qdrant_storage:/qdrant/storage
 
   app:
-    image: ${APP_IMAGE:-ghcr.io/yangwenjie1231/huangshifu-wiki:latest}
+    image: ${APP_IMAGE:-ghcr.io/huangshifu-wiki/huangshifu-wiki:latest}
     build:
       context: .
       dockerfile: Dockerfile

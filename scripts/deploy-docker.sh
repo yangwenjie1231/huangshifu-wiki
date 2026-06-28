@@ -217,7 +217,7 @@ main() {
 
   # 给 compose 和容器提供默认运行参数。
   export APP_PORT="${APP_PORT:-3003}"
-  export APP_IMAGE="${APP_IMAGE:-ghcr.io/yangwenjie1231/huangshifu-wiki:latest}"
+  export APP_IMAGE="${APP_IMAGE:-ghcr.io/huangshifu-wiki/huangshifu-wiki:latest}"
   export DEPLOY_IMAGE_MODE="${DEPLOY_IMAGE_MODE:-pull}"
   export PORT="${PORT:-3003}"
   export NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmjs.org}"

@@ -7,12 +7,12 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/yangwenjie1231/huangshifu-wiki.git"
+    "url": "git+ssh://git@github.com/huangshifu-wiki/huangshifu-wiki.git"
   },
   "bugs": {
-    "url": "https://github.com/yangwenjie1231/huangshifu-wiki/issues"
+    "url": "https://github.com/huangshifu-wiki/huangshifu-wiki/issues"
   },
-  "homepage": "https://github.com/yangwenjie1231/huangshifu-wiki#readme",
+  "homepage": "https://github.com/huangshifu-wiki/huangshifu-wiki#readme",
   "keywords": [
     "wiki",
     "react",
