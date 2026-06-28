@@ -47,7 +47,7 @@ chmod +x scripts/deploy-docker.sh
 
 脚本会完成：
 
-- 构建应用镜像
+- 拉取或构建应用镜像
 - 启动 PostgreSQL
 - 执行 `npm run db:deploy`
 - 执行 `npm run db:seed`
@@ -62,6 +62,18 @@ chmod +x scripts/deploy-docker.sh
 
 ```bash
 PULL_LATEST=1 ./scripts/deploy-docker.sh
+```
+
+默认 `DEPLOY_IMAGE_MODE="pull"`，服务器会拉取 GitHub Actions 发布到 GHCR 的预构建镜像，不在服务器上执行前端构建。若需要在服务器本机构建，改为：
+
+```env
+DEPLOY_IMAGE_MODE="build"
+```
+
+如果 GHCR package 设为 private，服务器需要先登录：
+
+```bash
+echo <github_token> | docker login ghcr.io -u <github用户名> --password-stdin
 ```
 
 已有数据时跳过 seed：

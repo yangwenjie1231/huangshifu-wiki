@@ -119,6 +119,14 @@ validate_env() {
     error 'example: postgresql://hsf_wiki:<password>@postgres:5432/huangshifu_wiki'
     exit 1
   fi
+
+  case "${DEPLOY_IMAGE_MODE:-pull}" in
+    pull | build) ;;
+    *)
+      error 'DEPLOY_IMAGE_MODE must be either pull or build'
+      exit 1
+      ;;
+  esac
 }
 
 is_semantic_enabled() {
@@ -209,6 +217,8 @@ main() {
 
   # 给 compose 和容器提供默认运行参数。
   export APP_PORT="${APP_PORT:-3003}"
+  export APP_IMAGE="${APP_IMAGE:-ghcr.io/yangwenjie1231/huangshifu-wiki:latest}"
+  export DEPLOY_IMAGE_MODE="${DEPLOY_IMAGE_MODE:-pull}"
   export PORT="${PORT:-3003}"
   export NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmjs.org}"
   export APP_ENV_FILE="$ENV_FILE"
@@ -229,10 +239,17 @@ main() {
   log 'validating docker compose configuration'
   compose config >/dev/null
 
-  # 构建应用镜像；SKIP_BUILD=1 可用于只重启已有镜像。
+  # 应用镜像来源由 DEPLOY_IMAGE_MODE 控制：
+  # pull 适合低内存服务器，直接使用 GitHub Actions 推送的预构建镜像；
+  # build 保留本机构建能力，适合离线或调试场景。
   if [[ "$SKIP_BUILD" != '1' ]]; then
-    log 'building app image'
-    compose build app
+    if [[ "$DEPLOY_IMAGE_MODE" == 'pull' ]]; then
+      log "pulling app image: $APP_IMAGE"
+      compose pull app
+    else
+      log 'building app image'
+      compose build app
+    fi
   else
     warn 'SKIP_BUILD=1, reusing existing app image'
   fi
