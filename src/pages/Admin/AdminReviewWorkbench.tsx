@@ -16,10 +16,7 @@ import {
 } from './reviewQueue'
 import type { AdminReviewQueueMergedItem } from '../../types/api'
 
-const getCurrentItemIndex = (
-  items: AdminReviewQueueMergedItem[],
-  currentKey: string | null
-) => {
+const getCurrentItemIndex = (items: AdminReviewQueueMergedItem[], currentKey: string | null) => {
   if (!items.length) return -1
   if (!currentKey) return 0
 
@@ -190,11 +187,10 @@ const AdminReviewWorkbench = () => {
           >
             <ArrowLeft size={16} /> 返回审核队列
           </Link>
-          <h1 className="text-2xl font-bold text-text-primary tracking-[0.12em]">
-            内容审核
-          </h1>
+          <h1 className="text-2xl font-bold text-text-primary tracking-[0.12em]">内容审核</h1>
           <p className="mt-1 text-sm text-text-muted">
-            {getReviewFilterLabel(filter)} · {items.length > 0 ? `${currentIndex + 1}/${items.length}` : '0/0'}
+            {getReviewFilterLabel(filter)} ·{' '}
+            {items.length > 0 ? `${currentIndex + 1}/${items.length}` : '0/0'}
           </p>
         </div>
 
@@ -257,7 +253,9 @@ const AdminReviewWorkbench = () => {
           <p className="text-lg font-semibold text-text-primary tracking-[0.08em]">
             当前范围已审核完成
           </p>
-          <p className="mt-2 text-sm text-text-muted">可以返回队列，或刷新查看是否有新的待审内容。</p>
+          <p className="mt-2 text-sm text-text-muted">
+            可以返回队列，或刷新查看是否有新的待审内容。
+          </p>
           <div className="mt-6 flex flex-wrap justify-center gap-2">
             <button
               type="button"

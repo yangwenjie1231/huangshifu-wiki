@@ -1,9 +1,13 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
-  --font-serif: "Source Han Serif SC", "Noto Serif SC", "Songti SC", "SimSun", serif;
-  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-serif: 'Source Han Serif SC', 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+  --font-body:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Noto Sans SC', sans-serif;
 
   /* 普通主题 - 原站米白 / 金棕色系 */
   --color-brand-primary: #b07b17;
@@ -29,7 +33,7 @@
   --radius-theme-card: 1.5rem;
   --shadow-theme-card: 0 10px 30px rgba(0, 0, 0, 0.06);
   --theme-header-image: linear-gradient(135deg, rgba(176, 123, 23, 0.12), rgba(240, 236, 227, 0.7));
-  
+
   /* 高亮文字色 - 苹果标志性渐变色彩 */
   --color-highlight-1: rgba(255, 149, 0, 0.8);
   --color-highlight-2: rgba(255, 99, 132, 0.8);
@@ -37,12 +41,16 @@
   --color-highlight-4: rgba(54, 162, 235, 0.8);
 
   /* 苹果标志性渐变 - 蓝紫渐变 */
-  --gradient-highlight: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
-  --gradient-highlight-subtle: linear-gradient(135deg, rgba(0, 122, 255, 0.8) 0%, rgba(88, 86, 214, 0.8) 100%);
+  --gradient-highlight: linear-gradient(135deg, #007aff 0%, #5856d6 100%);
+  --gradient-highlight-subtle: linear-gradient(
+    135deg,
+    rgba(0, 122, 255, 0.8) 0%,
+    rgba(88, 86, 214, 0.8) 100%
+  );
 
   /* CTA 行动号召色 */
-  --color-cta: #22C55E;
-  --color-cta-hover: #16A34A;
+  --color-cta: #22c55e;
+  --color-cta-hover: #16a34a;
 
   /* ===== 设计令牌别名系统 (Design Token Aliases) ===== */
   /* 将语义化命名映射到项目已有颜色，保持向后兼容 */
@@ -83,14 +91,14 @@
   --color-action-blue: #1890ff;
 
   /* 功能色 (Functional) */
-  --color-success: #22C55E;
-  --color-success-hover: #16A34A;
-  --color-warning: #F59E0B;
-  --color-warning-hover: #D97706;
-  --color-error: #EF4444;
-  --color-error-hover: #DC2626;
-  --color-info: #3B82F6;
-  --color-info-hover: #2563EB;
+  --color-success: #22c55e;
+  --color-success-hover: #16a34a;
+  --color-warning: #f59e0b;
+  --color-warning-hover: #d97706;
+  --color-error: #ef4444;
+  --color-error-hover: #dc2626;
+  --color-info: #3b82f6;
+  --color-info-hover: #2563eb;
 
   /* Liquid Glass 玻璃质感核心变量 */
   --glass-bg: rgba(255, 255, 255, 0.2);
@@ -119,7 +127,8 @@
   --color-liquid-border-strong: rgba(255, 255, 255, 0.5);
   --color-liquid-tint: rgba(255, 255, 255, 0.25);
   --shadow-liquid-hover: 0 12px 40px rgba(0, 0, 0, 0.15);
-  --shadow-liquid-shine: inset 2px 2px 1px 0 rgba(255, 255, 255, 0.5), inset -1px -1px 1px 1px rgba(255, 255, 255, 0.5);
+  --shadow-liquid-shine:
+    inset 2px 2px 1px 0 rgba(255, 255, 255, 0.5), inset -1px -1px 1px 1px rgba(255, 255, 255, 0.5);
   --color-menu-hover-light: rgba(255, 255, 255, 0.5);
   --shadow-menu-hover-light: inset -2px -2px 2px rgba(0, 0, 0, 0.1);
 
@@ -144,11 +153,11 @@ a.mention-highlight:hover {
 }
 
 :root,
-[data-theme="default"] {
+[data-theme='default'] {
   color-scheme: light;
 }
 
-[data-theme="dark"] {
+[data-theme='dark'] {
   color-scheme: dark;
   --color-theme-bg: #1f1a16;
   --color-theme-text: #efe6d8;
@@ -226,7 +235,12 @@ a.mention-highlight:hover {
     padding: 0;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-family: var(--font-theme-serif);
   }
 
@@ -254,25 +268,6 @@ a.mention-highlight:hover {
     top: 0;
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 .theme-surface {
   background: var(--color-theme-surface);
@@ -500,8 +495,12 @@ a.mention-highlight:hover {
 
 /* 旋转动画 - 用于加载指示器或装饰性元素 */
 @keyframes spin-slow {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* 缓慢旋转动画类 - 8秒一圈，用于装饰性旋转元素 */
@@ -509,7 +508,7 @@ a.mention-highlight:hover {
   animation: spin-slow 8s linear infinite;
 }
 
-input[type="range"]::-webkit-slider-thumb {
+input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 12px;
   height: 12px;
@@ -520,7 +519,7 @@ input[type="range"]::-webkit-slider-thumb {
   box-shadow: var(--shadow-range-thumb);
 }
 
-input[type="range"]::-moz-range-thumb {
+input[type='range']::-moz-range-thumb {
   width: 12px;
   height: 12px;
   background: var(--color-range-thumb);
@@ -562,7 +561,7 @@ body {
 }
 
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
-  [class~="md:pb-safe-desktop"] {
+  [class~='md:pb-safe-desktop'] {
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
@@ -585,7 +584,9 @@ body {
   padding-top: env(safe-area-inset-top);
 }
 
-input, textarea, select {
+input,
+textarea,
+select {
   font-size: 16px;
 }
 
@@ -797,11 +798,11 @@ img {
     grid-template-columns: repeat(2, 1fr);
     gap: 2rem;
   }
-  
+
   .bento-item-large {
     grid-column: span 2;
   }
-  
+
   .bento-item-tall {
     grid-row: span 2;
   }
@@ -820,7 +821,7 @@ img {
     grid-template-columns: 1fr;
     gap: 1.5rem;
   }
-  
+
   .bento-item-large,
   .bento-item-tall {
     grid-column: span 1;
@@ -1026,19 +1027,25 @@ html {
 .touch-active:active {
   opacity: 0.7;
   transform: scale(0.97);
-  transition: opacity 100ms ease, transform 100ms ease;
+  transition:
+    opacity 100ms ease,
+    transform 100ms ease;
 }
 
 .touch-active-sm:active {
   opacity: 0.8;
   transform: scale(0.98);
-  transition: opacity 100ms ease, transform 100ms ease;
+  transition:
+    opacity 100ms ease,
+    transform 100ms ease;
 }
 
 .touch-active-lg:active {
   opacity: 0.6;
   transform: scale(0.95);
-  transition: opacity 100ms ease, transform 100ms ease;
+  transition:
+    opacity 100ms ease,
+    transform 100ms ease;
 }
 
 .touch-active-opacity:active {
@@ -1068,17 +1075,13 @@ html {
 }
 
 .table-scroll-wrapper::after {
-  content: "";
+  content: '';
   position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
   width: 2rem;
-  background: linear-gradient(
-    to right,
-    transparent,
-    var(--color-theme-bg)
-  );
+  background: linear-gradient(to right, transparent, var(--color-theme-bg));
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.3s ease;
@@ -1095,17 +1098,13 @@ html {
 
 /* Left scroll hint for RTL awareness */
 .table-scroll-wrapper::before {
-  content: "";
+  content: '';
   position: absolute;
   top: 0;
   left: 0;
   bottom: 0;
   width: 2rem;
-  background: linear-gradient(
-    to left,
-    transparent,
-    var(--color-theme-bg)
-  );
+  background: linear-gradient(to left, transparent, var(--color-theme-bg));
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.3s ease;
@@ -1118,8 +1117,13 @@ html {
 
 /* Scroll hint animation for tables */
 @keyframes scroll-hint-pulse {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .table-scroll-wrapper.scroll-hint-animate::after {
@@ -1150,8 +1154,12 @@ html {
    用于歌曲列表的渐入效果
    ======================================== */
 @keyframes gufengFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .gufeng-fade-in {
@@ -1162,15 +1170,32 @@ html {
   animation: gufengFadeIn 0.3s ease forwards;
 }
 
-.gufeng-song-item:nth-child(1) { animation-delay: 0.02s; }
-.gufeng-song-item:nth-child(2) { animation-delay: 0.04s; }
-.gufeng-song-item:nth-child(3) { animation-delay: 0.06s; }
-.gufeng-song-item:nth-child(4) { animation-delay: 0.08s; }
-.gufeng-song-item:nth-child(5) { animation-delay: 0.10s; }
-.gufeng-song-item:nth-child(6) { animation-delay: 0.12s; }
+.gufeng-song-item:nth-child(1) {
+  animation-delay: 0.02s;
+}
+.gufeng-song-item:nth-child(2) {
+  animation-delay: 0.04s;
+}
+.gufeng-song-item:nth-child(3) {
+  animation-delay: 0.06s;
+}
+.gufeng-song-item:nth-child(4) {
+  animation-delay: 0.08s;
+}
+.gufeng-song-item:nth-child(5) {
+  animation-delay: 0.1s;
+}
+.gufeng-song-item:nth-child(6) {
+  animation-delay: 0.12s;
+}
 
-.gufeng-btn { transition: all 0.3s ease; }
-.gufeng-btn:hover { background-color: var(--color-theme-surface-alt); color: var(--color-brand-gold); }
+.gufeng-btn {
+  transition: all 0.3s ease;
+}
+.gufeng-btn:hover {
+  background-color: var(--color-theme-surface-alt);
+  color: var(--color-brand-gold);
+}
 
 /* ========================================
    Task 8: 375px Responsive Styles
@@ -1202,7 +1227,7 @@ html {
 
   /* 容器内边距调整 */
   .container,
-  [class*="max-w"] {
+  [class*='max-w'] {
     padding-left: 1rem !important;
     padding-right: 1rem !important;
   }
@@ -1231,31 +1256,38 @@ html {
     line-height: 1.35;
   }
 
-  h4, h5, h6 {
+  h4,
+  h5,
+  h6 {
     font-size: 1rem !important;
     line-height: 1.4;
   }
 
-  p, span, div, li, td, th {
+  p,
+  span,
+  div,
+  li,
+  td,
+  th {
     font-size: 0.875rem !important;
   }
 
   /* Reduce padding on common containers */
   .container,
-  [class*="px-"],
-  [class*="p-"] {
+  [class*='px-'],
+  [class*='p-'] {
     padding-left: 0.75rem !important;
     padding-right: 0.75rem !important;
   }
 
-  [class*="py-"] {
+  [class*='py-'] {
     padding-top: 0.5rem !important;
     padding-bottom: 0.5rem !important;
   }
 
   /* Stack flex layouts vertically */
   .flex-row-320,
-  [class*="flex-row"] {
+  [class*='flex-row'] {
     flex-direction: column !important;
   }
 
@@ -1269,12 +1301,12 @@ html {
   }
 
   /* Reduce grid gaps */
-  [class*="gap-"] {
+  [class*='gap-'] {
     gap: 0.5rem !important;
   }
 
   /* Make cards full width */
-  [class*="card"],
+  [class*='card'],
   .theme-surface,
   .theme-surface-soft,
   .liquidGlass-wrapper {
@@ -1310,7 +1342,7 @@ html {
   nav,
   header,
   .nav-bar,
-  [class*="navbar"] {
+  [class*='navbar'] {
     padding-left: 0.5rem !important;
     padding-right: 0.5rem !important;
   }
@@ -1318,7 +1350,7 @@ html {
   /* Buttons full width on 320px */
   button,
   .btn-cta,
-  [role="button"] {
+  [role='button'] {
     width: 100% !important;
     text-align: center;
   }
@@ -1328,7 +1360,8 @@ html {
     font-size: 0.75rem !important;
   }
 
-  th, td {
+  th,
+  td {
     padding: 0.375rem 0.5rem !important;
   }
 
@@ -1341,9 +1374,9 @@ html {
   }
 
   /* Modal/dialog adjustments */
-  [role="dialog"],
+  [role='dialog'],
   .modal,
-  [class*="modal"] {
+  [class*='modal'] {
     width: 100% !important;
     margin: 0.5rem !important;
     max-width: calc(100vw - 1rem) !important;
@@ -1364,12 +1397,12 @@ html {
    ======================================== */
 .antique-page {
   background-color: var(--color-bg-antique);
-  font-family: "Noto Serif SC", "Source Han Serif SC", "SimSun", "STSong", "FangSong", serif;
+  font-family: 'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif;
 }
 
 .antique-detail {
   background-color: var(--color-bg-antique);
-  font-family: "Noto Serif SC", "Source Han Serif SC", "SimSun", "STSong", "FangSong", serif;
+  font-family: 'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif;
   line-height: 1.8;
 }
 
@@ -1404,52 +1437,52 @@ html {
   position: absolute;
 }
 
-[data-theme="dark"] .liquidGlass-wrapper {
+[data-theme='dark'] .liquidGlass-wrapper {
   background: var(--glass-bg);
   border-color: var(--glass-border);
 }
 
-[data-theme="dark"] .glass {
+[data-theme='dark'] .glass {
   background: var(--color-dark-glass-bg);
   border-color: var(--color-dark-glass-border);
 }
 
-[data-theme="dark"] .gufeng-btn:hover {
+[data-theme='dark'] .gufeng-btn:hover {
   background-color: var(--color-surface-alt);
   color: var(--color-theme-accent-strong);
 }
 
-[data-theme="dark"] .menu-item:hover {
+[data-theme='dark'] .menu-item:hover {
   background-color: var(--color-menu-hover-bg);
   box-shadow: var(--shadow-menu-hover);
 }
 
-[data-theme="dark"] input[type="range"]::-webkit-slider-thumb {
+[data-theme='dark'] input[type='range']::-webkit-slider-thumb {
   background: var(--color-range-thumb);
   border-color: var(--color-range-thumb-border);
 }
 
-[data-theme="dark"] input[type="range"]::-moz-range-thumb {
+[data-theme='dark'] input[type='range']::-moz-range-thumb {
   background: var(--color-range-thumb);
   border-color: var(--color-range-thumb-border);
 }
 
-[data-theme="dark"] .wmde-markdown,
-[data-theme="dark"] .w-md-editor,
-[data-theme="dark"] .w-md-editor-text,
-[data-theme="dark"] .w-md-editor-text-pre,
-[data-theme="dark"] .w-md-editor-text-input,
-[data-theme="dark"] .w-md-editor-preview {
+[data-theme='dark'] .wmde-markdown,
+[data-theme='dark'] .w-md-editor,
+[data-theme='dark'] .w-md-editor-text,
+[data-theme='dark'] .w-md-editor-text-pre,
+[data-theme='dark'] .w-md-editor-text-input,
+[data-theme='dark'] .w-md-editor-preview {
   background-color: var(--color-surface) !important;
   color: var(--color-text-primary) !important;
 }
 
-[data-theme="dark"] .w-md-editor-toolbar {
+[data-theme='dark'] .w-md-editor-toolbar {
   background-color: var(--color-surface-alt) !important;
   border-bottom-color: var(--color-border) !important;
 }
 
-[data-theme="dark"] .w-md-editor-toolbar button {
+[data-theme='dark'] .w-md-editor-toolbar button {
   color: var(--color-text-secondary) !important;
 }
 
@@ -1614,7 +1647,7 @@ html {
   border-radius: 0.25rem;
   background: var(--color-surface-alt);
   color: var(--color-brand-gold-dark);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
   font-size: 0.92em;
 }
 
@@ -1726,7 +1759,9 @@ html {
   font-size: 0.85em;
   opacity: 0;
   text-decoration: none;
-  transition: opacity 0.15s ease, color 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    color 0.15s ease;
 }
 
 h1:hover .markdown-heading-anchor,
@@ -1862,7 +1897,7 @@ h6:hover .markdown-heading-anchor,
   color: var(--color-brand-gold-light);
 }
 
-[data-theme="dark"] .w-md-editor-toolbar button:hover {
+[data-theme='dark'] .w-md-editor-toolbar button:hover {
   background-color: var(--color-editor-toolbar-hover) !important;
 }
 

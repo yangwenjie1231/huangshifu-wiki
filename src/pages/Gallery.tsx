@@ -106,7 +106,12 @@ const GalleryCard = React.memo(
                   {Array.isArray(gallery.images) ? gallery.images.length : 0} 张
                 </span>
                 {gallery.status && gallery.status !== 'published' ? (
-                  <span className={clsx('px-1.5 py-0.5 text-[10px] font-medium rounded flex-shrink-0', getStatusClassName(gallery.status))}>
+                  <span
+                    className={clsx(
+                      'px-1.5 py-0.5 text-[10px] font-medium rounded flex-shrink-0',
+                      getStatusClassName(gallery.status)
+                    )}
+                  >
                     {getStatusText(gallery.status)}
                   </span>
                 ) : null}
@@ -141,7 +146,12 @@ const GalleryCard = React.memo(
                 {Array.isArray(gallery.images) ? gallery.images.length : 0} 张
               </div>
               {gallery.status && gallery.status !== 'published' ? (
-                <div className={clsx('absolute left-2 top-2 px-2 py-0.5 text-[10px] font-medium rounded', getStatusClassName(gallery.status))}>
+                <div
+                  className={clsx(
+                    'absolute left-2 top-2 px-2 py-0.5 text-[10px] font-medium rounded',
+                    getStatusClassName(gallery.status)
+                  )}
+                >
                   {getStatusText(gallery.status)}
                 </div>
               ) : null}
@@ -450,47 +460,47 @@ const GalleryList = () => {
             aria-hidden={!galleryToDelete}
           >
             <div className="floating-panel bg-surface rounded p-8 max-w-md w-full border border-border">
-                <h3 className="text-xl font-semibold text-text-primary mb-4 tracking-wide">
-                  确认删除
-                </h3>
-                <p className="text-text-secondary mb-8 text-[0.9375rem]">
-                  您确定要删除图集《{deleteTarget.title}》吗？此操作无法撤销。
-                </p>
-                {(() => {
-                  const target = galleries.find((gallery) => gallery.id === deleteTarget.id)
-                  const requiresReason = Boolean(target && user && target.authorUid !== user.uid)
-                  return requiresReason ? (
-                    <label className="mb-6 block text-sm font-medium text-text-secondary">
-                      删除理由（必填）
-                      <textarea
-                        value={deleteReason}
-                        onChange={(event) => setDeleteReason(event.target.value)}
-                        maxLength={CONTENT_LIMITS.gallery.reviewNote}
-                        rows={3}
-                        className="mt-2 w-full rounded border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-danger"
-                      />
-                    </label>
-                  ) : null
-                })()}
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => {
-                      setGalleryToDelete(null)
-                      setDeleteReason('')
-                    }}
-                    disabled={Boolean(deletingGalleryId)}
-                    className="flex-1 px-6 py-3 bg-surface-alt text-text-secondary rounded font-semibold hover:bg-bg-tertiary active:scale-[0.98] transition-all disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    取消
-                  </button>
-                  <button
-                    onClick={handleConfirmDeleteGallery}
-                    disabled={Boolean(deletingGalleryId)}
-                    className="flex-1 px-6 py-3 theme-button-danger rounded font-semibold active:scale-[0.98] transition-all disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {deletingGalleryId ? '删除中...' : '确定删除'}
-                  </button>
-                </div>
+              <h3 className="text-xl font-semibold text-text-primary mb-4 tracking-wide">
+                确认删除
+              </h3>
+              <p className="text-text-secondary mb-8 text-[0.9375rem]">
+                您确定要删除图集《{deleteTarget.title}》吗？此操作无法撤销。
+              </p>
+              {(() => {
+                const target = galleries.find((gallery) => gallery.id === deleteTarget.id)
+                const requiresReason = Boolean(target && user && target.authorUid !== user.uid)
+                return requiresReason ? (
+                  <label className="mb-6 block text-sm font-medium text-text-secondary">
+                    删除理由（必填）
+                    <textarea
+                      value={deleteReason}
+                      onChange={(event) => setDeleteReason(event.target.value)}
+                      maxLength={CONTENT_LIMITS.gallery.reviewNote}
+                      rows={3}
+                      className="mt-2 w-full rounded border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-danger"
+                    />
+                  </label>
+                ) : null
+              })()}
+              <div className="flex gap-4">
+                <button
+                  onClick={() => {
+                    setGalleryToDelete(null)
+                    setDeleteReason('')
+                  }}
+                  disabled={Boolean(deletingGalleryId)}
+                  className="flex-1 px-6 py-3 bg-surface-alt text-text-secondary rounded font-semibold hover:bg-bg-tertiary active:scale-[0.98] transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleConfirmDeleteGallery}
+                  disabled={Boolean(deletingGalleryId)}
+                  className="flex-1 px-6 py-3 theme-button-danger rounded font-semibold active:scale-[0.98] transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {deletingGalleryId ? '删除中...' : '确定删除'}
+                </button>
+              </div>
             </div>
           </div>
         )}

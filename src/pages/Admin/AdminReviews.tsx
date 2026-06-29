@@ -120,10 +120,14 @@ export const AdminReviews = () => {
                           ? 'bg-surface-alt text-brand-gold'
                           : item.reviewType === 'gallery'
                             ? 'theme-status-success'
-                          : 'bg-bg-tertiary text-text-secondary'
+                            : 'bg-bg-tertiary text-text-secondary'
                       )}
                     >
-                      {item.reviewType === 'wiki' ? '百科' : item.reviewType === 'gallery' ? '图集' : '帖子'}
+                      {item.reviewType === 'wiki'
+                        ? '百科'
+                        : item.reviewType === 'gallery'
+                          ? '图集'
+                          : '帖子'}
                     </span>
                     <span className="px-2 py-0.5 text-[10px] font-medium rounded theme-status-warning">
                       待审核
@@ -133,8 +137,11 @@ export const AdminReviews = () => {
                     {item.title || item.slug || item.id}
                   </p>
                   <p className="text-xs text-text-muted line-clamp-2">
-                    {(String(item.reviewType === 'gallery' ? item.description || '' : item.content || '')).replace(/[#*`]/g, '').slice(0, 160) ||
-                      '无内容摘要'}
+                    {String(
+                      item.reviewType === 'gallery' ? item.description || '' : item.content || ''
+                    )
+                      .replace(/[#*`]/g, '')
+                      .slice(0, 160) || '无内容摘要'}
                   </p>
                   <p className="text-[10px] text-text-muted mt-2">
                     更新时间：{formatDateTime(item.updatedAt, 'N/A')}

@@ -18,8 +18,10 @@ vi.mock('../../src/server/middleware/auth', () => ({
     }
     next()
   },
-  requireActiveUser: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
-  requireAdmin: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
+  requireActiveUser: (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
+    next(),
+  requireAdmin: (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
+    next(),
   requireSuperAdmin: (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const authUser = (req as express.Request & { authUser?: { role?: string } }).authUser
     if (!authUser) {
@@ -37,7 +39,8 @@ vi.mock('../../src/server/middleware/auth', () => ({
 }))
 
 vi.mock('../../src/server/middleware/rateLimiter', () => ({
-  profileLimiter: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
+  profileLimiter: (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
+    next(),
 }))
 
 vi.mock('../../src/server/utils', () => ({
@@ -86,15 +89,15 @@ describe('users routes role update compatibility', () => {
     })
     registerUsersRoutes(app as unknown as express.Router)
 
-    const response = await request(app)
-      .patch('/api/users/target-user/role')
-      .send({ role: 'admin' })
+    const response = await request(app).patch('/api/users/target-user/role').send({ role: 'admin' })
 
     expect(response.status).toBe(200)
-    expect(mockPrisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { uid: 'target-user' },
-      data: { role: 'admin' },
-    }))
+    expect(mockPrisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { uid: 'target-user' },
+        data: { role: 'admin' },
+      })
+    )
     expect(mockClearUserCache).toHaveBeenCalledWith('target-user')
     expect(response.body.user.role).toBe('admin')
   })

@@ -114,8 +114,7 @@ const SETTINGS_SECTION_SET = new Set<SettingsSection>([
   'appearance',
 ])
 const CONTENT_TAB_SET = new Set<ContentTab>(['posts', 'wiki', 'galleries', 'comments'])
-const CONTENT_ITEM_LINK_CLASS =
-  'group -mx-3 block px-3 transition-colors hover:bg-surface-alt/70'
+const CONTENT_ITEM_LINK_CLASS = 'group -mx-3 block px-3 transition-colors hover:bg-surface-alt/70'
 const CONTENT_META_ROW_CLASS = 'flex items-start justify-between gap-3 text-xs text-text-muted'
 const CONTENT_STATUS_BADGE_CLASS = 'rounded border px-1.5 py-0.5 text-[10px]'
 
@@ -299,16 +298,22 @@ const Settings = () => {
         }
 
         if (activeContentTab === 'galleries') {
-          const data = await apiGet<{ galleries: GalleryItem[] }>(`/api/users/${user.uid}/galleries`, {
-            limit: 50,
-          })
+          const data = await apiGet<{ galleries: GalleryItem[] }>(
+            `/api/users/${user.uid}/galleries`,
+            {
+              limit: 50,
+            }
+          )
           if (!cancelled) setMyGalleries(data.galleries || [])
           return
         }
 
-        const data = await apiGet<{ comments: UserCommentItem[] }>(`/api/users/${user.uid}/comments`, {
-          limit: 50,
-        })
+        const data = await apiGet<{ comments: UserCommentItem[] }>(
+          `/api/users/${user.uid}/comments`,
+          {
+            limit: 50,
+          }
+        )
         if (!cancelled) setMyComments(data.comments || [])
       } catch (error) {
         console.error('Fetch content management data error:', error)
@@ -660,9 +665,16 @@ const Settings = () => {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className={CONTENT_META_ROW_CLASS}>
-                    <span className="min-w-0 text-text-muted">{gallery.images?.length || 0} 张</span>
+                    <span className="min-w-0 text-text-muted">
+                      {gallery.images?.length || 0} 张
+                    </span>
                     {gallery.status && gallery.status !== 'published' ? (
-                      <span className={clsx(CONTENT_STATUS_BADGE_CLASS, getStatusClassName(gallery.status))}>
+                      <span
+                        className={clsx(
+                          CONTENT_STATUS_BADGE_CLASS,
+                          getStatusClassName(gallery.status)
+                        )}
+                      >
                         {getStatusText(gallery.status)}
                         {gallery.status === 'rejected' && gallery.reviewNote
                           ? `（原因：${gallery.reviewNote}）`
@@ -697,7 +709,11 @@ const Settings = () => {
           const isGalleryComment = comment.targetType === 'gallery' || Boolean(comment.gallery)
           const isReply = Boolean(comment.parentId)
           const canOpenComment = Boolean(target && (!comment.isDeleted || isAdmin))
-          const sourceHref = target ? (isGalleryComment ? `/gallery/${target.id}` : `/forum/${target.id}`) : '#'
+          const sourceHref = target
+            ? isGalleryComment
+              ? `/gallery/${target.id}`
+              : `/forum/${target.id}`
+            : '#'
           const commentHref = canOpenComment ? `${sourceHref}#comment-${comment.id}` : '#'
           return (
             <li
@@ -716,7 +732,12 @@ const Settings = () => {
                   className="absolute inset-0 z-0"
                 />
               ) : null}
-              <div className={clsx('relative z-10 flex flex-col gap-2 py-3', target && 'pointer-events-none')}>
+              <div
+                className={clsx(
+                  'relative z-10 flex flex-col gap-2 py-3',
+                  target && 'pointer-events-none'
+                )}
+              >
                 <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
                   <span>
                     {isReply
@@ -736,10 +757,12 @@ const Settings = () => {
                       {isReply ? <span>下的评论</span> : null}
                     </>
                   ) : (
-                    <span className={clsx(
-                      CONTENT_STATUS_BADGE_CLASS,
-                      'border-[color-mix(in_srgb,var(--color-warning)_46%,transparent)] text-[color-mix(in_srgb,var(--color-warning)_78%,var(--color-text-primary))]'
-                    )}>
+                    <span
+                      className={clsx(
+                        CONTENT_STATUS_BADGE_CLASS,
+                        'border-[color-mix(in_srgb,var(--color-warning)_46%,transparent)] text-[color-mix(in_srgb,var(--color-warning)_78%,var(--color-text-primary))]'
+                      )}
+                    >
                       原内容不可见
                     </span>
                   )}
@@ -755,7 +778,9 @@ const Settings = () => {
                     {comment.content}
                   </p>
                 ) : (
-                  <p className="max-w-[72ch] text-sm leading-7 text-text-secondary">{comment.content}</p>
+                  <p className="max-w-[72ch] text-sm leading-7 text-text-secondary">
+                    {comment.content}
+                  </p>
                 )}
                 <p className="text-xs text-text-muted">
                   {format(new Date(comment.createdAt), 'MM-dd HH:mm')}
@@ -785,23 +810,18 @@ const Settings = () => {
 
         <div className="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)]">
           <aside className="lg:sticky lg:top-[84px] lg:self-start lg:border-r lg:border-border lg:pr-4">
-            <nav className="flex gap-1 overflow-x-auto pb-2 lg:flex-col lg:gap-5 lg:overflow-visible lg:pb-0" aria-label="设置分类">
+            <nav
+              className="flex gap-1 overflow-x-auto pb-2 lg:flex-col lg:gap-5 lg:overflow-visible lg:pb-0"
+              aria-label="设置分类"
+            >
               <div className="flex gap-1 lg:flex-col">
                 {SECTION_NAV.map((item) => (
-                  <SettingsNavLink
-                    key={item.id}
-                    item={item}
-                    isActive={activeSection === item.id}
-                  />
+                  <SettingsNavLink key={item.id} item={item} isActive={activeSection === item.id} />
                 ))}
               </div>
               <div className="flex gap-1 lg:flex-col lg:border-t lg:border-border lg:pt-4">
                 {CONTENT_SECTION_NAV.map((item) => (
-                  <SettingsNavLink
-                    key={item.id}
-                    item={item}
-                    isActive={activeSection === item.id}
-                  />
+                  <SettingsNavLink key={item.id} item={item} isActive={activeSection === item.id} />
                 ))}
               </div>
             </nav>
@@ -812,7 +832,10 @@ const Settings = () => {
               <section className="space-y-6" aria-labelledby="settings-public-profile">
                 <div className="flex items-center gap-2 border-b border-border pb-3">
                   <UserRound size={18} className="text-brand-gold" />
-                  <h2 id="settings-public-profile" className="text-base font-semibold text-text-primary">
+                  <h2
+                    id="settings-public-profile"
+                    className="text-base font-semibold text-text-primary"
+                  >
                     公开资料
                   </h2>
                 </div>
@@ -899,7 +922,10 @@ const Settings = () => {
                           <span className="text-sm font-medium text-text-secondary">
                             个人简介（支持 Markdown）
                           </span>
-                          <CharacterCount current={profileForm.bio.length} max={WIKI_MAX_CONTENT_SIZE} />
+                          <CharacterCount
+                            current={profileForm.bio.length}
+                            max={WIKI_MAX_CONTENT_SIZE}
+                          />
                         </div>
                         <MarkdownEditor
                           value={profileForm.bio}
@@ -924,7 +950,11 @@ const Settings = () => {
                       disabled={savingProfile}
                       className="theme-button-primary inline-flex items-center gap-2 rounded px-5 py-2 text-sm font-medium transition-all disabled:opacity-50"
                     >
-                      {savingProfile ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                      {savingProfile ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Save size={14} />
+                      )}
                       {savingProfile ? '保存中...' : '保存公开资料'}
                     </button>
                   </div>
@@ -1025,7 +1055,9 @@ const Settings = () => {
                           <Mail size={16} className="text-brand-gold" />
                           <h3 className="text-sm font-semibold text-text-primary">邮箱</h3>
                         </div>
-                        <p className="truncate text-sm text-text-secondary">{user.email || '未设置'}</p>
+                        <p className="truncate text-sm text-text-secondary">
+                          {user.email || '未设置'}
+                        </p>
                         <div className="flex flex-wrap items-center gap-2 text-xs">
                           <span
                             className={clsx(
@@ -1083,7 +1115,9 @@ const Settings = () => {
                         className="mt-5 grid max-w-xl gap-4"
                       >
                         <label className="block">
-                          <span className="mb-1 block text-xs font-medium text-text-muted">当前密码</span>
+                          <span className="mb-1 block text-xs font-medium text-text-muted">
+                            当前密码
+                          </span>
                           <input
                             type="password"
                             value={emailForm.currentPassword}
@@ -1098,12 +1132,17 @@ const Settings = () => {
                           />
                         </label>
                         <label className="block">
-                          <span className="mb-1 block text-xs font-medium text-text-muted">新邮箱</span>
+                          <span className="mb-1 block text-xs font-medium text-text-muted">
+                            新邮箱
+                          </span>
                           <input
                             type="email"
                             value={emailForm.newEmail}
                             onChange={(event) =>
-                              setEmailForm((current) => ({ ...current, newEmail: event.target.value }))
+                              setEmailForm((current) => ({
+                                ...current,
+                                newEmail: event.target.value,
+                              }))
                             }
                             autoComplete="email"
                             className="theme-input w-full rounded px-4 py-2.5 text-sm"
@@ -1122,7 +1161,11 @@ const Settings = () => {
                             disabled={savingEmail}
                             className="theme-button-primary inline-flex items-center gap-2 rounded px-4 py-2 text-sm font-medium transition-all disabled:opacity-50"
                           >
-                            {savingEmail ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                            {savingEmail ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <Save size={14} />
+                            )}
                             {savingEmail ? '更新中...' : '保存邮箱'}
                           </button>
                         </div>
@@ -1156,7 +1199,9 @@ const Settings = () => {
                         className="mt-5 grid max-w-xl gap-4"
                       >
                         <label className="block">
-                          <span className="mb-1 block text-xs font-medium text-text-muted">当前密码</span>
+                          <span className="mb-1 block text-xs font-medium text-text-muted">
+                            当前密码
+                          </span>
                           <input
                             type="password"
                             value={passwordForm.currentPassword}
@@ -1172,10 +1217,16 @@ const Settings = () => {
                         </label>
                         <div className="block">
                           <div className="mb-1 flex items-center justify-between gap-3">
-                            <label htmlFor="settings-new-password" className="text-xs font-medium text-text-muted">
+                            <label
+                              htmlFor="settings-new-password"
+                              className="text-xs font-medium text-text-muted"
+                            >
                               新密码
                             </label>
-                            <CharacterCount current={passwordForm.newPassword.length} max={PASSWORD_MAX_LENGTH} />
+                            <CharacterCount
+                              current={passwordForm.newPassword.length}
+                              max={PASSWORD_MAX_LENGTH}
+                            />
                           </div>
                           <input
                             id="settings-new-password"
@@ -1201,7 +1252,10 @@ const Settings = () => {
                             >
                               确认新密码
                             </label>
-                            <CharacterCount current={passwordForm.confirmPassword.length} max={PASSWORD_MAX_LENGTH} />
+                            <CharacterCount
+                              current={passwordForm.confirmPassword.length}
+                              max={PASSWORD_MAX_LENGTH}
+                            />
                           </div>
                           <input
                             id="settings-confirm-password"
@@ -1232,7 +1286,11 @@ const Settings = () => {
                             disabled={savingPassword}
                             className="theme-button-primary inline-flex items-center gap-2 rounded px-4 py-2 text-sm font-medium transition-all disabled:opacity-50"
                           >
-                            {savingPassword ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                            {savingPassword ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <Save size={14} />
+                            )}
                             {savingPassword ? '更新中...' : '保存密码'}
                           </button>
                         </div>
@@ -1247,7 +1305,10 @@ const Settings = () => {
               <section className="space-y-6" aria-labelledby="settings-appearance">
                 <div className="flex items-center gap-2 border-b border-border pb-3">
                   <SlidersHorizontal size={18} className="text-brand-gold" />
-                  <h2 id="settings-appearance" className="text-base font-semibold text-text-primary">
+                  <h2
+                    id="settings-appearance"
+                    className="text-base font-semibold text-text-primary"
+                  >
                     外观
                   </h2>
                 </div>
@@ -1274,7 +1335,9 @@ const Settings = () => {
                       })
                     }
                     className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-gold focus:ring-offset-2 ${
-                      preferences.showCharacterCount ? 'bg-[var(--color-theme-accent)]' : 'bg-border'
+                      preferences.showCharacterCount
+                        ? 'bg-[var(--color-theme-accent)]'
+                        : 'bg-border'
                     }`}
                   >
                     <span

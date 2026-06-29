@@ -90,23 +90,13 @@ describe('AuthModal', () => {
 
     rerender(
       <ToastProvider>
-        <AuthModal
-          open={false}
-          initialMode="login"
-          onClose={vi.fn()}
-          onAuthSuccess={vi.fn()}
-        />
+        <AuthModal open={false} initialMode="login" onClose={vi.fn()} onAuthSuccess={vi.fn()} />
       </ToastProvider>
     )
 
     rerender(
       <ToastProvider>
-        <AuthModal
-          open
-          initialMode="register"
-          onClose={vi.fn()}
-          onAuthSuccess={vi.fn()}
-        />
+        <AuthModal open initialMode="register" onClose={vi.fn()} onAuthSuccess={vi.fn()} />
       </ToastProvider>
     )
 
@@ -143,7 +133,10 @@ describe('AuthModal', () => {
 
     renderAuthModal(true, 'register')
 
-    expect(screen.getByLabelText('显示名称')).toHaveAttribute('placeholder', '昵称（可选，留空将自动生成）')
+    expect(screen.getByLabelText('显示名称')).toHaveAttribute(
+      'placeholder',
+      '昵称（可选，留空将自动生成）'
+    )
 
     fireEvent.change(screen.getByLabelText('邮箱'), {
       target: { value: 'averylonglocalpart@example.com' },
@@ -154,7 +147,11 @@ describe('AuthModal', () => {
     fireEvent.submit(screen.getByRole('button', { name: '注册' }).closest('form')!)
 
     await waitFor(() => {
-      expect(registerMock).toHaveBeenCalledWith('averylonglocalpart@example.com', 'ValidPassword123!', '')
+      expect(registerMock).toHaveBeenCalledWith(
+        'averylonglocalpart@example.com',
+        'ValidPassword123!',
+        ''
+      )
     })
   })
 

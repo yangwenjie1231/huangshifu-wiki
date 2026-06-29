@@ -1,9 +1,9 @@
-import { useMemo, useCallback } from 'react';
-import { LskyProAPI, LskyProAPIError } from '../lib/lskyClient';
+import { useMemo, useCallback } from 'react'
+import { LskyProAPI, LskyProAPIError } from '../lib/lskyClient'
 
 export interface UseLskyGenericOptions {
-  baseUrl?: string;
-  token?: string;
+  baseUrl?: string
+  token?: string
 }
 
 /**
@@ -15,18 +15,18 @@ export interface UseLskyGenericOptions {
  * - formatError 统一错误格式化（LskyProAPIError → Error → fallback）
  */
 export function useLskyGeneric(options: UseLskyGenericOptions = {}) {
-  const baseUrl = options.baseUrl || import.meta.env.VITE_LSKY_BASE_URL || '';
+  const baseUrl = options.baseUrl || import.meta.env.VITE_LSKY_BASE_URL || ''
 
   const api = useMemo(
     () => new LskyProAPI({ baseUrl, token: options.token }),
-    [baseUrl, options.token],
-  );
+    [baseUrl, options.token]
+  )
 
   const formatError = useCallback((err: unknown, fallback: string): string => {
-    if (err instanceof LskyProAPIError) return err.message;
-    if (err instanceof Error) return err.message;
-    return fallback;
-  }, []);
+    if (err instanceof LskyProAPIError) return err.message
+    if (err instanceof Error) return err.message
+    return fallback
+  }, [])
 
-  return { api, baseUrl, formatError };
+  return { api, baseUrl, formatError }
 }

@@ -1,46 +1,46 @@
-import axios from 'axios';
+import axios from 'axios'
 
-const AMAP_WEB_SERVICE_KEY = process.env.AMAP_API_KEY || '';
-const AMAP_BASE_URL = 'https://restapi.amap.com/v3';
+const AMAP_WEB_SERVICE_KEY = process.env.AMAP_API_KEY || ''
+const AMAP_BASE_URL = 'https://restapi.amap.com/v3'
 
 export interface Coordinate {
-  lng: number;
-  lat: number;
+  lng: number
+  lat: number
 }
 
 export interface AddressComponent {
-  province: string;
-  city: string;
-  district: string;
-  township?: string;
+  province: string
+  city: string
+  district: string
+  township?: string
 }
 
 export interface GeocodingResult {
-  coordinate: Coordinate;
-  address: string;
-  province: string;
-  city: string;
-  district: string;
-  township?: string;
-  adcode: string;
+  coordinate: Coordinate
+  address: string
+  province: string
+  city: string
+  district: string
+  township?: string
+  adcode: string
 }
 
 export interface RegionResolveResult {
-  coordinate: Coordinate;
-  province: string;
-  provinceCode: string;
-  city: string;
-  cityCode: string;
-  district: string;
-  districtCode: string;
-  adcode: string;
-  formattedAddress: string;
+  coordinate: Coordinate
+  province: string
+  provinceCode: string
+  city: string
+  cityCode: string
+  district: string
+  districtCode: string
+  adcode: string
+  formattedAddress: string
 }
 
 async function amapGet<T>(endpoint: string, params: Record<string, string>): Promise<T | null> {
   if (!AMAP_WEB_SERVICE_KEY) {
-    console.warn('AMAP_API_KEY is not configured');
-    return null;
+    console.warn('AMAP_API_KEY is not configured')
+    return null
   }
 
   try {
@@ -50,72 +50,75 @@ async function amapGet<T>(endpoint: string, params: Record<string, string>): Pro
         ...params,
       },
       timeout: 10000,
-    });
+    })
 
     if (response.data.status !== '1') {
-      console.error('Amap API error:', response.data.info);
-      return null;
+      console.error('Amap API error:', response.data.info)
+      return null
     }
 
-    return response.data as T;
+    return response.data as T
   } catch (error) {
-    console.error('Amap request failed:', error);
-    return null;
+    console.error('Amap request failed:', error)
+    return null
   }
 }
 
 export async function addressToCoordinate(address: string): Promise<Coordinate | null> {
   interface GeocodeResponse {
-    status: string;
+    status: string
     geocodes: Array<{
-      location: string;
-      adcode: string;
-    }>;
+      location: string
+      adcode: string
+    }>
   }
 
   const data = await amapGet<GeocodeResponse>('/geocode/geo', {
     address,
     output: 'json',
-  });
+  })
 
   if (!data || !data.geocodes || data.geocodes.length === 0) {
-    return null;
+    return null
   }
 
-  const [lng, lat] = data.geocodes[0].location.split(',').map(Number);
+  const [lng, lat] = data.geocodes[0].location.split(',').map(Number)
   if (isNaN(lng) || isNaN(lat)) {
-    return null;
+    return null
   }
 
-  return { lng, lat };
+  return { lng, lat }
 }
 
-export async function coordinateToAddress(lng: number, lat: number): Promise<GeocodingResult | null> {
+export async function coordinateToAddress(
+  lng: number,
+  lat: number
+): Promise<GeocodingResult | null> {
   interface RegeoResponse {
-    status: string;
+    status: string
     regeocode: {
       addressComponent: {
-        province: string;
-        city: string;
-        district: string;
-        township: string;
-        adcode: string;
-      };
-      formatted_address: string;
-    };
+        province: string
+        city: string
+        district: string
+        township: string
+        adcode: string
+      }
+      formatted_address: string
+    }
   }
 
   const data = await amapGet<RegeoResponse>('/geocode/regeo', {
     location: `${lng},${lat}`,
     extensions: 'base',
     output: 'json',
-  });
+  })
 
   if (!data || !data.regeocode) {
-    return null;
+    return null
   }
 
-  const { addressComponent, formatted_address } = data.regeocode;
+  const { addressComponent, formatted_address } = data.regeocode
 
   return {
     coordinate: { lng, lat },
@@ -125,13 +128,16 @@ export async function coordinateToAddress(lng: number, lat: number): Promise<Geo
     district: addressComponent.district,
     township: addressComponent.township,
     adcode: addressComponent.adcode,
-  };
+  }
 }
 
-export async function resolveCoordinateToRegion(lng: number, lat: number): Promise<RegionResolveResult | null> {
-  const addressResult = await coordinateToAddress(lng, lat);
+export async function resolveCoordinateToRegion(
+  lng: number,
+  lat: number
+): Promise<RegionResolveResult | null> {
+  const addressResult = await coordinateToAddress(lng, lat)
   if (!addressResult) {
-    return null;
+    return null
   }
 
   return {
@@ -144,51 +150,56 @@ export async function resolveCoordinateToRegion(lng: number, lat: number): Promi
     districtCode: addressResult.adcode,
     adcode: addressResult.adcode,
     formattedAddress: addressResult.address,
-  };
+  }
 }
 
-export async function searchAddress(keyword: string, city?: string): Promise<Array<{
-  name: string;
-  address: string;
-  coordinate: Coordinate;
-  adcode: string;
-}>> {
+export async function searchAddress(
+  keyword: string,
+  city?: string
+): Promise<
+  Array<{
+    name: string
+    address: string
+    coordinate: Coordinate
+    adcode: string
+  }>
+> {
   interface TextSearchResponse {
-    status: string;
+    status: string
     pois: Array<{
-      name: string;
-      location: string;
-      address: string;
-      adcode: string;
-    }>;
+      name: string
+      location: string
+      address: string
+      adcode: string
+    }>
   }
 
   const params: Record<string, string> = {
     keywords: keyword,
     output: 'json',
-  };
-
-  if (city) {
-    params.city = city;
   }
 
-  const data = await amapGet<TextSearchResponse>('/place/text', params);
+  if (city) {
+    params.city = city
+  }
+
+  const data = await amapGet<TextSearchResponse>('/place/text', params)
 
   if (!data || !data.pois) {
-    return [];
+    return []
   }
 
   return data.pois.map((s) => {
-    const [lng, lat] = s.location.split(',').map(Number);
+    const [lng, lat] = s.location.split(',').map(Number)
     return {
       name: s.name,
       address: s.address,
       coordinate: { lng: isNaN(lng) ? 0 : lng, lat: isNaN(lat) ? 0 : lat },
       adcode: s.adcode,
-    };
-  });
+    }
+  })
 }
 
 export function isAmapConfigured(): boolean {
-  return Boolean(AMAP_WEB_SERVICE_KEY);
+  return Boolean(AMAP_WEB_SERVICE_KEY)
 }

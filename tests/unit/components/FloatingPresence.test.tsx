@@ -2,10 +2,7 @@
 import React from 'react'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  FLOATING_TRANSITION_MS,
-  useFloatingPresence,
-} from '../../../src/hooks/useFloatingPresence'
+import { FLOATING_TRANSITION_MS, useFloatingPresence } from '../../../src/hooks/useFloatingPresence'
 
 const PresenceProbe = ({ open }: { open: boolean }) => {
   const presence = useFloatingPresence(open)

@@ -212,7 +212,9 @@ export default function MentionTextarea({
               }}
               className={clsx(
                 'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors',
-                index === selectedIndex ? 'bg-[var(--color-theme-accent)] text-white' : 'hover:bg-surface-alt'
+                index === selectedIndex
+                  ? 'bg-[var(--color-theme-accent)] text-white'
+                  : 'hover:bg-surface-alt'
               )}
             >
               <span className="min-w-0 flex-1 truncate">{suggestion.displayName}</span>

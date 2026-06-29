@@ -1,10 +1,10 @@
-import { ViewMode } from '../types/userPreferences';
+import { ViewMode } from '../types/userPreferences'
 
 export interface ViewModeConfig {
-  gridCols: string;
-  cardHeight: string;
-  gap: string;
-  iconSize: number;
+  gridCols: string
+  cardHeight: string
+  gap: string
+  iconSize: number
 }
 
 export const VIEW_MODE_CONFIG: Record<ViewMode, ViewModeConfig> = {
@@ -32,11 +32,11 @@ export const VIEW_MODE_CONFIG: Record<ViewMode, ViewModeConfig> = {
     gap: 'gap-2',
     iconSize: 16,
   },
-};
+}
 
 export const VIEW_MODE_LABELS: Record<ViewMode, string> = {
   large: '舒适',
   medium: '标准',
   small: '紧凑',
   list: '列表',
-};
+}

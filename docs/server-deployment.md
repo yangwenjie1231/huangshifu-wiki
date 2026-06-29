@@ -4,16 +4,16 @@
 
 ## 项目架构
 
-| 层级    | 技术                                              |
-| ----- | ----------------------------------------------- |
-| 前端    | Vite 6 + React 19 + TypeScript + Tailwind CSS 4 |
-| 后端    | Express（`server.ts`）                            |
-| 数据库   | Prisma 6.x + PostgreSQL 18                      |
-| 运行时   | Node.js 22                                       |
-| 向量检索  | Qdrant + ChineseCLIP（`OFA-Sys/chinese-clip-vit-base-patch16`） |
-| 进程守护  | PM2                                             |
-| 反向代理  | Nginx                                           |
-| ORM   | Prisma（SQLite 用于本地开发，PostgreSQL 用于生产）           |
+| 层级     | 技术                                                            |
+| -------- | --------------------------------------------------------------- |
+| 前端     | Vite 6 + React 19 + TypeScript + Tailwind CSS 4                 |
+| 后端     | Express（`server.ts`）                                          |
+| 数据库   | Prisma 6.x + PostgreSQL 18                                      |
+| 运行时   | Node.js 22                                                      |
+| 向量检索 | Qdrant + ChineseCLIP（`OFA-Sys/chinese-clip-vit-base-patch16`） |
+| 进程守护 | PM2                                                             |
+| 反向代理 | Nginx                                                           |
+| ORM      | Prisma（SQLite 用于本地开发，PostgreSQL 用于生产）              |
 
 > 数据访问说明：当前前端业务页面（Wiki/Forum/Gallery/Admin/Music）统一走 REST API（`/api/*`）+ Prisma，`src/lib/firebaseCompat/` 已移除。
 
@@ -31,7 +31,7 @@ chmod +x scripts/deploy.sh
 
 一键部署脚本会自动完成：环境检测、依赖安装、数据库迁移、前端构建、PM2 启动。
 
-***
+---
 
 ## 1. 环境要求
 
@@ -95,7 +95,7 @@ apt install -y postgresql-18 postgresql-client-18
 systemctl enable --now postgresql
 ```
 
-***
+---
 
 ## 2. 数据库初始化
 
@@ -120,7 +120,7 @@ sudo -u postgres psql -d huangshifu_wiki -c "ALTER DEFAULT PRIVILEGES IN SCHEMA 
 sudo -u postgres psql -d huangshifu_wiki -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO hsf_app;"
 ```
 
-***
+---
 
 ## 3. 配置环境变量
 
@@ -232,146 +232,147 @@ EOF
 
 #### 核心基础设施
 
-| 变量                          | 说明                                        |
-| --------------------------- | ----------------------------------------- |
-| `DATABASE_URL`              | PostgreSQL 连接字符串                           |
-| `JWT_SECRET`                | JWT 签名密钥（必须设置，否则服务无法启动）                  |
-| `CORS_ORIGIN`               | 允许的跨域来源（如 `https://你的域名`）                   |
-| `NODE_ENV`                  | 运行环境（PM2 启动时设为 `production`）                 |
-| `AXIOS_DEFAULT_TIMEOUT`     | Axios 默认超时时间（毫秒），默认 15000（15秒）           |
-| `COOKIE_SECURE`             | HTTP 部署自动关闭，HTTPS 自动启用                     |
+| 变量                    | 说明                                           |
+| ----------------------- | ---------------------------------------------- |
+| `DATABASE_URL`          | PostgreSQL 连接字符串                          |
+| `JWT_SECRET`            | JWT 签名密钥（必须设置，否则服务无法启动）     |
+| `CORS_ORIGIN`           | 允许的跨域来源（如 `https://你的域名`）        |
+| `NODE_ENV`              | 运行环境（PM2 启动时设为 `production`）        |
+| `AXIOS_DEFAULT_TIMEOUT` | Axios 默认超时时间（毫秒），默认 15000（15秒） |
+| `COOKIE_SECURE`         | HTTP 部署自动关闭，HTTPS 自动启用              |
+
 #### 认证与微信小程序
 
-| 变量                              | 说明                                    |
-| --------------------------------- | ------------------------------------- |
-| `WECHAT_MP_APPID`               | 微信小程序 AppID                           |
-| `WECHAT_MP_APP_SECRET`          | 微信小程序 AppSecret                       |
-| `WECHAT_LOGIN_MOCK`             | 仅开发/测试联调可设 `true`，正式环境必须为 `false` 或留空，否则服务拒绝启动 |
+| 变量                   | 说明                                                                        |
+| ---------------------- | --------------------------------------------------------------------------- |
+| `WECHAT_MP_APPID`      | 微信小程序 AppID                                                            |
+| `WECHAT_MP_APP_SECRET` | 微信小程序 AppSecret                                                        |
+| `WECHAT_LOGIN_MOCK`    | 仅开发/测试联调可设 `true`，正式环境必须为 `false` 或留空，否则服务拒绝启动 |
 
 #### 向量检索（Qdrant + ChineseCLIP）
 
-| 变量                                | 说明                                          |
-| --------------------------------- | ------------------------------------------- |
-| `QDRANT_URL`                      | Qdrant 服务地址（默认 `http://127.0.0.1:6333`）     |
-| `QDRANT_API_KEY`                  | Qdrant API Key（可选，未设置则无需认证）                |
-| `QDRANT_COLLECTION`               | 图片向量集合名称（默认 `hsf_image_embeddings`）       |
-| `IMAGE_EMBEDDING_MODEL`           | 图片向量模型名称（默认 `OFA-Sys/chinese-clip-vit-base-patch16`） |
-| `IMAGE_EMBEDDING_VECTOR_SIZE`     | 向量维度（默认 512）                               |
-| `IMAGE_EMBEDDING_BATCH_SIZE`      | 批量处理大小（默认 100）                             |
-| `IMAGE_EMBEDDING_DTYPE`           | 模型量化类型：`q8`（int8，省内存）或 `fp32`（全精度）        |
-| `IMAGE_SEARCH_RESULT_LIMIT`       | 图片搜索结果上限（默认 24）                            |
-| `QDRANT_TIMEOUT_MS`               | Qdrant 请求超时（毫秒，默认 2000）                     |
+| 变量                          | 说明                                                             |
+| ----------------------------- | ---------------------------------------------------------------- |
+| `QDRANT_URL`                  | Qdrant 服务地址（默认 `http://127.0.0.1:6333`）                  |
+| `QDRANT_API_KEY`              | Qdrant API Key（可选，未设置则无需认证）                         |
+| `QDRANT_COLLECTION`           | 图片向量集合名称（默认 `hsf_image_embeddings`）                  |
+| `IMAGE_EMBEDDING_MODEL`       | 图片向量模型名称（默认 `OFA-Sys/chinese-clip-vit-base-patch16`） |
+| `IMAGE_EMBEDDING_VECTOR_SIZE` | 向量维度（默认 512）                                             |
+| `IMAGE_EMBEDDING_BATCH_SIZE`  | 批量处理大小（默认 100）                                         |
+| `IMAGE_EMBEDDING_DTYPE`       | 模型量化类型：`q8`（int8，省内存）或 `fp32`（全精度）            |
+| `IMAGE_SEARCH_RESULT_LIMIT`   | 图片搜索结果上限（默认 24）                                      |
+| `QDRANT_TIMEOUT_MS`           | Qdrant 请求超时（毫秒，默认 2000）                               |
 
 #### 文本嵌入（Text Embedding）
 
-| 变量                                  | 说明                                      |
-| ----------------------------------- | --------------------------------------- |
-| `TEXT_EMBEDDING_ENABLED`            | 是否启用文本向量搜索（默认 `true`）                 |
-| `TEXT_EMBEDDING_MAX_CHUNK_TOKENS`    | 文本分块最大 token 数（默认 512）                 |
-| `TEXT_EMBEDDING_CHUNK_OVERLAP_TOKENS` | 文本分块重叠 token 数（默认 50）                  |
-| `QDRANT_TEXT_COLLECTION`            | 文本向量集合名称（默认 `hsf_text_embeddings`）     |
-| `TEXT_SEARCH_MIN_SCORE`             | 文本搜索最低相似度阈值（默认 0.3）                    |
+| 变量                                  | 说明                                           |
+| ------------------------------------- | ---------------------------------------------- |
+| `TEXT_EMBEDDING_ENABLED`              | 是否启用文本向量搜索（默认 `true`）            |
+| `TEXT_EMBEDDING_MAX_CHUNK_TOKENS`     | 文本分块最大 token 数（默认 512）              |
+| `TEXT_EMBEDDING_CHUNK_OVERLAP_TOKENS` | 文本分块重叠 token 数（默认 50）               |
+| `QDRANT_TEXT_COLLECTION`              | 文本向量集合名称（默认 `hsf_text_embeddings`） |
+| `TEXT_SEARCH_MIN_SCORE`               | 文本搜索最低相似度阈值（默认 0.3）             |
 
 #### Transformers 模型配置
 
-| 变量                        | 说明                          |
-| ------------------------- | --------------------------- |
-| `TRANSFORMERS_CACHE`       | 模型缓存目录路径（留空使用默认缓存位置）          |
-| `TRANSFORMERS_OFFLINE`     | 是否离线模式（`true` 跳过网络探测，默认 `false`） |
-| `HF_PROBE_TIMEOUT_MS`      | HuggingFace 探测超时（毫秒，默认 5000）    |
-| `SKIP_NETWORK_PROBE`       | 是否跳过网络探测（默认 `false`）             |
+| 变量                   | 说明                                              |
+| ---------------------- | ------------------------------------------------- |
+| `TRANSFORMERS_CACHE`   | 模型缓存目录路径（留空使用默认缓存位置）          |
+| `TRANSFORMERS_OFFLINE` | 是否离线模式（`true` 跳过网络探测，默认 `false`） |
+| `HF_PROBE_TIMEOUT_MS`  | HuggingFace 探测超时（毫秒，默认 5000）           |
+| `SKIP_NETWORK_PROBE`   | 是否跳过网络探测（默认 `false`）                  |
 
 #### 地图
 
-| 变量                              | 说明                                     |
-| --------------------------------- | -------------------------------------- |
-| `VITE_AMAP_JS_API_KEY`          | 高德地图 JS API Key（Web 平台，前端变量）        |
-| `VITE_AMAP_SECURITY_JS_CODE`    | 高德地图安全密钥（JS API 2.0 必须，前端变量）        |
-| `AMAP_API_KEY`                  | 高德地图 Web 服务 API Key（服务端地理编码用）        |
+| 变量                         | 说明                                          |
+| ---------------------------- | --------------------------------------------- |
+| `VITE_AMAP_JS_API_KEY`       | 高德地图 JS API Key（Web 平台，前端变量）     |
+| `VITE_AMAP_SECURITY_JS_CODE` | 高德地图安全密钥（JS API 2.0 必须，前端变量） |
+| `AMAP_API_KEY`               | 高德地图 Web 服务 API Key（服务端地理编码用） |
 
 #### 存储与上传
 
-| 变量                          | 说明                          |
-| --------------------------- | --------------------------- |
+| 变量                         | 说明                                                  |
+| ---------------------------- | ----------------------------------------------------- |
 | `UPLOADS_PATH`               | 自定义上传文件绝对路径（留空使用项目根目录 uploads/） |
-| `UPLOAD_SESSION_TTL_MINUTES` | 上传会话过期时间（分钟，默认 45）           |
-| `UPLOAD_MIN_FREE_SPACE_MB`   | 最小剩余磁盘空间（MB，默认 500）            |
-| `BLURHASH_ENABLED`           | 是否启用 Blurhash（默认 true）          |
-| `BLURHASH_AUTO_GENERATE`     | 上传时自动生成 Blurhash（默认 true）       |
-| `BLURHASH_COMPONENTS_X`      | Blurhash X 分量（默认 4）             |
-| `BLURHASH_COMPONENTS_Y`      | Blurhash Y 分量（默认 3）             |
+| `UPLOAD_SESSION_TTL_MINUTES` | 上传会话过期时间（分钟，默认 45）                     |
+| `UPLOAD_MIN_FREE_SPACE_MB`   | 最小剩余磁盘空间（MB，默认 500）                      |
+| `BLURHASH_ENABLED`           | 是否启用 Blurhash（默认 true）                        |
+| `BLURHASH_AUTO_GENERATE`     | 上传时自动生成 Blurhash（默认 true）                  |
+| `BLURHASH_COMPONENTS_X`      | Blurhash X 分量（默认 4）                             |
+| `BLURHASH_COMPONENTS_Y`      | Blurhash Y 分量（默认 3）                             |
 
 #### S3 对象存储
 
-| 变量                               | 说明                                      |
-| -------------------------------- | --------------------------------------- |
-| `S3_ENABLED`                      | 是否启用 S3 存储（`false`=本地，`true`=S3）       |
-| `S3_ENDPOINT_URL`                 | S3 兼容端点地址（如 Bitiful: `https://s3.bitiful.net`） |
-| `S3_READ_ACCESS_KEY_ID`           | 读取凭证 AccessKey（可用于前端签名 URL）          |
-| `S3_READ_SECRET_ACCESS_KEY`       | 读取凭证 SecretKey                           |
-| `S3_WRITE_ACCESS_KEY_ID`          | 写入凭证 AccessKey（机密，仅后端使用）              |
-| `S3_WRITE_SECRET_ACCESS_KEY`      | 写入凭证 SecretKey（机密，仅后端使用）              |
-| `S3_PUBLIC_BUCKET_NAME`           | 存储桶名称                                   |
-| `S3_PUBLIC_BUCKET_REGION`         | 存储桶区域（默认 `auto`）                        |
-| `S3_PUBLIC_BUCKET_PREFIX`         | 存储桶内前缀路径（默认 `public/`）                  |
-| `S3_FORCE_PATH_STYLE`             | 是否强制路径风格（默认 `true`）                    |
-| `S3_SSL_ENABLED`                  | 是否启用 SSL（默认 `true`）                     |
-| `S3_SIGNATURE_VERSION`            | 签名版本（默认 `v4`）                          |
-| `S3_PUBLIC_DOMAIN`                | S3 自定义公开访问域名（可选，用于 CDN 或自定义域名）        |
+| 变量                         | 说明                                                    |
+| ---------------------------- | ------------------------------------------------------- |
+| `S3_ENABLED`                 | 是否启用 S3 存储（`false`=本地，`true`=S3）             |
+| `S3_ENDPOINT_URL`            | S3 兼容端点地址（如 Bitiful: `https://s3.bitiful.net`） |
+| `S3_READ_ACCESS_KEY_ID`      | 读取凭证 AccessKey（可用于前端签名 URL）                |
+| `S3_READ_SECRET_ACCESS_KEY`  | 读取凭证 SecretKey                                      |
+| `S3_WRITE_ACCESS_KEY_ID`     | 写入凭证 AccessKey（机密，仅后端使用）                  |
+| `S3_WRITE_SECRET_ACCESS_KEY` | 写入凭证 SecretKey（机密，仅后端使用）                  |
+| `S3_PUBLIC_BUCKET_NAME`      | 存储桶名称                                              |
+| `S3_PUBLIC_BUCKET_REGION`    | 存储桶区域（默认 `auto`）                               |
+| `S3_PUBLIC_BUCKET_PREFIX`    | 存储桶内前缀路径（默认 `public/`）                      |
+| `S3_FORCE_PATH_STYLE`        | 是否强制路径风格（默认 `true`）                         |
+| `S3_SSL_ENABLED`             | 是否启用 SSL（默认 `true`）                             |
+| `S3_SIGNATURE_VERSION`       | 签名版本（默认 `v4`）                                   |
+| `S3_PUBLIC_DOMAIN`           | S3 自定义公开访问域名（可选，用于 CDN 或自定义域名）    |
 
 #### Superbed 图床（可选）
 
-| 变量                  | 说明           |
-| ------------------- | ------------ |
+| 变量                 | 说明               |
+| -------------------- | ------------------ |
 | `SUPERBED_API_TOKEN` | Superbed API Token |
 
 #### Lsky Pro+ 图床（可选）
 
-| 变量                    | 说明                                      |
-| --------------------- | --------------------------------------- |
-| `LSKY_BASE_URL`        | Lsky Pro+ 服务地址（如 `https://your-lsky-pro-domain.com`） |
-| `LSKY_TOKEN`           | Lsky API Token（可选，部分策略不需要）            |
-| `LSKY_STRATEGY_ID`     | Lsky 上传策略 ID（可选）                        |
-| `VITE_LSKY_BASE_URL`   | Lsky 前端地址（**前端变量**，会被打包到代码中）          |
+| 变量                 | 说明                                                        |
+| -------------------- | ----------------------------------------------------------- |
+| `LSKY_BASE_URL`      | Lsky Pro+ 服务地址（如 `https://your-lsky-pro-domain.com`） |
+| `LSKY_TOKEN`         | Lsky API Token（可选，部分策略不需要）                      |
+| `LSKY_STRATEGY_ID`   | Lsky 上传策略 ID（可选）                                    |
+| `VITE_LSKY_BASE_URL` | Lsky 前端地址（**前端变量**，会被打包到代码中）             |
 
 #### 图片变体生成器（v2.1，可选）
 
-| 变量                              | 说明                        |
-| ------------------------------- | ------------------------- |
-| `VARIANT_MAX_CONCURRENT`         | 最大并发数（默认 3）             |
-| `VARIANT_TASK_TIMEOUT_MS`        | 单任务超时（毫秒，默认 30000）      |
-| `VARIANT_QUEUE_MAX_WAIT_MS`      | 队列最大等待时间（毫秒，默认 300000） |
-| `VARIANT_SHARP_MEMORY_LIMIT_MB`  | Sharp 内存限制（MB，默认 512）    |
-| `VARIANT_MAX_RETRIES`            | 最大重试次数（默认 3）            |
+| 变量                            | 说明                                  |
+| ------------------------------- | ------------------------------------- |
+| `VARIANT_MAX_CONCURRENT`        | 最大并发数（默认 3）                  |
+| `VARIANT_TASK_TIMEOUT_MS`       | 单任务超时（毫秒，默认 30000）        |
+| `VARIANT_QUEUE_MAX_WAIT_MS`     | 队列最大等待时间（毫秒，默认 300000） |
+| `VARIANT_SHARP_MEMORY_LIMIT_MB` | Sharp 内存限制（MB，默认 512）        |
+| `VARIANT_MAX_RETRIES`           | 最大重试次数（默认 3）                |
 
 #### 云端同步服务（v2.1，可选）
 
-| 变量                         | 说明               |
-| -------------------------- | ---------------- |
+| 变量                        | 说明                   |
+| --------------------------- | ---------------------- |
 | `CLOUD_SYNC_MAX_CONCURRENT` | 最大并发数（默认 2）   |
-| `CLOUD_SYNC_MAX_RETRIES`    | 最大重试次数（默认 3）  |
+| `CLOUD_SYNC_MAX_RETRIES`    | 最大重试次数（默认 3） |
 
 #### 磁盘空间监控（v2.1，可选）
 
-| 变量                           | 说明                     |
-| ---------------------------- | ---------------------- |
-| `DISK_WARNING_THRESHOLD_GB`   | 磁盘警告阈值（GB，默认 50）     |
-| `DISK_CRITICAL_THRESHOLD_GB`  | 磁盘严重阈值（GB，默认 20）     |
-| `DISK_CHECK_INTERVAL_MS`      | 检查间隔（毫秒，默认 300000）   |
-| `UPLOAD_MIN_FREE_SPACE_MB`    | 上传最小可用空间（MB，默认 500） |
+| 变量                         | 说明                             |
+| ---------------------------- | -------------------------------- |
+| `DISK_WARNING_THRESHOLD_GB`  | 磁盘警告阈值（GB，默认 50）      |
+| `DISK_CRITICAL_THRESHOLD_GB` | 磁盘严重阈值（GB，默认 20）      |
+| `DISK_CHECK_INTERVAL_MS`     | 检查间隔（毫秒，默认 300000）    |
+| `UPLOAD_MIN_FREE_SPACE_MB`   | 上传最小可用空间（MB，默认 500） |
 
 #### 数据库备份
 
-| 变量                    | 说明                                   |
-| --------------------- | ------------------------------------ |
-| `BACKUP_PASSWORD`      | 备份文件服务端加密密钥（可选；留空时新备份为明文 SQL zip） |
-| `BACKUP_RETAIN_COUNT`  | 备份保留数量（默认 20），超过后自动删除最旧备份           |
+| 变量                  | 说明                                                       |
+| --------------------- | ---------------------------------------------------------- |
+| `BACKUP_PASSWORD`     | 备份文件服务端加密密钥（可选；留空时新备份为明文 SQL zip） |
+| `BACKUP_RETAIN_COUNT` | 备份保留数量（默认 20），超过后自动删除最旧备份            |
 
 #### 音乐缓存
 
-| 变量                                 | 默认值   | 说明            |
-| ---------------------------------- | ----- | ------------- |
-| `MUSIC_PLAY_URL_CACHE_TTL_SECONDS` | `600` | 播放地址缓存 TTL（秒） |
+| 变量                               | 默认值 | 说明                   |
+| ---------------------------------- | ------ | ---------------------- |
+| `MUSIC_PLAY_URL_CACHE_TTL_SECONDS` | `600`  | 播放地址缓存 TTL（秒） |
 
 ### 3.1 微信小程序 WebView 登录相关
 
@@ -416,22 +417,22 @@ Lsky Pro+ 是一款开源的图床程序。配置方式：
 
 图片变体生成器用于自动生成不同尺寸的图片变体（缩略图、中等尺寸等）。配置项：
 
-| 变量 | 说明 | 默认值 |
-| --- | --- | --- |
-| `VARIANT_MAX_CONCURRENT` | 同时处理的图片数量 | 3 |
-| `VARIANT_TASK_TIMEOUT_MS` | 单张图片处理超时 | 30000ms (30s) |
-| `VARIANT_QUEUE_MAX_WAIT_MS` | 队列最大等待时间 | 300000ms (5min) |
-| `VARIANT_SHARP_MEMORY_LIMIT_MB` | Sharp 库内存限制 | 512MB |
-| `VARIANT_MAX_RETRIES` | 失败重试次数 | 3 |
+| 变量                            | 说明               | 默认值          |
+| ------------------------------- | ------------------ | --------------- |
+| `VARIANT_MAX_CONCURRENT`        | 同时处理的图片数量 | 3               |
+| `VARIANT_TASK_TIMEOUT_MS`       | 单张图片处理超时   | 30000ms (30s)   |
+| `VARIANT_QUEUE_MAX_WAIT_MS`     | 队列最大等待时间   | 300000ms (5min) |
+| `VARIANT_SHARP_MEMORY_LIMIT_MB` | Sharp 库内存限制   | 512MB           |
+| `VARIANT_MAX_RETRIES`           | 失败重试次数       | 3               |
 
 ### 3.5 云端同步服务配置（可选，v2.1）
 
 云端同步服务用于将本地存储的图片同步到 S3 兼容对象存储。配置项：
 
-| 变量 | 说明 | 默认值 |
-| --- | --- | --- |
-| `CLOUD_SYNC_MAX_CONCURRENT` | 同步任务并发数 | 2 |
-| `CLOUD_SYNC_MAX_RETRIES` | 同步失败重试次数 | 3 |
+| 变量                        | 说明             | 默认值 |
+| --------------------------- | ---------------- | ------ |
+| `CLOUD_SYNC_MAX_CONCURRENT` | 同步任务并发数   | 2      |
+| `CLOUD_SYNC_MAX_RETRIES`    | 同步失败重试次数 | 3      |
 
 需配合 S3 配置（`S3_ENABLED=true` 及相关凭证）使用。
 
@@ -439,18 +440,19 @@ Lsky Pro+ 是一款开源的图床程序。配置方式：
 
 磁盘空间监控服务定期检查服务器磁盘剩余空间，并在达到阈值时发出告警。配置项：
 
-| 变量 | 说明 | 默认值 |
-| --- | --- | --- |
-| `DISK_WARNING_THRESHOLD_GB` | 警告阈值（GB） | 50 |
-| `DISK_CRITICAL_THRESHOLD_GB` | 严重阈值（GB） | 20 |
-| `DISK_CHECK_INTERVAL_MS` | 检查间隔（毫秒） | 300000 (5min) |
-| `UPLOAD_MIN_FREE_SPACE_MB` | 上传操作最小可用空间（MB） | 500 |
+| 变量                         | 说明                       | 默认值        |
+| ---------------------------- | -------------------------- | ------------- |
+| `DISK_WARNING_THRESHOLD_GB`  | 警告阈值（GB）             | 50            |
+| `DISK_CRITICAL_THRESHOLD_GB` | 严重阈值（GB）             | 20            |
+| `DISK_CHECK_INTERVAL_MS`     | 检查间隔（毫秒）           | 300000 (5min) |
+| `UPLOAD_MIN_FREE_SPACE_MB`   | 上传操作最小可用空间（MB） | 500           |
 
 当磁盘空间低于阈值时：
+
 - **Warning**：记录警告日志，不影响上传
 - **Critical**：拒绝新的上传请求，返回错误提示
 
-***
+---
 
 ## 4. 启动 Qdrant 向量数据库
 
@@ -469,14 +471,14 @@ curl http://127.0.0.1:6333/healthz
 
 项目使用两个 Qdrant 集合：
 
-| 集合名                          | 用途         | 向量维度 | 距离度量  |
-| ----------------------------- | ---------- | ---- | ----- |
-| `hsf_image_embeddings`        | 图片向量（CLIP） | 512  | Cosine |
-| `hsf_text_embeddings`         | 文本向量（ChineseCLIP 文本编码器） | 512  | Cosine |
+| 集合名                 | 用途                               | 向量维度 | 距离度量 |
+| ---------------------- | ---------------------------------- | -------- | -------- |
+| `hsf_image_embeddings` | 图片向量（CLIP）                   | 512      | Cosine   |
+| `hsf_text_embeddings`  | 文本向量（ChineseCLIP 文本编码器） | 512      | Cosine   |
 
 集合在首次使用时自动创建，无需手动初始化。
 
-***
+---
 
 ## 5. 初始化 Prisma 与数据库
 
@@ -519,7 +521,7 @@ npm run regions:import
 
 此命令从 [slightlee/regions-data](https://github.com/slightlee/regions-data) 获取最新行政区划数据并写入 `Region` 表。
 
-***
+---
 
 ## 6. 构建并启动服务
 
@@ -538,7 +540,7 @@ curl http://127.0.0.1:3003/api/health
 # 返回: {"status":"ok"}
 ```
 
-***
+---
 
 ## 7. 使用 PM2 守护进程
 
@@ -560,7 +562,7 @@ pm2 restart huangshifu-wiki --update-env  # 更新 .env 后使用
 pm2 stop huangshifu-wiki
 ```
 
-***
+---
 
 ## 8. 配置 Nginx 反向代理
 
@@ -598,7 +600,7 @@ systemctl restart nginx
 
 建议关闭 3003 端口对公网暴露，仅保留 80/443。
 
-***
+---
 
 ## 9. 配置 HTTPS（Let's Encrypt）
 
@@ -613,7 +615,7 @@ certbot --nginx -d your-domain.com
 certbot renew --dry-run
 ```
 
-***
+---
 
 ## 10. 部署脚本参数
 
@@ -628,16 +630,16 @@ USE_PM2=0 ./scripts/deploy.sh         # 不使用 PM2
 
 环境变量：
 
-| 变量                   | 默认值               | 说明          |
-| -------------------- | ----------------- | ----------- |
-| `APP_NAME`           | `huangshifu-wiki` | PM2 进程名     |
-| `APP_PORT`           | `3003`            | 健康检查端口      |
-| `ENV_FILE`           | `.env`            | 环境文件路径      |
-| `INSTALL_MODE`       | `ci`              | 依赖安装模式      |
+| 变量                 | 默认值            | 说明                       |
+| -------------------- | ----------------- | -------------------------- |
+| `APP_NAME`           | `huangshifu-wiki` | PM2 进程名                 |
+| `APP_PORT`           | `3003`            | 健康检查端口               |
+| `ENV_FILE`           | `.env`            | 环境文件路径               |
+| `INSTALL_MODE`       | `ci`              | 依赖安装模式               |
 | `ENABLE_VECTOR_SYNC` | `1`               | 部署时自动执行图片向量同步 |
-| `VECTOR_SYNC_LIMIT`  | `100`             | 向量同步批次大小    |
+| `VECTOR_SYNC_LIMIT`  | `100`             | 向量同步批次大小           |
 
-***
+---
 
 ## 11. 上线后验证清单
 
@@ -672,7 +674,7 @@ USE_PM2=0 ./scripts/deploy.sh         # 不使用 PM2
 - [ ] 上传的图片可通过签名 URL 访问
 - [ ] MD5 校验功能正常工作
 
-***
+---
 
 ## 12. 常见问题排查
 
@@ -803,7 +805,7 @@ SELECT COUNT(*) FROM \"SongAlbumRelation\" WHERE \"albumDocId\" IN (
 "
 ```
 
-***
+---
 
 ## 13. 更新发布流程
 
@@ -824,13 +826,19 @@ pm2 save
 > ```bash
 > # 补齐缺失的文本嵌入
 > curl -X POST http://127.0.0.1:3003/api/embeddings/text/enqueue \
-  -H "Content-Type: application/json" \
-  -d '{"limit": 100}'
-
-# 批量同步文本嵌入
-curl -X POST http://127.0.0.1:3003/api/embeddings/text/sync \
 >   -H "Content-Type: application/json" \
 >   -d '{"limit": 100}'
+> ```
+
+# 批量同步文本嵌入
+
+curl -X POST http://127.0.0.1:3003/api/embeddings/text/sync \
+
+> -H "Content-Type: application/json" \
+>  -d '{"limit": 100}'
+>
+> ```
+>
 > ```
 
 发布后检查迁移状态：
@@ -858,7 +866,7 @@ npm run build
 
 若三项全部通过，再执行 `pm2 restart huangshifu-wiki --update-env`。
 
-***
+---
 
 ## 14. 数据库备份
 
@@ -919,7 +927,7 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 
 建议配合 `crontab` 做每日自动备份。
 
-***
+---
 
 ## 15. 安全机制说明
 
@@ -938,16 +946,16 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 
 ### 15.3 安全嵌入平台白名单
 
-| 平台       | 域名                                                      |
-| -------- | ------------------------------------------------------- |
-| Bilibili | player.bilibili.com                                     |
-| 网易云音乐    | music.163.com                                           |
+| 平台       | 域名                                                    |
+| ---------- | ------------------------------------------------------- |
+| Bilibili   | player.bilibili.com                                     |
+| 网易云音乐 | music.163.com                                           |
 | QQ 音乐    | y.qq.com                                                |
-| YouTube  | youtube.com / [www.youtube.com](http://www.youtube.com) |
+| YouTube    | youtube.com / [www.youtube.com](http://www.youtube.com) |
 | 优酷       | player.youku.com                                        |
-| 爱奇艺      | open.iqiyi.com / [www.iqiyi.com](http://www.iqiyi.com)  |
-| 微博视频     | weibo.com / [www.weibo.com](http://www.weibo.com)       |
-| Vimeo    | vimeo.com / player.vimeo.com                            |
+| 爱奇艺     | open.iqiyi.com / [www.iqiyi.com](http://www.iqiyi.com)  |
+| 微博视频   | weibo.com / [www.weibo.com](http://www.weibo.com)       |
+| Vimeo      | vimeo.com / player.vimeo.com                            |
 
 ### 15.4 Content Security Policy 与高德地图
 
@@ -955,13 +963,13 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 
 **高德地图 JS API 白名单**（必须包含以下域名才能正常使用地图功能）：
 
-| 域名                       | 用途             |
-| ------------------------ | -------------- |
-| `webapi.amap.com`        | 高德 Web API 主域名 |
-| `jsapi.amap.com`         | 高德 JS API 域名   |
+| 域名                     | 用途                 |
+| ------------------------ | -------------------- |
+| `webapi.amap.com`        | 高德 Web API 主域名  |
+| `jsapi.amap.com`         | 高德 JS API 域名     |
 | `jsapi-service.amap.com` | 高德 JS API 服务域名 |
-| `restapi.amap.com`       | 高德 REST API 域名 |
-| `mapplugin.amap.com`     | 高德地图插件域名       |
+| `restapi.amap.com`       | 高德 REST API 域名   |
+| `mapplugin.amap.com`     | 高德地图插件域名     |
 
 **说明**：
 
@@ -975,10 +983,10 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 
 **播放策略**：
 
-| 平台          | 播放方式    | 说明                                                                        |
-| ----------- | ------- | ------------------------------------------------------------------------- |
-| 网易云音乐       | 客户端直连   | 直接构造 URL: `https://music.163.com/song/media/outer/url?id={neteaseId}.mp3` |
-| QQ/酷狗/百度/酷我 | 服务器 API | 通过 `/api/music/:docId/play-url` 获取，服务器缓存结果                                |
+| 平台              | 播放方式   | 说明                                                                          |
+| ----------------- | ---------- | ----------------------------------------------------------------------------- |
+| 网易云音乐        | 客户端直连 | 直接构造 URL: `https://music.163.com/song/media/outer/url?id={neteaseId}.mp3` |
+| QQ/酷狗/百度/酷我 | 服务器 API | 通过 `/api/music/:docId/play-url` 获取，服务器缓存结果                        |
 
 **实现逻辑**：
 
@@ -997,9 +1005,9 @@ tar -czf /root/backup/uploads_$(date +%F).tar.gz /root/huangshifu-wiki/uploads
 
 **环境变量**：
 
-| 变量                                 | 默认值   | 说明            |
-| ---------------------------------- | ----- | ------------- |
-| `MUSIC_PLAY_URL_CACHE_TTL_SECONDS` | `600` | 播放地址缓存 TTL（秒） |
+| 变量                               | 默认值 | 说明                   |
+| ---------------------------------- | ------ | ---------------------- |
+| `MUSIC_PLAY_URL_CACHE_TTL_SECONDS` | `600`  | 播放地址缓存 TTL（秒） |
 
 ### 15.6 敏感词过滤
 
@@ -1026,10 +1034,10 @@ npm run download:sensitive-words
 
 **API 接口**：
 
-| 接口                           | 方法   | 说明                                                                     |
-| ---------------------------- | ---- | ---------------------------------------------------------------------- |
+| 接口                         | 方法 | 说明                                                                                       |
+| ---------------------------- | ---- | ------------------------------------------------------------------------------------------ |
 | `/api/admin/check-sensitive` | POST | 敏感词检测（需管理员权限），请求体 `{ text: string }`，返回 `{ sensitiveWords: string[] }` |
-| `/api/admin/review-queue`    | GET  | 审核队列返回时自动附带 `sensitiveWords` 字段                                        |
+| `/api/admin/review-queue`    | GET  | 审核队列返回时自动附带 `sensitiveWords` 字段                                               |
 
 **管理员面板**：
 
@@ -1052,33 +1060,33 @@ npm run download:sensitive-words
 
 **环境变量**：
 
-| 变量                                 | 默认值   | 说明            |
-| ---------------------------------- | ----- | ------------- |
-| `MUSIC_PLAY_URL_CACHE_TTL_SECONDS` | `600` | 播放地址缓存 TTL（秒） |
+| 变量                               | 默认值 | 说明                   |
+| ---------------------------------- | ------ | ---------------------- |
+| `MUSIC_PLAY_URL_CACHE_TTL_SECONDS` | `600`  | 播放地址缓存 TTL（秒） |
 
-***
+---
 
 ## 附录：主要数据库表
 
-| 表名                | 说明                                   |
-| ----------------- | ------------------------------------ |
-| `User`            | 用户账号（包含 `preferences` JSON 字段存储视图偏好） |
-| `Post`            | 论坛帖子                                 |
-| `PostComment`     | 评论（支持关联 `Post` 或 `Gallery`）          |
-| `WikiPage`        | Wiki 页面                              |
-| `Gallery`         | 图集（支持版权标识 `copyright` 字段）            |
-| `MusicTrack`      | 音乐曲目                                 |
-| `Album`           | 专辑                                   |
-| `MediaAsset`      | 媒体资产                                 |
-| `ImageEmbedding`  | 图片向量                                 |
-| `TextEmbeddingChunk` | 文本向量分块（wiki/post/music/album 四种来源） |
-| `ImageMap`        | 图片映射（blurhash、S3 URL、本地和外部图床 URL）    |
-| `Region`          | 行政区划                                 |
-| `EditLock`        | 编辑锁                                  |
-| `WikiBranch`      | Wiki 分支                              |
-| `WikiPullRequest` | Wiki PR                              |
+| 表名                 | 说明                                                 |
+| -------------------- | ---------------------------------------------------- |
+| `User`               | 用户账号（包含 `preferences` JSON 字段存储视图偏好） |
+| `Post`               | 论坛帖子                                             |
+| `PostComment`        | 评论（支持关联 `Post` 或 `Gallery`）                 |
+| `WikiPage`           | Wiki 页面                                            |
+| `Gallery`            | 图集（支持版权标识 `copyright` 字段）                |
+| `MusicTrack`         | 音乐曲目                                             |
+| `Album`              | 专辑                                                 |
+| `MediaAsset`         | 媒体资产                                             |
+| `ImageEmbedding`     | 图片向量                                             |
+| `TextEmbeddingChunk` | 文本向量分块（wiki/post/music/album 四种来源）       |
+| `ImageMap`           | 图片映射（blurhash、S3 URL、本地和外部图床 URL）     |
+| `Region`             | 行政区划                                             |
+| `EditLock`           | 编辑锁                                               |
+| `WikiBranch`         | Wiki 分支                                            |
+| `WikiPullRequest`    | Wiki PR                                              |
 
-***
+---
 
 ## 附录：图片系统架构
 
@@ -1086,37 +1094,37 @@ npm run download:sensitive-words
 
 ### 数据模型 (ImageMap)
 
-| 字段            | 类型          | 说明                         |
-| ------------- | ----------- | -------------------------- |
-| `id`          | String      | 唯一标识                       |
-| `md5`         | String      | 文件 MD5 哈希，用于去重             |
-| `localUrl`    | String      | 本地存储 URL                   |
-| `externalUrl` | String?     | 外部自定义图床 URL                |
-| `s3Url`       | String?     | S3 存储 URL                  |
+| 字段          | 类型        | 说明                             |
+| ------------- | ----------- | -------------------------------- |
+| `id`          | String      | 唯一标识                         |
+| `md5`         | String      | 文件 MD5 哈希，用于去重          |
+| `localUrl`    | String      | 本地存储 URL                     |
+| `externalUrl` | String?     | 外部自定义图床 URL               |
+| `s3Url`       | String?     | S3 存储 URL                      |
 | `storageType` | StorageType | 当前存储类型 (local/s3/external) |
-| `blurhash`    | String?     | Blurhash 预览数据              |
-| `thumbhash`   | String?     | 缩略图哈希（预留）                  |
-| `createdAt`   | DateTime    | 创建时间                       |
+| `blurhash`    | String?     | Blurhash 预览数据                |
+| `thumbhash`   | String?     | 缩略图哈希（预留）               |
+| `createdAt`   | DateTime    | 创建时间                         |
 
 ### API 端点
 
-| 方法     | 路径                                     | 说明            |
-| ------ | -------------------------------------- | ------------- |
-| GET    | `/api/image-maps`                      | 获取图片列表        |
-| GET    | `/api/image-maps/:id`                  | 获取单张图片        |
-| POST   | `/api/image-maps`                      | 创建图片记录        |
+| 方法   | 路径                                   | 说明              |
+| ------ | -------------------------------------- | ----------------- |
+| GET    | `/api/image-maps`                      | 获取图片列表      |
+| GET    | `/api/image-maps/:id`                  | 获取单张图片      |
+| POST   | `/api/image-maps`                      | 创建图片记录      |
 | PATCH  | `/api/image-maps/:id`                  | 更新图片          |
 | DELETE | `/api/image-maps/:id`                  | 删除图片          |
-| GET    | `/api/image-maps/export`               | 导出 CSV        |
+| GET    | `/api/image-maps/export`               | 导出 CSV          |
 | POST   | `/api/image-maps/import`               | 批量导入          |
-| POST   | `/api/image-maps/:id/refresh-blurhash` | 刷新 blurhash   |
+| POST   | `/api/image-maps/:id/refresh-blurhash` | 刷新 blurhash     |
 | POST   | `/api/image-maps/refresh-all-blurhash` | 批量生成 blurhash |
 | GET    | `/api/image-maps/stats`                | 获取统计          |
-| GET    | `/api/config/image-preference`         | 获取存储策略        |
-| PATCH  | `/api/config/image-preference`         | 设置存储策略        |
+| GET    | `/api/config/image-preference`         | 获取存储策略      |
+| PATCH  | `/api/config/image-preference`         | 设置存储策略      |
 | GET    | `/api/s3/config`                       | 获取 S3 配置      |
-| GET    | `/api/s3/presign-upload`               | 生成上传签名        |
-| GET    | `/api/s3/presign-download/:key`        | 生成下载签名        |
+| GET    | `/api/s3/presign-upload`               | 生成上传签名      |
+| GET    | `/api/s3/presign-download/:key`        | 生成下载签名      |
 
 ### 前端组件
 
@@ -1138,13 +1146,13 @@ npm run download:sensitive-words
 
 ### 环境变量
 
-| 变量                       | 默认值           | 说明            |
-| ------------------------ | ------------- | ------------- |
-| `UPLOADS_PATH`           | 项目根目录/uploads | 自定义上传路径       |
-| `BLURHASH_ENABLED`       | true          | 是否启用 blurhash |
-| `BLURHASH_AUTO_GENERATE` | true          | 上传时自动生成       |
-| `BLURHASH_COMPONENTS_X`  | 4             | blurhash X 分量 |
-| `BLURHASH_COMPONENTS_Y`  | 3             | blurhash Y 分量 |
+| 变量                     | 默认值             | 说明              |
+| ------------------------ | ------------------ | ----------------- |
+| `UPLOADS_PATH`           | 项目根目录/uploads | 自定义上传路径    |
+| `BLURHASH_ENABLED`       | true               | 是否启用 blurhash |
+| `BLURHASH_AUTO_GENERATE` | true               | 上传时自动生成    |
+| `BLURHASH_COMPONENTS_X`  | 4                  | blurhash X 分量   |
+| `BLURHASH_COMPONENTS_Y`  | 3                  | blurhash Y 分量   |
 
 ### 自定义上传路径配置
 

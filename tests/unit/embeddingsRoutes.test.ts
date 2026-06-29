@@ -23,7 +23,8 @@ const mockPrisma = vi.hoisted(() => ({
 }))
 
 vi.mock('../../src/server/middleware/auth', () => ({
-  requireAdmin: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
+  requireAdmin: (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
+    next(),
 }))
 
 vi.mock('../../src/server/prisma', () => ({

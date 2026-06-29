@@ -1,41 +1,41 @@
 export interface S3Credentials {
-  accessKeyId: string;
-  secretAccessKey: string;
+  accessKeyId: string
+  secretAccessKey: string
 }
 
 export interface S3BucketConfig {
-  name: string;
-  region: string;
-  prefix?: string;
+  name: string
+  region: string
+  prefix?: string
 }
 
 export interface S3EndpointConfig {
-  url: string;
-  forcePathStyle?: boolean;
-  sslEnabled?: boolean;
-  signatureVersion?: 'v2' | 'v4';
+  url: string
+  forcePathStyle?: boolean
+  sslEnabled?: boolean
+  signatureVersion?: 'v2' | 'v4'
 }
 
 export interface S3SecurityConfig {
-  maxFileSize?: number;
-  allowedContentTypes?: string[];
-  enableMd5Verification?: boolean;
+  maxFileSize?: number
+  allowedContentTypes?: string[]
+  enableMd5Verification?: boolean
 }
 
 export interface S3Config {
-  enabled: boolean;
+  enabled: boolean
   credentials: {
-    read: S3Credentials;
-    write: S3Credentials;
-  };
+    read: S3Credentials
+    write: S3Credentials
+  }
   buckets: {
-    public: S3BucketConfig;
-    private?: S3BucketConfig;
-  };
-  endpoint?: S3EndpointConfig;
-  security?: S3SecurityConfig;
-  defaultAcl?: string;
-  expiresIn?: number;
+    public: S3BucketConfig
+    private?: S3BucketConfig
+  }
+  endpoint?: S3EndpointConfig
+  security?: S3SecurityConfig
+  defaultAcl?: string
+  expiresIn?: number
 }
 
 export const S3_CONFIG_EXAMPLE: S3Config = {
@@ -77,7 +77,7 @@ export const S3_CONFIG_EXAMPLE: S3Config = {
   },
   defaultAcl: 'public-read',
   expiresIn: 3600,
-};
+}
 
 export const S3_ENV_VAR_NAMES = {
   S3_ENABLED: 'S3_ENABLED',
@@ -99,7 +99,7 @@ export const S3_ENV_VAR_NAMES = {
   S3_MAX_FILE_SIZE: 'S3_MAX_FILE_SIZE',
   S3_ALLOWED_CONTENT_TYPES: 'S3_ALLOWED_CONTENT_TYPES',
   S3_ENABLE_MD5_VERIFICATION: 'S3_ENABLE_MD5_VERIFICATION',
-} as const;
+} as const
 
 export function getS3EnvDocumentation(): string {
   return `
@@ -174,5 +174,5 @@ S3_DEFAULT_ACL="public-read"
 # 预签名 URL 过期时间（秒）
 # 建议：上传使用较短时间（300-900秒），下载使用较长时间（3600秒）
 S3_EXPIRES_IN="3600"
-`;
+`
 }

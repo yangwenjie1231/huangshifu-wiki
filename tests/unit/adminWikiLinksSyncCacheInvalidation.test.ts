@@ -23,7 +23,8 @@ vi.mock('../../src/server/middleware/auth', () => ({
   },
   requireActiveUser: (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
     next(),
-  requireAdmin: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
+  requireAdmin: (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
+    next(),
   requireSuperAdmin: (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
     next(),
   isAdminRole: vi.fn(() => true),
@@ -38,8 +39,8 @@ vi.mock('../../src/server/middleware/asyncHandler', () => ({
 }))
 
 vi.mock('../../src/server/schemas', () => ({
-  validateBody: vi.fn(() => (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
-    next()
+  validateBody: vi.fn(
+    () => (_req: express.Request, _res: express.Response, next: express.NextFunction) => next()
   ),
   backupCreateSchema: {},
   backupNoteSchema: {},
@@ -79,7 +80,8 @@ vi.mock('../../src/server/vector/qdrantService', () => ({
 }))
 
 vi.mock('../../src/server/utils', async () => {
-  const actual = await vi.importActual<typeof import('../../src/server/utils')>('../../src/server/utils')
+  const actual =
+    await vi.importActual<typeof import('../../src/server/utils')>('../../src/server/utils')
 
   return {
     ...actual,

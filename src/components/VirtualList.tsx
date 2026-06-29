@@ -1,22 +1,26 @@
-import React, { forwardRef, useImperativeHandle } from 'react';
-import { useVirtualList, type VirtualListOptions, type VirtualListReturn } from '../hooks/useVirtualList';
+import React, { forwardRef, useImperativeHandle } from 'react'
+import {
+  useVirtualList,
+  type VirtualListOptions,
+  type VirtualListReturn,
+} from '../hooks/useVirtualList'
 
 /**
  * VirtualList 组件的 props 接口
  */
 export interface VirtualListProps<T> {
   /** 数据数组 */
-  data: T[];
+  data: T[]
   /** 预估每项高度（像素），默认 120 */
-  estimateSize?: number;
+  estimateSize?: number
   /** 预渲染的额外项数，默认 5 */
-  overscan?: number;
+  overscan?: number
   /** 容器高度，可以是固定像素值或 CSS 值 */
-  height?: string | number;
+  height?: string | number
   /** 自定义样式类名 */
-  className?: string;
+  className?: string
   /** 渲染函数：接收数据项和索引，返回 React 元素 */
-  children: (item: T, index: number) => React.ReactNode;
+  children: (item: T, index: number) => React.ReactNode
 }
 
 /**
@@ -24,11 +28,11 @@ export interface VirtualListProps<T> {
  */
 export interface VirtualListHandle<T> {
   /** 滚动到指定索引 */
-  scrollToIndex: (index: number, options?: ScrollIntoViewOptions) => void;
+  scrollToIndex: (index: number, options?: ScrollIntoViewOptions) => void
   /** 滚动到顶部 */
-  scrollToTop: () => void;
+  scrollToTop: () => void
   /** 获取 virtualizer 实例（高级用法） */
-  getVirtualizer: () => NonNullable<VirtualListReturn<T>['virtualizer']>;
+  getVirtualizer: () => NonNullable<VirtualListReturn<T>['virtualizer']>
 }
 
 /**
@@ -64,14 +68,7 @@ function VirtualListInner<T>(
   props: VirtualListProps<T>,
   ref: React.ForwardedRef<VirtualListHandle<T>>
 ) {
-  const {
-    data,
-    estimateSize = 120,
-    overscan = 5,
-    height = '100%',
-    className,
-    children,
-  } = props;
+  const { data, estimateSize = 120, overscan = 5, height = '100%', className, children } = props
 
   // 使用虚拟滚动 Hook
   const { virtualizer, virtualItems, totalSize, scrollToIndex, scrollToTop, setScrollRef } =
@@ -79,7 +76,7 @@ function VirtualListInner<T>(
       data,
       estimateSize,
       overscan,
-    });
+    })
 
   // 暴露方法给父组件
   useImperativeHandle(
@@ -90,7 +87,7 @@ function VirtualListInner<T>(
       getVirtualizer: () => virtualizer,
     }),
     [scrollToIndex, scrollToTop, virtualizer]
-  );
+  )
 
   return (
     <div
@@ -108,8 +105,8 @@ function VirtualListInner<T>(
       >
         {/* 只渲染可见的项目 */}
         {virtualItems.map((virtualItem) => {
-          const item = data[virtualItem.index];
-          if (!item) return null;
+          const item = data[virtualItem.index]
+          if (!item) return null
 
           return (
             <div
@@ -124,11 +121,11 @@ function VirtualListInner<T>(
             >
               {children(item, virtualItem.index)}
             </div>
-          );
+          )
         })}
       </div>
     </div>
-  );
+  )
 }
 
 /**
@@ -136,6 +133,6 @@ function VirtualListInner<T>(
  */
 export const VirtualList = forwardRef(VirtualListInner) as <T>(
   props: VirtualListProps<T> & { ref?: React.ForwardedRef<VirtualListHandle<T>> }
-) => React.ReactElement | null;
+) => React.ReactElement | null
 
-export default VirtualList;
+export default VirtualList

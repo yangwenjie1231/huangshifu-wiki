@@ -34,9 +34,12 @@ vi.mock('../../src/server/middleware/auth', () => ({
     }
     next()
   },
-  requireActiveUser: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
-  requireAdmin: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
-  requireSuperAdmin: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
+  requireActiveUser: (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
+    next(),
+  requireAdmin: (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
+    next(),
+  requireSuperAdmin: (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
+    next(),
   userToApiUser: vi.fn((user) => user),
   clearUserCache: mockClearUserCache,
   createToken: vi.fn(),
@@ -46,11 +49,13 @@ vi.mock('../../src/server/middleware/auth', () => ({
 }))
 
 vi.mock('../../src/server/middleware/rateLimiter', () => ({
-  profileLimiter: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
+  profileLimiter: (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
+    next(),
 }))
 
 vi.mock('../../src/server/utils', async () => {
-  const actual = await vi.importActual<typeof import('../../src/server/utils')>('../../src/server/utils')
+  const actual =
+    await vi.importActual<typeof import('../../src/server/utils')>('../../src/server/utils')
 
   return {
     ...actual,
@@ -119,12 +124,10 @@ describe('users routes password update', () => {
 
   it('clears auth cache and reissues current cookie session after updating own password', async () => {
     const app = await createApp()
-    const response = await request(app)
-      .put('/api/users/password')
-      .send({
-        currentPassword: 'CurrentPassword123!',
-        newPassword: 'UpdatedPassword123!',
-      })
+    const response = await request(app).put('/api/users/password').send({
+      currentPassword: 'CurrentPassword123!',
+      newPassword: 'UpdatedPassword123!',
+    })
 
     expect(response.status).toBe(200)
     expect(mockHash).toHaveBeenCalledWith('UpdatedPassword123!', 12)
@@ -157,10 +160,14 @@ describe('users routes password update', () => {
     })
     expect(mockPrisma.$transaction).toHaveBeenCalled()
     expect(mockClearUserCache).toHaveBeenCalledWith('user-1')
-    expect(mockIssueUserSession).toHaveBeenCalledWith(expect.any(Object), expect.any(Object), expect.objectContaining({
-      uid: 'user-1',
-      passwordHash: 'hashed-new-password',
-    }))
+    expect(mockIssueUserSession).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.any(Object),
+      expect.objectContaining({
+        uid: 'user-1',
+        passwordHash: 'hashed-new-password',
+      })
+    )
     expect(response.body).toEqual({ success: true })
   })
 
@@ -168,12 +175,10 @@ describe('users routes password update', () => {
     mockIsBearerAuthRequest.mockReturnValue(true)
 
     const app = await createApp()
-    const response = await request(app)
-      .put('/api/users/password')
-      .send({
-        currentPassword: 'CurrentPassword123!',
-        newPassword: 'UpdatedPassword123!',
-      })
+    const response = await request(app).put('/api/users/password').send({
+      currentPassword: 'CurrentPassword123!',
+      newPassword: 'UpdatedPassword123!',
+    })
 
     expect(response.status).toBe(200)
     expect(response.body).toEqual({

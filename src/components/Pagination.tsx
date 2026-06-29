@@ -1,34 +1,34 @@
-import React from 'react';
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
-import { clsx } from 'clsx';
+import React from 'react'
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { clsx } from 'clsx'
 
 interface PaginationProps {
-  page: number;
-  totalPages: number;
-  onPageChange: (page: number) => void;
-  pageSize?: number;
-  onPageSizeChange?: (size: number) => void;
-  pageSizeOptions?: number[];
-  showPageSizeSelector?: boolean;
+  page: number
+  totalPages: number
+  onPageChange: (page: number) => void
+  pageSize?: number
+  onPageSizeChange?: (size: number) => void
+  pageSizeOptions?: number[]
+  showPageSizeSelector?: boolean
 }
 
-const DEFAULT_PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+const DEFAULT_PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 
 function generatePageNumbers(current: number, total: number): (number | 'ellipsis')[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
 
-  const pages: (number | 'ellipsis')[] = [1];
+  const pages: (number | 'ellipsis')[] = [1]
 
-  if (current > 3) pages.push('ellipsis');
+  if (current > 3) pages.push('ellipsis')
 
   for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) {
-    pages.push(i);
+    pages.push(i)
   }
 
-  if (current < total - 2) pages.push('ellipsis');
+  if (current < total - 2) pages.push('ellipsis')
 
-  pages.push(total);
-  return pages;
+  pages.push(total)
+  return pages
 }
 
 export const Pagination: React.FC<PaginationProps> = ({
@@ -40,33 +40,33 @@ export const Pagination: React.FC<PaginationProps> = ({
   pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
   showPageSizeSelector = false,
 }) => {
-  if (totalPages <= 0) return null;
+  if (totalPages <= 0) return null
 
   const handlePrev = () => {
     if (page > 1) {
-      onPageChange(page - 1);
+      onPageChange(page - 1)
     }
-  };
+  }
 
   const handleNext = () => {
     if (page < totalPages) {
-      onPageChange(page + 1);
+      onPageChange(page + 1)
     }
-  };
+  }
 
   const handleFirst = () => {
     if (page > 1) {
-      onPageChange(1);
+      onPageChange(1)
     }
-  };
+  }
 
   const handleLast = () => {
     if (page < totalPages) {
-      onPageChange(totalPages);
+      onPageChange(totalPages)
     }
-  };
+  }
 
-  const pageNumbers = generatePageNumbers(page, totalPages);
+  const pageNumbers = generatePageNumbers(page, totalPages)
 
   return (
     <footer
@@ -75,11 +75,7 @@ export const Pagination: React.FC<PaginationProps> = ({
       aria-label="分页导航"
     >
       <div className="flex items-center gap-3">
-        <p
-          className="text-xs text-text-muted"
-          aria-live="polite"
-          aria-atomic="true"
-        >
+        <p className="text-xs text-text-muted" aria-live="polite" aria-atomic="true">
           第 {Math.min(page, totalPages)} / {totalPages} 页
         </p>
         {showPageSizeSelector && pageSize && onPageSizeChange && (
@@ -183,7 +179,7 @@ export const Pagination: React.FC<PaginationProps> = ({
         </button>
       </div>
     </footer>
-  );
-};
+  )
+}
 
-export default Pagination;
+export default Pagination

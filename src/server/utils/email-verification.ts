@@ -216,9 +216,10 @@ function getTransporter(config: EmailVerificationConfig) {
     host: config.smtpHost,
     port: config.smtpPort,
     secure: config.smtpSecure,
-    auth: config.smtpUser || config.smtpPass
-      ? { user: config.smtpUser, pass: config.smtpPass }
-      : undefined,
+    auth:
+      config.smtpUser || config.smtpPass
+        ? { user: config.smtpUser, pass: config.smtpPass }
+        : undefined,
   })
 }
 
@@ -281,7 +282,10 @@ async function sendVerificationEmail(options: {
       `,
     })
   } catch (error) {
-    logger.error({ err: error, email: options.email, purpose: options.purpose }, 'Send verification email failed')
+    logger.error(
+      { err: error, email: options.email, purpose: options.purpose },
+      'Send verification email failed'
+    )
     throw new EmailVerificationError(
       'MAIL_SEND_FAILED',
       isPasswordReset ? '密码重置邮件发送失败' : '验证邮件发送失败'
@@ -343,9 +347,7 @@ export async function createAndSendEmailVerification(options: {
   return { expiresAt }
 }
 
-export async function createAndSendPasswordReset(options: {
-  user: EmailVerificationUser
-}) {
+export async function createAndSendPasswordReset(options: { user: EmailVerificationUser }) {
   return createAndSendEmailVerification({
     user: options.user,
     purpose: EmailVerificationPurpose.reset_password,
@@ -409,7 +411,10 @@ export async function verifyEmailVerificationToken(token: string) {
     throw new EmailVerificationError('TOKEN_EXPIRED', '验证链接已过期')
   }
 
-  if (record.purpose === EmailVerificationPurpose.change_email && record.user.email !== record.email) {
+  if (
+    record.purpose === EmailVerificationPurpose.change_email &&
+    record.user.email !== record.email
+  ) {
     throw new EmailVerificationError('INVALID_TOKEN', '验证链接无效')
   }
 

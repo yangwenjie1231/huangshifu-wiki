@@ -1,7 +1,7 @@
-import express from 'express';
-import { createServer, request as httpRequest, type IncomingMessage, type Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import express from 'express'
+import { createServer, request as httpRequest, type IncomingMessage, type Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockPrisma = vi.hoisted(() => ({
   wikiBranch: {
@@ -11,22 +11,24 @@ const mockPrisma = vi.hoisted(() => ({
     findMany: vi.fn(),
     findUnique: vi.fn(),
   },
-}));
+}))
 
-const mockCanViewWikiPage = vi.hoisted(() => vi.fn(() => true));
+const mockCanViewWikiPage = vi.hoisted(() => vi.fn(() => true))
 
 vi.mock('../../src/server/middleware/auth', () => ({
   requireAuth: (req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (!(req as { authUser?: unknown }).authUser) {
-      res.status(401).json({ error: '请先登录' });
-      return;
+      res.status(401).json({ error: '请先登录' })
+      return
     }
-    next();
+    next()
   },
-  requireActiveUser: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
-  requireAdmin: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
+  requireActiveUser: (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
+    next(),
+  requireAdmin: (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
+    next(),
   isAdminRole: (role: string | undefined) => role === 'admin' || role === 'super_admin',
-}));
+}))
 
 vi.mock('../../src/server/utils', () => ({
   prisma: mockPrisma,
@@ -53,17 +55,17 @@ vi.mock('../../src/server/utils', () => ({
   hasTag: vi.fn(() => false),
   buildWikiRelationBundle: vi.fn(),
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
-}));
+}))
 
 type TestUser = {
-  uid: string;
-  role: string;
-};
+  uid: string
+  role: string
+}
 
 type TestResponse = {
-  status: number;
-  body: unknown;
-};
+  status: number
+  body: unknown
+}
 
 function createBranch(overrides?: Record<string, unknown>) {
   return {
@@ -83,24 +85,24 @@ function createBranch(overrides?: Record<string, unknown>) {
       lastEditorUid: 'author_uid',
     },
     ...overrides,
-  };
+  }
 }
 
 async function createApp(authUser: TestUser | null) {
-  const { registerWikiRoutes } = await import('../../src/server/routes/wiki.routes');
-  const app = express();
+  const { registerWikiRoutes } = await import('../../src/server/routes/wiki.routes')
+  const app = express()
   app.use((req, _res, next) => {
-    (req as express.Request & { authUser?: TestUser }).authUser = authUser ?? undefined;
-    next();
-  });
-  registerWikiRoutes(app as unknown as express.Router);
-  return app;
+    ;(req as express.Request & { authUser?: TestUser }).authUser = authUser ?? undefined
+    next()
+  })
+  registerWikiRoutes(app as unknown as express.Router)
+  return app
 }
 
 async function request(app: express.Express, path: string): Promise<TestResponse> {
-  const server = createServer(app);
-  await new Promise<void>((resolve) => server.listen(0, resolve));
-  const { port } = server.address() as AddressInfo;
+  const server = createServer(app)
+  await new Promise<void>((resolve) => server.listen(0, resolve))
+  const { port } = server.address() as AddressInfo
 
   try {
     const response = await new Promise<IncomingMessage>((resolve, reject) => {
@@ -111,75 +113,75 @@ async function request(app: express.Express, path: string): Promise<TestResponse
           path,
           method: 'GET',
         },
-        resolve,
-      );
-      req.on('error', reject);
-      req.end();
-    });
+        resolve
+      )
+      req.on('error', reject)
+      req.end()
+    })
 
     const body = await new Promise<unknown>((resolve, reject) => {
-      let raw = '';
-      response.setEncoding('utf8');
+      let raw = ''
+      response.setEncoding('utf8')
       response.on('data', (chunk) => {
-        raw += chunk;
-      });
+        raw += chunk
+      })
       response.on('end', () => {
         if (!raw) {
-          resolve(null);
-          return;
+          resolve(null)
+          return
         }
 
         try {
-          resolve(JSON.parse(raw));
+          resolve(JSON.parse(raw))
         } catch (error) {
-          reject(error);
+          reject(error)
         }
-      });
-      response.on('error', reject);
-    });
+      })
+      response.on('error', reject)
+    })
 
     return {
       status: response.statusCode ?? 0,
       body,
-    };
+    }
   } finally {
     await new Promise<void>((resolve, reject) => {
-      (server as Server).close((error) => {
-        if (error) reject(error);
-        else resolve();
-      });
-    });
+      ;(server as Server).close((error) => {
+        if (error) reject(error)
+        else resolve()
+      })
+    })
   }
 }
 
 describe('wiki branch routes', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    mockCanViewWikiPage.mockReturnValue(true);
-  });
+    vi.clearAllMocks()
+    mockCanViewWikiPage.mockReturnValue(true)
+  })
 
   afterEach(() => {
-    vi.restoreAllMocks();
-  });
+    vi.restoreAllMocks()
+  })
 
   it('blocks unrelated users from pending review branch details', async () => {
-    mockPrisma.wikiBranch.findUnique.mockResolvedValueOnce(createBranch());
-    mockPrisma.wikiRevision.findUnique.mockResolvedValueOnce(null);
-    const app = await createApp({ uid: 'other_uid', role: 'user' });
+    mockPrisma.wikiBranch.findUnique.mockResolvedValueOnce(createBranch())
+    mockPrisma.wikiRevision.findUnique.mockResolvedValueOnce(null)
+    const app = await createApp({ uid: 'other_uid', role: 'user' })
 
-    const response = await request(app, '/api/wiki/branches/branch_1');
+    const response = await request(app, '/api/wiki/branches/branch_1')
 
-    expect(response).toEqual({ status: 403, body: { error: '无权访问该分支' } });
-    expect(mockPrisma.wikiRevision.findUnique).not.toHaveBeenCalled();
-  });
+    expect(response).toEqual({ status: 403, body: { error: '无权访问该分支' } })
+    expect(mockPrisma.wikiRevision.findUnique).not.toHaveBeenCalled()
+  })
 
   it('blocks unrelated users from conflicted branch revision history', async () => {
-    mockPrisma.wikiBranch.findUnique.mockResolvedValueOnce(createBranch({ status: 'conflict' }));
-    const app = await createApp({ uid: 'other_uid', role: 'user' });
+    mockPrisma.wikiBranch.findUnique.mockResolvedValueOnce(createBranch({ status: 'conflict' }))
+    const app = await createApp({ uid: 'other_uid', role: 'user' })
 
-    const response = await request(app, '/api/wiki/branches/branch_1/revisions');
+    const response = await request(app, '/api/wiki/branches/branch_1/revisions')
 
-    expect(response).toEqual({ status: 403, body: { error: '无权查看修订历史' } });
-    expect(mockPrisma.wikiRevision.findMany).not.toHaveBeenCalled();
-  });
-});
+    expect(response).toEqual({ status: 403, body: { error: '无权查看修订历史' } })
+    expect(mockPrisma.wikiRevision.findMany).not.toHaveBeenCalled()
+  })
+})

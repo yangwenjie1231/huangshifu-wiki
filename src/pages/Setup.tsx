@@ -87,7 +87,9 @@ const Setup = () => {
     >
       <div className="w-full max-w-md">
         <div className="mb-6">
-          <p className="mb-2 text-xs font-medium tracking-[0.14em] text-text-muted">INITIAL SETUP</p>
+          <p className="mb-2 text-xs font-medium tracking-[0.14em] text-text-muted">
+            INITIAL SETUP
+          </p>
           <h1 className="text-xl font-bold text-text-primary">初始化超级管理员</h1>
         </div>
 
@@ -124,10 +126,7 @@ const Setup = () => {
               className="theme-input w-full rounded px-4 py-2.5 text-sm"
             />
             <div className="mt-1 flex justify-end">
-              <CharacterCount
-                current={displayName.length}
-                max={PROFILE_DISPLAY_NAME_MAX_LENGTH}
-              />
+              <CharacterCount current={displayName.length} max={PROFILE_DISPLAY_NAME_MAX_LENGTH} />
             </div>
           </div>
 

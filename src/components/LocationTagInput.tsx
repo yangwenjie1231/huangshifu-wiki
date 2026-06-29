@@ -1,23 +1,23 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { MapPin, X, Loader2 } from 'lucide-react';
-import { MapPickerModal, type PickedLocation } from './MapPickerModal';
-import { apiGet, apiPost } from '../lib/apiClient';
-import { resolveLocationTagInputEnterSelectionIndex } from '../lib/locationTagInput';
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { MapPin, X, Loader2 } from 'lucide-react'
+import { MapPickerModal, type PickedLocation } from './MapPickerModal'
+import { apiGet, apiPost } from '../lib/apiClient'
+import { resolveLocationTagInputEnterSelectionIndex } from '../lib/locationTagInput'
 
 interface RegionSuggestion {
-  code: string;
-  name: string;
-  fullName: string;
-  level: number;
-  levelName: string;
-  parentCode: string | null;
+  code: string
+  name: string
+  fullName: string
+  level: number
+  levelName: string
+  parentCode: string | null
 }
 
 interface LocationTagInputProps {
-  value: string | null;
-  locationCode: string | null;
-  onChange: (fullName: string, code: string) => void;
-  onClear: () => void;
+  value: string | null
+  locationCode: string | null
+  onChange: (fullName: string, code: string) => void
+  onClear: () => void
 }
 
 export const LocationTagInput = ({
@@ -26,129 +26,140 @@ export const LocationTagInput = ({
   onChange,
   onClear,
 }: LocationTagInputProps) => {
-  const [open, setOpen] = useState(false);
-  const [mapPickerOpen, setMapPickerOpen] = useState(false);
-  const [inputValue, setInputValue] = useState(value || '');
-  const [suggestions, setSuggestions] = useState<RegionSuggestion[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState(-1);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<number | null>(null);
+  const [open, setOpen] = useState(false)
+  const [mapPickerOpen, setMapPickerOpen] = useState(false)
+  const [inputValue, setInputValue] = useState(value || '')
+  const [suggestions, setSuggestions] = useState<RegionSuggestion[]>([])
+  const [loading, setLoading] = useState(false)
+  const [showDropdown, setShowDropdown] = useState(false)
+  const [selectedIndex, setSelectedIndex] = useState(-1)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const debounceRef = useRef<number | null>(null)
 
   useEffect(() => {
-    setInputValue(value || '');
-  }, [value]);
+    setInputValue(value || '')
+  }, [value])
 
   const fetchSuggestions = useCallback(async (query: string) => {
-    if (query.length < 1) { setSuggestions([]); return; }
-    setLoading(true);
+    if (query.length < 1) {
+      setSuggestions([])
+      return
+    }
+    setLoading(true)
     try {
       const data = await apiGet<{ regions?: RegionSuggestion[] }>(
         `/api/regions/search?q=${encodeURIComponent(query)}&limit=10`
-      );
-      setSuggestions(data.regions || []);
+      )
+      setSuggestions(data.regions || [])
     } catch (err) {
-      console.error('Failed to fetch suggestions:', err);
-      setSuggestions([]);
+      console.error('Failed to fetch suggestions:', err)
+      setSuggestions([])
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, []);
+  }, [])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value;
-    setInputValue(newValue);
-    setShowDropdown(true);
-    setSelectedIndex(-1);
-    if (debounceRef.current) { window.clearTimeout(debounceRef.current); }
-    debounceRef.current = window.setTimeout(() => { fetchSuggestions(newValue); }, 200);
-  };
+    const newValue = e.target.value
+    setInputValue(newValue)
+    setShowDropdown(true)
+    setSelectedIndex(-1)
+    if (debounceRef.current) {
+      window.clearTimeout(debounceRef.current)
+    }
+    debounceRef.current = window.setTimeout(() => {
+      fetchSuggestions(newValue)
+    }, 200)
+  }
 
   const handleSelect = (region: RegionSuggestion) => {
-    setInputValue(region.fullName);
-    onChange(region.fullName, region.code);
-    setShowDropdown(false);
-    setSuggestions([]);
-    setSelectedIndex(-1);
-  };
+    setInputValue(region.fullName)
+    onChange(region.fullName, region.code)
+    setShowDropdown(false)
+    setSuggestions([])
+    setSelectedIndex(-1)
+  }
 
   const handleClear = () => {
-    setInputValue('');
-    onClear();
-    setSuggestions([]);
-    setShowDropdown(false);
-    setSelectedIndex(-1);
-    inputRef.current?.focus();
-  };
+    setInputValue('')
+    onClear()
+    setSuggestions([])
+    setShowDropdown(false)
+    setSelectedIndex(-1)
+    inputRef.current?.focus()
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.nativeEvent.isComposing) return;
+    if (e.nativeEvent.isComposing) return
 
     switch (e.key) {
       case 'ArrowDown':
-        if (!showDropdown || suggestions.length === 0) return;
-        e.preventDefault();
-        setSelectedIndex((prev) => prev < suggestions.length - 1 ? prev + 1 : prev);
-        break;
+        if (!showDropdown || suggestions.length === 0) return
+        e.preventDefault()
+        setSelectedIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : prev))
+        break
       case 'ArrowUp':
-        if (!showDropdown || suggestions.length === 0) return;
-        e.preventDefault();
-        setSelectedIndex((prev) => prev > 0 ? prev - 1 : -1);
-        break;
+        if (!showDropdown || suggestions.length === 0) return
+        e.preventDefault()
+        setSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1))
+        break
       case 'Enter':
-        e.preventDefault();
-        e.stopPropagation();
+        e.preventDefault()
+        e.stopPropagation()
         {
           const selectedSuggestionIndex = resolveLocationTagInputEnterSelectionIndex({
             showDropdown,
             suggestionsLength: suggestions.length,
             selectedIndex,
-          });
+          })
 
           if (selectedSuggestionIndex === null) {
-            setShowDropdown(false);
-            setSelectedIndex(-1);
-            break;
+            setShowDropdown(false)
+            setSelectedIndex(-1)
+            break
           }
 
-          handleSelect(suggestions[selectedSuggestionIndex]);
+          handleSelect(suggestions[selectedSuggestionIndex])
         }
-        break;
+        break
       case 'Escape':
-        if (!showDropdown) return;
-        e.preventDefault();
-        e.stopPropagation();
-        setShowDropdown(false);
-        setSelectedIndex(-1);
-        break;
+        if (!showDropdown) return
+        e.preventDefault()
+        e.stopPropagation()
+        setShowDropdown(false)
+        setSelectedIndex(-1)
+        break
     }
-  };
+  }
 
   const handleMapConfirm = async (location: PickedLocation) => {
     try {
-      const data = await apiPost<{ result?: { adcode: string; province: string; city: string; district: string } }>(
-        '/api/regions/resolve',
-        { lng: location.lng, lat: location.lat }
-      );
+      const data = await apiPost<{
+        result?: { adcode: string; province: string; city: string; district: string }
+      }>('/api/regions/resolve', { lng: location.lng, lat: location.lat })
       if (data.result) {
-        const displayName = location.address || `${data.result.province}${data.result.city}${data.result.district}`;
-        setInputValue(displayName);
-        onChange(displayName, data.result.adcode);
+        const displayName =
+          location.address || `${data.result.province}${data.result.city}${data.result.district}`
+        setInputValue(displayName)
+        onChange(displayName, data.result.adcode)
       }
     } catch (err) {
-      console.error('Failed to resolve location:', err);
+      console.error('Failed to resolve location:', err)
     }
-  };
+  }
 
   const handleFocus = () => {
-    if (inputValue && suggestions.length > 0) { setShowDropdown(true); }
-  };
+    if (inputValue && suggestions.length > 0) {
+      setShowDropdown(true)
+    }
+  }
 
   const handleBlur = () => {
-    setTimeout(() => { setShowDropdown(false); }, 150);
-  };
+    setTimeout(() => {
+      setShowDropdown(false)
+    }, 150)
+  }
 
   if (value && !inputValue) {
     return (
@@ -165,14 +176,17 @@ export const LocationTagInput = ({
           <X size={11} className="text-text-muted" />
         </button>
       </div>
-    );
+    )
   }
 
   return (
     <div className="relative">
       <div className="flex items-center gap-1">
         <div className="relative flex-1">
-          <MapPin size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+          <MapPin
+            size={13}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
+          />
           <input
             ref={inputRef}
             type="text"
@@ -185,7 +199,10 @@ export const LocationTagInput = ({
             className="theme-input w-full pl-9 pr-9 py-2.5 text-base rounded"
           />
           {loading && (
-            <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted animate-spin" />
+            <Loader2
+              size={13}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted animate-spin"
+            />
           )}
           {!loading && inputValue && (
             <button
@@ -228,9 +245,7 @@ export const LocationTagInput = ({
                   {region.levelName}
                 </span>
               </div>
-              <div className="text-xs text-text-muted mt-0.5 pl-[1.125rem]">
-                {region.fullName}
-              </div>
+              <div className="text-xs text-text-muted mt-0.5 pl-[1.125rem]">{region.fullName}</div>
             </button>
           ))}
         </div>
@@ -242,7 +257,7 @@ export const LocationTagInput = ({
         onConfirm={handleMapConfirm}
       />
     </div>
-  );
-};
+  )
+}
 
-export type { RegionSuggestion };
+export type { RegionSuggestion }

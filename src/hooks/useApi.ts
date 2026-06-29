@@ -1,17 +1,17 @@
-import { useState, useCallback, useRef } from 'react';
-import type { AppError } from '../lib/errorHandler';
-import { getUserFriendlyMessage } from '../lib/errorHandler';
-import { useToast } from '../components/Toast';
+import { useState, useCallback, useRef } from 'react'
+import type { AppError } from '../lib/errorHandler'
+import { getUserFriendlyMessage } from '../lib/errorHandler'
+import { useToast } from '../components/Toast'
 
 interface UseApiState<T> {
-  data: T | null;
-  error: AppError | null;
-  loading: boolean;
+  data: T | null
+  error: AppError | null
+  loading: boolean
 }
 
 interface UseApiReturn<T> extends UseApiState<T> {
-  execute: (fn: () => Promise<T>) => Promise<T | void>;
-  reset: () => void;
+  execute: (fn: () => Promise<T>) => Promise<T | void>
+  reset: () => void
 }
 
 export function useApi<T>(): UseApiReturn<T> {
@@ -19,41 +19,41 @@ export function useApi<T>(): UseApiReturn<T> {
     data: null,
     error: null,
     loading: false,
-  });
+  })
 
-  const requestIdRef = useRef(0);
+  const requestIdRef = useRef(0)
 
   const execute = useCallback(async (fn: () => Promise<T>) => {
-    const currentRequestId = ++requestIdRef.current;
-    setState((prev) => ({ ...prev, loading: true, error: null }));
+    const currentRequestId = ++requestIdRef.current
+    setState((prev) => ({ ...prev, loading: true, error: null }))
 
     try {
-      const data = await fn();
+      const data = await fn()
 
-      if (currentRequestId !== requestIdRef.current) return;
+      if (currentRequestId !== requestIdRef.current) return
 
-      setState({ data, error: null, loading: false });
-      return data;
+      setState({ data, error: null, loading: false })
+      return data
     } catch (error) {
-      if (currentRequestId !== requestIdRef.current) return;
+      if (currentRequestId !== requestIdRef.current) return
 
       setState((prev) => ({
         ...prev,
         loading: false,
         error: error as AppError,
-      }));
+      }))
     }
-  }, []);
+  }, [])
 
   const reset = useCallback(() => {
-    setState({ data: null, error: null, loading: false });
-  }, []);
+    setState({ data: null, error: null, loading: false })
+  }, [])
 
   return {
     ...state,
     execute,
     reset,
-  };
+  }
 }
 
 interface UseApiWithToastReturn<T> extends UseApiReturn<T> {
@@ -71,53 +71,56 @@ export function useApiWithToast<T>(showToast: boolean = true): UseApiWithToastRe
     data: null,
     error: null,
     loading: false,
-  });
+  })
 
-  const requestIdRef = useRef(0);
-  const { show: showToastFn } = useToast();
+  const requestIdRef = useRef(0)
+  const { show: showToastFn } = useToast()
 
-  const execute = useCallback(async (fn: () => Promise<T>) => {
-    const currentRequestId = ++requestIdRef.current;
-    setState((prev) => ({ ...prev, loading: true, error: null }));
+  const execute = useCallback(
+    async (fn: () => Promise<T>) => {
+      const currentRequestId = ++requestIdRef.current
+      setState((prev) => ({ ...prev, loading: true, error: null }))
 
-    try {
-      const data = await fn();
+      try {
+        const data = await fn()
 
-      if (currentRequestId !== requestIdRef.current) return;
+        if (currentRequestId !== requestIdRef.current) return
 
-      setState({ data, error: null, loading: false });
-      return data;
-    } catch (error) {
-      if (currentRequestId !== requestIdRef.current) return;
+        setState({ data, error: null, loading: false })
+        return data
+      } catch (error) {
+        if (currentRequestId !== requestIdRef.current) return
 
-      const appError = error as AppError;
-      setState((prev) => ({
-        ...prev,
-        loading: false,
-        error: appError,
-      }));
+        const appError = error as AppError
+        setState((prev) => ({
+          ...prev,
+          loading: false,
+          error: appError,
+        }))
 
-      if (showToast) {
-        try {
-          showToastFn(getUserFriendlyMessage(appError), { variant: 'error' });
-        } catch {
-          console.warn('[useApiWithToast] Error:', getUserFriendlyMessage(appError));
+        if (showToast) {
+          try {
+            showToastFn(getUserFriendlyMessage(appError), { variant: 'error' })
+          } catch {
+            console.warn('[useApiWithToast] Error:', getUserFriendlyMessage(appError))
+          }
         }
-      }
 
-      throw appError;
-    }
-  }, [showToast, showToastFn]);
+        throw appError
+      }
+    },
+    [showToast, showToastFn]
+  )
 
   const reset = useCallback(() => {
-    setState({ data: null, error: null, loading: false });
-  }, []);
+    setState({ data: null, error: null, loading: false })
+  }, [])
 
   return {
     ...state,
     execute,
     reset,
-  };
+  }
 }
 
-export default useApi;
+export default useApi

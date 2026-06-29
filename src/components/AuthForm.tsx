@@ -122,7 +122,10 @@ export const AuthForm = ({
             />
             {isRegisterMode && (
               <div className="mt-1 flex justify-end">
-                <CharacterCount current={displayName.length} max={PROFILE_DISPLAY_NAME_MAX_LENGTH} />
+                <CharacterCount
+                  current={displayName.length}
+                  max={PROFILE_DISPLAY_NAME_MAX_LENGTH}
+                />
               </div>
             )}
           </div>

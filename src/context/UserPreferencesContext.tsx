@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { UserPreferences, ViewMode, ThemeMode, DEFAULT_PREFERENCES } from '../types/userPreferences';
-import { apiGet, apiPatch } from '../lib/apiClient';
-import { useAuth } from './AuthContext';
-import type { AuthMeResponse } from '../types/api';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { UserPreferences, ViewMode, ThemeMode, DEFAULT_PREFERENCES } from '../types/userPreferences'
+import { apiGet, apiPatch } from '../lib/apiClient'
+import { useAuth } from './AuthContext'
+import type { AuthMeResponse } from '../types/api'
 import {
   applyResolvedTheme,
   hasStoredPreferenceValues,
@@ -12,15 +12,15 @@ import {
   resolveThemeMode,
   writeStoredPreferences,
   type ResolvedTheme,
-} from '../lib/theme';
+} from '../lib/theme'
 
 interface UserPreferencesContextType {
-  preferences: UserPreferences;
-  updatePreferences: (updates: Partial<UserPreferences>) => Promise<void>;
-  setViewMode: (mode: ViewMode) => Promise<void>;
-  setTheme: (mode: ThemeMode) => Promise<void>;
-  resolvedTheme: ResolvedTheme;
-  loading: boolean;
+  preferences: UserPreferences
+  updatePreferences: (updates: Partial<UserPreferences>) => Promise<void>
+  setViewMode: (mode: ViewMode) => Promise<void>
+  setTheme: (mode: ThemeMode) => Promise<void>
+  resolvedTheme: ResolvedTheme
+  loading: boolean
 }
 
 const UserPreferencesContext = createContext<UserPreferencesContextType>({
@@ -30,28 +30,31 @@ const UserPreferencesContext = createContext<UserPreferencesContextType>({
   setTheme: async () => {},
   resolvedTheme: 'default',
   loading: true,
-});
+})
 
 export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, loading: authLoading } = useAuth();
-  const [preferences, setPreferences] = useState<UserPreferences>(DEFAULT_PREFERENCES);
-  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>('default');
-  const [loading, setLoading] = useState(true);
+  const { user, loading: authLoading } = useAuth()
+  const [preferences, setPreferences] = useState<UserPreferences>(DEFAULT_PREFERENCES)
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>('default')
+  const [loading, setLoading] = useState(true)
 
-  const applyPreferences = useCallback((nextPreferences: UserPreferences) => {
-    setPreferences(nextPreferences)
-    writeStoredPreferences(nextPreferences, user?.uid)
-    const resolved = resolveThemeMode(nextPreferences.theme)
-    setResolvedTheme(resolved)
-    applyResolvedTheme(resolved)
-  }, [user?.uid])
+  const applyPreferences = useCallback(
+    (nextPreferences: UserPreferences) => {
+      setPreferences(nextPreferences)
+      writeStoredPreferences(nextPreferences, user?.uid)
+      const resolved = resolveThemeMode(nextPreferences.theme)
+      setResolvedTheme(resolved)
+      applyResolvedTheme(resolved)
+    },
+    [user?.uid]
+  )
 
   useEffect(() => {
     const loadPreferences = async () => {
       if (!authLoading) {
         if (user) {
           try {
-            const userData = await fetchUserPreferencesFromAPI();
+            const userData = await fetchUserPreferencesFromAPI()
             const storedPreferences = readStoredPreferences(user.uid, {
               includeLegacyFallback: true,
             })
@@ -67,68 +70,79 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
               applyPreferences(storedPreferences)
             }
           } catch (error) {
-            console.error('Failed to load user preferences from API:', error);
+            console.error('Failed to load user preferences from API:', error)
             applyPreferences(readStoredPreferences(user.uid, { includeLegacyFallback: true }))
           }
         } else {
           applyPreferences(readStoredPreferences())
         }
-        setLoading(false);
+        setLoading(false)
       }
-    };
+    }
 
-    loadPreferences();
-  }, [applyPreferences, user, authLoading]);
+    loadPreferences()
+  }, [applyPreferences, user, authLoading])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined') return
 
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
     const handleChange = () => {
       if (preferences.theme === 'system') {
-        const resolved = resolveThemeMode('system');
-        setResolvedTheme(resolved);
-        applyResolvedTheme(resolved);
+        const resolved = resolveThemeMode('system')
+        setResolvedTheme(resolved)
+        applyResolvedTheme(resolved)
       }
-    };
+    }
 
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [preferences.theme]);
+    mediaQuery.addEventListener('change', handleChange)
+    return () => mediaQuery.removeEventListener('change', handleChange)
+  }, [preferences.theme])
 
-  const fetchUserPreferencesFromAPI = async (): Promise<{ preferences?: Record<string, unknown> } | null> => {
+  const fetchUserPreferencesFromAPI = async (): Promise<{
+    preferences?: Record<string, unknown>
+  } | null> => {
     try {
-      const data = await apiGet<AuthMeResponse>('/api/users/me');
-      return data.user;
+      const data = await apiGet<AuthMeResponse>('/api/users/me')
+      return data.user
     } catch (error) {
-      console.error('Failed to fetch user preferences from API:', error);
-      return null;
+      console.error('Failed to fetch user preferences from API:', error)
+      return null
     }
-  };
+  }
 
-  const updatePreferences = useCallback(async (updates: Partial<UserPreferences>) => {
-    const newPrefs = normalizeStoredPreferences({
-      ...preferences,
-      ...updates,
-    });
-    applyPreferences(newPrefs)
+  const updatePreferences = useCallback(
+    async (updates: Partial<UserPreferences>) => {
+      const newPrefs = normalizeStoredPreferences({
+        ...preferences,
+        ...updates,
+      })
+      applyPreferences(newPrefs)
 
-    if (user) {
-      try {
-        await apiPatch('/api/users/me', { preferences: newPrefs });
-      } catch (error) {
-        console.error('Failed to sync preferences to server:', error);
+      if (user) {
+        try {
+          await apiPatch('/api/users/me', { preferences: newPrefs })
+        } catch (error) {
+          console.error('Failed to sync preferences to server:', error)
+        }
       }
-    }
-  }, [applyPreferences, preferences, user]);
+    },
+    [applyPreferences, preferences, user]
+  )
 
-  const setViewMode = useCallback((mode: ViewMode) => {
-    return updatePreferences({ viewMode: mode });
-  }, [updatePreferences]);
+  const setViewMode = useCallback(
+    (mode: ViewMode) => {
+      return updatePreferences({ viewMode: mode })
+    },
+    [updatePreferences]
+  )
 
-  const setTheme = useCallback((mode: ThemeMode) => {
-    return updatePreferences({ theme: mode });
-  }, [updatePreferences]);
+  const setTheme = useCallback(
+    (mode: ThemeMode) => {
+      return updatePreferences({ theme: mode })
+    },
+    [updatePreferences]
+  )
 
   return (
     <UserPreferencesContext.Provider
@@ -143,7 +157,7 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
     >
       {children}
     </UserPreferencesContext.Provider>
-  );
-};
+  )
+}
 
-export const useUserPreferences = () => useContext(UserPreferencesContext);
+export const useUserPreferences = () => useContext(UserPreferencesContext)

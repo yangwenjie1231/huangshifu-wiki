@@ -957,7 +957,9 @@ describe('Wiki API - 百科接口测试', () => {
         orderBy: { createdAt: 'desc' },
       })
       expect(revisions).toHaveLength(2)
-      const rollbackRevision = revisions.find((revision) => revision.editorUid === adminUser.user.uid)
+      const rollbackRevision = revisions.find(
+        (revision) => revision.editorUid === adminUser.user.uid
+      )
       expect(rollbackRevision).toMatchObject({
         pageSlug: wikiPage.slug,
         title: 'Rollback Target Title',
@@ -1206,7 +1208,9 @@ describe('Wiki API - 百科接口测试', () => {
         .set('X-XSRF-TOKEN', xsrfToken)
 
       expect(listResponse.status).toBe(200)
-      const deletedItem = listResponse.body.data.find((item: { slug: string }) => item.slug === wikiPage.slug)
+      const deletedItem = listResponse.body.data.find(
+        (item: { slug: string }) => item.slug === wikiPage.slug
+      )
       expect(deletedItem).toBeDefined()
       expect(deletedItem.deletionReason).toBe('后台管理删除重复条目')
     })

@@ -115,7 +115,9 @@ describe('GalleryDetail', () => {
       }
       if (path === '/api/galleries/gallery-1') {
         galleryFetchCount += 1
-        return Promise.resolve({ gallery: galleryFetchCount === 1 ? pendingGallery : completedGallery })
+        return Promise.resolve({
+          gallery: galleryFetchCount === 1 ? pendingGallery : completedGallery,
+        })
       }
       return Promise.resolve({})
     })

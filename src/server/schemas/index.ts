@@ -16,7 +16,12 @@ export {
   wikiDeleteSchema,
   wikiRevisionSchema,
 } from './wiki.schema'
-export { postCreateSchema, postUpdateSchema, postDeleteSchema, postCommentSchema } from './post.schema'
+export {
+  postCreateSchema,
+  postUpdateSchema,
+  postDeleteSchema,
+  postCommentSchema,
+} from './post.schema'
 export { galleryDeleteSchema } from './gallery.schema'
 export {
   backupCreateSchema,

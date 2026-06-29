@@ -72,9 +72,9 @@ export function getNotificationText(notif: NotificationItem) {
           ? `你的${target}已被删除`
           : payload.action === 'restored'
             ? `你的${target}已被恢复`
-          : payload.approved === true
-            ? `已通过你的${target}编辑审核`
-            : `已驳回你的${target}编辑审核`
+            : payload.approved === true
+              ? `已通过你的${target}编辑审核`
+              : `已驳回你的${target}编辑审核`
 
       if (payload.approved === true && payload.action !== 'deleted') {
         return `${base}${title ? `：${title}` : ''}`

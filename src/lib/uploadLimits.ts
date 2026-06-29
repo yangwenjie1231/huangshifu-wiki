@@ -5,6 +5,8 @@ export function formatUploadLimit(maxSizeBytes: number = UPLOAD_MAX_FILE_SIZE_BY
   return `${(maxSizeBytes / (1024 * 1024)).toFixed(0)}MB`
 }
 
-export function formatUploadLimitWithSize(maxSizeBytes: number = UPLOAD_MAX_FILE_SIZE_BYTES): string {
+export function formatUploadLimitWithSize(
+  maxSizeBytes: number = UPLOAD_MAX_FILE_SIZE_BYTES
+): string {
   return `最大 ${formatUploadLimit(maxSizeBytes)}`
 }

@@ -253,8 +253,10 @@ CREATE FUNCTION "trigger_function"() RETURNS trigger AS $$ BEGIN RETURN NEW; END
   it('should remove old backup sidecars during retention cleanup', async () => {
     process.env.BACKUP_RETAIN_COUNT = '1'
     vi.resetModules()
-    const { cleanupOldBackups: cleanupWithSingleRetention, writeBackupNote: writeNoteWithSingleRetention } =
-      await import('../../src/server/utils/backup')
+    const {
+      cleanupOldBackups: cleanupWithSingleRetention,
+      writeBackupNote: writeNoteWithSingleRetention,
+    } = await import('../../src/server/utils/backup')
 
     fs.writeFileSync(path.join(backupsDir, cleanupDeleteFilename), 'old')
     fs.writeFileSync(path.join(backupsDir, cleanupKeepFilename), 'new')

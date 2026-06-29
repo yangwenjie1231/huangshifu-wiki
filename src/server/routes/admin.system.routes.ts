@@ -1,6 +1,6 @@
 /**
  * 管理后台 API - 磁盘监控与系统管理
- * 
+ *
  * 功能：
  * 1. 磁盘状态查询
  * 2. 动态修改告警阈值（用户核心需求）
@@ -9,14 +9,14 @@
  * 5. 批量变体重建
  */
 
-import { Router } from 'express';
-import { prisma } from '../prisma';
-import { requireAuth, requireAdmin, AuthenticatedRequest } from '../middleware/auth';
-import { diskMonitor } from '../services/diskMonitor.service';
-import { variantGenerator } from '../services/variantGenerator';
-import { cloudSyncService } from '../services/cloudSyncService';
+import { Router } from 'express'
+import { prisma } from '../prisma'
+import { requireAuth, requireAdmin, AuthenticatedRequest } from '../middleware/auth'
+import { diskMonitor } from '../services/diskMonitor.service'
+import { variantGenerator } from '../services/variantGenerator'
+import { cloudSyncService } from '../services/cloudSyncService'
 
-const router = Router();
+const router = Router()
 
 // ============================================================================
 // 📊 磁盘监控 API（支持动态配置）
@@ -27,46 +27,46 @@ const router = Router();
  */
 router.get('/disk/status', requireAuth, requireAdmin, async (_req, res) => {
   try {
-    const status = await diskMonitor.checkDiskSpace();
-    
+    const status = await diskMonitor.checkDiskSpace()
+
     res.json({
       success: true,
       data: status,
       timestamp: new Date().toISOString(),
-    });
+    })
   } catch (error) {
-    console.error('[Admin/Disk] Error getting status:', error);
+    console.error('[Admin/Disk] Error getting status:', error)
     res.status(500).json({
       success: false,
       error: 'Failed to get disk status',
-    });
+    })
   }
-});
+})
 
 /**
  * GET /api/admin/disk/config - 获取当前监控配置
  */
 router.get('/disk/config', requireAuth, requireAdmin, async (_req, res) => {
   try {
-    const config = diskMonitor.getConfig();
-    
+    const config = diskMonitor.getConfig()
+
     res.json({
       success: true,
       data: config,
       timestamp: new Date().toISOString(),
-    });
+    })
   } catch (error) {
-    console.error('[Admin/Disk] Error getting config:', error);
+    console.error('[Admin/Disk] Error getting config:', error)
     res.status(500).json({
       success: false,
       error: 'Failed to get disk monitor configuration',
-    });
+    })
   }
-});
+})
 
 /**
  * PUT /api/admin/disk/config - ⭐ 更新监控配置（核心功能：后台修改阈值）
- * 
+ *
  * 请求体示例：
  * {
  *   "warningThresholdGB": 100,    // 可选：警告阈值（GB），默认 50
@@ -77,40 +77,40 @@ router.get('/disk/config', requireAuth, requireAdmin, async (_req, res) => {
  */
 router.put('/disk/config', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
-    const newConfig = req.body;
+    const newConfig = req.body
 
     // 参数验证
     if (typeof newConfig !== 'object' || newConfig === null) {
       return res.status(400).json({
         success: false,
         error: 'Request body must be a JSON object',
-      });
+      })
     }
 
     // 验证各字段类型和范围
-    const validationErrors: string[] = [];
+    const validationErrors: string[] = []
 
     if ('warningThresholdGB' in newConfig) {
       if (typeof newConfig.warningThresholdGB !== 'number' || newConfig.warningThresholdGB <= 0) {
-        validationErrors.push('warningThresholdGB must be a positive number');
+        validationErrors.push('warningThresholdGB must be a positive number')
       }
     }
 
     if ('criticalThresholdGB' in newConfig) {
       if (typeof newConfig.criticalThresholdGB !== 'number' || newConfig.criticalThresholdGB <= 0) {
-        validationErrors.push('criticalThresholdGB must be a positive number');
+        validationErrors.push('criticalThresholdGB must be a positive number')
       }
     }
 
     if ('checkIntervalMs' in newConfig) {
       if (typeof newConfig.checkIntervalMs !== 'number' || newConfig.checkIntervalMs < 60000) {
-        validationErrors.push('checkIntervalMs must be >= 60000 (1 minute)');
+        validationErrors.push('checkIntervalMs must be >= 60000 (1 minute)')
       }
     }
 
     if ('uploadsMinFreeMB' in newConfig) {
       if (typeof newConfig.uploadsMinFreeMB !== 'number' || newConfig.uploadsMinFreeMB < 10) {
-        validationErrors.push('uploadsMinFreeMB must be >= 10 MB');
+        validationErrors.push('uploadsMinFreeMB must be >= 10 MB')
       }
     }
 
@@ -119,7 +119,7 @@ router.put('/disk/config', requireAuth, requireAdmin, async (req: AuthenticatedR
         success: false,
         error: 'Validation failed',
         details: validationErrors,
-      });
+      })
     }
 
     // 业务逻辑验证：critical 必须小于 warning
@@ -131,116 +131,113 @@ router.put('/disk/config', requireAuth, requireAdmin, async (req: AuthenticatedR
       return res.status(400).json({
         success: false,
         error: 'criticalThresholdGB must be less than warningThresholdGB',
-      });
+      })
     }
 
     // 更新配置（会自动保存到数据库并生效）
-    const updatedConfig = await diskMonitor.updateConfig(newConfig);
+    const updatedConfig = await diskMonitor.updateConfig(newConfig)
 
-    console.log(
-      `[Admin/Disk] 🔧 Config updated by admin: ${req.authUser?.uid}`,
-      updatedConfig
-    );
+    console.log(`[Admin/Disk] 🔧 Config updated by admin: ${req.authUser?.uid}`, updatedConfig)
 
     res.json({
       success: true,
       message: 'Disk monitor configuration updated successfully',
       data: updatedConfig,
-      previousConfig: diskMonitor.getConfig(),  // 实际上已经是更新后的了
+      previousConfig: diskMonitor.getConfig(), // 实际上已经是更新后的了
       timestamp: new Date().toISOString(),
-    });
+    })
   } catch (error) {
-    console.error('[Admin/Disk] Error updating config:', error);
+    console.error('[Admin/Disk] Error updating config:', error)
     res.status(500).json({
       success: false,
       error: 'Failed to update disk monitor configuration',
-    });
+    })
   }
-});
+})
 
 /**
  * POST /api/admin/disk/config/reset - 重置为默认配置
  */
 router.post('/disk/config/reset', requireAuth, requireAdmin, async (_req, res) => {
   try {
-    const defaultConfig = await diskMonitor.resetConfig();
+    const defaultConfig = await diskMonitor.resetConfig()
 
     res.json({
       success: true,
       message: 'Configuration reset to defaults',
       data: defaultConfig,
       timestamp: new Date().toISOString(),
-    });
+    })
   } catch (error) {
-    console.error('[Admin/Disk] Error resetting config:', error);
+    console.error('[Admin/Disk] Error resetting config:', error)
     res.status(500).json({
       success: false,
       error: 'Failed to reset configuration',
-    });
+    })
   }
-});
+})
 
 /**
  * POST /api/admin/disk/check - 手动触发磁盘检查
  */
 router.post('/disk/check', requireAuth, requireAdmin, async (_req, res) => {
   try {
-    const status = await diskMonitor.manualCheck();
-    
+    const status = await diskMonitor.manualCheck()
+
     res.json({
       success: true,
       message: 'Manual disk check completed',
       data: status,
       timestamp: new Date().toISOString(),
-    });
+    })
   } catch (error) {
-    console.error('[Admin/Disk] Error in manual check:', error);
+    console.error('[Admin/Disk] Error in manual check:', error)
     res.status(500).json({
       success: false,
       error: 'Manual disk check failed',
-    });
+    })
   }
-});
+})
 
 /**
  * POST /api/admin/disk/monitor/stop - 停止监控（维护用）
  */
 router.post('/disk/monitor/stop', requireAuth, requireAdmin, async (_req, res) => {
   try {
-    diskMonitor.stopMonitoring();
-    
+    diskMonitor.stopMonitoring()
+
     res.json({
       success: true,
       message: 'Disk monitoring stopped',
       timestamp: new Date().toISOString(),
-    });
+    })
   } catch (error) {
     res.status(500).json({
       success: false,
       error: 'Failed to stop monitoring',
-    });
+    })
   }
-});
+})
 
 /**
  * POST /api/admin/disk/monitor/resume - 恢复监控
  */
 router.post('/disk/monitor/resume', requireAuth, requireAdmin, async (_req, res) => {
   try {
-    diskMonitor.resumeMonitoring();
-    
+    diskMonitor.resumeMonitoring()
+
     res.json({
       success: true,
       message: 'Disk monitoring resumed',
       timestamp: new Date().toISOString(),
-    });
+    })
   } catch (error) {
     res.status(500).json({
       success: false,
       error: 'Failed to resume monitoring',
-    });
+    })
   }
-});
+})
 
 // ============================================================================
 // 🖼️ 变体生成器 API
@@ -251,20 +248,20 @@ router.post('/disk/monitor/resume', requireAuth, requireAdmin, async (_req, res)
  */
 router.get('/variants/stats', requireAuth, requireAdmin, async (_req, res) => {
   try {
-    const stats = variantGenerator.getQueueStats();
-    
+    const stats = variantGenerator.getQueueStats()
+
     res.json({
       success: true,
       data: stats,
       timestamp: new Date().toISOString(),
-    });
+    })
   } catch (error) {
     res.status(500).json({
       success: false,
       error: 'Failed to get variant generator stats',
-    });
+    })
   }
-});
+})
 
 // ============================================================================
 // ☁️ 云端同步 API
@@ -275,21 +272,21 @@ router.get('/variants/stats', requireAuth, requireAdmin, async (_req, res) => {
  */
 router.get('/cloud-sync/stats', requireAuth, requireAdmin, async (_req, res) => {
   try {
-    const stats = cloudSyncService.getQueueStats();
-    
+    const stats = cloudSyncService.getQueueStats()
+
     res.json({
       success: true,
       data: stats,
       lskyProAvailable: cloudSyncService.isLskyProAvailable(),
       timestamp: new Date().toISOString(),
-    });
+    })
   } catch (error) {
     res.status(500).json({
       success: false,
       error: 'Failed to get cloud sync stats',
-    });
+    })
   }
-});
+})
 
 // ============================================================================
 // 📈 系统健康检查仪表盘
@@ -304,7 +301,7 @@ router.get('/system/dashboard', requireAuth, requireAdmin, async (_req, res) => 
       diskMonitor.getStatus() || diskMonitor.manualCheck(),
       Promise.resolve(variantGenerator.getQueueStats()),
       Promise.resolve(cloudSyncService.getQueueStats()),
-    ]);
+    ])
 
     res.json({
       success: true,
@@ -323,18 +320,18 @@ router.get('/system/dashboard', requireAuth, requireAdmin, async (_req, res) => 
         memoryUsage: process.memoryUsage(),
       },
       timestamp: new Date().toISOString(),
-    });
+    })
   } catch (error) {
-    console.error('[Admin/Dashboard] Error:', error);
+    console.error('[Admin/Dashboard] Error:', error)
     res.status(500).json({
       success: false,
       error: 'Failed to get system dashboard',
-    });
+    })
   }
-});
+})
 
-export { registerAdminSystemRoutes };
+export { registerAdminSystemRoutes }
 
 function registerAdminSystemRoutes(app: Router) {
-  app.use('/api/admin', router);
+  app.use('/api/admin', router)
 }

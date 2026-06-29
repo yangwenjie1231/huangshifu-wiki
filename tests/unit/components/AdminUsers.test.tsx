@@ -172,7 +172,10 @@ describe('AdminUsers', () => {
     expect(screen.getByRole('dialog', { name: '编辑用户' })).toBeInTheDocument()
     expect(screen.getByLabelText(/昵称/)).toHaveValue('普通用户')
     expect(screen.getByLabelText('邮箱')).toHaveValue('user@example.com')
-    expect(screen.getByRole('switch', { name: '邮箱验证状态' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('switch', { name: '邮箱验证状态' })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    )
 
     fireEvent.change(screen.getByLabelText(/昵称/), {
       target: { value: '新昵称' },
@@ -180,16 +183,25 @@ describe('AdminUsers', () => {
     fireEvent.change(screen.getByLabelText('邮箱'), {
       target: { value: 'new@example.com' },
     })
-    expect(screen.getByRole('switch', { name: '邮箱验证状态' })).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByRole('switch', { name: '邮箱验证状态' })).toHaveAttribute(
+      'aria-checked',
+      'false'
+    )
     fireEvent.click(screen.getByRole('switch', { name: '邮箱验证状态' }))
-    expect(screen.getByRole('switch', { name: '邮箱验证状态' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('switch', { name: '邮箱验证状态' })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    )
     fireEvent.change(screen.getByLabelText(/签名/), {
       target: { value: '新签名' },
     })
     fireEvent.change(screen.getByLabelText(/个人简介/), {
       target: { value: '新简介' },
     })
-    expect(screen.getByLabelText(/^新密码/)).toHaveAttribute('maxlength', String(PASSWORD_MAX_LENGTH))
+    expect(screen.getByLabelText(/^新密码/)).toHaveAttribute(
+      'maxlength',
+      String(PASSWORD_MAX_LENGTH)
+    )
     fireEvent.change(screen.getByLabelText(/^新密码/), {
       target: { value: 'NewPassword123!' },
     })

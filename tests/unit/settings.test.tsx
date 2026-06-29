@@ -126,7 +126,9 @@ describe('Settings', () => {
 
     const displayNameInput = await screen.findByLabelText('昵称')
     expect(displayNameInput).toHaveAttribute('maxlength', String(PROFILE_DISPLAY_NAME_MAX_LENGTH))
-    expect(screen.queryByText(`4 / ${PROFILE_DISPLAY_NAME_MAX_LENGTH} 字符`)).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(`4 / ${PROFILE_DISPLAY_NAME_MAX_LENGTH} 字符`)
+    ).not.toBeInTheDocument()
     await user.clear(displayNameInput)
     await user.type(displayNameInput, '新昵称')
 
@@ -142,7 +144,9 @@ describe('Settings', () => {
     await user.clear(signatureInput)
     await user.type(signatureInput, '新签名')
 
-    expect(screen.queryByText(`3 / ${PROFILE_DISPLAY_NAME_MAX_LENGTH} 字符`)).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(`3 / ${PROFILE_DISPLAY_NAME_MAX_LENGTH} 字符`)
+    ).not.toBeInTheDocument()
     expect(screen.queryByText(`3 / ${WIKI_MAX_CONTENT_SIZE} 字符`)).not.toBeInTheDocument()
     expect(screen.queryByText(`3 / ${PROFILE_SIGNATURE_MAX_LENGTH} 字符`)).not.toBeInTheDocument()
 
@@ -274,11 +278,23 @@ describe('Settings', () => {
   it('renders section navigation as routes', () => {
     renderSettings('/settings/profile')
 
-    expect(screen.getByRole('link', { name: '公开资料' })).toHaveAttribute('href', '/settings/profile')
-    expect(screen.getByRole('link', { name: '内容管理' })).toHaveAttribute('href', '/settings/content')
-    expect(screen.getByRole('link', { name: '隐私设置' })).toHaveAttribute('href', '/settings/privacy')
+    expect(screen.getByRole('link', { name: '公开资料' })).toHaveAttribute(
+      'href',
+      '/settings/profile'
+    )
+    expect(screen.getByRole('link', { name: '内容管理' })).toHaveAttribute(
+      'href',
+      '/settings/content'
+    )
+    expect(screen.getByRole('link', { name: '隐私设置' })).toHaveAttribute(
+      'href',
+      '/settings/privacy'
+    )
     expect(screen.getByRole('link', { name: '账户' })).toHaveAttribute('href', '/settings/account')
-    expect(screen.getByRole('link', { name: '外观' })).toHaveAttribute('href', '/settings/appearance')
+    expect(screen.getByRole('link', { name: '外观' })).toHaveAttribute(
+      'href',
+      '/settings/appearance'
+    )
   })
 
   it('can update privacy settings', async () => {

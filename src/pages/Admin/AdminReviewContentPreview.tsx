@@ -178,12 +178,8 @@ const renderGalleryPreview = (
             {getReviewTypeLabel(item)}
           </span>
         </div>
-        <p className="mt-2 text-text-secondary leading-relaxed">
-          {item.description || '暂无描述'}
-        </p>
-        {item.copyright && (
-          <p className="text-xs text-text-muted mt-1">{item.copyright}</p>
-        )}
+        <p className="mt-2 text-text-secondary leading-relaxed">{item.description || '暂无描述'}</p>
+        {item.copyright && <p className="text-xs text-text-muted mt-1">{item.copyright}</p>}
       </header>
 
       <div className="flex items-end justify-between border-b border-border mb-6 pb-2">
@@ -239,7 +235,10 @@ const renderGalleryPreview = (
       {(item.tags?.length || item.locationDetail || item.locationName) && (
         <div className="grid grid-cols-1 gap-8 border-t border-border lg:grid-cols-[1fr_280px]">
           <div />
-          <aside>{renderTags(item.tags)}{renderLocation(item)}</aside>
+          <aside>
+            {renderTags(item.tags)}
+            {renderLocation(item)}
+          </aside>
         </div>
       )}
     </>

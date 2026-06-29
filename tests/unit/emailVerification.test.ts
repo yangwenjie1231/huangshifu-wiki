@@ -73,9 +73,8 @@ describe('email verification utility', () => {
   })
 
   it('preserves previous verification tokens when resend email delivery fails', async () => {
-    const { createAndSendEmailVerification, EmailVerificationPurpose } = await import(
-      '../../src/server/utils/email-verification'
-    )
+    const { createAndSendEmailVerification, EmailVerificationPurpose } =
+      await import('../../src/server/utils/email-verification')
     mockSendMail.mockRejectedValueOnce(new Error('smtp down'))
 
     await expect(
@@ -97,9 +96,8 @@ describe('email verification utility', () => {
   })
 
   it('invalidates previous verification tokens only after the new email is sent', async () => {
-    const { createAndSendEmailVerification, EmailVerificationPurpose } = await import(
-      '../../src/server/utils/email-verification'
-    )
+    const { createAndSendEmailVerification, EmailVerificationPurpose } =
+      await import('../../src/server/utils/email-verification')
     mockSendMail.mockResolvedValueOnce({})
 
     await createAndSendEmailVerification({
@@ -125,9 +123,8 @@ describe('email verification utility', () => {
   })
 
   it('creates password reset email with reset link and invalidates old reset tokens', async () => {
-    const { createAndSendPasswordReset, EmailVerificationPurpose } = await import(
-      '../../src/server/utils/email-verification'
-    )
+    const { createAndSendPasswordReset, EmailVerificationPurpose } =
+      await import('../../src/server/utils/email-verification')
     mockSendMail.mockResolvedValueOnce({})
 
     await createAndSendPasswordReset({ user })
@@ -139,11 +136,13 @@ describe('email verification utility', () => {
         purpose: EmailVerificationPurpose.reset_password,
       }),
     })
-    expect(mockSendMail).toHaveBeenCalledWith(expect.objectContaining({
-      subject: '重置你的黄诗扶 Wiki 密码',
-      text: expect.stringContaining('/reset-password?token='),
-      html: expect.stringContaining('/reset-password?token='),
-    }))
+    expect(mockSendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: '重置你的黄诗扶 Wiki 密码',
+        text: expect.stringContaining('/reset-password?token='),
+        html: expect.stringContaining('/reset-password?token='),
+      })
+    )
     expect(mockPrisma.emailVerificationToken.updateMany).toHaveBeenCalledWith({
       where: {
         userUid: user.uid,

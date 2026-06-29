@@ -1,10 +1,15 @@
-import { EChartsComponent, chartPalette, chartTheme, defaultTooltipSettings } from './EChartsComponent';
-import type { EChartsOption } from 'echarts';
+import {
+  EChartsComponent,
+  chartPalette,
+  chartTheme,
+  defaultTooltipSettings,
+} from './EChartsComponent'
+import type { EChartsOption } from 'echarts'
 
 interface ContentDistributionChartProps {
-  data: { name: string; value: number }[];
-  style?: React.CSSProperties;
-  className?: string;
+  data: { name: string; value: number }[]
+  style?: React.CSSProperties
+  className?: string
 }
 
 export const ContentDistributionChart: React.FC<ContentDistributionChartProps> = ({
@@ -61,7 +66,7 @@ export const ContentDistributionChart: React.FC<ContentDistributionChartProps> =
         })),
       },
     ],
-  };
+  }
 
-  return <EChartsComponent option={option} style={style} className={className} />;
-};
+  return <EChartsComponent option={option} style={style} className={className} />
+}

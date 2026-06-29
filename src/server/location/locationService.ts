@@ -1,22 +1,22 @@
-import { Region } from '@prisma/client';
-import { prisma } from '../prisma';
+import { Region } from '@prisma/client'
+import { prisma } from '../prisma'
 
 export interface RegionSearchResult {
-  code: string;
-  name: string;
-  fullName: string;
-  level: number;
-  levelName: string;
-  parentCode: string | null;
+  code: string
+  name: string
+  fullName: string
+  level: number
+  levelName: string
+  parentCode: string | null
 }
 
 export interface RegionTreeNode {
-  code: string;
-  name: string;
-  fullName: string;
-  level: number;
-  levelName: string;
-  children?: RegionTreeNode[];
+  code: string
+  name: string
+  fullName: string
+  level: number
+  levelName: string
+  children?: RegionTreeNode[]
 }
 
 const LEVEL_NAMES: Record<number, string> = {
@@ -24,7 +24,7 @@ const LEVEL_NAMES: Record<number, string> = {
   2: '地级',
   3: '县级',
   4: '乡级',
-};
+}
 
 function formatRegion(region: Region): RegionSearchResult {
   return {
@@ -34,53 +34,50 @@ function formatRegion(region: Region): RegionSearchResult {
     level: region.level,
     levelName: LEVEL_NAMES[region.level] || `Level ${region.level}`,
     parentCode: region.parentCode,
-  };
+  }
 }
 
 export async function searchRegions(
   query: string,
   options: {
-    limit?: number;
-    level?: number;
-    parentCode?: string;
+    limit?: number
+    level?: number
+    parentCode?: string
   } = {}
 ): Promise<RegionSearchResult[]> {
-  const { limit = 20, level, parentCode } = options;
+  const { limit = 20, level, parentCode } = options
 
   const where: Parameters<typeof prisma.region.findMany>[0]['where'] = {
     OR: [
       { name: { contains: query, mode: 'insensitive' } },
       { fullName: { contains: query, mode: 'insensitive' } },
     ],
-  };
+  }
 
   if (level !== undefined) {
-    where.level = level;
+    where.level = level
   }
 
   if (parentCode !== undefined) {
-    where.parentCode = parentCode;
+    where.parentCode = parentCode
   }
 
   const regions = await prisma.region.findMany({
     where,
     take: limit,
-    orderBy: [
-      { level: 'asc' },
-      { sortOrder: 'asc' },
-    ],
-  });
+    orderBy: [{ level: 'asc' }, { sortOrder: 'asc' }],
+  })
 
-  return regions.map(formatRegion);
+  return regions.map(formatRegion)
 }
 
 export async function getRegionByCode(code: string): Promise<RegionSearchResult | null> {
   const region = await prisma.region.findUnique({
     where: { code },
-  });
+  })
 
-  if (!region) return null;
-  return formatRegion(region);
+  if (!region) return null
+  return formatRegion(region)
 }
 
 export async function getRegionTree(
@@ -93,7 +90,7 @@ export async function getRegionTree(
       level: { lte: maxDepth },
     },
     orderBy: { sortOrder: 'asc' },
-  });
+  })
 
   return regions.map((region) => ({
     code: region.code,
@@ -101,67 +98,65 @@ export async function getRegionTree(
     fullName: region.fullName,
     level: region.level,
     levelName: LEVEL_NAMES[region.level] || `Level ${region.level}`,
-  }));
+  }))
 }
 
 export async function getProvinces(): Promise<RegionSearchResult[]> {
   const regions = await prisma.region.findMany({
     where: { level: 1 },
     orderBy: { sortOrder: 'asc' },
-  });
-  return regions.map(formatRegion);
+  })
+  return regions.map(formatRegion)
 }
 
 export async function getCitiesByProvince(provinceCode: string): Promise<RegionSearchResult[]> {
   const regions = await prisma.region.findMany({
     where: { level: 2, parentCode: provinceCode },
     orderBy: { sortOrder: 'asc' },
-  });
-  return regions.map(formatRegion);
+  })
+  return regions.map(formatRegion)
 }
 
 export async function getDistrictsByCity(cityCode: string): Promise<RegionSearchResult[]> {
   const regions = await prisma.region.findMany({
     where: { level: 3, parentCode: cityCode },
     orderBy: { sortOrder: 'asc' },
-  });
-  return regions.map(formatRegion);
+  })
+  return regions.map(formatRegion)
 }
 
 export async function getFullRegionPath(code: string): Promise<RegionSearchResult[]> {
-  const region = await prisma.region.findUnique({ where: { code } });
-  if (!region) return [];
+  const region = await prisma.region.findUnique({ where: { code } })
+  if (!region) return []
 
-  const pathCodes = region.path.split(',');
+  const pathCodes = region.path.split(',')
   const regions = await prisma.region.findMany({
     where: { code: { in: pathCodes } },
     orderBy: { level: 'asc' },
-  });
+  })
 
-  return regions.map(formatRegion);
+  return regions.map(formatRegion)
 }
 
-export async function findMostCommonRegion(
-  codes: string[]
-): Promise<RegionSearchResult | null> {
-  if (codes.length === 0) return null;
+export async function findMostCommonRegion(codes: string[]): Promise<RegionSearchResult | null> {
+  if (codes.length === 0) return null
 
-  const codeCounts = new Map<string, number>();
+  const codeCounts = new Map<string, number>()
   codes.forEach((code) => {
-    const count = codeCounts.get(code) || 0;
-    codeCounts.set(code, count + 1);
-  });
+    const count = codeCounts.get(code) || 0
+    codeCounts.set(code, count + 1)
+  })
 
-  let mostCommonCode = codes[0];
-  let maxCount = 0;
+  let mostCommonCode = codes[0]
+  let maxCount = 0
   codeCounts.forEach((count, code) => {
     if (count > maxCount) {
-      maxCount = count;
-      mostCommonCode = code;
+      maxCount = count
+      mostCommonCode = code
     }
-  });
+  })
 
-  return getRegionByCode(mostCommonCode);
+  return getRegionByCode(mostCommonCode)
 }
 
 export async function fuzzyMatchRegion(
@@ -169,7 +164,7 @@ export async function fuzzyMatchRegion(
   limit: number = 10
 ): Promise<RegionSearchResult[]> {
   if (!query || query.length < 2) {
-    return [];
+    return []
   }
 
   const regions = await prisma.region.findMany({
@@ -181,13 +176,10 @@ export async function fuzzyMatchRegion(
       ],
     },
     take: limit,
-    orderBy: [
-      { level: 'asc' },
-      { sortOrder: 'asc' },
-    ],
-  });
+    orderBy: [{ level: 'asc' }, { sortOrder: 'asc' }],
+  })
 
-  return regions.map(formatRegion);
+  return regions.map(formatRegion)
 }
 
 export async function suggestRegions(
@@ -195,7 +187,7 @@ export async function suggestRegions(
   limit: number = 5
 ): Promise<RegionSearchResult[]> {
   if (!query || query.length < 1) {
-    return [];
+    return []
   }
 
   const regions = await prisma.region.findMany({
@@ -207,7 +199,7 @@ export async function suggestRegions(
     },
     take: limit,
     orderBy: { level: 'asc' },
-  });
+  })
 
-  return regions.map(formatRegion);
+  return regions.map(formatRegion)
 }

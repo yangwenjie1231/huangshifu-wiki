@@ -1,33 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState } from 'react'
 
-import { apiPatch, apiPost } from '../lib/apiClient';
-import { useToast } from './Toast';
-import { FormModal } from './Modal/FormModal';
+import { apiPatch, apiPost } from '../lib/apiClient'
+import { useToast } from './Toast'
+import { FormModal } from './Modal/FormModal'
 
 type AlbumFormData = {
-  title: string;
-  artist: string;
-  description?: string;
-  cover?: string;
-  platformUrl?: string;
-};
+  title: string
+  artist: string
+  description?: string
+  cover?: string
+  platformUrl?: string
+}
 
 type AlbumItem = {
-  docId?: string;
-  id: string;
-  title: string;
-  artist: string;
-  cover: string;
-  description?: string | null;
-  trackCount?: number;
-  tracks?: unknown[];
-};
+  docId?: string
+  id: string
+  title: string
+  artist: string
+  cover: string
+  description?: string | null
+  trackCount?: number
+  tracks?: unknown[]
+}
 
 interface AlbumEditModalProps {
-  open: boolean;
-  onClose: () => void;
-  onSuccess: () => void;
-  album?: AlbumItem | null;
+  open: boolean
+  onClose: () => void
+  onSuccess: () => void
+  album?: AlbumItem | null
 }
 
 export const AlbumEditModal = ({ open, onClose, onSuccess, album }: AlbumEditModalProps) => {
@@ -37,24 +37,36 @@ export const AlbumEditModal = ({ open, onClose, onSuccess, album }: AlbumEditMod
     description: album?.description || '',
     cover: album?.cover || '',
     platformUrl: '',
-  });
-  const [saving, setSaving] = useState(false);
-  const { show } = useToast();
+  })
+  const [saving, setSaving] = useState(false)
+  const { show } = useToast()
 
   React.useEffect(() => {
     if (album) {
-      setFormData({ title: album.title || '', artist: album.artist || '', description: album.description || '', cover: album.cover || '', platformUrl: '' });
+      setFormData({
+        title: album.title || '',
+        artist: album.artist || '',
+        description: album.description || '',
+        cover: album.cover || '',
+        platformUrl: '',
+      })
     } else {
-      setFormData({ title: '', artist: '', description: '', cover: '', platformUrl: '' });
+      setFormData({ title: '', artist: '', description: '', cover: '', platformUrl: '' })
     }
-  }, [album, open]);
+  }, [album, open])
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.title.trim()) { show('请输入专辑标题', { variant: 'error' }); return; }
-    if (!formData.artist.trim()) { show('请输入艺术家名称', { variant: 'error' }); return; }
+    e.preventDefault()
+    if (!formData.title.trim()) {
+      show('请输入专辑标题', { variant: 'error' })
+      return
+    }
+    if (!formData.artist.trim()) {
+      show('请输入艺术家名称', { variant: 'error' })
+      return
+    }
 
-    setSaving(true);
+    setSaving(true)
     try {
       if (album?.docId) {
         await apiPatch(`/api/albums/${album.docId}`, {
@@ -62,26 +74,26 @@ export const AlbumEditModal = ({ open, onClose, onSuccess, album }: AlbumEditMod
           artist: formData.artist.trim(),
           description: (formData.description ?? '').trim() || null,
           platformUrl: (formData.platformUrl ?? '').trim() || null,
-        });
-        show('专辑已更新');
+        })
+        show('专辑已更新')
       } else {
         await apiPost('/api/albums', {
           title: formData.title.trim(),
           artist: formData.artist.trim(),
           description: (formData.description ?? '').trim() || null,
           platformUrl: (formData.platformUrl ?? '').trim() || null,
-        });
-        show('专辑已创建');
+        })
+        show('专辑已创建')
       }
-      onSuccess();
-      onClose();
+      onSuccess()
+      onClose()
     } catch (error) {
-      console.error('Save album failed:', error);
-      show(error instanceof Error ? error.message : '保存专辑失败', { variant: 'error' });
+      console.error('Save album failed:', error)
+      show(error instanceof Error ? error.message : '保存专辑失败', { variant: 'error' })
     } finally {
-      setSaving(false);
+      setSaving(false)
     }
-  };
+  }
 
   return (
     <FormModal
@@ -95,7 +107,9 @@ export const AlbumEditModal = ({ open, onClose, onSuccess, album }: AlbumEditMod
       maxWidth="max-w-lg"
     >
       <div className="space-y-1.5">
-        <label className="text-sm font-medium text-text-primary">专辑标题 <span className="theme-text-error">*</span></label>
+        <label className="text-sm font-medium text-text-primary">
+          专辑标题 <span className="theme-text-error">*</span>
+        </label>
         <input
           type="text"
           value={formData.title}
@@ -105,7 +119,9 @@ export const AlbumEditModal = ({ open, onClose, onSuccess, album }: AlbumEditMod
         />
       </div>
       <div className="space-y-1.5">
-        <label className="text-sm font-medium text-text-primary">艺术家 <span className="theme-text-error">*</span></label>
+        <label className="text-sm font-medium text-text-primary">
+          艺术家 <span className="theme-text-error">*</span>
+        </label>
         <input
           type="text"
           value={formData.artist}
@@ -135,5 +151,5 @@ export const AlbumEditModal = ({ open, onClose, onSuccess, album }: AlbumEditMod
         />
       </div>
     </FormModal>
-  );
-};
+  )
+}

@@ -8,9 +8,12 @@ const mockGetPresignedDeleteUrl = vi.hoisted(() => vi.fn())
 const mockGetPublicConfig = vi.hoisted(() => vi.fn())
 
 vi.mock('../../src/server/middleware/auth', () => ({
-  requireAuth: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
-  requireActiveUser: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
-  requireAdmin: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
+  requireAuth: (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
+    next(),
+  requireActiveUser: (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
+    next(),
+  requireAdmin: (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
+    next(),
 }))
 
 vi.mock('../../src/server/s3/s3Service', () => ({

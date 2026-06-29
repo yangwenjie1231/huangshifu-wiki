@@ -73,7 +73,7 @@ describe('auth middleware', () => {
         sessionVersion: createSessionVersion('old-password-hash'),
       },
       JWT_SECRET,
-      { expiresIn: '7d' },
+      { expiresIn: '7d' }
     )
 
     app.use((req, _res, next) => {
@@ -91,7 +91,10 @@ describe('auth middleware', () => {
 
     expect(response.status).toBe(200)
     expect(response.body).toEqual({ hasUser: false })
-    expect(mockLogger.info).toHaveBeenCalledWith({ uid: 'user-1' }, 'Rejecting token with stale session version')
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      { uid: 'user-1' },
+      'Rejecting token with stale session version'
+    )
     expect(mockCache.set).not.toHaveBeenCalled()
   })
 
@@ -126,7 +129,7 @@ describe('auth middleware', () => {
         sessionVersion: createSessionVersion('old-password-hash'),
       },
       JWT_SECRET,
-      { expiresIn: '7d' },
+      { expiresIn: '7d' }
     )
 
     app.use((req, _res, next) => {

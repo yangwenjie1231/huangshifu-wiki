@@ -108,12 +108,14 @@ describe('AdminDiskMonitor', () => {
 
   it('preserves the initial load error while a silent retry is pending', async () => {
     let intervalCallback: (() => void) | undefined
-    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval').mockImplementation((handler, timeout) => {
-      if (timeout === 30000) {
-        intervalCallback = handler as () => void
-      }
-      return 1 as unknown as ReturnType<typeof setInterval>
-    })
+    const setIntervalSpy = vi
+      .spyOn(globalThis, 'setInterval')
+      .mockImplementation((handler, timeout) => {
+        if (timeout === 30000) {
+          intervalCallback = handler as () => void
+        }
+        return 1 as unknown as ReturnType<typeof setInterval>
+      })
     const clearIntervalSpy = vi
       .spyOn(globalThis, 'clearInterval')
       .mockImplementation(() => undefined)

@@ -35,7 +35,8 @@ vi.mock('../../src/server/middleware/auth', () => ({
     }
     next()
   },
-  requireActiveUser: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
+  requireActiveUser: (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
+    next(),
   requireAdmin: (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const authUser = (req as express.Request & { authUser?: { role?: string } }).authUser
     if (!authUser) {
@@ -65,11 +66,13 @@ vi.mock('../../src/server/middleware/auth', () => ({
 }))
 
 vi.mock('../../src/server/middleware/rateLimiter', () => ({
-  profileLimiter: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
+  profileLimiter: (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
+    next(),
 }))
 
 vi.mock('../../src/server/utils', async () => {
-  const actual = await vi.importActual<typeof import('../../src/server/utils')>('../../src/server/utils')
+  const actual =
+    await vi.importActual<typeof import('../../src/server/utils')>('../../src/server/utils')
 
   return {
     ...actual,
@@ -242,16 +245,14 @@ describe('users routes reset password', () => {
     })
 
     const app = await createApp({ uid: 'admin-1', role: 'admin' })
-    const response = await request(app)
-      .patch('/api/users/target-user')
-      .send({
-        displayName: '新昵称',
-        signature: '新签名',
-        bio: '新简介',
-        email: 'NEW@EXAMPLE.COM',
-        emailVerified: true,
-        newPassword: 'NewPassword123!',
-      })
+    const response = await request(app).patch('/api/users/target-user').send({
+      displayName: '新昵称',
+      signature: '新签名',
+      bio: '新简介',
+      email: 'NEW@EXAMPLE.COM',
+      emailVerified: true,
+      newPassword: 'NewPassword123!',
+    })
 
     expect(response.status).toBe(200)
     expect(mockPrisma.user.findUnique).toHaveBeenNthCalledWith(2, {
@@ -266,17 +267,19 @@ describe('users routes reset password', () => {
       },
       data: { usedAt: expect.any(Date) },
     })
-    expect(mockPrisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { uid: 'target-user' },
-      data: expect.objectContaining({
-        displayName: '新昵称',
-        signature: '新签名',
-        bio: '新简介',
-        email: 'new@example.com',
-        emailVerifiedAt: expect.any(Date),
-        passwordHash: 'hashed-password',
-      }),
-    }))
+    expect(mockPrisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { uid: 'target-user' },
+        data: expect.objectContaining({
+          displayName: '新昵称',
+          signature: '新签名',
+          bio: '新简介',
+          email: 'new@example.com',
+          emailVerifiedAt: expect.any(Date),
+          passwordHash: 'hashed-password',
+        }),
+      })
+    )
     expect(mockPrisma.$transaction).toHaveBeenCalled()
     expect(mockClearUserCache).toHaveBeenCalledWith('target-user')
     expect(response.body.user.displayName).toBe('新昵称')
@@ -322,9 +325,7 @@ describe('users routes reset password', () => {
 
   it('rejects editing own profile from admin route', async () => {
     const app = await createApp({ uid: 'admin-1', role: 'super_admin' })
-    const response = await request(app)
-      .patch('/api/users/admin-1')
-      .send({ displayName: '新昵称' })
+    const response = await request(app).patch('/api/users/admin-1').send({ displayName: '新昵称' })
 
     expect(response.status).toBe(400)
     expect(response.body.error).toBe('不能编辑自己的资料')
@@ -400,13 +401,15 @@ describe('users routes reset password', () => {
       .send({ reason: '测试封禁' })
 
     expect(response.status).toBe(200)
-    expect(mockPrisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { uid: 'target-user' },
-      data: expect.objectContaining({
-        status: 'banned',
-        banReason: '测试封禁',
-      }),
-    }))
+    expect(mockPrisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { uid: 'target-user' },
+        data: expect.objectContaining({
+          status: 'banned',
+          banReason: '测试封禁',
+        }),
+      })
+    )
     expect(mockPrisma.userBanLog.create).toHaveBeenCalledWith({
       data: {
         targetUid: 'target-user',

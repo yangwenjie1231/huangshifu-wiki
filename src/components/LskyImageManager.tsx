@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
-import { useLskyUpload } from '../hooks/useLskyUpload';
-import { useLskyPhotos } from '../hooks/useLskyPhotos';
-import { useLskyAlbums } from '../hooks/useLskyAlbums';
-import { useDialog } from './Dialog';
-import { useToast } from './Toast';
+import React, { useState } from 'react'
+import { useLskyUpload } from '../hooks/useLskyUpload'
+import { useLskyPhotos } from '../hooks/useLskyPhotos'
+import { useLskyAlbums } from '../hooks/useLskyAlbums'
+import { useDialog } from './Dialog'
+import { useToast } from './Toast'
 
 export function LskyImageManager() {
-  const [activeTab, setActiveTab] = useState<'upload' | 'photos' | 'albums'>('upload');
+  const [activeTab, setActiveTab] = useState<'upload' | 'photos' | 'albums'>('upload')
 
   return (
     <div className="lsky-manager">
@@ -163,19 +163,19 @@ export function LskyImageManager() {
       <h2>Lsky Pro+ 图床管理</h2>
 
       <div className="lsky-tabs">
-        <button 
+        <button
           className={`lsky-tab ${activeTab === 'upload' ? 'active' : ''}`}
           onClick={() => setActiveTab('upload')}
         >
           上传图片
         </button>
-        <button 
+        <button
           className={`lsky-tab ${activeTab === 'photos' ? 'active' : ''}`}
           onClick={() => setActiveTab('photos')}
         >
           图片列表
         </button>
-        <button 
+        <button
           className={`lsky-tab ${activeTab === 'albums' ? 'active' : ''}`}
           onClick={() => setActiveTab('albums')}
         >
@@ -187,34 +187,34 @@ export function LskyImageManager() {
       {activeTab === 'photos' && <PhotosPanel />}
       {activeTab === 'albums' && <AlbumsPanel />}
     </div>
-  );
+  )
 }
 
 function UploadPanel() {
-  const { uploading, progress, error, data, upload, reset } = useLskyUpload();
-  const { show } = useToast();
-  const [imageUrl, setImageUrl] = useState<string>('');
+  const { uploading, progress, error, data, upload, reset } = useLskyUpload()
+  const { show } = useToast()
+  const [imageUrl, setImageUrl] = useState<string>('')
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const file = e.target.files?.[0]
+    if (!file) return
 
-    const result = await upload(file);
+    const result = await upload(file)
     if (result) {
-      setImageUrl(result.url);
+      setImageUrl(result.url)
     }
-  };
+  }
 
   const handleCopyUrl = () => {
     if (imageUrl) {
-      navigator.clipboard.writeText(imageUrl);
-      show('URL 已复制到剪贴板');
+      navigator.clipboard.writeText(imageUrl)
+      show('URL 已复制到剪贴板')
     }
-  };
+  }
 
   return (
     <div>
-      <div 
+      <div
         className={`lsky-upload-area ${uploading ? 'uploading' : ''}`}
         onClick={() => document.getElementById('lsky-file-input')?.click()}
       >
@@ -242,13 +242,22 @@ function UploadPanel() {
       </div>
 
       {error && <div className="lsky-error">❌ {error}</div>}
-      
+
       {data && (
         <div className="lsky-success">
           <p>✅ 上传成功！</p>
-          <p><strong>文件名：</strong>{data.origin_name}</p>
-          <p><strong>大小：</strong>{(data.size / 1024).toFixed(2)} KB</p>
-          <p><strong>尺寸：</strong>{data.info.width} x {data.info.height}</p>
+          <p>
+            <strong>文件名：</strong>
+            {data.origin_name}
+          </p>
+          <p>
+            <strong>大小：</strong>
+            {(data.size / 1024).toFixed(2)} KB
+          </p>
+          <p>
+            <strong>尺寸：</strong>
+            {data.info.width} x {data.info.height}
+          </p>
           <div style={{ marginTop: '10px' }}>
             <input
               type="text"
@@ -264,22 +273,30 @@ function UploadPanel() {
               }}
             />
             <div style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
-              <button className="lsky-btn" onClick={handleCopyUrl}>复制 URL</button>
-              <button className="lsky-btn" onClick={reset}>继续上传</button>
+              <button className="lsky-btn" onClick={handleCopyUrl}>
+                复制 URL
+              </button>
+              <button className="lsky-btn" onClick={reset}>
+                继续上传
+              </button>
             </div>
           </div>
           <div style={{ marginTop: '10px' }}>
-            <img src={data.url} alt="Uploaded" style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '4px' }} />
+            <img
+              src={data.url}
+              alt="Uploaded"
+              style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '4px' }}
+            />
           </div>
         </div>
       )}
     </div>
-  );
+  )
 }
 
 function PhotosPanel() {
-  const { loading, error, photos, pagination, fetchPhotos, deletePhoto } = useLskyPhotos();
-  const dialog = useDialog();
+  const { loading, error, photos, pagination, fetchPhotos, deletePhoto } = useLskyPhotos()
+  const dialog = useDialog()
 
   const handleDelete = async (id: number) => {
     const confirmed = await dialog.confirm({
@@ -287,37 +304,48 @@ function PhotosPanel() {
       message: '确定要删除这张图片吗？',
       confirmText: '删除',
       variant: 'danger',
-    });
-    if (confirmed) await deletePhoto(id);
-  };
+    })
+    if (confirmed) await deletePhoto(id)
+  }
 
   if (loading) {
-    return <div className="lsky-loading">加载中...</div>;
+    return <div className="lsky-loading">加载中...</div>
   }
 
   if (error) {
-    return <div className="lsky-error">❌ {error}</div>;
+    return <div className="lsky-error">❌ {error}</div>
   }
 
   if (photos.length === 0) {
-    return <div className="lsky-empty">暂无图片</div>;
+    return <div className="lsky-empty">暂无图片</div>
   }
 
   return (
     <div>
       <div className="lsky-photos-grid">
-        {photos.map(photo => (
+        {photos.map((photo) => (
           <div key={photo.id} className="lsky-photo-card">
             <img src={photo.url} alt={photo.filename} />
             <div className="lsky-photo-info">
-              <p style={{ fontSize: '14px', margin: '0 0 4px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <p
+                style={{
+                  fontSize: '14px',
+                  margin: '0 0 4px 0',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
                 {photo.origin_name}
               </p>
               <p className="text-xs text-[var(--color-text-placeholder)] m-0">
                 {(photo.size / 1024).toFixed(2)} KB
               </p>
               <div className="lsky-photo-actions">
-                <button className="lsky-btn" onClick={() => navigator.clipboard.writeText(photo.url)}>
+                <button
+                  className="lsky-btn"
+                  onClick={() => navigator.clipboard.writeText(photo.url)}
+                >
                   复制
                 </button>
                 <button className="lsky-btn danger" onClick={() => handleDelete(photo.id)}>
@@ -331,7 +359,7 @@ function PhotosPanel() {
 
       {pagination && pagination.last_page > 1 && (
         <div style={{ marginTop: '20px', textAlign: 'center' }}>
-          <button 
+          <button
             className="lsky-btn"
             onClick={() => fetchPhotos({ page: pagination.current_page - 1 })}
             disabled={pagination.current_page === 1}
@@ -341,7 +369,7 @@ function PhotosPanel() {
           <span style={{ margin: '0 10px' }}>
             {pagination.current_page} / {pagination.last_page}
           </span>
-          <button 
+          <button
             className="lsky-btn"
             onClick={() => fetchPhotos({ page: pagination.current_page + 1 })}
             disabled={pagination.current_page === pagination.last_page}
@@ -351,35 +379,35 @@ function PhotosPanel() {
         </div>
       )}
     </div>
-  );
+  )
 }
 
 function AlbumsPanel() {
-  const { loading, error, albums, createAlbum, deleteAlbum } = useLskyAlbums();
-  const dialog = useDialog();
-  const { show } = useToast();
-  const [showCreate, setShowCreate] = useState(false);
-  const [newAlbumName, setNewAlbumName] = useState('');
-  const [newAlbumDesc, setNewAlbumDesc] = useState('');
+  const { loading, error, albums, createAlbum, deleteAlbum } = useLskyAlbums()
+  const dialog = useDialog()
+  const { show } = useToast()
+  const [showCreate, setShowCreate] = useState(false)
+  const [newAlbumName, setNewAlbumName] = useState('')
+  const [newAlbumDesc, setNewAlbumDesc] = useState('')
 
   const handleCreate = async () => {
     if (!newAlbumName.trim()) {
-      show('请输入相册名称', { variant: 'error' });
-      return;
+      show('请输入相册名称', { variant: 'error' })
+      return
     }
 
     const result = await createAlbum({
       name: newAlbumName,
       description: newAlbumDesc,
-    });
+    })
 
     if (result) {
-      setShowCreate(false);
-      setNewAlbumName('');
-      setNewAlbumDesc('');
-      show('相册创建成功');
+      setShowCreate(false)
+      setNewAlbumName('')
+      setNewAlbumDesc('')
+      show('相册创建成功')
     }
-  };
+  }
 
   const handleDelete = async (id: number) => {
     const confirmed = await dialog.confirm({
@@ -387,21 +415,25 @@ function AlbumsPanel() {
       message: '确定要删除这个相册吗？',
       confirmText: '删除',
       variant: 'danger',
-    });
-    if (confirmed) await deleteAlbum(id);
-  };
+    })
+    if (confirmed) await deleteAlbum(id)
+  }
 
   if (loading) {
-    return <div className="lsky-loading">加载中...</div>;
+    return <div className="lsky-loading">加载中...</div>
   }
 
   if (error) {
-    return <div className="lsky-error">❌ {error}</div>;
+    return <div className="lsky-error">❌ {error}</div>
   }
 
   return (
     <div>
-      <button className="lsky-btn" onClick={() => setShowCreate(!showCreate)} style={{ marginBottom: '16px' }}>
+      <button
+        className="lsky-btn"
+        onClick={() => setShowCreate(!showCreate)}
+        style={{ marginBottom: '16px' }}
+      >
         {showCreate ? '取消' : '+ 新建相册'}
       </button>
 
@@ -441,7 +473,10 @@ function AlbumsPanel() {
               placeholder="输入相册描述（可选）"
             />
           </div>
-          <button className="lsky-btn bg-[var(--color-action-blue)] text-white border-none" onClick={handleCreate}>
+          <button
+            className="lsky-btn bg-[var(--color-action-blue)] text-white border-none"
+            onClick={handleCreate}
+          >
             创建相册
           </button>
         </div>
@@ -451,7 +486,7 @@ function AlbumsPanel() {
         <div className="lsky-empty">暂无相册</div>
       ) : (
         <div className="lsky-albums-list">
-          {albums.map(album => (
+          {albums.map((album) => (
             <div key={album.id} className="lsky-album-item">
               <div className="lsky-album-info">
                 <h3>{album.name}</h3>
@@ -468,5 +503,5 @@ function AlbumsPanel() {
         </div>
       )}
     </div>
-  );
+  )
 }

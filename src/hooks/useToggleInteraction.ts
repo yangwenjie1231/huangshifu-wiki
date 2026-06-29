@@ -66,7 +66,7 @@ function deriveI18nPrefix(apiBase: string): string {
  * 7. finally 重置 loading
  */
 export function useToggleInteraction<T extends Record<string, any>>(
-  options: UseToggleInteractionOptions<T>,
+  options: UseToggleInteractionOptions<T>
 ): UseToggleInteractionReturn {
   const {
     entity,
@@ -111,7 +111,7 @@ export function useToggleInteraction<T extends Record<string, any>>(
               likedByMe: false,
               likesCount: Math.max(0, Number(prev.likesCount || 0) - 1),
             }
-          : prev,
+          : prev
       )
     } else {
       setEntity((prev: T) =>
@@ -125,18 +125,16 @@ export function useToggleInteraction<T extends Record<string, any>>(
                 ? Math.max(0, Number(prev.dislikesCount || 0) - 1)
                 : prev.dislikesCount,
             }
-          : prev,
+          : prev
       )
     }
 
     try {
       if (prevState?.likedByMe) {
         const data = await apiDelete<{ liked: boolean; likesCount: number }>(
-          `${apiBase}/${entityId}/like`,
+          `${apiBase}/${entityId}/like`
         )
-        setEntity((prev: T) =>
-          prev ? { ...prev, likesCount: data.likesCount } : prev,
-        )
+        setEntity((prev: T) => (prev ? { ...prev, likesCount: data.likesCount } : prev))
       } else {
         const data = await apiPost<{
           liked: boolean
@@ -144,9 +142,7 @@ export function useToggleInteraction<T extends Record<string, any>>(
           dislikesCount: number
         }>(`${apiBase}/${entityId}/like`)
         setEntity((prev: T) =>
-          prev
-            ? { ...prev, likesCount: data.likesCount, dislikesCount: data.dislikesCount }
-            : prev,
+          prev ? { ...prev, likesCount: data.likesCount, dislikesCount: data.dislikesCount } : prev
         )
       }
     } catch (error) {
@@ -181,7 +177,7 @@ export function useToggleInteraction<T extends Record<string, any>>(
               dislikedByMe: false,
               dislikesCount: Math.max(0, Number(prev.dislikesCount || 0) - 1),
             }
-          : prev,
+          : prev
       )
     } else {
       setEntity((prev: T) =>
@@ -195,7 +191,7 @@ export function useToggleInteraction<T extends Record<string, any>>(
                 ? Math.max(0, Number(prev.likesCount || 0) - 1)
                 : prev.likesCount,
             }
-          : prev,
+          : prev
       )
     }
 
@@ -205,9 +201,7 @@ export function useToggleInteraction<T extends Record<string, any>>(
           disliked: boolean
           dislikesCount: number
         }>(`${apiBase}/${entityId}/dislike`)
-        setEntity((prev: T) =>
-          prev ? { ...prev, dislikesCount: data.dislikesCount } : prev,
-        )
+        setEntity((prev: T) => (prev ? { ...prev, dislikesCount: data.dislikesCount } : prev))
       } else {
         const data = await apiPost<{
           disliked: boolean
@@ -215,9 +209,7 @@ export function useToggleInteraction<T extends Record<string, any>>(
           likesCount: number
         }>(`${apiBase}/${entityId}/dislike`)
         setEntity((prev: T) =>
-          prev
-            ? { ...prev, dislikesCount: data.dislikesCount, likesCount: data.likesCount }
-            : prev,
+          prev ? { ...prev, dislikesCount: data.dislikesCount, likesCount: data.likesCount } : prev
         )
       }
     } catch (error) {
@@ -252,7 +244,7 @@ export function useToggleInteraction<T extends Record<string, any>>(
               favoritedByMe: false,
               favoritesCount: Math.max(0, Number(prev.favoritesCount || 0) - 1),
             }
-          : prev,
+          : prev
       )
     } else {
       setEntity((prev: T) =>
@@ -262,7 +254,7 @@ export function useToggleInteraction<T extends Record<string, any>>(
               favoritedByMe: true,
               favoritesCount: Number(prev.favoritesCount || 0) + 1,
             }
-          : prev,
+          : prev
       )
     }
 

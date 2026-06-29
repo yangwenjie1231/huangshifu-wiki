@@ -64,9 +64,7 @@ export const registerSchema = z.object({
 
 export const loginSchema = z.object({
   email: authEmailSchema,
-  password: z
-    .string({ error: '密码不能为空' })
-    .min(1, '密码不能为空'),
+  password: z.string({ error: '密码不能为空' }).min(1, '密码不能为空'),
 })
 
 export const verifyEmailSchema = z.object({

@@ -1,63 +1,63 @@
-import bcrypt from 'bcryptjs';
-import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import { UserRole as PrismaUserRole } from '@prisma/client';
-import type { ApiUser, SessionJwtPayload, UserStatus, AuthenticatedRequest } from '../types';
-import { prisma } from '../prisma';
-import { enhancedCache, CACHE_KEYS, CACHE_TTL_SEC } from '../utils/cache';
-import { logger } from '../utils/logger';
-import { createSessionVersion } from '../utils/auth-session';
-import { issueXsrfToken } from './csrf';
+import bcrypt from 'bcryptjs'
+import { Request, Response, NextFunction } from 'express'
+import jwt from 'jsonwebtoken'
+import { UserRole as PrismaUserRole } from '@prisma/client'
+import type { ApiUser, SessionJwtPayload, UserStatus, AuthenticatedRequest } from '../types'
+import { prisma } from '../prisma'
+import { enhancedCache, CACHE_KEYS, CACHE_TTL_SEC } from '../utils/cache'
+import { logger } from '../utils/logger'
+import { createSessionVersion } from '../utils/auth-session'
+import { issueXsrfToken } from './csrf'
 
-const JWT_SECRET = process.env.JWT_SECRET;
-const AUTH_COOKIE_NAME = 'hsf_token';
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-const IS_PROD = process.env.NODE_ENV === 'production';
+const JWT_SECRET = process.env.JWT_SECRET
+const AUTH_COOKIE_NAME = 'hsf_token'
+const ONE_DAY_MS = 24 * 60 * 60 * 1000
+const IS_PROD = process.env.NODE_ENV === 'production'
 
 type CachedAuthUser = {
-  apiUser: ApiUser;
-  sessionVersion: string;
+  apiUser: ApiUser
+  sessionVersion: string
 }
 
 type SessionUser = {
-  uid: string;
-  email: string;
-  displayName: string;
-  photoURL: string | null;
-  wechatOpenId?: string | null;
-  role: PrismaUserRole;
-  status: UserStatus;
-  banReason: string | null;
-  bannedAt: Date | null;
-  emailVerifiedAt: Date | null;
-  level: number;
-  signature: string;
-  bio: string;
-  deletedAt?: Date | null;
-  passwordHash: string;
+  uid: string
+  email: string
+  displayName: string
+  photoURL: string | null
+  wechatOpenId?: string | null
+  role: PrismaUserRole
+  status: UserStatus
+  banReason: string | null
+  bannedAt: Date | null
+  emailVerifiedAt: Date | null
+  level: number
+  signature: string
+  bio: string
+  deletedAt?: Date | null
+  passwordHash: string
 }
 
 if (!JWT_SECRET || JWT_SECRET.length < 32) {
   throw new Error(
     `Invalid JWT_SECRET: length must be >= 32 characters. ` +
-    `Generate one with: node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`
-  );
+      `Generate one with: node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`
+  )
 }
 
 function userToApiUser(user: {
-  uid: string;
-  email: string;
-  displayName: string;
-  photoURL: string | null;
-  wechatOpenId?: string | null;
-  role: PrismaUserRole;
-  status: UserStatus;
-  banReason: string | null;
-  bannedAt: Date | null;
-  emailVerifiedAt: Date | null;
-  level: number;
-  signature: string;
-  bio: string;
+  uid: string
+  email: string
+  displayName: string
+  photoURL: string | null
+  wechatOpenId?: string | null
+  role: PrismaUserRole
+  status: UserStatus
+  banReason: string | null
+  bannedAt: Date | null
+  emailVerifiedAt: Date | null
+  level: number
+  signature: string
+  bio: string
 }): ApiUser {
   return {
     uid: user.uid,
@@ -73,11 +73,11 @@ function userToApiUser(user: {
     level: user.level,
     signature: user.signature,
     bio: user.bio,
-  };
+  }
 }
 
 function isAdminRole(role: PrismaUserRole | undefined) {
-  return role === 'admin' || role === 'super_admin';
+  return role === 'admin' || role === 'super_admin'
 }
 
 function createToken(user: ApiUser, passwordHash: string) {
@@ -88,30 +88,30 @@ function createToken(user: ApiUser, passwordHash: string) {
       sessionVersion: createSessionVersion(passwordHash),
     },
     JWT_SECRET,
-    { expiresIn: '7d' },
-  );
+    { expiresIn: '7d' }
+  )
 }
 
 function issueUserSession(req: Request, res: Response, user: SessionUser) {
-  const apiUser = userToApiUser(user);
-  const token = createToken(apiUser, user.passwordHash);
-  setAuthCookie(req, res, token);
-  issueXsrfToken(res);
-  return { apiUser, token };
+  const apiUser = userToApiUser(user)
+  const token = createToken(apiUser, user.passwordHash)
+  setAuthCookie(req, res, token)
+  issueXsrfToken(res)
+  return { apiUser, token }
 }
 
 function shouldUseSecureCookie(req: Request) {
-  const override = process.env.COOKIE_SECURE;
-  if (override === 'true') return true;
-  if (override === 'false') return false;
-  if (!IS_PROD) return false;
+  const override = process.env.COOKIE_SECURE
+  if (override === 'true') return true
+  if (override === 'false') return false
+  if (!IS_PROD) return false
 
-  const forwardedProto = req.headers['x-forwarded-proto'];
+  const forwardedProto = req.headers['x-forwarded-proto']
   if (typeof forwardedProto === 'string') {
-    return forwardedProto.split(',')[0].trim() === 'https';
+    return forwardedProto.split(',')[0].trim() === 'https'
   }
 
-  return req.secure;
+  return req.secure
 }
 
 function setAuthCookie(req: Request, res: Response, token: string) {
@@ -121,7 +121,7 @@ function setAuthCookie(req: Request, res: Response, token: string) {
     secure: shouldUseSecureCookie(req),
     maxAge: 7 * ONE_DAY_MS,
     path: '/',
-  });
+  })
 }
 
 function clearAuthCookie(req: Request, res: Response) {
@@ -130,154 +130,159 @@ function clearAuthCookie(req: Request, res: Response) {
     sameSite: 'lax',
     secure: shouldUseSecureCookie(req),
     path: '/',
-  });
+  })
 }
 
 function getTokenFromRequest(req: Request) {
-  const cookieToken = req.cookies?.[AUTH_COOKIE_NAME];
-  if (cookieToken) return cookieToken;
+  const cookieToken = req.cookies?.[AUTH_COOKIE_NAME]
+  if (cookieToken) return cookieToken
 
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return null;
-  const [scheme, token] = authHeader.split(' ');
-  if (scheme !== 'Bearer' || !token) return null;
-  return token;
+  const authHeader = req.headers.authorization
+  if (!authHeader) return null
+  const [scheme, token] = authHeader.split(' ')
+  if (scheme !== 'Bearer' || !token) return null
+  return token
 }
 
 function isBearerAuthRequest(req: Request) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return false;
-  const [scheme, token] = authHeader.split(' ');
-  return scheme === 'Bearer' && Boolean(token);
+  const authHeader = req.headers.authorization
+  if (!authHeader) return false
+  const [scheme, token] = authHeader.split(' ')
+  return scheme === 'Bearer' && Boolean(token)
 }
 
 /**
  * 获取用户缓存键
  */
 function getUserCacheKey(uid: string): string {
-  return `${CACHE_KEYS.AUTH_USER}:${uid}`;
+  return `${CACHE_KEYS.AUTH_USER}:${uid}`
 }
 
 /**
  * 清除用户缓存
  */
 function clearUserCache(uid: string): void {
-  enhancedCache.delete(getUserCacheKey(uid));
+  enhancedCache.delete(getUserCacheKey(uid))
 }
 
 async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   const authReq = req as AuthenticatedRequest
-  const token = getTokenFromRequest(req);
+  const token = getTokenFromRequest(req)
   if (!token) {
-    next();
-    return;
+    next()
+    return
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as SessionJwtPayload;
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as SessionJwtPayload
 
     // 尝试从缓存获取用户
-    const cacheKey = getUserCacheKey(payload.uid);
-    const cachedAuthUser = enhancedCache.get<CachedAuthUser>(cacheKey);
-    let apiUser = cachedAuthUser?.sessionVersion === payload.sessionVersion
-      ? cachedAuthUser.apiUser
-      : undefined;
+    const cacheKey = getUserCacheKey(payload.uid)
+    const cachedAuthUser = enhancedCache.get<CachedAuthUser>(cacheKey)
+    let apiUser =
+      cachedAuthUser?.sessionVersion === payload.sessionVersion ? cachedAuthUser.apiUser : undefined
 
     if (!apiUser) {
       // 缓存未命中，从数据库获取
       const user = await prisma.user.findUnique({
         where: { uid: payload.uid },
-      });
+      })
 
       if (user?.deletedAt) {
-        logger.info({ uid: user.uid }, 'Rejecting token for soft-deleted user');
-        clearAuthCookie(req, res);
-        next();
-        return;
+        logger.info({ uid: user.uid }, 'Rejecting token for soft-deleted user')
+        clearAuthCookie(req, res)
+        next()
+        return
       }
 
       if (user) {
-        const currentSessionVersion = createSessionVersion(user.passwordHash);
+        const currentSessionVersion = createSessionVersion(user.passwordHash)
         if (payload.sessionVersion !== currentSessionVersion) {
-          logger.info({ uid: user.uid }, 'Rejecting token with stale session version');
-          clearAuthCookie(req, res);
-          next();
-          return;
+          logger.info({ uid: user.uid }, 'Rejecting token with stale session version')
+          clearAuthCookie(req, res)
+          next()
+          return
         }
 
-        apiUser = userToApiUser(user);
+        apiUser = userToApiUser(user)
         // 缓存用户数据
-        enhancedCache.set(cacheKey, {
-          apiUser,
-          sessionVersion: currentSessionVersion,
-        }, CACHE_TTL_SEC.AUTH_USER);
+        enhancedCache.set(
+          cacheKey,
+          {
+            apiUser,
+            sessionVersion: currentSessionVersion,
+          },
+          CACHE_TTL_SEC.AUTH_USER
+        )
       }
     }
 
     if (apiUser) {
-      authReq.authUser = apiUser;
+      authReq.authUser = apiUser
     }
   } catch (error) {
-    logger.warn({ err: error }, 'Invalid auth token');
-    clearAuthCookie(req, res);
+    logger.warn({ err: error }, 'Invalid auth token')
+    clearAuthCookie(req, res)
   }
 
-  next();
+  next()
 }
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   const authReq = req as AuthenticatedRequest
   if (!authReq.authUser) {
-    res.status(401).json({ error: '请先登录' });
-    return;
+    res.status(401).json({ error: '请先登录' })
+    return
   }
-  next();
+  next()
 }
 
 function requireActiveUser(req: Request, res: Response, next: NextFunction) {
   const authReq = req as AuthenticatedRequest
   if (!authReq.authUser) {
-    res.status(401).json({ error: '请先登录' });
-    return;
+    res.status(401).json({ error: '请先登录' })
+    return
   }
 
   if (authReq.authUser.status === 'banned') {
     res.status(403).json({
-      error: authReq.authUser.banReason ? `账号已被封禁：${authReq.authUser.banReason}` : '账号已被封禁，无法执行写操作',
+      error: authReq.authUser.banReason
+        ? `账号已被封禁：${authReq.authUser.banReason}`
+        : '账号已被封禁，无法执行写操作',
       code: 'USER_BANNED',
       banReason: authReq.authUser.banReason,
       bannedAt: authReq.authUser.bannedAt,
-    });
-    return;
+    })
+    return
   }
 
-  next();
+  next()
 }
 
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const authReq = req as AuthenticatedRequest
   if (!authReq.authUser || !isAdminRole(authReq.authUser.role)) {
-    res.status(403).json({ error: '需要管理员权限' });
-    return;
+    res.status(403).json({ error: '需要管理员权限' })
+    return
   }
   if (authReq.authUser.status === 'banned') {
-    res.status(403).json({ error: '账号已被封禁，无法执行管理操作' });
-    return;
+    res.status(403).json({ error: '账号已被封禁，无法执行管理操作' })
+    return
   }
-  next();
+  next()
 }
 
 function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
   const authReq = req as AuthenticatedRequest
   if (!authReq.authUser || authReq.authUser.role !== 'super_admin') {
-    res.status(403).json({ error: '需要超级管理员权限' });
-    return;
+    res.status(403).json({ error: '需要超级管理员权限' })
+    return
   }
   if (authReq.authUser.status === 'banned') {
-    res.status(403).json({ error: '账号已被封禁，无法执行管理操作' });
-    return;
+    res.status(403).json({ error: '账号已被封禁，无法执行管理操作' })
+    return
   }
-  next();
+  next()
 }
 
 export {
@@ -302,6 +307,6 @@ export {
   requireSuperAdmin,
   clearUserCache,
   getUserCacheKey,
-};
+}
 
-export type { AuthenticatedRequest };
+export type { AuthenticatedRequest }

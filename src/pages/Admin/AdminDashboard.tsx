@@ -1,57 +1,80 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { AlertTriangle, Book, Music, MessageSquare, Image as ImageIcon, Users, Layers, Megaphone, Lock, RefreshCw } from 'lucide-react';
-import { apiGet } from '../../lib/apiClient';
-import { useAuth } from '../../context/AuthContext';
+import React, { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import {
+  AlertTriangle,
+  Book,
+  Music,
+  MessageSquare,
+  Image as ImageIcon,
+  Users,
+  Layers,
+  Megaphone,
+  Lock,
+  RefreshCw,
+} from 'lucide-react'
+import { apiGet } from '../../lib/apiClient'
+import { useAuth } from '../../context/AuthContext'
 
 const cards = [
   { key: 'wiki', label: '百科', path: '/admin/wiki', icon: Book, countKey: 'wiki' },
   { key: 'music', label: '音乐', path: '/admin/music', icon: Music, countKey: 'music' },
   { key: 'posts', label: '帖子', path: '/admin/posts', icon: MessageSquare, countKey: 'posts' },
-  { key: 'galleries', label: '图集', path: '/admin/galleries', icon: ImageIcon, countKey: 'galleries' },
+  {
+    key: 'galleries',
+    label: '图集',
+    path: '/admin/galleries',
+    icon: ImageIcon,
+    countKey: 'galleries',
+  },
   { key: 'users', label: '用户', path: '/admin/users', icon: Users, countKey: 'users' },
   { key: 'sections', label: '版块', path: '/admin/sections', icon: Layers, countKey: 'sections' },
-  { key: 'announcements', label: '公告', path: '/admin/announcements', icon: Megaphone, countKey: 'announcements' },
+  {
+    key: 'announcements',
+    label: '公告',
+    path: '/admin/announcements',
+    icon: Megaphone,
+    countKey: 'announcements',
+  },
   { key: 'locks', label: '编辑锁', path: '/admin/locks', icon: Lock, countKey: 'locks' },
-];
+]
 
 export const AdminDashboard = () => {
-  const { user } = useAuth();
-  const [stats, setStats] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const { user } = useAuth()
+  const [stats, setStats] = useState<Record<string, number>>({})
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
 
   const fetchStats = async (manual = false) => {
-    if (manual) setRefreshing(true);
-    else setLoading(true);
+    if (manual) setRefreshing(true)
+    else setLoading(true)
     try {
-      const results: Record<string, number> = {};
+      const results: Record<string, number> = {}
       await Promise.all(
         cards.map(async (c) => {
           try {
-            const data = await apiGet<{ data?: any[]; locks?: any[] }>(`/api/admin/${c.key}`);
-            const arr = data.data || (data as any).locks || [];
-            results[c.key] = arr.length;
+            const data = await apiGet<{ data?: any[]; locks?: any[] }>(`/api/admin/${c.key}`)
+            const arr = data.data || (data as any).locks || []
+            results[c.key] = arr.length
           } catch {
-            results[c.key] = 0;
+            results[c.key] = 0
           }
-        }),
-      );
-      setStats(results);
+        })
+      )
+      setStats(results)
     } catch (e) {
-      console.error(e);
+      console.error(e)
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      setLoading(false)
+      setRefreshing(false)
     }
-  };
+  }
 
   useEffect(() => {
-    fetchStats();
-  }, []);
+    fetchStats()
+  }, [])
 
-  const total = Object.values(stats).reduce<number>((a: number, b: number) => a + b, 0);
-  const isRegularAdmin = user?.role === 'admin';
+  const total = Object.values(stats).reduce<number>((a: number, b: number) => a + b, 0)
+  const isRegularAdmin = user?.role === 'admin'
 
   return (
     <div className="space-y-6">
@@ -81,7 +104,7 @@ export const AdminDashboard = () => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {cards.map((c) => {
-            const Icon = c.icon;
+            const Icon = c.icon
             return (
               <Link
                 key={c.key}
@@ -89,12 +112,17 @@ export const AdminDashboard = () => {
                 className="bg-surface border border-border rounded p-5 hover:border-brand-gold transition-all group"
               >
                 <div className="flex items-center gap-2 mb-3">
-                  <Icon size={16} className="text-text-muted group-hover:text-brand-gold transition-colors" />
-                  <span className="text-sm text-text-muted group-hover:text-brand-gold transition-colors">{c.label}</span>
+                  <Icon
+                    size={16}
+                    className="text-text-muted group-hover:text-brand-gold transition-colors"
+                  />
+                  <span className="text-sm text-text-muted group-hover:text-brand-gold transition-colors">
+                    {c.label}
+                  </span>
                 </div>
                 <p className="text-2xl font-bold text-text-primary">{stats[c.key] ?? 0}</p>
               </Link>
-            );
+            )
           })}
         </div>
       )}
@@ -102,13 +130,11 @@ export const AdminDashboard = () => {
       {isRegularAdmin && (
         <div className="flex items-start gap-3 rounded border border-border bg-surface p-4 text-sm text-text-secondary">
           <AlertTriangle size={18} className="theme-text-warning mt-0.5 shrink-0" />
-          <p>
-            数据库备份功能仅限超级管理员使用。普通管理员无法查看、创建、下载、恢复或删除备份。
-          </p>
+          <p>数据库备份功能仅限超级管理员使用。普通管理员无法查看、创建、下载、恢复或删除备份。</p>
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
-export default AdminDashboard;
+export default AdminDashboard

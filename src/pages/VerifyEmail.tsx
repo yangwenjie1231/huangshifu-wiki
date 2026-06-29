@@ -35,10 +35,7 @@ const VerifyEmail = () => {
         if (cancelled) return
         setState({
           status: 'success',
-          message:
-            result.purpose === 'change_email'
-              ? '邮箱验证成功'
-              : '邮箱验证成功',
+          message: result.purpose === 'change_email' ? '邮箱验证成功' : '邮箱验证成功',
         })
       })
       .catch((error) => {

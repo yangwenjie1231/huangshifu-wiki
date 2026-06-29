@@ -16,11 +16,17 @@ export const backupNoteSchema = z
   .object({
     note: z
       .string()
-      .max(CONTENT_LIMITS.admin.backupNote, `备份备注不能超过${CONTENT_LIMITS.admin.backupNote}个字符`),
+      .max(
+        CONTENT_LIMITS.admin.backupNote,
+        `备份备注不能超过${CONTENT_LIMITS.admin.backupNote}个字符`
+      ),
   })
   .strip()
 
-export const backupCreateSchema = z.preprocess((value) => value ?? {}, backupNoteSchema.partial().strip())
+export const backupCreateSchema = z.preprocess(
+  (value) => value ?? {},
+  backupNoteSchema.partial().strip()
+)
 
 export const adminResetUserPasswordSchema = z.object({
   newPassword: passwordSchema,
@@ -83,9 +89,15 @@ export const adminUpdateUserSchema = z
 
 const idListSchema = (fieldName: string) =>
   z
-    .array(z.string({ error: `${fieldName} 必须是字符串` }).trim().min(1, `${fieldName} 不能为空`), {
-      error: `${fieldName} 必须是数组`,
-    })
+    .array(
+      z
+        .string({ error: `${fieldName} 必须是字符串` })
+        .trim()
+        .min(1, `${fieldName} 不能为空`),
+      {
+        error: `${fieldName} 必须是数组`,
+      }
+    )
     .min(1, `请选择${fieldName}`)
     .max(200, `一次最多处理 200 个${fieldName}`)
     .transform((items) => [...new Set(items)])

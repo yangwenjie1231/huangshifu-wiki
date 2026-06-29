@@ -1,68 +1,79 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
-type ToastVariant = 'success' | 'error';
+type ToastVariant = 'success' | 'error'
 
 type ToastOptions = {
-  variant?: ToastVariant;
-  duration?: number;
-};
+  variant?: ToastVariant
+  duration?: number
+}
 
 type ToastState = {
-  message: string;
-  variant: ToastVariant;
-  visible: boolean;
-} | null;
+  message: string
+  variant: ToastVariant
+  visible: boolean
+} | null
 
 type ToastContextValue = {
-  show: (message: string, options?: ToastOptions) => void;
-};
+  show: (message: string, options?: ToastOptions) => void
+}
 
-const ToastContext = createContext<ToastContextValue | undefined>(undefined);
+const ToastContext = createContext<ToastContextValue | undefined>(undefined)
 
 export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
-  const [toast, setToast] = useState<ToastState>(null);
-  const hideMotionTimerRef = useRef<number | null>(null);
-  const clearTimerRef = useRef<number | null>(null);
+  const [toast, setToast] = useState<ToastState>(null)
+  const hideMotionTimerRef = useRef<number | null>(null)
+  const clearTimerRef = useRef<number | null>(null)
 
   const clearTimers = useCallback(() => {
     if (hideMotionTimerRef.current) {
-      window.clearTimeout(hideMotionTimerRef.current);
-      hideMotionTimerRef.current = null;
+      window.clearTimeout(hideMotionTimerRef.current)
+      hideMotionTimerRef.current = null
     }
     if (clearTimerRef.current) {
-      window.clearTimeout(clearTimerRef.current);
-      clearTimerRef.current = null;
+      window.clearTimeout(clearTimerRef.current)
+      clearTimerRef.current = null
     }
-  }, []);
+  }, [])
 
-  const show = useCallback((message: string, options?: ToastOptions) => {
-    const duration = Math.max(1200, options?.duration ?? 2000);
-    const variant = options?.variant ?? 'success';
-    const fadeOutDelay = Math.max(200, duration - 180);
+  const show = useCallback(
+    (message: string, options?: ToastOptions) => {
+      const duration = Math.max(1200, options?.duration ?? 2000)
+      const variant = options?.variant ?? 'success'
+      const fadeOutDelay = Math.max(200, duration - 180)
 
-    clearTimers();
-    setToast({ message, variant, visible: true });
+      clearTimers()
+      setToast({ message, variant, visible: true })
 
-    hideMotionTimerRef.current = window.setTimeout(() => {
-      setToast((prev) => {
-        if (!prev) return prev;
-        return { ...prev, visible: false };
-      });
-    }, fadeOutDelay);
+      hideMotionTimerRef.current = window.setTimeout(() => {
+        setToast((prev) => {
+          if (!prev) return prev
+          return { ...prev, visible: false }
+        })
+      }, fadeOutDelay)
 
-    clearTimerRef.current = window.setTimeout(() => {
-      setToast(null);
-      clearTimers();
-    }, duration);
-  }, [clearTimers]);
+      clearTimerRef.current = window.setTimeout(() => {
+        setToast(null)
+        clearTimers()
+      }, duration)
+    },
+    [clearTimers]
+  )
 
   useEffect(() => {
     return () => {
-      clearTimers();
-    };
-  }, [clearTimers]);
+      clearTimers()
+    }
+  }, [clearTimers])
 
-  const value = useMemo(() => ({ show }), [show]);
+  const value = useMemo(() => ({ show }), [show])
 
   return (
     <ToastContext.Provider value={value}>
@@ -94,13 +105,13 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
         </div>
       )}
     </ToastContext.Provider>
-  );
-};
+  )
+}
 
 export const useToast = () => {
-  const context = useContext(ToastContext);
+  const context = useContext(ToastContext)
   if (!context) {
-    throw new Error('useToast must be used within ToastProvider');
+    throw new Error('useToast must be used within ToastProvider')
   }
-  return context;
-};
+  return context
+}

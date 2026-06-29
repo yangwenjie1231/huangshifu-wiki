@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { extractMentionMatches, extractMentionNames, splitMentionText } from '../../src/lib/mentions'
+import {
+  extractMentionMatches,
+  extractMentionNames,
+  splitMentionText,
+} from '../../src/lib/mentions'
 
 describe('mentions', () => {
   it('extracts mention candidates without splitting internal dots', () => {

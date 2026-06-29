@@ -256,10 +256,10 @@ const GalleryDetail = () => {
   const isOwner = Boolean(user && gallery && gallery.authorUid === user.uid)
   const canSubmitReview = Boolean(
     !isBanned &&
-      canManage &&
-      isOwner &&
-      gallery &&
-      (gallery.status === 'draft' || gallery.status === 'rejected')
+    canManage &&
+    isOwner &&
+    gallery &&
+    (gallery.status === 'draft' || gallery.status === 'rejected')
   )
   const rootComments = comments.filter((comment) => !comment.parentId)
   const getReplies = (parentId: string) =>
@@ -575,7 +575,11 @@ const GalleryDetail = () => {
     try {
       const data = await apiPost<GalleryDetailResponse>(`/api/galleries/${gallery.id}/submit`)
       setGallery(data.gallery)
-      show(data.gallery.status === 'published' ? t('gallery.galleryPublished') : t('gallery.reviewSubmitted'))
+      show(
+        data.gallery.status === 'published'
+          ? t('gallery.galleryPublished')
+          : t('gallery.reviewSubmitted')
+      )
     } catch (error) {
       console.error('Submit gallery review error:', error)
       show(t('gallery.submitReviewFailed'), { variant: 'error' })
@@ -1096,7 +1100,8 @@ const GalleryDetail = () => {
                                     </span>
                                   </>
                                 ) : null}
-                                <span>：
+                                <span>
+                                  ：
                                   <MentionText
                                     text={reply.content}
                                     targets={reply.mentionTargets || []}

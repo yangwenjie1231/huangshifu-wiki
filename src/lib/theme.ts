@@ -125,9 +125,7 @@ function readThemeStorageState(): ThemeStorageState {
     }
 
     const users: Record<string, Partial<UserPreferences>> = isRecord(parsed.users)
-      ? Object.fromEntries(
-          Object.entries(parsed.users).filter(([, value]) => isRecord(value))
-        )
+      ? Object.fromEntries(Object.entries(parsed.users).filter(([, value]) => isRecord(value)))
       : {}
 
     if (isRecord(parsed.guest)) {
@@ -225,7 +223,10 @@ export function readStoredPreferences(
   }
 }
 
-export function writeStoredPreferences(preferences: Partial<UserPreferences>, uid?: string | null): void {
+export function writeStoredPreferences(
+  preferences: Partial<UserPreferences>,
+  uid?: string | null
+): void {
   if (typeof window === 'undefined') {
     return
   }

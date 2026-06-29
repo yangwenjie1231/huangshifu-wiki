@@ -39,8 +39,10 @@ export const invalidateReviewQueueCaches = () => {
 const getReviewItemType = (queueType: AdminReviewQueueType): AdminReviewItemType =>
   queueType === 'wiki' ? 'wiki' : queueType === 'galleries' ? 'gallery' : 'post'
 
-const getReviewId = (item: AdminReviewQueueResponse['items'][number], queueType: AdminReviewQueueType) =>
-  queueType === 'wiki' ? item.slug || item.id : item.id
+const getReviewId = (
+  item: AdminReviewQueueResponse['items'][number],
+  queueType: AdminReviewQueueType
+) => (queueType === 'wiki' ? item.slug || item.id : item.id)
 
 export const getReviewItemKey = (item: AdminReviewQueueMergedItem) =>
   `${item.reviewType}-${item.reviewId}`

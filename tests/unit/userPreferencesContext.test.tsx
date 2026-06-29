@@ -2,7 +2,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import React from 'react'
-import { UserPreferencesProvider, useUserPreferences } from '../../src/context/UserPreferencesContext'
+import {
+  UserPreferencesProvider,
+  useUserPreferences,
+} from '../../src/context/UserPreferencesContext'
 import { THEME_STORAGE_KEY, readStoredPreferences } from '../../src/lib/theme'
 import { DEFAULT_PREFERENCES } from '../../src/types/userPreferences'
 

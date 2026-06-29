@@ -1,100 +1,125 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, Image, Trash2, RotateCcw, Loader2, CheckCircle, AlertTriangle, XCircle, Zap, Clock, BarChart3 } from 'lucide-react';
-import { apiGet, apiPost } from '../../lib/apiClient';
-import { useDialog } from '../../components/Dialog';
-import { clsx } from 'clsx';
+import React, { useState, useEffect, useCallback } from 'react'
+import {
+  RefreshCw,
+  Image,
+  Trash2,
+  RotateCcw,
+  Loader2,
+  CheckCircle,
+  AlertTriangle,
+  XCircle,
+  Zap,
+  Clock,
+  BarChart3,
+} from 'lucide-react'
+import { apiGet, apiPost } from '../../lib/apiClient'
+import { useDialog } from '../../components/Dialog'
+import { clsx } from 'clsx'
 
 interface VariantStats {
-  queueLength: number;
-  processingCount: number;
-  completedToday: number;
-  failedToday: number;
-  averageProcessingTime: number;
-  timeoutCount: number;
+  queueLength: number
+  processingCount: number
+  completedToday: number
+  failedToday: number
+  averageProcessingTime: number
+  timeoutCount: number
 }
 
 interface CleanupStats {
-  totalImages: number;
-  completedVariants: number;
-  failedVariants: number;
-  pendingOrProcessing: number;
-  estimatedOrphanedDirectories: number;
+  totalImages: number
+  completedVariants: number
+  failedVariants: number
+  pendingOrProcessing: number
+  estimatedOrphanedDirectories: number
 }
 
 interface RebuildResponse {
-  success: boolean;
-  error?: string;
-  jobId?: string;
+  success: boolean
+  error?: string
+  jobId?: string
   summary?: {
-    totalScanned: number;
-    queuedForRebuild: number;
-    skipped: number;
-    errors: number;
-  };
-  estimatedTimeSeconds?: number;
+    totalScanned: number
+    queuedForRebuild: number
+    skipped: number
+    errors: number
+  }
+  estimatedTimeSeconds?: number
 }
 
 export const AdminVariantManager: React.FC = () => {
-  const [variantStats, setVariantStats] = useState<VariantStats | null>(null);
-  const [cleanupStats, setCleanupStats] = useState<CleanupStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [rebuildScope, setRebuildScope] = useState<string>('missing');
-  const [rebuilding, setRebuilding] = useState(false);
-  const [rebuildResult, setRebuildResult] = useState<RebuildResponse | null>(null);
-  const [cleaning, setCleaning] = useState(false);
-  const [cleanupResult, setCleanupResult] = useState<{ type: string; freedSpace: number; deletedCount: number; errorsCount: number } | null>(null);
-  const dialog = useDialog();
+  const [variantStats, setVariantStats] = useState<VariantStats | null>(null)
+  const [cleanupStats, setCleanupStats] = useState<CleanupStats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [rebuildScope, setRebuildScope] = useState<string>('missing')
+  const [rebuilding, setRebuilding] = useState(false)
+  const [rebuildResult, setRebuildResult] = useState<RebuildResponse | null>(null)
+  const [cleaning, setCleaning] = useState(false)
+  const [cleanupResult, setCleanupResult] = useState<{
+    type: string
+    freedSpace: number
+    deletedCount: number
+    errorsCount: number
+  } | null>(null)
+  const dialog = useDialog()
 
   const fetchStats = useCallback(async () => {
     try {
-      setLoading(true);
-      setError(null);
+      setLoading(true)
+      setError(null)
       const [statsData, cleanupData] = await Promise.all([
         apiGet<{ success: boolean; data: VariantStats }>('/api/admin/variants/stats'),
-        apiGet<{ success: boolean; data: CleanupStats }>('/api/admin/cleanup/stats').catch(() => ({ success: false, data: null as any })),
-      ]);
-      if (statsData.success) setVariantStats(statsData.data);
-      if (cleanupData.success) setCleanupStats(cleanupData.data);
+        apiGet<{ success: boolean; data: CleanupStats }>('/api/admin/cleanup/stats').catch(() => ({
+          success: false,
+          data: null as any,
+        })),
+      ])
+      if (statsData.success) setVariantStats(statsData.data)
+      if (cleanupData.success) setCleanupStats(cleanupData.data)
     } catch (err) {
-      console.error('Failed to fetch stats:', err);
-      setError(err instanceof Error ? err.message : '网络错误');
+      console.error('Failed to fetch stats:', err)
+      setError(err instanceof Error ? err.message : '网络错误')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    fetchStats();
-    const interval = setInterval(fetchStats, 30000);
-    return () => clearInterval(interval);
-  }, [fetchStats]);
+    fetchStats()
+    const interval = setInterval(fetchStats, 30000)
+    return () => clearInterval(interval)
+  }, [fetchStats])
 
   const handleRebuildVariants = async (scope: string) => {
-    const actionLabel = scope === 'missing' ? '补全缺失' : scope === 'failed' ? '重建失败' : '全部重建';
+    const actionLabel =
+      scope === 'missing' ? '补全缺失' : scope === 'failed' ? '重建失败' : '全部重建'
     const confirmed = await dialog.confirm({
       title: '重建变体',
       message: `确定要执行"${actionLabel}"吗？`,
       confirmText: '执行',
       variant: scope === 'all' ? 'danger' : 'warning',
-    });
-    if (!confirmed) return;
+    })
+    if (!confirmed) return
     try {
-      setRebuilding(true);
-      setRebuildResult(null);
-      const result = await apiPost<RebuildResponse>('/api/admin/rebuild-all-variants', { scope, batchSize: 100, dryRun: false });
+      setRebuilding(true)
+      setRebuildResult(null)
+      const result = await apiPost<RebuildResponse>('/api/admin/rebuild-all-variants', {
+        scope,
+        batchSize: 100,
+        dryRun: false,
+      })
       if (result.success) {
-        setRebuildResult(result);
-        setTimeout(() => fetchStats(), 2000);
+        setRebuildResult(result)
+        setTimeout(() => fetchStats(), 2000)
       } else {
-        throw new Error(result.error || '重建失败');
+        throw new Error(result.error || '重建失败')
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '重建失败');
+      setError(err instanceof Error ? err.message : '重建失败')
     } finally {
-      setRebuilding(false);
+      setRebuilding(false)
     }
-  };
+  }
 
   const handleCleanupOrphaned = async () => {
     const confirmed = await dialog.confirm({
@@ -102,22 +127,30 @@ export const AdminVariantManager: React.FC = () => {
       message: '确定要清理所有孤儿变体文件吗？',
       confirmText: '清理',
       variant: 'warning',
-    });
-    if (!confirmed) return;
+    })
+    if (!confirmed) return
     try {
-      setCleaning(true);
-      setCleanupResult(null);
-      const data = await apiPost<{ success: boolean; data: { freedSpace: number; deletedCount: number; errorsCount: number } }>('/api/admin/cleanup/orphaned');
+      setCleaning(true)
+      setCleanupResult(null)
+      const data = await apiPost<{
+        success: boolean
+        data: { freedSpace: number; deletedCount: number; errorsCount: number }
+      }>('/api/admin/cleanup/orphaned')
       if (data.success) {
-        setCleanupResult({ type: 'orphaned', freedSpace: data.data.freedSpace, deletedCount: data.data.deletedCount, errorsCount: data.data.errorsCount });
-        setTimeout(() => fetchStats(), 1000);
+        setCleanupResult({
+          type: 'orphaned',
+          freedSpace: data.data.freedSpace,
+          deletedCount: data.data.deletedCount,
+          errorsCount: data.data.errorsCount,
+        })
+        setTimeout(() => fetchStats(), 1000)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '清理失败');
+      setError(err instanceof Error ? err.message : '清理失败')
     } finally {
-      setCleaning(false);
+      setCleaning(false)
     }
-  };
+  }
 
   const handleCleanupFailed = async () => {
     const confirmed = await dialog.confirm({
@@ -125,22 +158,30 @@ export const AdminVariantManager: React.FC = () => {
       message: '确定要清理所有失败的变体文件吗？',
       confirmText: '清理',
       variant: 'warning',
-    });
-    if (!confirmed) return;
+    })
+    if (!confirmed) return
     try {
-      setCleaning(true);
-      setCleanupResult(null);
-      const data = await apiPost<{ success: boolean; data: { freedSpace: number; deletedCount: number; errorsCount: number } }>('/api/admin/cleanup/failed');
+      setCleaning(true)
+      setCleanupResult(null)
+      const data = await apiPost<{
+        success: boolean
+        data: { freedSpace: number; deletedCount: number; errorsCount: number }
+      }>('/api/admin/cleanup/failed')
       if (data.success) {
-        setCleanupResult({ type: 'failed', freedSpace: data.data.freedSpace, deletedCount: data.data.deletedCount, errorsCount: data.data.errorsCount });
-        setTimeout(() => fetchStats(), 1000);
+        setCleanupResult({
+          type: 'failed',
+          freedSpace: data.data.freedSpace,
+          deletedCount: data.data.deletedCount,
+          errorsCount: data.data.errorsCount,
+        })
+        setTimeout(() => fetchStats(), 1000)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '清理失败');
+      setError(err instanceof Error ? err.message : '清理失败')
     } finally {
-      setCleaning(false);
+      setCleaning(false)
     }
-  };
+  }
 
   const handleCleanupAll = async () => {
     const confirmed = await dialog.confirm({
@@ -148,28 +189,36 @@ export const AdminVariantManager: React.FC = () => {
       message: '确定要执行全量清理吗？这将同时清理孤儿文件和失败残留。',
       confirmText: '清理',
       variant: 'danger',
-    });
-    if (!confirmed) return;
+    })
+    if (!confirmed) return
     try {
-      setCleaning(true);
-      setCleanupResult(null);
-      const data = await apiPost<{ success: boolean; data: { totalFreedBytes: number; totalDeletedFiles: number; totalErrors: number } }>('/api/admin/cleanup/all');
+      setCleaning(true)
+      setCleanupResult(null)
+      const data = await apiPost<{
+        success: boolean
+        data: { totalFreedBytes: number; totalDeletedFiles: number; totalErrors: number }
+      }>('/api/admin/cleanup/all')
       if (data.success) {
-        setCleanupResult({ type: 'all', freedSpace: data.data.totalFreedBytes, deletedCount: data.data.totalDeletedFiles, errorsCount: data.data.totalErrors });
-        setTimeout(() => fetchStats(), 1500);
+        setCleanupResult({
+          type: 'all',
+          freedSpace: data.data.totalFreedBytes,
+          deletedCount: data.data.totalDeletedFiles,
+          errorsCount: data.data.totalErrors,
+        })
+        setTimeout(() => fetchStats(), 1500)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '全量清理失败');
+      setError(err instanceof Error ? err.message : '全量清理失败')
     } finally {
-      setCleaning(false);
+      setCleaning(false)
     }
-  };
+  }
 
   const formatBytes = (bytes: number): string => {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  };
+    if (bytes < 1024) return bytes + ' B'
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+  }
 
   /**
    * 变体管理按钮说明：
@@ -188,7 +237,7 @@ export const AdminVariantManager: React.FC = () => {
     { value: 'missing', label: '补全缺失', desc: '仅处理没有变体的图片' },
     { value: 'failed', label: '重建失败', desc: '仅处理生成失败的图片' },
     { value: 'all', label: '全部重建', desc: '强制重新生成所有变体（慎用）' },
-  ];
+  ]
 
   if (loading && !variantStats && !cleanupStats) {
     return (
@@ -205,7 +254,7 @@ export const AdminVariantManager: React.FC = () => {
           ))}
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -239,18 +288,50 @@ export const AdminVariantManager: React.FC = () => {
           <div className="flex items-center gap-2 mb-4">
             <BarChart3 size={16} className="text-text-muted" />
             <h3 className="text-sm font-semibold text-text-secondary">生成队列</h3>
-            <span className="px-2 py-0.5 theme-status-success text-[10px] font-medium rounded border border-border">运行中</span>
+            <span className="px-2 py-0.5 theme-status-success text-[10px] font-medium rounded border border-border">
+              运行中
+            </span>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
-              { label: '等待处理', value: variantStats.queueLength, icon: Clock, color: 'text-text-primary' },
-              { label: '正在处理', value: variantStats.processingCount, icon: Loader2, color: 'text-brand-gold' },
-              { label: '今日完成', value: variantStats.completedToday, icon: CheckCircle, color: 'theme-text-success' },
-              { label: '今日失败', value: variantStats.failedToday, icon: XCircle, color: 'theme-text-error' },
-              { label: '超时次数', value: variantStats.timeoutCount, icon: AlertTriangle, color: 'theme-text-warning' },
-              { label: '平均耗时', value: `${variantStats.averageProcessingTime}ms`, icon: Clock, color: 'text-text-secondary' },
+              {
+                label: '等待处理',
+                value: variantStats.queueLength,
+                icon: Clock,
+                color: 'text-text-primary',
+              },
+              {
+                label: '正在处理',
+                value: variantStats.processingCount,
+                icon: Loader2,
+                color: 'text-brand-gold',
+              },
+              {
+                label: '今日完成',
+                value: variantStats.completedToday,
+                icon: CheckCircle,
+                color: 'theme-text-success',
+              },
+              {
+                label: '今日失败',
+                value: variantStats.failedToday,
+                icon: XCircle,
+                color: 'theme-text-error',
+              },
+              {
+                label: '超时次数',
+                value: variantStats.timeoutCount,
+                icon: AlertTriangle,
+                color: 'theme-text-warning',
+              },
+              {
+                label: '平均耗时',
+                value: `${variantStats.averageProcessingTime}ms`,
+                icon: Clock,
+                color: 'text-text-secondary',
+              },
             ].map((item) => {
-              const Icon = item.icon;
+              const Icon = item.icon
               return (
                 <div key={item.label} className="bg-surface-alt rounded p-3">
                   <div className="flex items-center gap-1.5 mb-1">
@@ -259,7 +340,7 @@ export const AdminVariantManager: React.FC = () => {
                   </div>
                   <p className={`text-lg font-bold ${item.color}`}>{item.value}</p>
                 </div>
-              );
+              )
             })}
           </div>
         </div>
@@ -274,14 +355,28 @@ export const AdminVariantManager: React.FC = () => {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {[
               { label: '总图片数', value: cleanupStats.totalImages },
-              { label: '已完成', value: cleanupStats.completedVariants, badge: 'theme-status-success' },
+              {
+                label: '已完成',
+                value: cleanupStats.completedVariants,
+                badge: 'theme-status-success',
+              },
               { label: '失败数', value: cleanupStats.failedVariants, badge: 'theme-status-error' },
-              { label: '待处理', value: cleanupStats.pendingOrProcessing, badge: 'theme-status-warning' },
-              { label: '孤儿目录', value: cleanupStats.estimatedOrphanedDirectories, badge: 'theme-tag' },
+              {
+                label: '待处理',
+                value: cleanupStats.pendingOrProcessing,
+                badge: 'theme-status-warning',
+              },
+              {
+                label: '孤儿目录',
+                value: cleanupStats.estimatedOrphanedDirectories,
+                badge: 'theme-tag',
+              },
             ].map((item) => (
               <div key={item.label} className="bg-surface-alt rounded p-3">
                 <span className="text-[11px] text-text-muted">{item.label}</span>
-                <p className={`text-lg font-bold ${item.badge ?? 'text-text-primary'}`}>{item.value}</p>
+                <p className={`text-lg font-bold ${item.badge ?? 'text-text-primary'}`}>
+                  {item.value}
+                </p>
               </div>
             ))}
           </div>
@@ -332,10 +427,32 @@ export const AdminVariantManager: React.FC = () => {
               <p className="text-sm font-medium theme-text-success">重建任务已提交</p>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-              <div><span className="text-text-muted">扫描总数</span><p className="font-medium text-text-primary">{rebuildResult.summary?.totalScanned ?? 0}</p></div>
-              <div><span className="text-text-muted">入队数量</span><p className="font-medium text-text-primary">{rebuildResult.summary?.queuedForRebuild ?? 0}</p></div>
-              <div><span className="text-text-muted">跳过数量</span><p className="font-medium text-text-primary">{rebuildResult.summary?.skipped ?? 0}</p></div>
-              <div><span className="text-text-muted">错误数量</span><p className={`font-medium ${(rebuildResult.summary?.errors ?? 0) > 0 ? 'theme-text-error' : 'text-text-primary'}`}>{rebuildResult.summary?.errors ?? 0}</p></div>
+              <div>
+                <span className="text-text-muted">扫描总数</span>
+                <p className="font-medium text-text-primary">
+                  {rebuildResult.summary?.totalScanned ?? 0}
+                </p>
+              </div>
+              <div>
+                <span className="text-text-muted">入队数量</span>
+                <p className="font-medium text-text-primary">
+                  {rebuildResult.summary?.queuedForRebuild ?? 0}
+                </p>
+              </div>
+              <div>
+                <span className="text-text-muted">跳过数量</span>
+                <p className="font-medium text-text-primary">
+                  {rebuildResult.summary?.skipped ?? 0}
+                </p>
+              </div>
+              <div>
+                <span className="text-text-muted">错误数量</span>
+                <p
+                  className={`font-medium ${(rebuildResult.summary?.errors ?? 0) > 0 ? 'theme-text-error' : 'text-text-primary'}`}
+                >
+                  {rebuildResult.summary?.errors ?? 0}
+                </p>
+              </div>
             </div>
           </div>
         )}
@@ -384,18 +501,35 @@ export const AdminVariantManager: React.FC = () => {
             <div className="flex items-center gap-2 mb-2">
               <CheckCircle size={16} className="text-brand-gold" />
               <p className="text-sm font-medium text-text-primary">清理完成</p>
-              <span className="px-2 py-0.5 theme-tag text-[10px] font-medium rounded">{cleanupResult.type}</span>
+              <span className="px-2 py-0.5 theme-tag text-[10px] font-medium rounded">
+                {cleanupResult.type}
+              </span>
             </div>
             <div className="grid grid-cols-3 gap-3 text-sm">
-              <div><span className="text-text-muted">释放空间</span><p className="font-medium theme-text-success">{formatBytes(cleanupResult.freedSpace)}</p></div>
-              <div><span className="text-text-muted">删除文件</span><p className="font-medium text-text-primary">{cleanupResult.deletedCount}</p></div>
-              <div><span className="text-text-muted">错误数量</span><p className={`font-medium ${cleanupResult.errorsCount > 0 ? 'theme-text-error' : 'text-text-primary'}`}>{cleanupResult.errorsCount}</p></div>
+              <div>
+                <span className="text-text-muted">释放空间</span>
+                <p className="font-medium theme-text-success">
+                  {formatBytes(cleanupResult.freedSpace)}
+                </p>
+              </div>
+              <div>
+                <span className="text-text-muted">删除文件</span>
+                <p className="font-medium text-text-primary">{cleanupResult.deletedCount}</p>
+              </div>
+              <div>
+                <span className="text-text-muted">错误数量</span>
+                <p
+                  className={`font-medium ${cleanupResult.errorsCount > 0 ? 'theme-text-error' : 'text-text-primary'}`}
+                >
+                  {cleanupResult.errorsCount}
+                </p>
+              </div>
             </div>
           </div>
         )}
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default AdminVariantManager;
+export default AdminVariantManager

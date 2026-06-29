@@ -337,7 +337,9 @@ const AdminSettings = () => {
               </label>
 
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-text-muted">链接有效期（分钟）</span>
+                <span className="mb-1 block text-xs font-medium text-text-muted">
+                  链接有效期（分钟）
+                </span>
                 <input
                   type="number"
                   min={5}

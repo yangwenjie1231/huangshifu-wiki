@@ -1,39 +1,39 @@
-import { QdrantClient } from '@qdrant/js-client-rest';
+import { QdrantClient } from '@qdrant/js-client-rest'
 
-const DEFAULT_COLLECTION = 'hsf_image_embeddings';
-const DEFAULT_TEXT_COLLECTION = 'hsf_text_embeddings';
-const DEFAULT_DISTANCE: 'Cosine' | 'Dot' | 'Euclid' | 'Manhattan' = 'Cosine';
+const DEFAULT_COLLECTION = 'hsf_image_embeddings'
+const DEFAULT_TEXT_COLLECTION = 'hsf_text_embeddings'
+const DEFAULT_DISTANCE: 'Cosine' | 'Dot' | 'Euclid' | 'Manhattan' = 'Cosine'
 
-let qdrantClient: QdrantClient | null = null;
-let ensureCollectionPromise: Promise<void> | null = null;
-let ensureTextCollectionPromise: Promise<void> | null = null;
+let qdrantClient: QdrantClient | null = null
+let ensureCollectionPromise: Promise<void> | null = null
+let ensureTextCollectionPromise: Promise<void> | null = null
 
 function parseInteger(value: string | undefined, fallback: number) {
-  const parsed = Number(value);
+  const parsed = Number(value)
   if (!Number.isFinite(parsed) || parsed <= 0) {
-    return fallback;
+    return fallback
   }
-  return Math.floor(parsed);
+  return Math.floor(parsed)
 }
 
 export function getQdrantCollectionName() {
-  return process.env.QDRANT_COLLECTION || DEFAULT_COLLECTION;
+  return process.env.QDRANT_COLLECTION || DEFAULT_COLLECTION
 }
 
 export function getTextCollectionName(): string {
-  return process.env.QDRANT_TEXT_COLLECTION || DEFAULT_TEXT_COLLECTION;
+  return process.env.QDRANT_TEXT_COLLECTION || DEFAULT_TEXT_COLLECTION
 }
 
 function getQdrantUrl() {
-  return process.env.QDRANT_URL || 'http://127.0.0.1:6333';
+  return process.env.QDRANT_URL || 'http://127.0.0.1:6333'
 }
 
 function getQdrantApiKey() {
-  return process.env.QDRANT_API_KEY || undefined;
+  return process.env.QDRANT_API_KEY || undefined
 }
 
 function getVectorSize() {
-  return parseInteger(process.env.IMAGE_EMBEDDING_VECTOR_SIZE, 512);
+  return parseInteger(process.env.IMAGE_EMBEDDING_VECTOR_SIZE, 512)
 }
 
 export function getQdrantClient() {
@@ -41,19 +41,21 @@ export function getQdrantClient() {
     qdrantClient = new QdrantClient({
       url: getQdrantUrl(),
       apiKey: getQdrantApiKey(),
-    });
+    })
   }
-  return qdrantClient;
+  return qdrantClient
 }
 
 export async function ensureQdrantCollection() {
   if (!ensureCollectionPromise) {
     ensureCollectionPromise = (async () => {
-      const client = getQdrantClient();
-      const collectionName = getQdrantCollectionName();
+      const client = getQdrantClient()
+      const collectionName = getQdrantCollectionName()
 
-      const collections = await client.getCollections();
-      const exists = collections.collections.some((collection) => collection.name === collectionName);
+      const collections = await client.getCollections()
+      const exists = collections.collections.some(
+        (collection) => collection.name === collectionName
+      )
       if (exists) {
         try {
           const existing = await client.getCollection(collectionName)
@@ -68,7 +70,9 @@ export async function ensureQdrantCollection() {
             } catch {}
             return
           }
-          console.warn(`[Qdrant] 向量维度不匹配: existing=${existingSize}, required=${getVectorSize()}，将重建 collection`)
+          console.warn(
+            `[Qdrant] 向量维度不匹配: existing=${existingSize}, required=${getVectorSize()}，将重建 collection`
+          )
           await client.deleteCollection(collectionName)
         } catch (error) {
           console.error('[Qdrant] 获取现有 collection 信息失败:', error)
@@ -101,22 +105,24 @@ export async function ensureQdrantCollection() {
         })
       } catch {}
     })().catch((error) => {
-      ensureCollectionPromise = null;
-      throw error;
-    });
+      ensureCollectionPromise = null
+      throw error
+    })
   }
 
-  return ensureCollectionPromise;
+  return ensureCollectionPromise
 }
 
 export async function ensureTextQdrantCollection() {
   if (!ensureTextCollectionPromise) {
     ensureTextCollectionPromise = (async () => {
-      const client = getQdrantClient();
-      const collectionName = getTextCollectionName();
+      const client = getQdrantClient()
+      const collectionName = getTextCollectionName()
 
-      const collections = await client.getCollections();
-      const exists = collections.collections.some((collection) => collection.name === collectionName);
+      const collections = await client.getCollections()
+      const exists = collections.collections.some(
+        (collection) => collection.name === collectionName
+      )
       if (exists) {
         try {
           const existing = await client.getCollection(collectionName)
@@ -138,7 +144,9 @@ export async function ensureTextQdrantCollection() {
             } catch {}
             return
           }
-          console.warn(`[Qdrant] 文本向量维度不匹配: existing=${existingSize}, required=${getVectorSize()}，将重建 collection`)
+          console.warn(
+            `[Qdrant] 文本向量维度不匹配: existing=${existingSize}, required=${getVectorSize()}，将重建 collection`
+          )
           await client.deleteCollection(collectionName)
         } catch (error) {
           console.error('[Qdrant] 获取现有文本 collection 信息失败:', error)
@@ -172,18 +180,18 @@ export async function ensureTextQdrantCollection() {
         })
       } catch {}
     })().catch((error) => {
-      ensureTextCollectionPromise = null;
-      throw error;
-    });
+      ensureTextCollectionPromise = null
+      throw error
+    })
   }
 
-  return ensureTextCollectionPromise;
+  return ensureTextCollectionPromise
 }
 
 /**
  * 图片来源类型
  */
-export type ImageSourceType = 'gallery' | 'wiki' | 'post';
+export type ImageSourceType = 'gallery' | 'wiki' | 'post'
 
 /**
  * 图片向量嵌入的 Payload 类型
@@ -191,38 +199,40 @@ export type ImageSourceType = 'gallery' | 'wiki' | 'post';
  */
 export interface ImageEmbeddingPayload {
   // 通用字段
-  sourceType: ImageSourceType;
-  sourceId: string;
-  imageUrl: string;
-  updatedAt: string;
+  sourceType: ImageSourceType
+  sourceId: string
+  imageUrl: string
+  updatedAt: string
 
   // Gallery 类型特有字段
-  galleryId?: string;
-  imageName?: string;
+  galleryId?: string
+  imageName?: string
 
   // Wiki 类型特有字段
-  wikiPageSlug?: string;
+  wikiPageSlug?: string
 
   // Post 类型特有字段
-  postId?: string;
+  postId?: string
 
   // 向后兼容：旧数据可能只有这些字段
   /** @deprecated 使用 sourceType 和 sourceId 替代 */
-  galleryImageId?: string;
+  galleryImageId?: string
 }
 
 /**
  * 将 Qdrant 返回的 payload 解析为 ImageEmbeddingPayload
  * 处理向后兼容逻辑
  */
-export function toEmbeddingPayload(payload: Record<string, unknown> | null | undefined): ImageEmbeddingPayload | null {
+export function toEmbeddingPayload(
+  payload: Record<string, unknown> | null | undefined
+): ImageEmbeddingPayload | null {
   if (!payload) {
-    return null;
+    return null
   }
 
   // 如果已有 sourceType，直接返回
   if (payload.sourceType) {
-    return payload as unknown as ImageEmbeddingPayload;
+    return payload as unknown as ImageEmbeddingPayload
   }
 
   // 向后兼容：旧数据只有 galleryImageId 等字段
@@ -235,10 +245,10 @@ export function toEmbeddingPayload(payload: Record<string, unknown> | null | und
       galleryId: payload.galleryId ? String(payload.galleryId) : undefined,
       galleryImageId: String(payload.galleryImageId),
       imageName: payload.imageName ? String(payload.imageName) : undefined,
-    };
+    }
   }
 
-  return null;
+  return null
 }
 
 /**
@@ -246,21 +256,21 @@ export function toEmbeddingPayload(payload: Record<string, unknown> | null | und
  * 支持多种来源：gallery、wiki、post
  */
 export async function upsertImageEmbeddingPoint(params: {
-  pointId: string;
-  vector: number[];
-  sourceType: ImageSourceType;
-  sourceId: string;
-  imageUrl: string;
-  galleryId?: string;
-  galleryImageId?: string;
-  wikiPageSlug?: string;
-  postId?: string;
-  imageName?: string;
-  updatedAt: string;
+  pointId: string
+  vector: number[]
+  sourceType: ImageSourceType
+  sourceId: string
+  imageUrl: string
+  galleryId?: string
+  galleryImageId?: string
+  wikiPageSlug?: string
+  postId?: string
+  imageName?: string
+  updatedAt: string
 }) {
-  await ensureQdrantCollection();
-  const client = getQdrantClient();
-  const collectionName = getQdrantCollectionName();
+  await ensureQdrantCollection()
+  const client = getQdrantClient()
+  const collectionName = getQdrantCollectionName()
 
   // 构建 payload
   const payload: ImageEmbeddingPayload = {
@@ -268,17 +278,17 @@ export async function upsertImageEmbeddingPoint(params: {
     sourceId: params.sourceId,
     imageUrl: params.imageUrl,
     updatedAt: params.updatedAt,
-  };
+  }
 
   // 根据来源类型添加特定字段
   if (params.sourceType === 'gallery') {
-    payload.galleryId = params.galleryId;
-    payload.galleryImageId = params.galleryImageId || params.sourceId;
-    payload.imageName = params.imageName;
+    payload.galleryId = params.galleryId
+    payload.galleryImageId = params.galleryImageId || params.sourceId
+    payload.imageName = params.imageName
   } else if (params.sourceType === 'wiki') {
-    payload.wikiPageSlug = params.wikiPageSlug || params.sourceId;
+    payload.wikiPageSlug = params.wikiPageSlug || params.sourceId
   } else if (params.sourceType === 'post') {
-    payload.postId = params.postId || params.sourceId;
+    payload.postId = params.postId || params.sourceId
   }
 
   await client.upsert(collectionName, {
@@ -290,7 +300,7 @@ export async function upsertImageEmbeddingPoint(params: {
         payload: payload as unknown as Record<string, unknown>,
       },
     ],
-  });
+  })
 }
 
 /**
@@ -298,14 +308,14 @@ export async function upsertImageEmbeddingPoint(params: {
  * 返回的结果包含完整的来源信息
  */
 export async function searchImageEmbeddingPoints(params: {
-  vector: number[];
-  limit: number;
-  minScore?: number;
-  sourceType?: string;
+  vector: number[]
+  limit: number
+  minScore?: number
+  sourceType?: string
 }) {
-  await ensureQdrantCollection();
-  const client = getQdrantClient();
-  const collectionName = getQdrantCollectionName();
+  await ensureQdrantCollection()
+  const client = getQdrantClient()
+  const collectionName = getQdrantCollectionName()
 
   const results = await client.search(collectionName, {
     vector: params.vector,
@@ -316,44 +326,42 @@ export async function searchImageEmbeddingPoints(params: {
     ...(params.sourceType
       ? {
           filter: {
-            must: [
-              { key: 'sourceType', match: { value: params.sourceType } },
-            ],
+            must: [{ key: 'sourceType', match: { value: params.sourceType } }],
           },
         }
       : {}),
-  });
+  })
 
   // 转换结果为包含解析后 payload 的格式
   return results.map((result) => ({
     id: result.id,
     score: result.score,
     payload: toEmbeddingPayload(result.payload as Record<string, unknown> | undefined),
-  }));
+  }))
 }
 
 /**
  * 删除图片向量嵌入点
  */
 export async function deleteImageEmbeddingPoint(pointId: string) {
-  await ensureQdrantCollection();
-  const client = getQdrantClient();
-  const collectionName = getQdrantCollectionName();
+  await ensureQdrantCollection()
+  const client = getQdrantClient()
+  const collectionName = getQdrantCollectionName()
 
   await client.delete(collectionName, {
     wait: true,
     points: [pointId],
-  });
+  })
 }
 
 export async function healthCheck(): Promise<{ status: string; latencyMs: number }> {
-  const start = Date.now();
+  const start = Date.now()
   try {
-    const client = getQdrantClient();
-    await client.getCollections();
-    return { status: 'ok', latencyMs: Date.now() - start };
+    const client = getQdrantClient()
+    await client.getCollections()
+    return { status: 'ok', latencyMs: Date.now() - start }
   } catch (error) {
-    return { status: 'error', latencyMs: Date.now() - start };
+    return { status: 'error', latencyMs: Date.now() - start }
   }
 }
 
@@ -392,13 +400,15 @@ export async function searchTextEmbeddingPoints(
   queryVector: number[],
   limit?: number,
   minScore?: number
-): Promise<Array<{
-  sourceType: string
-  sourceId: string
-  chunkIndex: number
-  chunkPreview: string
-  score: number
-}>> {
+): Promise<
+  Array<{
+    sourceType: string
+    sourceId: string
+    chunkIndex: number
+    chunkPreview: string
+    score: number
+  }>
+> {
   await ensureTextQdrantCollection()
   const client = getQdrantClient()
   const collectionName = getTextCollectionName()
@@ -445,7 +455,7 @@ export async function deleteTextEmbeddingPointsBySource(
     })
     allPointIds.push(...filtered.points.map((p) => String(p.id)))
     const rawNextOffset = (filtered as Record<string, unknown>).next_offset
-    offset = (typeof rawNextOffset === 'string' ? rawNextOffset : undefined)
+    offset = typeof rawNextOffset === 'string' ? rawNextOffset : undefined
   } while (offset)
 
   if (allPointIds.length === 0) return 0
@@ -453,9 +463,7 @@ export async function deleteTextEmbeddingPointsBySource(
   return allPointIds.length
 }
 
-export async function deleteTextEmbeddingPoint(
-  pointId: string
-): Promise<void> {
+export async function deleteTextEmbeddingPoint(pointId: string): Promise<void> {
   await ensureTextQdrantCollection()
   const client = getQdrantClient()
   const collectionName = getTextCollectionName()

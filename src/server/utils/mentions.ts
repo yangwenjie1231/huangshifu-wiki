@@ -18,7 +18,10 @@ function normalizeMentionName(name: string) {
 }
 
 async function findMentionUsersByNames(names: string[]) {
-  const normalizedNames = [...new Set(names.map((name) => name.trim()).filter(Boolean))].slice(0, 50)
+  const normalizedNames = [...new Set(names.map((name) => name.trim()).filter(Boolean))].slice(
+    0,
+    50
+  )
   if (!normalizedNames.length) return new Map<string, MentionUser[]>()
 
   const users = await prisma.user.findMany({
@@ -120,7 +123,9 @@ export async function resolveMentionTargetsForText(content: string) {
   return resolveMentionTargetsForMatches(extractMentionMatches(content))
 }
 
-export async function buildMentionTargetsByTextKey(contents: Array<{ key: string; content: string }>) {
+export async function buildMentionTargetsByTextKey(
+  contents: Array<{ key: string; content: string }>
+) {
   const matchesByKey = new Map<string, MentionMatch[]>()
   const allNames = new Set<string>()
 
@@ -136,9 +141,7 @@ export async function buildMentionTargetsByTextKey(contents: Array<{ key: string
   for (const [key, matches] of matchesByKey.entries()) {
     result.set(
       key,
-      uniqueMentionTargets(
-        matches.map((match) => resolveMentionTargetForMatch(match, usersByName))
-      )
+      uniqueMentionTargets(matches.map((match) => resolveMentionTargetForMatch(match, usersByName)))
     )
   }
 
@@ -159,7 +162,8 @@ export async function notifyMentionUsers(options: {
   if (!targets.length) return
 
   const previousTargets =
-    options.previousMentionTargets ?? (await resolveMentionTargetsForText(options.previousContent ?? ''))
+    options.previousMentionTargets ??
+    (await resolveMentionTargetsForText(options.previousContent ?? ''))
   const previousUserUids = new Set(previousTargets.map((target) => target.uid))
 
   const excludeUserUids = new Set([options.actorUid, ...(options.excludeUserUids ?? [])])

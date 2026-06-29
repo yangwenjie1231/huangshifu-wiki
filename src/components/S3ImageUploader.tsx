@@ -1,26 +1,26 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { Upload, Image as ImageIcon, CheckCircle, AlertCircle, RefreshCw, X } from 'lucide-react';
-import { useS3Upload } from '../hooks/useS3Upload';
-import { apiGet } from '../lib/apiClient';
-import { UPLOAD_MAX_FILE_SIZE_BYTES, formatUploadLimit } from '../lib/uploadLimits';
+import React, { useCallback, useRef, useState } from 'react'
+import { Upload, Image as ImageIcon, CheckCircle, AlertCircle, RefreshCw, X } from 'lucide-react'
+import { useS3Upload } from '../hooks/useS3Upload'
+import { apiGet } from '../lib/apiClient'
+import { UPLOAD_MAX_FILE_SIZE_BYTES, formatUploadLimit } from '../lib/uploadLimits'
 
 export interface S3ImageUploaderProps {
-  onUpload?: (url: string, key: string, md5?: string) => void;
-  onError?: (error: Error) => void;
-  bucket?: 'public' | 'private';
-  maxSize?: number;
-  accept?: string;
-  className?: string;
-  enableMd5Verification?: boolean;
+  onUpload?: (url: string, key: string, md5?: string) => void
+  onError?: (error: Error) => void
+  bucket?: 'public' | 'private'
+  maxSize?: number
+  accept?: string
+  className?: string
+  enableMd5Verification?: boolean
 }
 
 interface ValidationResult {
-  valid: boolean;
-  error?: string;
+  valid: boolean
+  error?: string
 }
 
-const DEFAULT_MAX_SIZE = UPLOAD_MAX_FILE_SIZE_BYTES;
-const DEFAULT_ACCEPT = 'image/*';
+const DEFAULT_MAX_SIZE = UPLOAD_MAX_FILE_SIZE_BYTES
+const DEFAULT_ACCEPT = 'image/*'
 
 export const S3ImageUploader: React.FC<S3ImageUploaderProps> = ({
   onUpload,
@@ -31,90 +31,110 @@ export const S3ImageUploader: React.FC<S3ImageUploaderProps> = ({
   className = '',
   enableMd5Verification = true,
 }) => {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
-  const [uploadedKey, setUploadedKey] = useState<string | null>(null);
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null)
+  const [uploadedKey, setUploadedKey] = useState<string | null>(null)
+  const [validationError, setValidationError] = useState<string | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
 
-  const { upload, uploading, progress, error, reset } = useS3Upload();
+  const { upload, uploading, progress, error, reset } = useS3Upload()
 
   const validateFile = useCallback(
     (file: File): ValidationResult => {
       if (!accept.includes('*')) {
-        const acceptTypes = accept.split(',').map((t) => t.trim());
+        const acceptTypes = accept.split(',').map((t) => t.trim())
         const isAccepted = acceptTypes.some((type) => {
-          if (type.startsWith('.')) return file.name.toLowerCase().endsWith(type.toLowerCase());
-          if (type.endsWith('/*')) return file.type.startsWith(type.replace('/*', '/'));
-          return file.type === type;
-        });
-        if (!isAccepted) return { valid: false, error: `不支持的文件类型，请上传 ${accept} 格式的图片` };
+          if (type.startsWith('.')) return file.name.toLowerCase().endsWith(type.toLowerCase())
+          if (type.endsWith('/*')) return file.type.startsWith(type.replace('/*', '/'))
+          return file.type === type
+        })
+        if (!isAccepted)
+          return { valid: false, error: `不支持的文件类型，请上传 ${accept} 格式的图片` }
       }
       if (file.size > maxSize) {
-        return { valid: false, error: `文件大小超过限制，${formatUploadLimit(maxSize)}` };
+        return { valid: false, error: `文件大小超过限制，${formatUploadLimit(maxSize)}` }
       }
-      return { valid: true };
+      return { valid: true }
     },
     [accept, maxSize]
-  );
+  )
 
   const generatePreview = useCallback((file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => { setPreviewUrl(e.target?.result as string); };
-    reader.readAsDataURL(file);
-  }, []);
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      setPreviewUrl(e.target?.result as string)
+    }
+    reader.readAsDataURL(file)
+  }, [])
 
   const handleFile = useCallback(
     async (file: File) => {
-      setValidationError(null);
-      const validation = validateFile(file);
-      if (!validation.valid) { setValidationError(validation.error || '文件验证失败'); return; }
-      generatePreview(file);
+      setValidationError(null)
+      const validation = validateFile(file)
+      if (!validation.valid) {
+        setValidationError(validation.error || '文件验证失败')
+        return
+      }
+      generatePreview(file)
       try {
-        const { key, md5 } = await upload(file, { contentType: file.type, enableMd5Verification });
-        const config = await apiGet<{ enabled: boolean; endpoint: string; bucket: string; publicDomain?: string; region: string }>('/api/s3/config');
-        const url = config.publicDomain ? `${config.publicDomain}/${key}` : `${config.endpoint}/${config.bucket}/${key}`;
-        setUploadedUrl(url);
-        setUploadedKey(key);
-        onUpload?.(url, key, md5);
+        const { key, md5 } = await upload(file, { contentType: file.type, enableMd5Verification })
+        const config = await apiGet<{
+          enabled: boolean
+          endpoint: string
+          bucket: string
+          publicDomain?: string
+          region: string
+        }>('/api/s3/config')
+        const url = config.publicDomain
+          ? `${config.publicDomain}/${key}`
+          : `${config.endpoint}/${config.bucket}/${key}`
+        setUploadedUrl(url)
+        setUploadedKey(key)
+        onUpload?.(url, key, md5)
       } catch (err) {
-        const e = err instanceof Error ? err : new Error(String(err));
-        onError?.(e);
+        const e = err instanceof Error ? err : new Error(String(err))
+        onError?.(e)
       }
     },
     [upload, validateFile, generatePreview, onUpload, onError, enableMd5Verification]
-  );
+  )
 
   const handleRemove = useCallback(() => {
-    setPreviewUrl(null);
-    setUploadedUrl(null);
-    setUploadedKey(null);
-    setValidationError(null);
-    reset();
-    if (inputRef.current) inputRef.current.value = '';
-  }, [reset]);
+    setPreviewUrl(null)
+    setUploadedUrl(null)
+    setUploadedKey(null)
+    setValidationError(null)
+    reset()
+    if (inputRef.current) inputRef.current.value = ''
+  }, [reset])
 
-  const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); }, []);
-  const handleDragLeave = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); }, []);
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }, [])
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+  }, [])
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      const file = e.dataTransfer.files[0];
-      if (file) handleFile(file);
+      e.preventDefault()
+      setIsDragging(false)
+      const file = e.dataTransfer.files[0]
+      if (file) handleFile(file)
     },
     [handleFile]
-  );
+  )
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) handleFile(file);
+      const file = e.target.files?.[0]
+      if (file) handleFile(file)
     },
     [handleFile]
-  );
+  )
 
   return (
     <div className={`space-y-3 ${className}`}>
@@ -124,15 +144,24 @@ export const S3ImageUploader: React.FC<S3ImageUploaderProps> = ({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={`relative border-2 border-dashed rounded p-6 text-center cursor-pointer transition-all ${
-          isDragging ? 'border-brand-gold bg-brand-gold/10' : 'border-border hover:border-brand-gold'
+          isDragging
+            ? 'border-brand-gold bg-brand-gold/10'
+            : 'border-border hover:border-brand-gold'
         } ${uploading ? 'cursor-not-allowed opacity-60' : ''}`}
       >
         {previewUrl && !uploading && !error ? (
           <div className="relative">
-            <img src={previewUrl} alt="Preview" className="max-h-56 mx-auto rounded object-contain" />
+            <img
+              src={previewUrl}
+              alt="Preview"
+              className="max-h-56 mx-auto rounded object-contain"
+            />
             {!uploadedUrl && (
               <button
-                onClick={(e) => { e.stopPropagation(); handleRemove(); }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleRemove()
+                }}
                 className="absolute top-2 right-2 p-1 theme-button-danger rounded"
               >
                 <X size={14} />
@@ -149,7 +178,10 @@ export const S3ImageUploader: React.FC<S3ImageUploaderProps> = ({
             <div>
               <p className="text-sm text-text-secondary">上传中...</p>
               <div className="w-full bg-border rounded h-1.5 mt-2">
-                <div className="bg-[var(--color-theme-accent)] h-1.5 rounded transition-all" style={{ width: `${progress}%` }} />
+                <div
+                  className="bg-[var(--color-theme-accent)] h-1.5 rounded transition-all"
+                  style={{ width: `${progress}%` }}
+                />
               </div>
               <p className="text-xs text-text-muted mt-1">{progress}%</p>
             </div>
@@ -166,7 +198,10 @@ export const S3ImageUploader: React.FC<S3ImageUploaderProps> = ({
               <p className="text-xs theme-text-error mt-1">{error.message}</p>
             </div>
             <button
-              onClick={(e) => { e.stopPropagation(); handleRemove(); }}
+              onClick={(e) => {
+                e.stopPropagation()
+                handleRemove()
+              }}
               className="text-sm text-brand-gold hover:underline"
             >
               <RefreshCw size={13} className="inline mr-1" />
@@ -192,10 +227,18 @@ export const S3ImageUploader: React.FC<S3ImageUploaderProps> = ({
         )}
 
         {validationError && (
-          <div className="mt-3 p-2 theme-bg-error-soft rounded text-sm theme-text-error">{validationError}</div>
+          <div className="mt-3 p-2 theme-bg-error-soft rounded text-sm theme-text-error">
+            {validationError}
+          </div>
         )}
 
-        <input ref={inputRef} type="file" accept={accept} onChange={handleInputChange} className="hidden" />
+        <input
+          ref={inputRef}
+          type="file"
+          accept={accept}
+          onChange={handleInputChange}
+          className="hidden"
+        />
       </div>
 
       {uploadedUrl && (
@@ -213,5 +256,5 @@ export const S3ImageUploader: React.FC<S3ImageUploaderProps> = ({
         </div>
       )}
     </div>
-  );
-};
+  )
+}

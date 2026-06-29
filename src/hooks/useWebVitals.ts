@@ -16,7 +16,13 @@ export const useWebVitals = (options: WebVitalsOptions = {}): void => {
       cleanupRef.current?.()
       cleanupRef.current = null
     }
-  }, [options.logToConsole, options.reportToEndpoint, options.endpointUrl, options.sampleRate, options.onReport])
+  }, [
+    options.logToConsole,
+    options.reportToEndpoint,
+    options.endpointUrl,
+    options.sampleRate,
+    options.onReport,
+  ])
 }
 
 export default useWebVitals

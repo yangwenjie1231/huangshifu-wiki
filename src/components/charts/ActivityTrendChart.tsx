@@ -1,10 +1,16 @@
-import { EChartsComponent, chartPalette, chartTheme, defaultGridSettings, defaultTooltipSettings } from './EChartsComponent';
-import type { EChartsOption } from 'echarts';
+import {
+  EChartsComponent,
+  chartPalette,
+  chartTheme,
+  defaultGridSettings,
+  defaultTooltipSettings,
+} from './EChartsComponent'
+import type { EChartsOption } from 'echarts'
 
 interface ActivityTrendChartProps {
-  data: { date: string; value: number }[];
-  style?: React.CSSProperties;
-  className?: string;
+  data: { date: string; value: number }[]
+  style?: React.CSSProperties
+  className?: string
 }
 
 export const ActivityTrendChart: React.FC<ActivityTrendChartProps> = ({
@@ -78,7 +84,7 @@ export const ActivityTrendChart: React.FC<ActivityTrendChartProps> = ({
         },
       },
     ],
-  };
+  }
 
-  return <EChartsComponent option={option} style={style} className={className} />;
-};
+  return <EChartsComponent option={option} style={style} className={className} />
+}

@@ -107,14 +107,14 @@ describe('WikiList', () => {
     const articles = container.querySelectorAll<HTMLElement>('[role="article"]')
     expect(articles).toHaveLength(2)
 
-    const gridContainer = Array.from(container.querySelectorAll<HTMLDivElement>('div')).find((element) => {
-      const className = typeof element.className === 'string' ? element.className : ''
-      const expectedClasses = ['grid', ...gridCols.split(' '), gap]
+    const gridContainer = Array.from(container.querySelectorAll<HTMLDivElement>('div')).find(
+      (element) => {
+        const className = typeof element.className === 'string' ? element.className : ''
+        const expectedClasses = ['grid', ...gridCols.split(' '), gap]
 
-      return (
-        expectedClasses.every((expectedClass) => className.includes(expectedClass))
-      )
-    })
+        return expectedClasses.every((expectedClass) => className.includes(expectedClass))
+      }
+    )
 
     expect(gridContainer).toBeTruthy()
     expect(within(gridContainer as HTMLElement).getByText('测试页面一')).toBeInTheDocument()

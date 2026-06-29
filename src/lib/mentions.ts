@@ -314,10 +314,7 @@ export function extractMentionNames(input: string) {
   return [...names.values()]
 }
 
-function resolveMentionMatch(
-  match: MentionMatch,
-  targetByName: Map<string, MentionTarget | null>
-) {
+function resolveMentionMatch(match: MentionMatch, targetByName: Map<string, MentionTarget | null>) {
   for (const candidate of match.candidates) {
     const key = candidate.name.toLowerCase()
     if (!targetByName.has(key)) continue

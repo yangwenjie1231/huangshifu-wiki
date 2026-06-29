@@ -2,27 +2,26 @@ import rateLimit, {
   ipKeyGenerator,
   type Options as RateLimitLibraryOptions,
   type ValueDeterminingMiddleware,
-} from 'express-rate-limit';
-import type { AuthenticatedRequest } from './auth';
-import { isProductionRuntime, isTestRuntime } from '../utils/runtimeEnv';
+} from 'express-rate-limit'
+import type { AuthenticatedRequest } from './auth'
+import { isProductionRuntime, isTestRuntime } from '../utils/runtimeEnv'
 
 type RateLimitOptions = Partial<RateLimitLibraryOptions>
 type RateLimitRequest = Parameters<ValueDeterminingMiddleware<string>>[0]
 
 function extractUidOrIp(req: RateLimitRequest): string {
-  const authReq = req as AuthenticatedRequest;
+  const authReq = req as AuthenticatedRequest
   if (authReq.authUser?.uid) {
-    return authReq.authUser.uid;
+    return authReq.authUser.uid
   }
 
-  return ipKeyGenerator(req.ip ?? 'unknown');
+  return ipKeyGenerator(req.ip ?? 'unknown')
 }
 
 export function isRateLimitDisabledInDevelopment(): boolean {
   return (
-    isTestRuntime() ||
-    (!isProductionRuntime() && process.env.DEV_DISABLE_RATE_LIMIT === 'true')
-  );
+    isTestRuntime() || (!isProductionRuntime() && process.env.DEV_DISABLE_RATE_LIMIT === 'true')
+  )
 }
 
 function createRateLimiter(options: RateLimitOptions) {
@@ -30,12 +29,12 @@ function createRateLimiter(options: RateLimitOptions) {
     ...options,
     skip: (req, res) => {
       if (isRateLimitDisabledInDevelopment()) {
-        return true;
+        return true
       }
 
-      return options.skip?.(req, res) ?? false;
+      return options.skip?.(req, res) ?? false
     },
-  });
+  })
 }
 
 export const authRateLimiter = createRateLimiter({
@@ -45,7 +44,7 @@ export const authRateLimiter = createRateLimiter({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: extractUidOrIp,
-});
+})
 
 export const emailVerificationLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
@@ -54,7 +53,7 @@ export const emailVerificationLimiter = createRateLimiter({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: extractUidOrIp,
-});
+})
 
 export const passwordResetRequestLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
@@ -63,7 +62,7 @@ export const passwordResetRequestLimiter = createRateLimiter({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: extractUidOrIp,
-});
+})
 
 export const passwordResetConfirmLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
@@ -72,7 +71,7 @@ export const passwordResetConfirmLimiter = createRateLimiter({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: extractUidOrIp,
-});
+})
 
 export const globalLimiter = createRateLimiter({
   windowMs: 60 * 1000,
@@ -81,9 +80,9 @@ export const globalLimiter = createRateLimiter({
   legacyHeaders: false,
   keyGenerator: extractUidOrIp,
   handler: (_req, res) => {
-    res.status(429).json({ error: '请求过于频繁，请稍后再试' });
+    res.status(429).json({ error: '请求过于频繁，请稍后再试' })
   },
-});
+})
 
 export const searchLimiter = createRateLimiter({
   windowMs: 60 * 1000,
@@ -91,9 +90,9 @@ export const searchLimiter = createRateLimiter({
   standardHeaders: true,
   legacyHeaders: false,
   handler: (_req, res) => {
-    res.status(429).json({ error: '搜索过于频繁，请稍后再试' });
+    res.status(429).json({ error: '搜索过于频繁，请稍后再试' })
   },
-});
+})
 
 export const uploadLimiter = createRateLimiter({
   windowMs: 60 * 1000,
@@ -102,9 +101,9 @@ export const uploadLimiter = createRateLimiter({
   legacyHeaders: false,
   keyGenerator: extractUidOrIp,
   handler: (_req, res) => {
-    res.status(429).json({ error: '上传过于频繁，请稍后再试' });
+    res.status(429).json({ error: '上传过于频繁，请稍后再试' })
   },
-});
+})
 
 export const wikiWriteLimiter = createRateLimiter({
   windowMs: 60 * 1000,
@@ -113,9 +112,9 @@ export const wikiWriteLimiter = createRateLimiter({
   legacyHeaders: false,
   keyGenerator: extractUidOrIp,
   handler: (_req, res) => {
-    res.status(429).json({ error: 'Wiki 编辑过于频繁，请稍后再试' });
+    res.status(429).json({ error: 'Wiki 编辑过于频繁，请稍后再试' })
   },
-});
+})
 
 export const postWriteLimiter = createRateLimiter({
   windowMs: 60 * 1000,
@@ -124,9 +123,9 @@ export const postWriteLimiter = createRateLimiter({
   legacyHeaders: false,
   keyGenerator: extractUidOrIp,
   handler: (_req, res) => {
-    res.status(429).json({ error: '发帖过于频繁，请稍后再试' });
+    res.status(429).json({ error: '发帖过于频繁，请稍后再试' })
   },
-});
+})
 
 export const galleryWriteLimiter = createRateLimiter({
   windowMs: 60 * 1000,
@@ -135,9 +134,9 @@ export const galleryWriteLimiter = createRateLimiter({
   legacyHeaders: false,
   keyGenerator: extractUidOrIp,
   handler: (_req, res) => {
-    res.status(429).json({ error: '图集操作过于频繁，请稍后再试' });
+    res.status(429).json({ error: '图集操作过于频繁，请稍后再试' })
   },
-});
+})
 
 export const profileLimiter = createRateLimiter({
   windowMs: 60 * 1000,
@@ -146,6 +145,6 @@ export const profileLimiter = createRateLimiter({
   legacyHeaders: false,
   keyGenerator: extractUidOrIp,
   handler: (_req, res) => {
-    res.status(429).json({ error: '资料修改过于频繁，请稍后再试' });
+    res.status(429).json({ error: '资料修改过于频繁，请稍后再试' })
   },
-});
+})

@@ -70,7 +70,18 @@ const mockGalleries: GalleryItem[] = [
     copyright: null,
     published: true,
     publishedAt: new Date('2024-01-01').toISOString(),
-    images: [{ id: 'img-1', assetId: null, url: '/uploads/test-1.jpg', thumbnailUrl: '/uploads/variants/img-1/1080h.webp', thumbnailStatus: 'completed', name: 'test-1.jpg', mimeType: 'image/jpeg', sizeBytes: 1024 }],
+    images: [
+      {
+        id: 'img-1',
+        assetId: null,
+        url: '/uploads/test-1.jpg',
+        thumbnailUrl: '/uploads/variants/img-1/1080h.webp',
+        thumbnailStatus: 'completed',
+        name: 'test-1.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 1024,
+      },
+    ],
     createdAt: new Date('2024-01-01').toISOString(),
     updatedAt: new Date('2024-01-02').toISOString(),
   },
@@ -87,7 +98,18 @@ const mockGalleries: GalleryItem[] = [
     copyright: null,
     published: false,
     publishedAt: null,
-    images: [{ id: 'img-2', assetId: null, url: '/uploads/test-2.jpg', thumbnailUrl: '/uploads/variants/img-2/1080h.webp', thumbnailStatus: 'completed', name: 'test-2.jpg', mimeType: 'image/jpeg', sizeBytes: 1024 }],
+    images: [
+      {
+        id: 'img-2',
+        assetId: null,
+        url: '/uploads/test-2.jpg',
+        thumbnailUrl: '/uploads/variants/img-2/1080h.webp',
+        thumbnailStatus: 'completed',
+        name: 'test-2.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 1024,
+      },
+    ],
     createdAt: new Date('2024-02-01').toISOString(),
     updatedAt: new Date('2024-02-02').toISOString(),
   },
@@ -137,12 +159,14 @@ describe('GalleryList', () => {
     expect(await screen.findByText('测试图集一')).toBeInTheDocument()
     expect(screen.getByText('测试图集二')).toBeInTheDocument()
 
-    const gridContainer = Array.from(container.querySelectorAll<HTMLDivElement>('div')).find((element) => {
-      const className = typeof element.className === 'string' ? element.className : ''
-      const expectedClasses = ['grid', ...gridCols.split(' '), gap]
+    const gridContainer = Array.from(container.querySelectorAll<HTMLDivElement>('div')).find(
+      (element) => {
+        const className = typeof element.className === 'string' ? element.className : ''
+        const expectedClasses = ['grid', ...gridCols.split(' '), gap]
 
-      return expectedClasses.every((expectedClass) => className.includes(expectedClass))
-    })
+        return expectedClasses.every((expectedClass) => className.includes(expectedClass))
+      }
+    )
 
     expect(gridContainer).toBeTruthy()
     expect(within(gridContainer as HTMLElement).getByText('测试图集一')).toBeInTheDocument()
@@ -153,7 +177,8 @@ describe('GalleryList', () => {
     ).find((element) => {
       const className = typeof element.className === 'string' ? element.className : ''
       const hasLegacyClasses = className.includes('overflow-y-auto')
-      const hasLegacyInlineStyles = element.style.overflowY === 'auto' && element.style.maxHeight !== ''
+      const hasLegacyInlineStyles =
+        element.style.overflowY === 'auto' && element.style.maxHeight !== ''
 
       return hasLegacyClasses || hasLegacyInlineStyles
     })

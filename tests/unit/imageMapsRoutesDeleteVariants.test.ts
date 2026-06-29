@@ -21,8 +21,10 @@ vi.mock('../../src/server/middleware/auth', () => ({
     next()
   },
   isAdminRole: (role?: string) => role === 'admin' || role === 'super_admin',
-  requireActiveUser: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
-  requireAdmin: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
+  requireActiveUser: (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
+    next(),
+  requireAdmin: (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
+    next(),
 }))
 
 vi.mock('../../src/server/utils', () => ({

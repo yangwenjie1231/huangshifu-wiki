@@ -402,34 +402,39 @@ router.get('/s3/config', requireAuth, requireAdmin, async (_req, res) => {
 })
 
 // GET /api/s3/presign-upload - Get S3 presigned upload URL
-router.get('/s3/presign-upload', requireAuth, requireActiveUser, async (req: AuthenticatedRequest, res) => {
-  try {
-    const filename = parseQueryString(req.query.filename)
-    const contentType = parseQueryString(req.query.contentType) || undefined
-    const contentMd5 = parseQueryString(req.query.contentMd5) || undefined
-    const fileSize = parseQueryString(req.query.fileSize) || undefined
+router.get(
+  '/s3/presign-upload',
+  requireAuth,
+  requireActiveUser,
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const filename = parseQueryString(req.query.filename)
+      const contentType = parseQueryString(req.query.contentType) || undefined
+      const contentMd5 = parseQueryString(req.query.contentMd5) || undefined
+      const fileSize = parseQueryString(req.query.fileSize) || undefined
 
-    if (!filename) {
-      res.status(400).json({ error: '缺少 filename 参数' })
-      return
+      if (!filename) {
+        res.status(400).json({ error: '缺少 filename 参数' })
+        return
+      }
+
+      const result = await getUserPresignedUploadUrl({
+        userUid: req.authUser!.uid,
+        filename,
+        contentType,
+        contentMd5,
+        fileSize,
+      })
+
+      res.json(result)
+    } catch (error) {
+      console.error('[S3] 生成上传签名失败:', error)
+      const message = error instanceof Error ? error.message : '生成上传签名失败'
+      const status = message.includes('验证失败') || message.includes('必须') ? 400 : 500
+      res.status(status).json({ error: message })
     }
-
-    const result = await getUserPresignedUploadUrl({
-      userUid: req.authUser!.uid,
-      filename,
-      contentType,
-      contentMd5,
-      fileSize,
-    })
-
-    res.json(result)
-  } catch (error) {
-    console.error('[S3] 生成上传签名失败:', error)
-    const message = error instanceof Error ? error.message : '生成上传签名失败'
-    const status = message.includes('验证失败') || message.includes('必须') ? 400 : 500
-    res.status(status).json({ error: message })
   }
-})
+)
 
 // GET /api/s3/presign-download/*key - Get S3 presigned download URL
 router.get('/s3/presign-download/*key', requireAuth, async (req, res) => {

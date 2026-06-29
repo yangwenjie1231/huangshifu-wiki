@@ -8,7 +8,9 @@ import type { SearchState } from '../../src/hooks/useSearchPage'
 
 vi.mock('motion/react', () => ({
   motion: {
-    section: ({ children, ...props }: React.ComponentProps<'section'>) => <section {...props}>{children}</section>,
+    section: ({ children, ...props }: React.ComponentProps<'section'>) => (
+      <section {...props}>{children}</section>
+    ),
   },
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
@@ -64,12 +66,7 @@ const makeWiki = (index: number) => ({
 const renderSearchResults = (state: SearchState) =>
   render(
     <MemoryRouter>
-      <SearchResults
-        state={state}
-        viewMode="small"
-        tabItems={tabItems}
-        onTabChange={() => {}}
-      />
+      <SearchResults state={state} viewMode="small" tabItems={tabItems} onTabChange={() => {}} />
     </MemoryRouter>
   )
 
@@ -88,11 +85,13 @@ describe('SearchResults', () => {
 
     expect(await screen.findByText('百科 1')).toBeInTheDocument()
 
-    const gridContainer = Array.from(container.querySelectorAll<HTMLDivElement>('div')).find((element) => {
-      const className = typeof element.className === 'string' ? element.className : ''
-      const expectedClasses = ['grid', ...gridCols.split(' '), gap]
-      return expectedClasses.every((expectedClass) => className.includes(expectedClass))
-    })
+    const gridContainer = Array.from(container.querySelectorAll<HTMLDivElement>('div')).find(
+      (element) => {
+        const className = typeof element.className === 'string' ? element.className : ''
+        const expectedClasses = ['grid', ...gridCols.split(' '), gap]
+        return expectedClasses.every((expectedClass) => className.includes(expectedClass))
+      }
+    )
 
     expect(gridContainer).toBeTruthy()
     expect(within(gridContainer as HTMLElement).getByText('百科 1')).toBeInTheDocument()
@@ -101,10 +100,14 @@ describe('SearchResults', () => {
     expect(firstCard).toHaveClass(cardHeight)
     expect(firstCard?.className).not.toContain('w-full')
 
-    const legacyVirtualScrollContainer = Array.from(container.querySelectorAll<HTMLDivElement>('div')).find((element) => {
+    const legacyVirtualScrollContainer = Array.from(
+      container.querySelectorAll<HTMLDivElement>('div')
+    ).find((element) => {
       const className = typeof element.className === 'string' ? element.className : ''
-      const hasLegacyClasses = className.includes('overflow-auto') && className.includes('max-h-[60vh]')
-      const hasLegacyInlineStyles = element.style.overflow === 'auto' && element.style.maxHeight === '60vh'
+      const hasLegacyClasses =
+        className.includes('overflow-auto') && className.includes('max-h-[60vh]')
+      const hasLegacyInlineStyles =
+        element.style.overflow === 'auto' && element.style.maxHeight === '60vh'
       return hasLegacyClasses || hasLegacyInlineStyles
     })
 

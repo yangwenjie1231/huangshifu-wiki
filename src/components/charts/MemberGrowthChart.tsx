@@ -1,10 +1,16 @@
-import { EChartsComponent, chartPalette, chartTheme, defaultGridSettings, defaultTooltipSettings } from './EChartsComponent';
-import type { EChartsOption } from 'echarts';
+import {
+  EChartsComponent,
+  chartPalette,
+  chartTheme,
+  defaultGridSettings,
+  defaultTooltipSettings,
+} from './EChartsComponent'
+import type { EChartsOption } from 'echarts'
 
 interface MemberGrowthChartProps {
-  data: { month: string; count: number }[];
-  style?: React.CSSProperties;
-  className?: string;
+  data: { month: string; count: number }[]
+  style?: React.CSSProperties
+  className?: string
 }
 
 export const MemberGrowthChart: React.FC<MemberGrowthChartProps> = ({ data, style, className }) => {
@@ -63,7 +69,7 @@ export const MemberGrowthChart: React.FC<MemberGrowthChartProps> = ({ data, styl
         barWidth: '40%',
       },
     ],
-  };
+  }
 
-  return <EChartsComponent option={option} style={style} className={className} />;
-};
+  return <EChartsComponent option={option} style={style} className={className} />
+}

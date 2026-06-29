@@ -1,4 +1,12 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
 import { ConfirmModal } from './Modal'
 
@@ -56,19 +64,16 @@ export const DialogProvider = ({ children }: { children: React.ReactNode }) => {
     setPromptState(null)
   }, [])
 
-  const confirm = useCallback(
-    (options: ConfirmOptions) => {
-      confirmResolveRef.current?.(false)
-      promptResolveRef.current?.(null)
-      promptResolveRef.current = null
-      setPromptState(null)
-      setConfirmState({ ...options, open: true })
-      return new Promise<boolean>((resolve) => {
-        confirmResolveRef.current = resolve
-      })
-    },
-    []
-  )
+  const confirm = useCallback((options: ConfirmOptions) => {
+    confirmResolveRef.current?.(false)
+    promptResolveRef.current?.(null)
+    promptResolveRef.current = null
+    setPromptState(null)
+    setConfirmState({ ...options, open: true })
+    return new Promise<boolean>((resolve) => {
+      confirmResolveRef.current = resolve
+    })
+  }, [])
 
   const prompt = useCallback((options: PromptOptions) => {
     promptResolveRef.current?.(null)
@@ -90,7 +95,9 @@ export const DialogProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [])
 
-  const handlePromptValueChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handlePromptValueChange = (
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     setPromptState((prev) => (prev ? { ...prev, value: event.target.value } : prev))
   }
 

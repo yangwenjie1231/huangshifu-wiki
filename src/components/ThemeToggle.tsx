@@ -1,21 +1,21 @@
-import { Sun, Moon, Monitor } from 'lucide-react';
-import { clsx } from 'clsx';
-import { useUserPreferences } from '../context/UserPreferencesContext';
-import type { ThemeMode } from '../types/userPreferences';
+import { Sun, Moon, Monitor } from 'lucide-react'
+import { clsx } from 'clsx'
+import { useUserPreferences } from '../context/UserPreferencesContext'
+import type { ThemeMode } from '../types/userPreferences'
 
 const THEME_LABELS: Record<ThemeMode, string> = {
   default: '浅色模式',
   dark: '深色模式',
   system: '跟随系统',
-};
+}
 
 const THEME_ICONS: Record<ThemeMode, typeof Sun> = {
   default: Sun,
   dark: Moon,
   system: Monitor,
-};
+}
 
-const THEME_OPTIONS: ThemeMode[] = ['default', 'dark', 'system'];
+const THEME_OPTIONS: ThemeMode[] = ['default', 'dark', 'system']
 
 interface ThemeToggleProps {
   fullWidth?: boolean
@@ -23,8 +23,8 @@ interface ThemeToggleProps {
 }
 
 export function ThemeToggle({ fullWidth = false, compact = false }: ThemeToggleProps) {
-  const { preferences, setTheme, resolvedTheme } = useUserPreferences();
-  const currentTheme = preferences.theme ?? 'system';
+  const { preferences, setTheme, resolvedTheme } = useUserPreferences()
+  const currentTheme = preferences.theme ?? 'system'
 
   return (
     <div
@@ -40,7 +40,9 @@ export function ThemeToggle({ fullWidth = false, compact = false }: ThemeToggleP
         const Icon = THEME_ICONS[mode]
         const isActive = currentTheme === mode
         const resolvedLabel =
-          mode === 'system' ? `${THEME_LABELS[mode]}（当前${resolvedTheme === 'dark' ? '深色' : '浅色'}）` : THEME_LABELS[mode]
+          mode === 'system'
+            ? `${THEME_LABELS[mode]}（当前${resolvedTheme === 'dark' ? '深色' : '浅色'}）`
+            : THEME_LABELS[mode]
 
         return (
           <button
@@ -65,5 +67,5 @@ export function ThemeToggle({ fullWidth = false, compact = false }: ThemeToggleP
         )
       })}
     </div>
-  );
+  )
 }

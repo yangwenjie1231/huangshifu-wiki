@@ -1,5 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Routes, Route, Link, useParams, useSearchParams, useNavigate, useLocation } from 'react-router-dom'
+import {
+  Routes,
+  Route,
+  Link,
+  useParams,
+  useSearchParams,
+  useNavigate,
+  useLocation,
+} from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import {
   MessageSquare,
@@ -479,9 +487,7 @@ const PostDetail = () => {
       target?.scrollIntoView({ block: 'start' })
     })
     const clearTimer = window.setTimeout(() => {
-      setHighlightedCommentId((current) =>
-        current === nextHighlightedCommentId ? null : current
-      )
+      setHighlightedCommentId((current) => (current === nextHighlightedCommentId ? null : current))
     }, COMMENT_HIGHLIGHT_DURATION_MS)
 
     return () => {
@@ -1013,7 +1019,8 @@ const PostDetail = () => {
                                       </span>
                                     </>
                                   ) : null}
-                                  <span>：
+                                  <span>
+                                    ：
                                     <MentionText
                                       text={reply.content}
                                       targets={reply.mentionTargets || []}

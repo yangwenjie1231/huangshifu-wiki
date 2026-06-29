@@ -1,10 +1,9 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { Music, Book, MessageSquare, Image as ImageIcon, Search, Home } from 'lucide-react';
-import { clsx } from 'clsx';
+import React from 'react'
+import { NavLink } from 'react-router-dom'
+import { Music, Book, MessageSquare, Image as ImageIcon, Search, Home } from 'lucide-react'
+import { clsx } from 'clsx'
 
 export const BottomNav = () => {
-
   const items = [
     { to: '/', icon: Home, label: '首页' },
     { to: '/wiki', icon: Book, label: '百科' },
@@ -12,7 +11,7 @@ export const BottomNav = () => {
     { to: '/gallery', icon: ImageIcon, label: '图集' },
     { to: '/music', icon: Music, label: '音乐' },
     { to: '/search', icon: Search, label: '搜索' },
-  ];
+  ]
 
   return (
     <nav
@@ -25,10 +24,12 @@ export const BottomNav = () => {
           <NavLink
             key={to}
             to={to}
-            className={({ isActive }) => clsx(
-              'flex flex-col items-center gap-0.5 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2 rounded px-2 py-1',
-              isActive ? 'text-brand-gold' : 'text-text-muted'
-            )}
+            className={({ isActive }) =>
+              clsx(
+                'flex flex-col items-center gap-0.5 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2 rounded px-2 py-1',
+                isActive ? 'text-brand-gold' : 'text-text-muted'
+              )
+            }
             aria-label={label}
           >
             <Icon size={22} />
@@ -37,5 +38,5 @@ export const BottomNav = () => {
         ))}
       </div>
     </nav>
-  );
-};
+  )
+}

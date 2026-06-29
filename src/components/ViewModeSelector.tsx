@@ -1,32 +1,41 @@
-import React from 'react';
-import { LayoutGrid, Grid3X3, Grid2x2, List } from 'lucide-react';
-import { clsx } from 'clsx';
-import { ViewMode } from '../types/userPreferences';
+import React from 'react'
+import { LayoutGrid, Grid3X3, Grid2x2, List } from 'lucide-react'
+import { clsx } from 'clsx'
+import { ViewMode } from '../types/userPreferences'
 
 interface ViewModeSelectorProps {
-  value: ViewMode;
-  onChange: (mode: ViewMode) => void;
-  size?: 'sm' | 'md';
+  value: ViewMode
+  onChange: (mode: ViewMode) => void
+  size?: 'sm' | 'md'
 }
 
-const VIEW_MODE_CONFIG_UI: Record<ViewMode, { label: string; icon: React.ReactNode; iconSize: number }> = {
+const VIEW_MODE_CONFIG_UI: Record<
+  ViewMode,
+  { label: string; icon: React.ReactNode; iconSize: number }
+> = {
   large: { label: '舒适', icon: <LayoutGrid size={20} />, iconSize: 20 },
   medium: { label: '标准', icon: <Grid3X3 size={17} />, iconSize: 17 },
   small: { label: '紧凑', icon: <Grid2x2 size={14} />, iconSize: 14 },
   list: { label: '列表', icon: <List size={16} />, iconSize: 16 },
-};
+}
 
-export const ViewModeSelector: React.FC<ViewModeSelectorProps> = ({ value, onChange, size = 'md' }) => {
-  const modes: ViewMode[] = ['large', 'medium', 'small', 'list'];
-  const showLabels = size === 'md';
+export const ViewModeSelector: React.FC<ViewModeSelectorProps> = ({
+  value,
+  onChange,
+  size = 'md',
+}) => {
+  const modes: ViewMode[] = ['large', 'medium', 'small', 'list']
+  const showLabels = size === 'md'
 
   return (
-    <div className={clsx(
-      'inline-flex border border-border bg-surface rounded p-0.5',
-      size === 'sm' ? 'gap-0.5' : 'gap-1'
-    )}>
+    <div
+      className={clsx(
+        'inline-flex border border-border bg-surface rounded p-0.5',
+        size === 'sm' ? 'gap-0.5' : 'gap-1'
+      )}
+    >
       {modes.map((mode) => {
-        const config = VIEW_MODE_CONFIG_UI[mode];
+        const config = VIEW_MODE_CONFIG_UI[mode]
         return (
           <button
             key={mode}
@@ -44,8 +53,8 @@ export const ViewModeSelector: React.FC<ViewModeSelectorProps> = ({ value, onCha
             {config.icon}
             {showLabels && <span className="hidden sm:inline">{config.label}</span>}
           </button>
-        );
+        )
       })}
     </div>
-  );
-};
+  )
+}

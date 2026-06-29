@@ -1,23 +1,23 @@
-import React from 'react';
-import { MapPin, Check, X, Loader2 } from 'lucide-react';
-import { useFloatingPresence } from '../hooks/useFloatingPresence';
+import React from 'react'
+import { MapPin, Check, X, Loader2 } from 'lucide-react'
+import { useFloatingPresence } from '../hooks/useFloatingPresence'
 
 interface RegionSuggestion {
-  code: string;
-  name: string;
-  fullName: string;
-  level: number;
-  levelName: string;
-  parentCode: string | null;
+  code: string
+  name: string
+  fullName: string
+  level: number
+  levelName: string
+  parentCode: string | null
 }
 
 interface LocationConfirmDialogProps {
-  open: boolean;
-  detectedLocation: RegionSuggestion | null;
-  onConfirm: () => void;
-  onChange: () => void;
-  onSkip: () => void;
-  loading?: boolean;
+  open: boolean
+  detectedLocation: RegionSuggestion | null
+  onConfirm: () => void
+  onChange: () => void
+  onSkip: () => void
+  loading?: boolean
 }
 
 export const LocationConfirmDialog = ({
@@ -28,9 +28,9 @@ export const LocationConfirmDialog = ({
   onSkip,
   loading,
 }: LocationConfirmDialogProps) => {
-  const presence = useFloatingPresence(open);
+  const presence = useFloatingPresence(open)
 
-  if (!presence.mounted) return null;
+  if (!presence.mounted) return null
 
   return (
     <div
@@ -59,7 +59,9 @@ export const LocationConfirmDialog = ({
           ) : detectedLocation ? (
             <div className="space-y-4">
               <div className="p-3 rounded border border-border bg-surface-alt">
-                <div className="text-sm font-medium text-text-primary">{detectedLocation.fullName}</div>
+                <div className="text-sm font-medium text-text-primary">
+                  {detectedLocation.fullName}
+                </div>
                 <div className="text-xs text-text-muted mt-1">{detectedLocation.levelName}</div>
               </div>
               <div className="flex gap-2">
@@ -108,7 +110,7 @@ export const LocationConfirmDialog = ({
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export type { RegionSuggestion };
+export type { RegionSuggestion }

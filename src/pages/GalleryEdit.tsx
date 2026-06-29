@@ -232,7 +232,9 @@ const GalleryEdit = () => {
         )
         if (!stopped) {
           setGallery((prev) => (prev ? { ...prev, images: data.gallery.images } : data.gallery))
-          applyDraft((prev) => (prev ? mergeServerImagesIntoDraft(prev, data.gallery.images) : prev))
+          applyDraft((prev) =>
+            prev ? mergeServerImagesIntoDraft(prev, data.gallery.images) : prev
+          )
         }
       } catch (error) {
         if (!(error instanceof DOMException && error.name === 'AbortError')) {
@@ -978,7 +980,8 @@ const GalleryEdit = () => {
               disabled={Boolean(savingMode) || uploading}
               className="px-6 py-2.5 bg-surface-alt text-text-secondary border border-border rounded text-sm font-medium hover:border-brand-gold hover:text-brand-gold transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Save size={16} /> {savingMode === 'draft' ? t('gallery.saving') : t('gallery.saveDraft')}
+              <Save size={16} />{' '}
+              {savingMode === 'draft' ? t('gallery.saving') : t('gallery.saveDraft')}
             </button>
             <button
               type="submit"

@@ -16,6 +16,7 @@ VITE_LSKY_BASE_URL="https://your-lsky-domain.com"
 ```
 
 ⚠️ **安全提示**：
+
 - `LSKY_*` 开头的变量只在后端使用，是安全的
 - `VITE_*` 开头的变量会被打包到前端代码，不要放敏感信息（如 Token、密码）
 
@@ -31,30 +32,30 @@ VITE_LSKY_BASE_URL="https://your-lsky-domain.com"
 ### useLskyUpload - 图片上传
 
 ```tsx
-import { useLskyUpload } from '../hooks/useLskyUpload';
+import { useLskyUpload } from '../hooks/useLskyUpload'
 
 function UploadComponent() {
-  const { uploading, progress, error, data, upload, reset } = useLskyUpload();
+  const { uploading, progress, error, data, upload, reset } = useLskyUpload()
 
   const handleUpload = async (file: File) => {
     const result = await upload(file, {
-      album_id: 1,        // 可选：指定相册
-      permission: '0',    // 可选：0=公开，1=私有，2=密码保护
-    });
+      album_id: 1, // 可选：指定相册
+      permission: '0', // 可选：0=公开，1=私有，2=密码保护
+    })
 
     if (result) {
-      console.log('上传成功:', result.url);
+      console.log('上传成功:', result.url)
     }
-  };
+  }
 
   return (
     <div>
-      <input 
-        type="file" 
+      <input
+        type="file"
         onChange={(e) => e.target.files?.[0] && handleUpload(e.target.files[0])}
         disabled={uploading}
       />
-      
+
       {uploading && <div>上传进度: {progress}%</div>}
       {error && <div style={{ color: 'red' }}>{error}</div>}
       {data && (
@@ -65,11 +66,12 @@ function UploadComponent() {
         </div>
       )}
     </div>
-  );
+  )
 }
 ```
 
 **返回值**：
+
 - `uploading: boolean` - 是否正在上传
 - `progress: number` - 上传进度（0-100）
 - `error: string | null` - 错误信息
@@ -83,36 +85,29 @@ function UploadComponent() {
 ### useLskyPhotos - 图片管理
 
 ```tsx
-import { useLskyPhotos } from '../hooks/useLskyPhotos';
+import { useLskyPhotos } from '../hooks/useLskyPhotos'
 
 function PhotosComponent() {
-  const { 
-    loading, 
-    error, 
-    photos, 
-    pagination, 
-    fetchPhotos, 
-    deletePhoto,
-    updatePhoto 
-  } = useLskyPhotos({ autoFetch: true });
+  const { loading, error, photos, pagination, fetchPhotos, deletePhoto, updatePhoto } =
+    useLskyPhotos({ autoFetch: true })
 
   const handleDelete = async (id: number) => {
-    const success = await deletePhoto(id);
+    const success = await deletePhoto(id)
     if (success) {
-      alert('删除成功');
+      alert('删除成功')
     }
-  };
+  }
 
   const handleMoveToAlbum = async (id: number, albumId: number) => {
-    await updatePhoto(id, { album_id: albumId });
-  };
+    await updatePhoto(id, { album_id: albumId })
+  }
 
-  if (loading) return <div>加载中...</div>;
-  if (error) return <div>错误: {error}</div>;
+  if (loading) return <div>加载中...</div>
+  if (error) return <div>错误: {error}</div>
 
   return (
     <div>
-      {photos.map(photo => (
+      {photos.map((photo) => (
         <div key={photo.id}>
           <img src={photo.url} alt={photo.filename} />
           <p>{photo.origin_name}</p>
@@ -122,14 +117,16 @@ function PhotosComponent() {
 
       {pagination && (
         <div>
-          <button 
+          <button
             onClick={() => fetchPhotos({ page: pagination.current_page - 1 })}
             disabled={pagination.current_page === 1}
           >
             上一页
           </button>
-          <span>{pagination.current_page} / {pagination.last_page}</span>
-          <button 
+          <span>
+            {pagination.current_page} / {pagination.last_page}
+          </span>
+          <button
             onClick={() => fetchPhotos({ page: pagination.current_page + 1 })}
             disabled={pagination.current_page === pagination.last_page}
           >
@@ -138,11 +135,12 @@ function PhotosComponent() {
         </div>
       )}
     </div>
-  );
+  )
 }
 ```
 
 **返回值**：
+
 - `loading: boolean` - 是否正在加载
 - `error: string | null` - 错误信息
 - `photos: Photo[]` - 图片列表
@@ -156,45 +154,45 @@ function PhotosComponent() {
 ### useLskyAlbums - 相册管理
 
 ```tsx
-import { useLskyAlbums } from '../hooks/useLskyAlbums';
+import { useLskyAlbums } from '../hooks/useLskyAlbums'
 
 function AlbumsComponent() {
-  const { 
-    loading, 
-    error, 
-    albums, 
+  const {
+    loading,
+    error,
+    albums,
     currentAlbum,
-    createAlbum, 
-    updateAlbum, 
+    createAlbum,
+    updateAlbum,
     deleteAlbum,
-    fetchAlbum 
-  } = useLskyAlbums({ autoFetch: true });
+    fetchAlbum,
+  } = useLskyAlbums({ autoFetch: true })
 
   const handleCreate = async () => {
     const album = await createAlbum({
       name: '新相册',
       description: '相册描述',
-    });
+    })
 
     if (album) {
-      alert('创建成功');
+      alert('创建成功')
     }
-  };
+  }
 
   const handleDelete = async (id: number) => {
-    const success = await deleteAlbum(id);
+    const success = await deleteAlbum(id)
     if (success) {
-      alert('删除成功');
+      alert('删除成功')
     }
-  };
+  }
 
-  if (loading) return <div>加载中...</div>;
+  if (loading) return <div>加载中...</div>
 
   return (
     <div>
       <button onClick={handleCreate}>创建相册</button>
-      
-      {albums.map(album => (
+
+      {albums.map((album) => (
         <div key={album.id}>
           <h3>{album.name}</h3>
           <p>{album.description}</p>
@@ -203,11 +201,12 @@ function AlbumsComponent() {
         </div>
       ))}
     </div>
-  );
+  )
 }
 ```
 
 **返回值**：
+
 - `loading: boolean` - 是否正在加载
 - `error: string | null` - 错误信息
 - `albums: Album[]` - 相册列表
@@ -233,10 +232,10 @@ function AlbumsComponent() {
 **使用方式**：
 
 ```tsx
-import { LskyImageManager } from '../components/LskyImageManager';
+import { LskyImageManager } from '../components/LskyImageManager'
 
 function App() {
-  return <LskyImageManager />;
+  return <LskyImageManager />
 }
 ```
 
@@ -248,24 +247,24 @@ function App() {
 
 ```typescript
 // server.ts 或后端路由文件
-import { LskyProAPI } from './src/lib/lskyClient';
+import { LskyProAPI } from './src/lib/lskyClient'
 
 const api = new LskyProAPI({
   baseUrl: process.env.LSKY_BASE_URL!,
-  token: process.env.LSKY_TOKEN,  // 从环境变量读取，安全
-});
+  token: process.env.LSKY_TOKEN, // 从环境变量读取，安全
+})
 
 // 上传图片（后端）
 app.post('/api/upload-to-lsky', async (req, res) => {
-  const file = req.file; // 从请求中获取文件
-  
-  const result = await api.upload(file);
-  
+  const file = req.file // 从请求中获取文件
+
+  const result = await api.upload(file)
+
   res.json({
     url: result.data.url,
     id: result.data.id,
-  });
-});
+  })
+})
 ```
 
 ---
@@ -275,14 +274,16 @@ app.post('/api/upload-to-lsky', async (req, res) => {
 ### Q1: 如何处理认证？
 
 **方式 A：使用 Token（推荐用于后端）**
+
 ```typescript
-const api = new LskyProAPI({ 
+const api = new LskyProAPI({
   baseUrl: process.env.LSKY_BASE_URL!,
-  token: process.env.LSKY_TOKEN 
-});
+  token: process.env.LSKY_TOKEN,
+})
 ```
 
 **方式 B：使用用户名密码登录（推荐用于前端）**
+
 ```typescript
 const { upload } = useLskyUpload({
   autoLogin: true,
@@ -290,16 +291,16 @@ const { upload } = useLskyUpload({
     email: 'user@example.com',
     password: '123456',
   },
-});
+})
 ```
 
 ### Q2: 如何处理错误？
 
 ```typescript
-import { LskyProAPIError } from '../lib/lskyClient';
+import { LskyProAPIError } from '../lib/lskyClient'
 
 try {
-  await upload(file);
+  await upload(file)
 } catch (err) {
   if (err instanceof LskyProAPIError) {
     if (err.isAuthError) {
@@ -308,7 +309,7 @@ try {
       // 权限不足
     } else {
       // 其他错误
-      console.log(err.message);
+      console.log(err.message)
     }
   }
 }
@@ -318,10 +319,10 @@ try {
 
 ```typescript
 const { upload } = useLskyUpload({
-  baseUrl: 'https://custom-lsky.com',  // 自定义地址
-  token: 'your-token',                  // 自定义 Token
-  timeout: 60000,                       // 自定义超时
-});
+  baseUrl: 'https://custom-lsky.com', // 自定义地址
+  token: 'your-token', // 自定义 Token
+  timeout: 60000, // 自定义超时
+})
 ```
 
 ---

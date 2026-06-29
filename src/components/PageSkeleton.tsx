@@ -1,22 +1,16 @@
-import React from 'react';
+import React from 'react'
 
 interface PageSkeletonProps {
-  variant?: 'default' | 'wiki' | 'gallery' | 'music' | 'forum';
+  variant?: 'default' | 'wiki' | 'gallery' | 'music' | 'forum'
 }
 
 const SkeletonLine = ({ className = '' }: { className?: string }) => (
-  <div
-    className={`bg-border rounded animate-pulse ${className}`}
-    aria-hidden="true"
-  />
-);
+  <div className={`bg-border rounded animate-pulse ${className}`} aria-hidden="true" />
+)
 
 const SkeletonCircle = ({ size = 'w-16 h-16' }: { size?: string }) => (
-  <div
-    className={`${size} bg-border rounded-full animate-pulse`}
-    aria-hidden="true"
-  />
-);
+  <div className={`${size} bg-border rounded-full animate-pulse`} aria-hidden="true" />
+)
 
 export const PageSkeleton: React.FC<PageSkeletonProps> = ({ variant = 'default' }) => {
   if (variant === 'wiki') {
@@ -37,7 +31,7 @@ export const PageSkeleton: React.FC<PageSkeletonProps> = ({ variant = 'default' 
           ))}
         </div>
       </div>
-    );
+    )
   }
 
   if (variant === 'gallery') {
@@ -59,7 +53,7 @@ export const PageSkeleton: React.FC<PageSkeletonProps> = ({ variant = 'default' 
           ))}
         </div>
       </div>
-    );
+    )
   }
 
   if (variant === 'music') {
@@ -68,10 +62,7 @@ export const PageSkeleton: React.FC<PageSkeletonProps> = ({ variant = 'default' 
         <SkeletonLine className="h-10 w-48 mb-6" />
         <div className="space-y-1">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div
-              key={i}
-              className="flex items-center gap-4 py-4 px-1 border-b border-border"
-            >
+            <div key={i} className="flex items-center gap-4 py-4 px-1 border-b border-border">
               <SkeletonCircle size="w-14 h-14" />
               <div className="flex-1 space-y-2">
                 <SkeletonLine className="h-5 w-1/3" />
@@ -82,7 +73,7 @@ export const PageSkeleton: React.FC<PageSkeletonProps> = ({ variant = 'default' 
           ))}
         </div>
       </div>
-    );
+    )
   }
 
   if (variant === 'forum') {
@@ -91,10 +82,7 @@ export const PageSkeleton: React.FC<PageSkeletonProps> = ({ variant = 'default' 
         <SkeletonLine className="h-10 w-56 mb-6" />
         <div className="space-y-4">
           {[1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="bg-surface border border-border rounded p-5"
-            >
+            <div key={i} className="bg-surface border border-border rounded p-5">
               <div className="flex items-start gap-4">
                 <SkeletonCircle size="w-10 h-10" />
                 <div className="flex-1 space-y-2">
@@ -107,20 +95,23 @@ export const PageSkeleton: React.FC<PageSkeletonProps> = ({ variant = 'default' 
           ))}
         </div>
       </div>
-    );
+    )
   }
 
   // Default skeleton
   return (
-    <div className="max-w-[1100px] mx-auto px-6 py-8 flex items-center justify-center min-h-[400px]"
-         aria-label="加载中"
-         role="status">
+    <div
+      className="max-w-[1100px] mx-auto px-6 py-8 flex items-center justify-center min-h-[400px]"
+      aria-label="加载中"
+      role="status"
+    >
       <div className="text-center">
-        <div className="inline-block w-12 h-12 border-4 border-border border-t-[var(--color-theme-accent)] rounded-full animate-spin mb-4"
-             aria-hidden="true"
+        <div
+          className="inline-block w-12 h-12 border-4 border-border border-t-[var(--color-theme-accent)] rounded-full animate-spin mb-4"
+          aria-hidden="true"
         />
         <p className="text-sm text-text-muted">加载中...</p>
       </div>
     </div>
-  );
-};
+  )
+}
