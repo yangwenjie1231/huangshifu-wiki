@@ -1,164 +1,172 @@
-import React, { useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Loader2, Link2, X } from 'lucide-react';
-import { clsx } from 'clsx';
+import React, { useMemo, useState } from 'react'
+import { AlertTriangle, CheckCircle2, Loader2, Link2, X } from 'lucide-react'
+import { clsx } from 'clsx'
 
-import { apiPost } from '../lib/apiClient';
-import { useFloatingPresence } from '../hooks/useFloatingPresence';
+import { apiPost } from '../lib/apiClient'
+import { formatMusicCredits } from '../lib/musicCredits'
+import { useFloatingPresence } from '../hooks/useFloatingPresence'
 
-type Platform = 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo';
-type ResourceType = 'song' | 'album' | 'playlist';
+type Platform = 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo'
+type ResourceType = 'song' | 'album' | 'playlist'
 
 type PreviewSong = {
-  sourceId: string;
-  title: string;
-  artist: string;
-  album: string;
-  cover: string;
-  sourceUrl: string;
-};
+  sourceId: string
+  title: string
+  artists: string[]
+  album: string
+  cover: string
+  sourceUrl: string
+}
 
 type ParsedResource = {
-  platform: Platform;
-  type: ResourceType;
-  id: string;
-  title: string;
-  artist: string;
-  cover: string;
-  description: string;
-  platformUrl: string;
-  songs: PreviewSong[];
-  totalSongs: number;
-};
+  platform: Platform
+  type: ResourceType
+  id: string
+  title: string
+  artist: string
+  cover: string
+  description: string
+  platformUrl: string
+  songs: PreviewSong[]
+  totalSongs: number
+}
 
 type ParseUrlResponse = {
-  resource: ParsedResource;
-};
+  resource: ParsedResource
+}
 
 type ImportResponse = {
   summary: {
-    imported: number;
-    skipped: number;
-    failed: number;
-  };
+    imported: number
+    skipped: number
+    failed: number
+  }
   collection?: {
-    docId: string;
-    title: string;
-    resourceType: ResourceType;
-  } | null;
-};
+    docId: string
+    title: string
+    resourceType: ResourceType
+  } | null
+}
 
 interface MusicImportModalProps {
-  open: boolean;
-  onClose: () => void;
-  onImported: () => Promise<void> | void;
+  open: boolean
+  onClose: () => void
+  onImported: () => Promise<void> | void
 }
 
 function platformLabel(platform: Platform) {
-  if (platform === 'netease') return '网易云音乐';
-  if (platform === 'tencent') return 'QQ音乐';
-  if (platform === 'kugou') return '酷狗音乐';
-  if (platform === 'baidu') return '百度音乐';
-  return '酷我音乐';
+  if (platform === 'netease') return '网易云音乐'
+  if (platform === 'tencent') return 'QQ音乐'
+  if (platform === 'kugou') return '酷狗音乐'
+  if (platform === 'baidu') return '百度音乐'
+  return '酷我音乐'
 }
 
 function resourceTypeLabel(type: ResourceType) {
-  if (type === 'song') return '歌曲';
-  if (type === 'album') return '专辑';
-  return '歌单';
+  if (type === 'song') return '歌曲'
+  if (type === 'album') return '专辑'
+  return '歌单'
 }
 
 export const MusicImportModal = ({ open, onClose, onImported }: MusicImportModalProps) => {
-  const presence = useFloatingPresence(open);
-  const [url, setUrl] = useState('');
-  const [parsing, setParsing] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [preview, setPreview] = useState<ParsedResource | null>(null);
-  const [error, setError] = useState('');
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [confirmingImport, setConfirmingImport] = useState(false);
-  const [importResult, setImportResult] = useState<string>('');
+  const presence = useFloatingPresence(open)
+  const [url, setUrl] = useState('')
+  const [parsing, setParsing] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [preview, setPreview] = useState<ParsedResource | null>(null)
+  const [error, setError] = useState('')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [confirmingImport, setConfirmingImport] = useState(false)
+  const [importResult, setImportResult] = useState<string>('')
 
-  const selectedCount = selectedIds.size;
+  const selectedCount = selectedIds.size
 
   const allSelected = useMemo(() => {
-    if (!preview || !preview.songs.length) return false;
-    return preview.songs.every((song) => selectedIds.has(song.sourceId));
-  }, [preview, selectedIds]);
+    if (!preview || !preview.songs.length) return false
+    return preview.songs.every((song) => selectedIds.has(song.sourceId))
+  }, [preview, selectedIds])
 
-  if (!presence.mounted) return null;
+  if (!presence.mounted) return null
 
   const resetResult = () => {
-    setImportResult('');
-    setConfirmingImport(false);
-  };
+    setImportResult('')
+    setConfirmingImport(false)
+  }
 
   const handleParse = async () => {
     if (!url.trim()) {
-      setError('请先粘贴音乐链接');
-      return;
+      setError('请先粘贴音乐链接')
+      return
     }
-    setParsing(true);
-    setError('');
-    setImportResult('');
-    setConfirmingImport(false);
+    setParsing(true)
+    setError('')
+    setImportResult('')
+    setConfirmingImport(false)
     try {
-      const response = await apiPost<ParseUrlResponse>('/api/music/parse-url', { url: url.trim() });
-      setPreview(response.resource);
-      setSelectedIds(new Set(response.resource.songs.map((song) => song.sourceId)));
+      const response = await apiPost<ParseUrlResponse>('/api/music/parse-url', { url: url.trim() })
+      setPreview(response.resource)
+      setSelectedIds(new Set(response.resource.songs.map((song) => song.sourceId)))
     } catch (err) {
-      setPreview(null);
-      setSelectedIds(new Set());
-      setError(err instanceof Error ? err.message : '解析链接失败');
+      setPreview(null)
+      setSelectedIds(new Set())
+      setError(err instanceof Error ? err.message : '解析链接失败')
     } finally {
-      setParsing(false);
+      setParsing(false)
     }
-  };
+  }
 
   const toggleSong = (sourceId: string) => {
-    resetResult();
+    resetResult()
     setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(sourceId)) next.delete(sourceId); else next.add(sourceId);
-      return next;
-    });
-  };
+      const next = new Set(prev)
+      if (next.has(sourceId)) next.delete(sourceId)
+      else next.add(sourceId)
+      return next
+    })
+  }
 
   const handleSelectAll = () => {
-    if (!preview) return;
-    resetResult();
-    setSelectedIds(new Set(preview.songs.map((song) => song.sourceId)));
-  };
+    if (!preview) return
+    resetResult()
+    setSelectedIds(new Set(preview.songs.map((song) => song.sourceId)))
+  }
 
   const handleSelectNone = () => {
-    resetResult();
-    setSelectedIds(new Set());
-  };
+    resetResult()
+    setSelectedIds(new Set())
+  }
 
   const handleFinalImport = async () => {
-    if (!preview) return;
-    if (!selectedCount) { setError('请至少选择一首歌曲'); return; }
-    setImporting(true);
-    setError('');
-    setImportResult('');
+    if (!preview) return
+    if (!selectedCount) {
+      setError('请至少选择一首歌曲')
+      return
+    }
+    setImporting(true)
+    setError('')
+    setImportResult('')
     try {
       const response = await apiPost<ImportResponse>('/api/music/import', {
         url: url.trim() || preview.platformUrl,
         selectedSongIds: [...selectedIds],
-      });
-      const summary = response.summary;
-      const parts = [`导入成功 ${summary.imported} 首`];
-      if (summary.skipped) parts.push(`已存在 ${summary.skipped} 首`);
-      if (summary.failed) parts.push(`失败 ${summary.failed} 首`);
-      if (response.collection) parts.push(`已更新${resourceTypeLabel(response.collection.resourceType)}：${response.collection.title}`);
-      setImportResult(parts.join('，'));
-      setConfirmingImport(false);
-      await onImported();
+      })
+      const summary = response.summary
+      const parts = [`导入成功 ${summary.imported} 首`]
+      if (summary.skipped) parts.push(`已存在 ${summary.skipped} 首`)
+      if (summary.failed) parts.push(`失败 ${summary.failed} 首`)
+      if (response.collection)
+        parts.push(
+          `已更新${resourceTypeLabel(response.collection.resourceType)}：${response.collection.title}`
+        )
+      setImportResult(parts.join('，'))
+      setConfirmingImport(false)
+      await onImported()
     } catch (err) {
-      setError(err instanceof Error ? err.message : '导入失败');
+      setError(err instanceof Error ? err.message : '导入失败')
     } finally {
-      setImporting(false);
+      setImporting(false)
     }
-  };
+  }
 
   return (
     <div
@@ -170,7 +178,9 @@ export const MusicImportModal = ({ open, onClose, onImported }: MusicImportModal
         <header className="px-5 md:px-6 py-4 border-b border-border flex items-center justify-between">
           <div>
             <h3 className="text-base font-bold text-text-primary">导入音乐 / 专辑 / 歌单</h3>
-            <p className="text-xs text-text-muted mt-0.5">粘贴链接后自动识别平台；导入前需二次确认</p>
+            <p className="text-xs text-text-muted mt-0.5">
+              粘贴链接后自动识别平台；导入前需二次确认
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -190,8 +200,8 @@ export const MusicImportModal = ({ open, onClose, onImported }: MusicImportModal
               <input
                 value={url}
                 onChange={(event) => {
-                  setUrl(event.target.value);
-                  setError('');
+                  setUrl(event.target.value)
+                  setError('')
                 }}
                 placeholder="例如: https://music.163.com/#/playlist?id=3778678"
                 className="theme-input flex-1 px-3 py-2 text-sm rounded"
@@ -213,13 +223,22 @@ export const MusicImportModal = ({ open, onClose, onImported }: MusicImportModal
               <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-14 h-14 rounded overflow-hidden bg-surface-alt shrink-0 border border-border">
-                    {preview.cover && <img src={preview.cover} alt="封面" className="w-full h-full object-cover" referrerPolicy="no-referrer" />}
+                    {preview.cover && (
+                      <img
+                        src={preview.cover}
+                        alt="封面"
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    )}
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs text-text-muted font-medium">
                       {platformLabel(preview.platform)} · {resourceTypeLabel(preview.type)}
                     </p>
-                    <h4 className="text-base font-bold text-text-primary truncate">{preview.title}</h4>
+                    <h4 className="text-base font-bold text-text-primary truncate">
+                      {preview.title}
+                    </h4>
                     <p className="text-sm text-text-secondary truncate">{preview.artist}</p>
                   </div>
                 </div>
@@ -234,26 +253,40 @@ export const MusicImportModal = ({ open, onClose, onImported }: MusicImportModal
               </div>
 
               {preview.description && (
-                <p className="text-sm text-text-secondary bg-surface rounded p-3 border border-border">{preview.description}</p>
+                <p className="text-sm text-text-secondary bg-surface rounded p-3 border border-border">
+                  {preview.description}
+                </p>
               )}
 
               <div className="flex items-center justify-between text-sm">
-                <span className="text-text-secondary">共 {preview.totalSongs} 首，已选择 {selectedCount} 首</span>
+                <span className="text-text-secondary">
+                  共 {preview.totalSongs} 首，已选择 {selectedCount} 首
+                </span>
                 <div className="flex items-center gap-3">
-                  <button onClick={handleSelectAll} className="text-brand-gold hover:underline text-xs">全选</button>
-                  <button onClick={handleSelectNone} className="text-text-muted hover:underline text-xs">清空</button>
+                  <button
+                    onClick={handleSelectAll}
+                    className="text-brand-gold hover:underline text-xs"
+                  >
+                    全选
+                  </button>
+                  <button
+                    onClick={handleSelectNone}
+                    className="text-text-muted hover:underline text-xs"
+                  >
+                    清空
+                  </button>
                 </div>
               </div>
 
               <div className="max-h-64 overflow-y-auto bg-surface rounded border border-border">
                 {preview.songs.map((song, index) => {
-                  const checked = selectedIds.has(song.sourceId);
+                  const checked = selectedIds.has(song.sourceId)
                   return (
                     <label
                       key={`${song.sourceId}-${index}`}
                       className={clsx(
                         'px-4 py-3 flex items-center gap-3 cursor-pointer transition-colors border-b border-border last:border-b-0',
-                        checked && 'bg-brand-gold/10',
+                        checked && 'bg-brand-gold/10'
                       )}
                     >
                       <input
@@ -263,14 +296,25 @@ export const MusicImportModal = ({ open, onClose, onImported }: MusicImportModal
                         className="w-4 h-4 accent-[var(--color-theme-accent)]"
                       />
                       <div className="w-10 h-10 rounded overflow-hidden bg-surface-alt shrink-0 border border-border">
-                        {song.cover && <img src={song.cover} alt="封面" className="w-full h-full object-cover" referrerPolicy="no-referrer" />}
+                        {song.cover && (
+                          <img
+                            src={song.cover}
+                            alt="封面"
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                        )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-text-primary truncate">{song.title}</p>
-                        <p className="text-xs text-text-muted truncate">{song.artist} · {song.album}</p>
+                        <p className="text-sm font-medium text-text-primary truncate">
+                          {song.title}
+                        </p>
+                        <p className="text-xs text-text-muted truncate">
+                          {formatMusicCredits(song.artists, '未知歌手')} · {song.album}
+                        </p>
                       </div>
                     </label>
-                  );
+                  )
                 })}
               </div>
 
@@ -281,13 +325,16 @@ export const MusicImportModal = ({ open, onClose, onImported }: MusicImportModal
                 </div>
               ) : null}
 
-              {!importResult && (
-                !confirmingImport ? (
+              {!importResult &&
+                (!confirmingImport ? (
                   <button
                     onClick={() => {
-                      if (!selectedCount) { setError('请至少选择一首歌曲'); return; }
-                      setConfirmingImport(true);
-                      setError('');
+                      if (!selectedCount) {
+                        setError('请至少选择一首歌曲')
+                        return
+                      }
+                      setConfirmingImport(true)
+                      setError('')
                     }}
                     className="px-5 py-2 rounded theme-button-primary font-medium transition-all text-sm"
                   >
@@ -316,8 +363,7 @@ export const MusicImportModal = ({ open, onClose, onImported }: MusicImportModal
                       </button>
                     </div>
                   </div>
-                )
-              )}
+                ))}
             </section>
           )}
         </div>
@@ -336,5 +382,5 @@ export const MusicImportModal = ({ open, onClose, onImported }: MusicImportModal
         </footer>
       </div>
     </div>
-  );
-};
+  )
+}

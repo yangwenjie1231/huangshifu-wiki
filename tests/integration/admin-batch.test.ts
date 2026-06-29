@@ -171,7 +171,7 @@ describe('Admin batch operations API', () => {
         data: {
           id: `test-admin-batch-song-${suffix}`,
           title: 'Batch Cover Song',
-          artist: 'Batch Artist',
+          artists: ['Batch Artist'],
           album: 'Batch Album',
           addedBy: adminUser.user.uid,
         },
@@ -242,11 +242,17 @@ describe('Admin batch operations API', () => {
     expect(songResponse.status).toBe(200)
     expect(albumResponse.status).toBe(200)
     await expect(prisma.songCover.findUnique({ where: { id: songCoverA.id } })).resolves.toBeNull()
-    await expect(prisma.albumCover.findUnique({ where: { id: albumCoverA.id } })).resolves.toBeNull()
-    await expect(prisma.songCover.findUnique({ where: { id: songCoverB.id } })).resolves.toMatchObject({
+    await expect(
+      prisma.albumCover.findUnique({ where: { id: albumCoverA.id } })
+    ).resolves.toBeNull()
+    await expect(
+      prisma.songCover.findUnique({ where: { id: songCoverB.id } })
+    ).resolves.toMatchObject({
       isDefault: true,
     })
-    await expect(prisma.albumCover.findUnique({ where: { id: albumCoverB.id } })).resolves.toMatchObject({
+    await expect(
+      prisma.albumCover.findUnique({ where: { id: albumCoverB.id } })
+    ).resolves.toMatchObject({
       isDefault: true,
     })
 
@@ -256,10 +262,12 @@ describe('Admin batch operations API', () => {
       .send({ coverIds: [albumCoverB.id] })
 
     expect(finalAlbumResponse.status).toBe(200)
-    await expect(prisma.album.findUnique({ where: { docId: album.docId } })).resolves.toMatchObject({
-      cover: '',
-      defaultCoverSource: 'old_cover',
-    })
+    await expect(prisma.album.findUnique({ where: { docId: album.docId } })).resolves.toMatchObject(
+      {
+        cover: '',
+        defaultCoverSource: 'old_cover',
+      }
+    )
   })
 
   it('batch releases edit locks', async () => {
@@ -288,7 +296,9 @@ describe('Admin batch operations API', () => {
 
     expect(response.status).toBe(200)
     expect(response.body.deleted).toBe(2)
-    expect(await prisma.editLock.count({ where: { id: { in: locks.map((lock) => lock.id) } } })).toBe(0)
+    expect(
+      await prisma.editLock.count({ where: { id: { in: locks.map((lock) => lock.id) } } })
+    ).toBe(0)
   })
 
   it('batch updates music display info', async () => {
@@ -309,7 +319,7 @@ describe('Admin batch operations API', () => {
           data: {
             id: `test-admin-batch-song-${suffix}-${index}`,
             title: `Batch Display Song ${index}`,
-            artist: 'Batch Artist',
+            artists: ['Batch Artist'],
             addedBy: adminUser.user.uid,
           },
         })

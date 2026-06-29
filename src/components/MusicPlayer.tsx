@@ -1,59 +1,67 @@
-import React, { useState, useEffect } from 'react';
-import { Play, Pause, SkipBack, SkipForward } from 'lucide-react';
-import { useMusic } from '../context/MusicContext';
-import { formatTime } from '../lib/formatUtils';
-import { apiGet } from '../lib/apiClient';
-import type { Platform, PlatformIds } from '../types/PlatformIds';
+import React, { useState, useEffect } from 'react'
+import { Play, Pause, SkipBack, SkipForward } from 'lucide-react'
+import { useMusic } from '../context/MusicContext'
+import { formatTime } from '../lib/formatUtils'
+import { formatMusicCredits } from '../lib/musicCredits'
+import { apiGet } from '../lib/apiClient'
+import type { Platform, PlatformIds } from '../types/PlatformIds'
 
 interface Song {
-  id: string;
-  docId?: string;
-  title: string;
-  artist: string;
-  album: string;
-  cover: string;
-  audioUrl: string;
-  playUrl?: string;
-  lyric?: string | null;
-  description?: string | null;
-  primaryPlatform?: Platform | null;
-  platformIds?: PlatformIds;
+  id: string
+  docId?: string
+  title: string
+  artists: string[]
+  album: string
+  cover: string
+  audioUrl: string
+  playUrl?: string
+  lyric?: string | null
+  description?: string | null
+  primaryPlatform?: Platform | null
+  platformIds?: PlatformIds
 }
 
 interface MusicSongApiResponse {
-  id: string;
-  docId?: string | null;
-  title: string;
-  artist: string;
-  album?: string;
-  cover: string;
-  coverUrl?: string;
-  audioUrl: string;
-  playUrl?: string;
-  lyric?: string | null;
-  description?: string | null;
-  primaryPlatform?: Platform | null;
-  platformIds?: PlatformIds;
+  id: string
+  docId?: string | null
+  title: string
+  artists: string[]
+  album?: string
+  cover: string
+  coverUrl?: string
+  audioUrl: string
+  playUrl?: string
+  lyric?: string | null
+  description?: string | null
+  primaryPlatform?: Platform | null
+  platformIds?: PlatformIds
 }
 
 export const MusicPlayer = ({ songId }: { songId: string }) => {
-  const { 
-    currentSong, setCurrentSong, isPlaying, setIsPlaying, playNext, playPrevious,
-    currentTime, duration, seekTo
-  } = useMusic();
-  const [song, setSong] = useState<Song | null>(null);
-  const [loading, setLoading] = useState(true);
+  const {
+    currentSong,
+    setCurrentSong,
+    isPlaying,
+    setIsPlaying,
+    playNext,
+    playPrevious,
+    currentTime,
+    duration,
+    seekTo,
+  } = useMusic()
+  const [song, setSong] = useState<Song | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchSong = async () => {
-      setLoading(true);
+      setLoading(true)
       try {
-        const apiSong = await apiGet<MusicSongApiResponse>(`/api/music/song/${songId}`);
+        const apiSong = await apiGet<MusicSongApiResponse>(`/api/music/song/${songId}`)
         setSong({
           id: apiSong.id,
           docId: apiSong.docId || undefined,
           title: apiSong.title,
-          artist: apiSong.artist,
+          artists: apiSong.artists,
           album: apiSong.album || '',
           cover: apiSong.cover || apiSong.coverUrl || '',
           audioUrl: apiSong.playUrl || apiSong.audioUrl || '',
@@ -62,46 +70,49 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
           description: apiSong.description || null,
           primaryPlatform: apiSong.primaryPlatform,
           platformIds: apiSong.platformIds,
-        });
+        })
       } catch (e) {
-        console.error("Error fetching song:", e);
+        console.error('Error fetching song:', e)
       }
-      setLoading(false);
-    };
+      setLoading(false)
+    }
 
-    if (songId) fetchSong();
-  }, [songId]);
+    if (songId) fetchSong()
+  }, [songId])
 
   const togglePlay = () => {
     if (currentSong?.id !== song?.id) {
-      setCurrentSong(song);
-      setIsPlaying(true);
+      setCurrentSong(song)
+      setIsPlaying(true)
     } else {
-      setIsPlaying(!isPlaying);
+      setIsPlaying(!isPlaying)
     }
-  };
+  }
 
-  if (loading) return <div className="py-4 text-center text-xs text-text-muted animate-pulse">加载中...</div>;
-  if (!song) return null;
+  if (loading)
+    return <div className="py-4 text-center text-xs text-text-muted animate-pulse">加载中...</div>
+  if (!song) return null
 
-  const isCurrent = currentSong?.id === song.id;
+  const isCurrent = currentSong?.id === song.id
 
   return (
     <div className="bg-surface-alt rounded border border-border p-4">
       <div className="flex items-center gap-3 mb-3">
-        <img 
-          src={song.cover} 
+        <img
+          src={song.cover}
           alt={song.title + ' 封面'}
           className="w-12 h-12 rounded object-cover bg-surface flex-shrink-0"
           referrerPolicy="no-referrer"
         />
         <div className="min-w-0 flex-1">
           <h4 className="text-sm font-semibold text-text-primary truncate">{song.title}</h4>
-          <p className="text-xs text-text-muted truncate">{song.artist} — {song.album}</p>
+          <p className="text-xs text-text-muted truncate">
+            {formatMusicCredits(song.artists, '未知歌手')} — {song.album}
+          </p>
         </div>
       </div>
 
-      <input 
+      <input
         type="range"
         min="0"
         max={duration || 0}
@@ -113,19 +124,19 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <button 
+          <button
             onClick={playPrevious}
             className="p-1.5 text-text-secondary hover:text-brand-gold hover:bg-surface rounded-full transition-all"
           >
             <SkipBack size={16} />
           </button>
-          <button 
+          <button
             onClick={togglePlay}
             className="w-8 h-8 theme-button-primary rounded-full flex items-center justify-center transition-all"
           >
-            {(isCurrent && isPlaying) ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
+            {isCurrent && isPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
           </button>
-          <button 
+          <button
             onClick={playNext}
             className="p-1.5 text-text-secondary hover:text-brand-gold hover:bg-surface rounded-full transition-all"
           >
@@ -137,5 +148,5 @@ export const MusicPlayer = ({ songId }: { songId: string }) => {
         </span>
       </div>
     </div>
-  );
-};
+  )
+}

@@ -1,36 +1,37 @@
-import React, { useState } from 'react';
-import { ExternalLink, Loader2, Search, X, Check, AlertCircle } from 'lucide-react';
+import React, { useState } from 'react'
+import { ExternalLink, Loader2, Search, X, Check, AlertCircle } from 'lucide-react'
 
-import { apiGet } from '../lib/apiClient';
-import { useFloatingPresence } from '../hooks/useFloatingPresence';
+import { apiGet } from '../lib/apiClient'
+import { formatMusicCredits } from '../lib/musicCredits'
+import { useFloatingPresence } from '../hooks/useFloatingPresence'
 
-type Platform = 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo';
+type Platform = 'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo'
 
 type MatchSuggestion = {
-  sourceId: string;
-  title: string;
-  artist: string;
-  album: string;
-  cover: string;
-  sourceUrl: string;
-  score: number;
-  isAutoSelected: boolean;
-  alreadyLinked: { docId: string; title: string } | null;
-};
+  sourceId: string
+  title: string
+  artists: string[]
+  album: string
+  cover: string
+  sourceUrl: string
+  score: number
+  isAutoSelected: boolean
+  alreadyLinked: { docId: string; title: string } | null
+}
 
 type MatchSuggestionsResponse = {
-  suggestions: MatchSuggestion[];
-  autoSelectedIndex: number | null;
-};
+  suggestions: MatchSuggestion[]
+  autoSelectedIndex: number | null
+}
 
 interface MatchSuggestionModalProps {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  artist: string;
-  targetPlatform: Platform;
-  existingPlatformId?: string | null;
-  onSelect: (sourceId: string) => void;
+  open: boolean
+  onClose: () => void
+  title: string
+  artist: string
+  targetPlatform: Platform
+  existingPlatformId?: string | null
+  onSelect: (sourceId: string) => void
 }
 
 const platformLabels: Record<Platform, string> = {
@@ -39,14 +40,14 @@ const platformLabels: Record<Platform, string> = {
   kugou: '酷狗音乐',
   baidu: '百度音乐',
   kuwo: '酷我音乐',
-};
+}
 
 function buildPlatformSongUrl(platform: Platform, id: string): string {
-  if (platform === 'netease') return `https://music.163.com/song?id=${id}`;
-  if (platform === 'tencent') return `https://y.qq.com/n/ryqq/songDetail/${id}`;
-  if (platform === 'kugou') return `https://www.kugou.com/song/#hash=${id}`;
-  if (platform === 'baidu') return `https://music.baidu.com/song/${id}`;
-  return `https://www.kuwo.cn/song_detail/${id}`;
+  if (platform === 'netease') return `https://music.163.com/song?id=${id}`
+  if (platform === 'tencent') return `https://y.qq.com/n/ryqq/songDetail/${id}`
+  if (platform === 'kugou') return `https://www.kugou.com/song/#hash=${id}`
+  if (platform === 'baidu') return `https://music.baidu.com/song/${id}`
+  return `https://www.kuwo.cn/song_detail/${id}`
 }
 
 export const MatchSuggestionModal = ({
@@ -58,59 +59,68 @@ export const MatchSuggestionModal = ({
   existingPlatformId,
   onSelect,
 }: MatchSuggestionModalProps) => {
-  const presence = useFloatingPresence(open);
-  const [loading, setLoading] = useState(false);
-  const [suggestions, setSuggestions] = useState<MatchSuggestion[]>([]);
-  const [error, setError] = useState('');
-  const [searched, setSearched] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const presence = useFloatingPresence(open)
+  const [loading, setLoading] = useState(false)
+  const [suggestions, setSuggestions] = useState<MatchSuggestion[]>([])
+  const [error, setError] = useState('')
+  const [searched, setSearched] = useState(false)
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
 
   React.useEffect(() => {
-    if (open && !searched) { handleSearch(); }
-  }, [open]);
+    if (open && !searched) {
+      handleSearch()
+    }
+  }, [open])
 
   React.useEffect(() => {
-    if (!open) { setSuggestions([]); setSearched(false); setError(''); setSelectedIndex(null); }
-  }, [open]);
+    if (!open) {
+      setSuggestions([])
+      setSearched(false)
+      setError('')
+      setSelectedIndex(null)
+    }
+  }, [open])
 
   React.useEffect(() => {
     if (searched && suggestions.length > 0) {
-      const autoIdx = suggestions.findIndex((s) => s.isAutoSelected);
-      if (autoIdx >= 0) { setSelectedIndex(autoIdx); }
+      const autoIdx = suggestions.findIndex((s) => s.isAutoSelected)
+      if (autoIdx >= 0) {
+        setSelectedIndex(autoIdx)
+      }
     }
-  }, [searched, suggestions]);
+  }, [searched, suggestions])
 
   const handleSearch = async () => {
-    setLoading(true);
-    setError('');
-    setSearched(false);
+    setLoading(true)
+    setError('')
+    setSearched(false)
     try {
       const data = await apiGet<MatchSuggestionsResponse>('/api/music/match-suggestions', {
         platform: targetPlatform,
         title,
         artist,
-      });
-      setSuggestions(data.suggestions || []);
-      setSearched(true);
+      })
+      setSuggestions(data.suggestions || [])
+      setSearched(true)
       if (data.suggestions.length === 0) {
-        setError(`在${platformLabels[targetPlatform]}未找到匹配歌曲`);
+        setError(`在${platformLabels[targetPlatform]}未找到匹配歌曲`)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '搜索失败');
-      setSuggestions([]);
-      setSearched(true);
+      setError(err instanceof Error ? err.message : '搜索失败')
+      setSuggestions([])
+      setSearched(true)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const handleConfirm = () => {
-    if (selectedIndex === null) return;
-    onSelect(suggestions[selectedIndex].sourceId);
-    onClose();
-  };
+    if (selectedIndex === null) return
+    onSelect(suggestions[selectedIndex].sourceId)
+    onClose()
+  }
 
-  if (!presence.mounted) return null;
+  if (!presence.mounted) return null
 
   return (
     <div
@@ -178,16 +188,20 @@ export const MatchSuggestionModal = ({
                       referrerPolicy="no-referrer"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-text-primary truncate">{suggestion.title}</p>
-                      <p className="text-xs text-text-muted truncate">{suggestion.artist} · {suggestion.album}</p>
+                      <p className="text-sm font-medium text-text-primary truncate">
+                        {suggestion.title}
+                      </p>
+                      <p className="text-xs text-text-muted truncate">
+                        {formatMusicCredits(suggestion.artists, '未知歌手')} · {suggestion.album}
+                      </p>
                       <div className="flex items-center gap-2 mt-1">
                         <span
                           className={`text-[10px] px-1.5 py-0.5 rounded ${
                             suggestion.score >= 80
                               ? 'theme-status-success'
                               : suggestion.score >= 60
-                              ? 'theme-status-warning'
-                              : 'bg-surface-alt text-text-muted'
+                                ? 'theme-status-warning'
+                                : 'bg-surface-alt text-text-muted'
                           }`}
                         >
                           匹配度 {suggestion.score}%
@@ -198,9 +212,7 @@ export const MatchSuggestionModal = ({
                           </span>
                         )}
                         {suggestion.isAutoSelected && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded theme-tag">
-                            推荐
-                          </span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded theme-tag">推荐</span>
                         )}
                       </div>
                     </div>
@@ -229,7 +241,10 @@ export const MatchSuggestionModal = ({
           {existingPlatformId && (
             <div className="p-3 rounded bg-surface-alt border border-border">
               <p className="text-xs text-text-muted">
-                该平台已有ID: <span className="font-mono font-medium text-text-primary">{existingPlatformId}</span>
+                该平台已有ID:{' '}
+                <span className="font-mono font-medium text-text-primary">
+                  {existingPlatformId}
+                </span>
               </p>
             </div>
           )}
@@ -254,5 +269,5 @@ export const MatchSuggestionModal = ({
         </footer>
       </div>
     </div>
-  );
-};
+  )
+}

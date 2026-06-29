@@ -2,6 +2,7 @@ import { describe, beforeEach, afterEach, it, expect } from 'vitest'
 import request from 'supertest'
 import { app } from '../../server'
 import { prisma, createTestUser } from './setup'
+import { applyAlbumTracksToRelations } from '../../src/server/utils/music'
 
 describe('Music API - 音乐接口测试', () => {
   let adminUser: Awaited<ReturnType<typeof createTestUser>>
@@ -33,9 +34,20 @@ describe('Music API - 音乐接口测试', () => {
   beforeEach(async () => {
     await prisma.musicTrack.deleteMany({
       where: {
-        id: {
-          startsWith: 'test-markdown-description-',
-        },
+        OR: [
+          { id: { startsWith: 'test-markdown-description-' } },
+          { id: { startsWith: 'test-optional-metadata-' } },
+          { id: { startsWith: 'test-artist-partial-search-' } },
+          { id: { startsWith: 'test-display-relation-' } },
+        ],
+      },
+    })
+    await prisma.album.deleteMany({
+      where: {
+        OR: [
+          { id: { startsWith: 'test-display-relation-' } },
+          { id: { startsWith: 'test-optional-album-' } },
+        ],
       },
     })
     await prisma.user.deleteMany({
@@ -57,9 +69,20 @@ describe('Music API - 音乐接口测试', () => {
   afterEach(async () => {
     await prisma.musicTrack.deleteMany({
       where: {
-        id: {
-          startsWith: 'test-markdown-description-',
-        },
+        OR: [
+          { id: { startsWith: 'test-markdown-description-' } },
+          { id: { startsWith: 'test-optional-metadata-' } },
+          { id: { startsWith: 'test-artist-partial-search-' } },
+          { id: { startsWith: 'test-display-relation-' } },
+        ],
+      },
+    })
+    await prisma.album.deleteMany({
+      where: {
+        OR: [
+          { id: { startsWith: 'test-display-relation-' } },
+          { id: { startsWith: 'test-optional-album-' } },
+        ],
       },
     })
     await prisma.user.deleteMany({
@@ -77,7 +100,7 @@ describe('Music API - 音乐接口测试', () => {
       data: {
         id: `test-markdown-description-${suffix}`,
         title: 'Markdown Description Test Song',
-        artist: 'Markdown Description Test Artist',
+        artists: ['Markdown Description Test Artist'],
         album: '',
         addedBy: adminUser.user.uid,
       },
@@ -101,5 +124,204 @@ describe('Music API - 音乐接口测试', () => {
       select: { description: true },
     })
     expect(updatedSong?.description).toBe(markdownDescription)
+  })
+
+  it('创建歌曲时允许省略发行日期和时长', async () => {
+    const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const { agent, xsrfToken } = await createAuthenticatedAgent(
+      adminUser.user.email,
+      adminUser.plainPassword
+    )
+
+    const response = await agent
+      .post('/api/music')
+      .set('X-XSRF-TOKEN', xsrfToken)
+      .send({
+        id: `test-optional-metadata-${suffix}`,
+        title: 'Optional Metadata Test Song',
+        artists: ['Optional Metadata Test Artist'],
+      })
+
+    expect(response.status).toBe(201)
+    expect(response.body.song.releaseDate).toBeNull()
+    expect(response.body.song.durationMs).toBeNull()
+  })
+
+  it('创建歌曲时拒绝非法发行日期和时长', async () => {
+    const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const { agent, xsrfToken } = await createAuthenticatedAgent(
+      adminUser.user.email,
+      adminUser.plainPassword
+    )
+
+    const invalidDateResponse = await agent
+      .post('/api/music')
+      .set('X-XSRF-TOKEN', xsrfToken)
+      .send({
+        id: `test-optional-metadata-${suffix}-date`,
+        title: 'Invalid Date Test Song',
+        artists: ['Optional Metadata Test Artist'],
+        releaseDate: '2026-02-31',
+      })
+
+    expect(invalidDateResponse.status).toBe(400)
+
+    const invalidDurationResponse = await agent
+      .post('/api/music')
+      .set('X-XSRF-TOKEN', xsrfToken)
+      .send({
+        id: `test-optional-metadata-${suffix}-duration`,
+        title: 'Invalid Duration Test Song',
+        artists: ['Optional Metadata Test Artist'],
+        durationMs: -1,
+      })
+
+    expect(invalidDurationResponse.status).toBe(400)
+  })
+
+  it('创建专辑时允许省略发行日期', async () => {
+    const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const { agent, xsrfToken } = await createAuthenticatedAgent(
+      adminUser.user.email,
+      adminUser.plainPassword
+    )
+
+    const response = await agent
+      .post('/api/albums')
+      .set('X-XSRF-TOKEN', xsrfToken)
+      .send({
+        id: `test-optional-album-${suffix}`,
+        sourceId: `test-optional-album-source-${suffix}`,
+        title: 'Optional Album Release Date',
+        artist: 'Optional Album Artist',
+        cover: '',
+        description: 'Optional album description',
+        platformUrl: 'https://music.example.com/album/optional',
+      })
+
+    expect(response.status).toBe(201)
+    expect(response.body.album.releaseDate).toBeNull()
+  })
+
+  it('创建专辑时拒绝非法发行日期', async () => {
+    const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const { agent, xsrfToken } = await createAuthenticatedAgent(
+      adminUser.user.email,
+      adminUser.plainPassword
+    )
+
+    const response = await agent
+      .post('/api/albums')
+      .set('X-XSRF-TOKEN', xsrfToken)
+      .send({
+        id: `test-optional-album-${suffix}`,
+        title: 'Invalid Album Release Date',
+        artist: 'Optional Album Artist',
+        releaseDate: '2026-02-31',
+      })
+
+    expect(response.status).toBe(400)
+  })
+
+  it('重写专辑曲目关系时保留已有展示专辑选择', async () => {
+    const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const [album, displaySong, normalSong] = await Promise.all([
+      prisma.album.create({
+        data: {
+          id: `test-display-relation-album-${suffix}`,
+          platform: 'netease',
+          sourceId: `test-display-relation-album-${suffix}`,
+          title: 'Display Relation Album',
+          artist: 'Batch Artist',
+          cover: '',
+        },
+      }),
+      prisma.musicTrack.create({
+        data: {
+          id: `test-display-relation-song-display-${suffix}`,
+          title: 'Display Relation Song Display',
+          artists: ['Batch Artist'],
+          addedBy: adminUser.user.uid,
+        },
+      }),
+      prisma.musicTrack.create({
+        data: {
+          id: `test-display-relation-song-normal-${suffix}`,
+          title: 'Display Relation Song Normal',
+          artists: ['Batch Artist'],
+          addedBy: adminUser.user.uid,
+        },
+      }),
+    ])
+    await Promise.all([
+      prisma.songAlbumRelation.create({
+        data: {
+          songDocId: displaySong.docId,
+          albumDocId: album.docId,
+          discNumber: 1,
+          trackOrder: 0,
+          isDisplay: true,
+        },
+      }),
+      prisma.songAlbumRelation.create({
+        data: {
+          songDocId: normalSong.docId,
+          albumDocId: album.docId,
+          discNumber: 1,
+          trackOrder: 1,
+          isDisplay: false,
+        },
+      }),
+    ])
+
+    await applyAlbumTracksToRelations(album.docId, [
+      {
+        disc: 1,
+        name: '',
+        songs: [
+          { songDocId: normalSong.docId, trackOrder: 0 },
+          { songDocId: displaySong.docId, trackOrder: 1 },
+        ],
+      },
+    ])
+
+    const relations = await prisma.songAlbumRelation.findMany({
+      where: { albumDocId: album.docId },
+      orderBy: { trackOrder: 'asc' },
+    })
+    const displayRelation = relations.find((relation) => relation.songDocId === displaySong.docId)
+    const normalRelation = relations.find((relation) => relation.songDocId === normalSong.docId)
+    expect(displayRelation?.isDisplay).toBe(true)
+    expect(displayRelation?.trackOrder).toBe(1)
+    expect(normalRelation?.isDisplay).toBe(false)
+  })
+
+  it('音乐搜索和搜索建议支持艺术家名称部分匹配', async () => {
+    const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const song = await prisma.musicTrack.create({
+      data: {
+        id: `test-artist-partial-search-${suffix}`,
+        title: 'Artist Partial Search Test Song',
+        artists: ['黄诗扶'],
+        album: '',
+        addedBy: adminUser.user.uid,
+      },
+    })
+
+    const searchResponse = await request(app).get('/api/search').query({ q: '诗扶', type: 'music' })
+
+    expect(searchResponse.status).toBe(200)
+    expect(
+      searchResponse.body.music.some((item: { docId: string }) => item.docId === song.docId)
+    ).toBe(true)
+
+    const suggestResponse = await request(app).get('/api/search/suggest').query({ q: '诗扶' })
+
+    expect(suggestResponse.status).toBe(200)
+    expect(
+      suggestResponse.body.suggestions.some(
+        (item: { type: string; id?: string }) => item.type === 'music' && item.id === song.docId
+      )
+    ).toBe(true)
   })
 })

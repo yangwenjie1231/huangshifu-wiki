@@ -23,6 +23,8 @@ export {
 // === 通用解析与验证 ===
 export {
   parseDate,
+  normalizeOptionalDateOnly,
+  normalizeOptionalDurationMs,
   parseInteger,
   firstString,
   parseQueryString,

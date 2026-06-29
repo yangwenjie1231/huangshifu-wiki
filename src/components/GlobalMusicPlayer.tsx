@@ -1,37 +1,49 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Volume2, X } from 'lucide-react';
-import { useMusic } from '../context/MusicContext';
-import { formatTime } from '../lib/formatUtils';
-import { apiGet } from '../lib/apiClient';
-import { useFloatingPresence } from '../hooks/useFloatingPresence';
-import type { MusicPlayUrlResponse } from '../types/api';
+import React, { useRef, useEffect, useState, useCallback } from 'react'
+import { Play, Pause, SkipBack, SkipForward, Volume2, X } from 'lucide-react'
+import { useMusic } from '../context/MusicContext'
+import { formatTime } from '../lib/formatUtils'
+import { formatMusicCredits } from '../lib/musicCredits'
+import { apiGet } from '../lib/apiClient'
+import { useFloatingPresence } from '../hooks/useFloatingPresence'
+import type { MusicPlayUrlResponse } from '../types/api'
 
 interface AudioStats {
-  bufferHealth: number;
-  isStalling: boolean;
-  stallCount: number;
-  readyState: number;
+  bufferHealth: number
+  isStalling: boolean
+  stallCount: number
+  readyState: number
 }
 
 export const GlobalMusicPlayer = () => {
-  const { 
-    currentSong, setCurrentSong, isPlaying, setIsPlaying, playNext, playPrevious,
-    currentTime: contextCurrentTime, duration: contextDuration, volume: contextVolume, isMuted: contextIsMuted,
-    seekTo, setVolume: contextSetVolume, toggleMute: contextToggleMute, setDuration: contextSetDuration
-  } = useMusic();
-  const [resolvedPlayUrl, setResolvedPlayUrl] = useState('');
-  const [resolvingPlayUrl, setResolvingPlayUrl] = useState(false);
-  const [playUrlError, setPlayUrlError] = useState('');
-  const [volumeSliderExpanded, setVolumeSliderExpanded] = useState(false);
+  const {
+    currentSong,
+    setCurrentSong,
+    isPlaying,
+    setIsPlaying,
+    playNext,
+    playPrevious,
+    currentTime: contextCurrentTime,
+    duration: contextDuration,
+    volume: contextVolume,
+    isMuted: contextIsMuted,
+    seekTo,
+    setVolume: contextSetVolume,
+    toggleMute: contextToggleMute,
+    setDuration: contextSetDuration,
+  } = useMusic()
+  const [resolvedPlayUrl, setResolvedPlayUrl] = useState('')
+  const [resolvingPlayUrl, setResolvingPlayUrl] = useState(false)
+  const [playUrlError, setPlayUrlError] = useState('')
+  const [volumeSliderExpanded, setVolumeSliderExpanded] = useState(false)
   const [audioStats, setAudioStats] = useState<AudioStats>({
     bufferHealth: 0,
     isStalling: false,
     stallCount: 0,
-    readyState: 0
-  });
-  const volumeHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const timeUpdateRef = useRef<number>(0);
+    readyState: 0,
+  })
+  const volumeHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const timeUpdateRef = useRef<number>(0)
 
   useEffect(() => {
     return () => {
@@ -45,49 +57,52 @@ export const GlobalMusicPlayer = () => {
   useEffect(() => {
     const resolvePlayUrl = async () => {
       if (!currentSong) {
-        setResolvedPlayUrl('');
-        setResolvingPlayUrl(false);
-        setPlayUrlError('');
-        return;
+        setResolvedPlayUrl('')
+        setResolvingPlayUrl(false)
+        setPlayUrlError('')
+        return
       }
 
-      const fallback = currentSong.audioUrl || '';
+      const fallback = currentSong.audioUrl || ''
       if (!currentSong.docId) {
-        setResolvedPlayUrl(currentSong.playUrl || fallback);
-        setResolvingPlayUrl(false);
-        setPlayUrlError('');
-        return;
+        setResolvedPlayUrl(currentSong.playUrl || fallback)
+        setResolvingPlayUrl(false)
+        setPlayUrlError('')
+        return
       }
 
-      const neteaseId = currentSong.platformIds?.neteaseId;
+      const neteaseId = currentSong.platformIds?.neteaseId
       if (currentSong.primaryPlatform === 'netease' && neteaseId) {
-        const directUrl = `https://music.163.com/song/media/outer/url?id=${neteaseId}.mp3`;
-        setResolvedPlayUrl(directUrl);
-        setResolvingPlayUrl(false);
-        setPlayUrlError('');
-        return;
+        const directUrl = `https://music.163.com/song/media/outer/url?id=${neteaseId}.mp3`
+        setResolvedPlayUrl(directUrl)
+        setResolvingPlayUrl(false)
+        setPlayUrlError('')
+        return
       }
 
-      setResolvingPlayUrl(true);
-      setPlayUrlError('');
+      setResolvingPlayUrl(true)
+      setPlayUrlError('')
 
       try {
-        const data = await apiGet<MusicPlayUrlResponse>(`/api/music/${encodeURIComponent(currentSong.docId)}/play-url`);
-        const nextUrl = typeof data.playUrl === 'string' && data.playUrl.trim()
-          ? data.playUrl.trim()
-          : (currentSong.playUrl || fallback);
-        setResolvedPlayUrl(nextUrl);
+        const data = await apiGet<MusicPlayUrlResponse>(
+          `/api/music/${encodeURIComponent(currentSong.docId)}/play-url`
+        )
+        const nextUrl =
+          typeof data.playUrl === 'string' && data.playUrl.trim()
+            ? data.playUrl.trim()
+            : currentSong.playUrl || fallback
+        setResolvedPlayUrl(nextUrl)
       } catch (error) {
-        console.error('Resolve play url failed:', error);
-        setResolvedPlayUrl(currentSong.playUrl || fallback);
-        setPlayUrlError('播放地址获取失败，已使用备用链接');
+        console.error('Resolve play url failed:', error)
+        setResolvedPlayUrl(currentSong.playUrl || fallback)
+        setPlayUrlError('播放地址获取失败，已使用备用链接')
       } finally {
-        setResolvingPlayUrl(false);
+        setResolvingPlayUrl(false)
       }
-    };
+    }
 
-    resolvePlayUrl();
-  }, [currentSong]);
+    resolvePlayUrl()
+  }, [currentSong])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -100,7 +115,7 @@ export const GlobalMusicPlayer = () => {
         bufferHealth: 0,
         isStalling: false,
         stallCount: 0,
-        readyState: 0
+        readyState: 0,
       })
     }
 
@@ -145,115 +160,118 @@ export const GlobalMusicPlayer = () => {
 
   useEffect(() => {
     if (audioRef.current) {
-      audioRef.current.volume = contextIsMuted ? 0 : contextVolume;
+      audioRef.current.volume = contextIsMuted ? 0 : contextVolume
     }
-  }, [contextVolume, contextIsMuted]);
+  }, [contextVolume, contextIsMuted])
 
   useEffect(() => {
     if (audioRef.current && Math.abs(audioRef.current.currentTime - contextCurrentTime) > 0.5) {
-      audioRef.current.currentTime = contextCurrentTime;
+      audioRef.current.currentTime = contextCurrentTime
     }
-  }, [contextCurrentTime]);
+  }, [contextCurrentTime])
 
   const handleVolumeMouseEnter = () => {
     if (volumeHideTimeoutRef.current) {
-      clearTimeout(volumeHideTimeoutRef.current);
-      volumeHideTimeoutRef.current = null;
+      clearTimeout(volumeHideTimeoutRef.current)
+      volumeHideTimeoutRef.current = null
     }
-    setVolumeSliderExpanded(true);
-  };
+    setVolumeSliderExpanded(true)
+  }
 
   const handleVolumeMouseLeave = () => {
     volumeHideTimeoutRef.current = setTimeout(() => {
-      setVolumeSliderExpanded(false);
-    }, 1000);
-  };
+      setVolumeSliderExpanded(false)
+    }, 1000)
+  }
 
   const togglePlay = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsPlaying(!isPlaying);
-  };
+    e.stopPropagation()
+    setIsPlaying(!isPlaying)
+  }
 
   const handlePlayPrevious = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    playPrevious();
-  };
+    e.stopPropagation()
+    playPrevious()
+  }
 
   const handlePlayNext = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    playNext();
-  };
+    e.stopPropagation()
+    playNext()
+  }
 
   // 节流的时间更新处理 - 每 250ms 最多更新一次
   const onTimeUpdate = useCallback(() => {
-    const now = Date.now();
-    if (now - timeUpdateRef.current < 250) return;
-    timeUpdateRef.current = now;
-    
+    const now = Date.now()
+    if (now - timeUpdateRef.current < 250) return
+    timeUpdateRef.current = now
+
     if (audioRef.current) {
-      seekTo(audioRef.current.currentTime);
-      
+      seekTo(audioRef.current.currentTime)
+
       // 更新音频统计
-      const audio = audioRef.current;
-      let bufferHealth = 0;
+      const audio = audioRef.current
+      let bufferHealth = 0
       if (audio.buffered.length > 0) {
-        const bufferedEnd = audio.buffered.end(audio.buffered.length - 1);
-        bufferHealth = bufferedEnd - audio.currentTime;
+        const bufferedEnd = audio.buffered.end(audio.buffered.length - 1)
+        bufferHealth = bufferedEnd - audio.currentTime
       }
-      
-      setAudioStats(prev => ({
+
+      setAudioStats((prev) => ({
         ...prev,
         bufferHealth,
-        readyState: audio.readyState
-      }));
+        readyState: audio.readyState,
+      }))
     }
-  }, [seekTo]);
+  }, [seekTo])
 
   const onLoadedMetadata = useCallback(() => {
     if (audioRef.current && audioRef.current.duration) {
-      contextSetDuration(audioRef.current.duration);
+      contextSetDuration(audioRef.current.duration)
     }
-  }, [contextSetDuration]);
+  }, [contextSetDuration])
 
   // 卡顿检测
   const onWaiting = useCallback(() => {
-    setAudioStats(prev => ({
+    setAudioStats((prev) => ({
       ...prev,
       isStalling: true,
-      stallCount: prev.stallCount + 1
-    }));
-    console.warn('[音频缓冲] 正在等待数据...');
-  }, []);
+      stallCount: prev.stallCount + 1,
+    }))
+    console.warn('[音频缓冲] 正在等待数据...')
+  }, [])
 
   const onCanPlay = useCallback(() => {
-    setAudioStats(prev => ({
+    setAudioStats((prev) => ({
       ...prev,
-      isStalling: false
-    }));
-  }, []);
+      isStalling: false,
+    }))
+  }, [])
 
   const onError = useCallback((e: React.SyntheticEvent<HTMLAudioElement>) => {
-    const audio = e.currentTarget;
+    const audio = e.currentTarget
     console.error('[音频错误]', {
       error: audio.error,
       networkState: audio.networkState,
       readyState: audio.readyState,
-      currentSrc: audio.currentSrc
-    });
-    setPlayUrlError('音频加载失败，请检查网络连接');
-  }, []);
+      currentSrc: audio.currentSrc,
+    })
+    setPlayUrlError('音频加载失败，请检查网络连接')
+  }, [])
 
-  const handleProgressChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const time = parseFloat(e.target.value);
-    if (audioRef.current) {
-      audioRef.current.currentTime = time;
-      seekTo(time);
-    }
-  }, [seekTo]);
+  const handleProgressChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const time = parseFloat(e.target.value)
+      if (audioRef.current) {
+        audioRef.current.currentTime = time
+        seekTo(time)
+      }
+    },
+    [seekTo]
+  )
 
-  const volumePresence = useFloatingPresence(volumeSliderExpanded);
+  const volumePresence = useFloatingPresence(volumeSliderExpanded)
 
-  if (!currentSong) return null;
+  if (!currentSong) return null
 
   return (
     <div
@@ -266,7 +284,9 @@ export const GlobalMusicPlayer = () => {
         aria-label="播放进度"
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={contextDuration > 0 ? Math.round((contextCurrentTime / contextDuration) * 100) : 0}
+        aria-valuenow={
+          contextDuration > 0 ? Math.round((contextCurrentTime / contextDuration) * 100) : 0
+        }
       >
         <input
           type="range"
@@ -278,7 +298,10 @@ export const GlobalMusicPlayer = () => {
           className="absolute top-0 left-0 w-full h-[2px] appearance-none cursor-pointer bg-transparent accent-antique"
         />
         <div
-          ref={(el) => { if (el) el.style.width = `${contextDuration > 0 ? (contextCurrentTime / contextDuration) * 100 : 0}%` }}
+          ref={(el) => {
+            if (el)
+              el.style.width = `${contextDuration > 0 ? (contextCurrentTime / contextDuration) * 100 : 0}%`
+          }}
           className="h-full bg-[var(--color-accent-antique)] pointer-events-none progress-bar-fill"
         />
       </div>
@@ -294,8 +317,12 @@ export const GlobalMusicPlayer = () => {
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <p className="text-[0.875rem] font-semibold text-text-primary truncate tracking-wide">{currentSong.title}</p>
-          <p className="text-xs text-text-muted truncate mt-0.5">{currentSong.artist}</p>
+          <p className="text-[0.875rem] font-semibold text-text-primary truncate tracking-wide">
+            {currentSong.title}
+          </p>
+          <p className="text-xs text-text-muted truncate mt-0.5">
+            {formatMusicCredits(currentSong.artists, '未知歌手')}
+          </p>
           {audioStats.isStalling && (
             <p className="text-[0.7rem] theme-text-warning animate-pulse">缓冲中...</p>
           )}
@@ -389,5 +416,5 @@ export const GlobalMusicPlayer = () => {
         onEnded={playNext}
       />
     </div>
-  );
-};
+  )
+}

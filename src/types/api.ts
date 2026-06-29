@@ -1,137 +1,137 @@
-import type { GalleryItem } from './entities';
+import type { GalleryItem } from './entities'
 
 export interface ApiResponse<T> {
-  data: T;
+  data: T
 }
 
 export interface PaginatedResponse<T> {
-  items: T[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
+  items: T[]
+  total: number
+  page: number
+  limit: number
+  totalPages: number
 }
 
 export interface HomeFeedResponse {
   announcements: Array<{
-    id: string;
-    content: string;
-    link?: string;
-    createdAt: string;
-  }>;
+    id: string
+    content: string
+    link?: string
+    createdAt: string
+  }>
   hotPosts: Array<{
-    id: string;
-    title: string;
-    section: string;
-    commentsCount: number;
-    likesCount: number;
-    createdAt: string;
-    updatedAt: string;
-  }>;
+    id: string
+    title: string
+    section: string
+    commentsCount: number
+    likesCount: number
+    createdAt: string
+    updatedAt: string
+  }>
   recentPosts: Array<{
-    id: string;
-    title: string;
-    section: string;
-    commentsCount: number;
-    likesCount: number;
-    updatedAt: string;
-  }>;
+    id: string
+    title: string
+    section: string
+    commentsCount: number
+    likesCount: number
+    updatedAt: string
+  }>
 }
 
 export interface NotificationsResponse {
   notifications: Array<{
-    id: string;
-    type: 'reply' | 'like' | 'review_result' | 'mention';
-    payload: Record<string, unknown>;
-    isRead: boolean;
-    createdAt: string;
-  }>;
-  total: number;
-  unreadCount: number;
-  page: number;
-  limit: number;
+    id: string
+    type: 'reply' | 'like' | 'review_result' | 'mention'
+    payload: Record<string, unknown>
+    isRead: boolean
+    createdAt: string
+  }>
+  total: number
+  unreadCount: number
+  page: number
+  limit: number
 }
 
 export interface UploadSessionResponse {
   session: {
-    id: string;
-    status: 'open' | 'finalized' | 'expired';
-    maxFiles: number;
-    uploadedFiles: number;
-    expiresAt: string;
-  };
+    id: string
+    status: 'open' | 'finalized' | 'expired'
+    maxFiles: number
+    uploadedFiles: number
+    expiresAt: string
+  }
 }
 
 export interface UploadFileResponse {
   session: {
-    id: string;
-    status: 'open' | 'finalized' | 'expired';
-    uploadedFiles: number;
-    maxFiles: number;
-  };
+    id: string
+    status: 'open' | 'finalized' | 'expired'
+    uploadedFiles: number
+    maxFiles: number
+  }
   asset: {
-    id: string;
-    publicUrl: string;
-    storageKey?: string;
-    fileName: string;
-    mimeType: string;
-    sizeBytes: number;
-    md5?: string;
-  };
+    id: string
+    publicUrl: string
+    storageKey?: string
+    fileName: string
+    mimeType: string
+    sizeBytes: number
+    md5?: string
+  }
   tripleStorage?: {
-    localUrl: string;
-    s3Url?: string;
-    externalUrl?: string;
-  };
+    localUrl: string
+    s3Url?: string
+    externalUrl?: string
+  }
 }
 
 export interface GalleryCreateResponse {
-  gallery: GalleryItem;
+  gallery: GalleryItem
 }
 
 export interface ImageStats {
-  total: number;
+  total: number
   stats: {
-    local: number;
-    external: number;
-    s3: number;
-  };
+    local: number
+    external: number
+    s3: number
+  }
 }
 
 export interface ImagePreference {
-  strategy: 'local' | 's3' | 'external';
-  fallback: boolean;
+  strategy: 'local' | 's3' | 'external'
+  fallback: boolean
 }
 
 export interface EmailVerificationPublicConfig {
-  enabled: boolean;
+  enabled: boolean
 }
 
 export interface EmailVerificationAdminConfig extends EmailVerificationPublicConfig {
-  publicBaseUrl: string;
-  tokenTtlMinutes: number;
-  smtpHost: string;
-  smtpPort: number;
-  smtpSecure: boolean;
-  smtpUser: string;
-  smtpFrom: string;
-  smtpPassSet: boolean;
+  publicBaseUrl: string
+  tokenTtlMinutes: number
+  smtpHost: string
+  smtpPort: number
+  smtpSecure: boolean
+  smtpUser: string
+  smtpFrom: string
+  smtpPassSet: boolean
 }
 
 export interface RegistrationConfig {
-  enabled: boolean;
+  enabled: boolean
 }
 
 // ============================================================================
 // 错误类型定义
 // ============================================================================
 
-export type ErrorType = 'NetworkError' | 'AuthError' | 'BusinessError' | 'ServerError';
+export type ErrorType = 'NetworkError' | 'AuthError' | 'BusinessError' | 'ServerError'
 
 export interface ApiErrorObject {
-  error: string;
-  code?: string;
-  details?: Record<string, unknown>;
+  error: string
+  code?: string
+  details?: Record<string, unknown>
 }
 
 // ============================================================================
@@ -139,15 +139,15 @@ export interface ApiErrorObject {
 // ============================================================================
 
 export interface PaginationParams {
-  page?: number;
-  limit?: number;
-  sort?: string;
-  order?: 'asc' | 'desc';
+  page?: number
+  limit?: number
+  sort?: string
+  order?: 'asc' | 'desc'
 }
 
 export interface SuccessResponse {
-  success: boolean;
-  message?: string;
+  success: boolean
+  message?: string
 }
 
 // ============================================================================
@@ -156,33 +156,33 @@ export interface SuccessResponse {
 
 export interface AuthMeResponse {
   user: {
-    uid: string;
-    nickname: string;
-    avatarUrl?: string;
-    role: 'user' | 'admin' | 'super_admin';
-    status: 'active' | 'banned' | 'pending';
-    preferences?: Record<string, unknown>;
-  } | null;
+    uid: string
+    nickname: string
+    avatarUrl?: string
+    role: 'user' | 'admin' | 'super_admin'
+    status: 'active' | 'banned' | 'pending'
+    preferences?: Record<string, unknown>
+  } | null
 }
 
 export interface AuthRegisterRequest {
-  email: string;
-  password: string;
-  nickname: string;
+  email: string
+  password: string
+  nickname: string
 }
 
 export interface AuthLoginRequest {
-  email: string;
-  password: string;
+  email: string
+  password: string
 }
 
 export interface PasswordResetRequest {
-  email: string;
+  email: string
 }
 
 export interface PasswordResetConfirmRequest {
-  token: string;
-  newPassword: string;
+  token: string
+  newPassword: string
 }
 
 // ============================================================================
@@ -190,25 +190,25 @@ export interface PasswordResetConfirmRequest {
 // ============================================================================
 
 export interface UserUpdateRequest {
-  displayName?: string;
-  signature?: string;
-  bio?: string;
-  photoURL?: string | null;
-  preferences?: Record<string, unknown>;
+  displayName?: string
+  signature?: string
+  bio?: string
+  photoURL?: string | null
+  preferences?: Record<string, unknown>
 }
 
 export interface UserResponse {
   user: {
-    uid: string;
-    nickname: string;
-    avatarUrl?: string;
-    role: string;
-    status: string;
-    emailVerified?: boolean;
-    emailVerifiedAt?: string | null;
-    createdAt: string;
-    updatedAt: string;
-  };
+    uid: string
+    nickname: string
+    avatarUrl?: string
+    role: string
+    status: string
+    emailVerified?: boolean
+    emailVerifiedAt?: string | null
+    createdAt: string
+    updatedAt: string
+  }
 }
 
 // ============================================================================
@@ -217,22 +217,22 @@ export interface UserResponse {
 
 export interface WikiDetailResponse {
   wiki: {
-    id: string;
-    slug: string;
-    title: string;
-    category: string;
-    content: string;
-    summary?: string;
-    tags?: string[];
-    likes: number;
-    dislikes: number;
-    views: number;
-    isPinned: boolean;
-    status: 'draft' | 'pending' | 'approved' | 'rejected';
-    createdAt: string;
-    updatedAt: string;
-    author?: UserResponse['user'];
-  };
+    id: string
+    slug: string
+    title: string
+    category: string
+    content: string
+    summary?: string
+    tags?: string[]
+    likes: number
+    dislikes: number
+    views: number
+    isPinned: boolean
+    status: 'draft' | 'pending' | 'approved' | 'rejected'
+    createdAt: string
+    updatedAt: string
+    author?: UserResponse['user']
+  }
 }
 
 export interface WikiListResponse extends PaginatedResponse<WikiDetailResponse['wiki']> {}
@@ -243,25 +243,25 @@ export interface WikiListResponse extends PaginatedResponse<WikiDetailResponse['
 
 export interface PostDetailResponse {
   post: {
-    id: string;
-    title: string;
-    content: string;
-    sectionId: string;
-    authorId: string;
-    likes: number;
-    dislikes: number;
-    commentsCount: number;
-    views: number;
-    isPinned: boolean;
-    status: string;
-    createdAt: string;
-    updatedAt: string;
-    author?: UserResponse['user'];
+    id: string
+    title: string
+    content: string
+    sectionId: string
+    authorId: string
+    likes: number
+    dislikes: number
+    commentsCount: number
+    views: number
+    isPinned: boolean
+    status: string
+    createdAt: string
+    updatedAt: string
+    author?: UserResponse['user']
     section?: {
-      id: string;
-      name: string;
-    };
-  };
+      id: string
+      name: string
+    }
+  }
 }
 
 export interface PostListResponse extends PaginatedResponse<PostDetailResponse['post']> {}
@@ -272,37 +272,47 @@ export interface PostListResponse extends PaginatedResponse<PostDetailResponse['
 
 export interface MusicListResponse {
   songs: Array<{
-    id: string;
-    docId: string;
-    title: string;
-    artist: string;
-    album?: string;
-    description?: string | null;
-    coverUrl?: string;
-    playUrl?: string;
-    duration?: number;
-    createdAt: string;
-  }>;
-  total: number;
+    id: string
+    docId: string
+    title: string
+    artists: string[]
+    lyricists?: string[]
+    composers?: string[]
+    arrangers?: string[]
+    vocals?: string[]
+    album?: string
+    description?: string | null
+    coverUrl?: string
+    playUrl?: string
+    releaseDate?: string | null
+    durationMs?: number | null
+    createdAt: string
+  }>
+  total: number
 }
 
 export interface MusicDetailResponse {
   song: {
-    id: string;
-    docId: string;
-    title: string;
-    artist: string;
-    album?: string;
-    description?: string | null;
-    coverUrl?: string;
-    playUrl?: string;
-    duration?: number;
-    createdAt: string;
-  };
+    id: string
+    docId: string
+    title: string
+    artists: string[]
+    lyricists?: string[]
+    composers?: string[]
+    arrangers?: string[]
+    vocals?: string[]
+    album?: string
+    description?: string | null
+    coverUrl?: string
+    playUrl?: string
+    releaseDate?: string | null
+    durationMs?: number | null
+    createdAt: string
+  }
 }
 
 export interface MusicPlayUrlResponse {
-  playUrl: string;
+  playUrl: string
 }
 
 // ============================================================================
@@ -310,19 +320,19 @@ export interface MusicPlayUrlResponse {
 // ============================================================================
 
 export interface GalleryDetailResponse {
-  gallery: GalleryItem;
+  gallery: GalleryItem
 }
 
 export interface GalleryListResponse {
-  galleries: GalleryItem[];
-  total: number;
-  page: number;
-  limit: number;
-  hasMore: boolean;
+  galleries: GalleryItem[]
+  total: number
+  page: number
+  limit: number
+  hasMore: boolean
 }
 
 export interface GalleryUploadResponse {
-  urls: string[];
+  urls: string[]
 }
 
 // ============================================================================
@@ -330,81 +340,81 @@ export interface GalleryUploadResponse {
 // ============================================================================
 
 export interface AdminBackup {
-  filename: string;
-  size: number;
-  createdAt: string;
-  note: string;
+  filename: string
+  size: number
+  createdAt: string
+  note: string
 }
 
 export interface AdminBackupsResponse {
-  backups: AdminBackup[];
+  backups: AdminBackup[]
 }
 
-export type AdminReviewQueueType = 'wiki' | 'posts' | 'galleries';
+export type AdminReviewQueueType = 'wiki' | 'posts' | 'galleries'
 
-export type AdminReviewItemType = 'wiki' | 'post' | 'gallery';
+export type AdminReviewItemType = 'wiki' | 'post' | 'gallery'
 
 export type AdminReviewQueueItem = {
-  id: string;
-  slug?: string;
-  title?: string;
-  category?: string;
-  section?: string;
-  sectionName?: string;
-  content?: string;
-  description?: string;
-  copyright?: string | null;
-  tags?: string[];
-  locationCode?: string | null;
-  locationName?: string | null;
-  locationDetail?: string | null;
-  status?: 'draft' | 'pending' | 'published' | 'rejected';
-  reviewNote?: string | null;
-  reviewedBy?: string | null;
-  reviewedAt?: string | null;
-  viewCount?: number;
-  favoritesCount?: number;
-  likesCount?: number;
-  dislikesCount?: number;
-  commentsCount?: number;
-  isPinned?: boolean;
-  published?: boolean;
-  publishedAt?: string | null;
-  authorUid?: string;
-  authorName?: string | null;
-  lastEditorUid?: string;
-  lastEditorName?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
-  sensitiveWords?: string[];
+  id: string
+  slug?: string
+  title?: string
+  category?: string
+  section?: string
+  sectionName?: string
+  content?: string
+  description?: string
+  copyright?: string | null
+  tags?: string[]
+  locationCode?: string | null
+  locationName?: string | null
+  locationDetail?: string | null
+  status?: 'draft' | 'pending' | 'published' | 'rejected'
+  reviewNote?: string | null
+  reviewedBy?: string | null
+  reviewedAt?: string | null
+  viewCount?: number
+  favoritesCount?: number
+  likesCount?: number
+  dislikesCount?: number
+  commentsCount?: number
+  isPinned?: boolean
+  published?: boolean
+  publishedAt?: string | null
+  authorUid?: string
+  authorName?: string | null
+  lastEditorUid?: string
+  lastEditorName?: string | null
+  createdAt?: string
+  updatedAt?: string
+  sensitiveWords?: string[]
   images?: {
-    id: string;
-    url: string;
-    originalUrl?: string | null;
-    thumbnailUrl?: string | null;
-    name: string;
-  }[];
-};
+    id: string
+    url: string
+    originalUrl?: string | null
+    thumbnailUrl?: string | null
+    name: string
+  }[]
+}
 
 export type AdminReviewQueueMergedItem = AdminReviewQueueItem & {
-  reviewType: AdminReviewItemType;
-  reviewId: string;
-};
+  reviewType: AdminReviewItemType
+  reviewId: string
+}
 
 export interface AdminReviewQueueResponse {
-  type: AdminReviewQueueType;
-  status: 'draft' | 'pending' | 'published' | 'rejected';
-  items: AdminReviewQueueItem[];
+  type: AdminReviewQueueType
+  status: 'draft' | 'pending' | 'published' | 'rejected'
+  items: AdminReviewQueueItem[]
 }
 
 export interface AdminReviewQueueCountResponse {
-  status: 'draft' | 'pending' | 'published' | 'rejected';
+  status: 'draft' | 'pending' | 'published' | 'rejected'
   counts: {
-    wiki: number;
-    posts: number;
-    galleries: number;
-  };
-  total: number;
+    wiki: number
+    posts: number
+    galleries: number
+  }
+  total: number
 }
 
 // ============================================================================
@@ -431,7 +441,7 @@ export type TextSearchResult =
       sourceId: string
       score: number
       chunkPreview: string
-      entity: { id: string; title?: string; artist?: string; [key: string]: unknown }
+      entity: { id: string; title?: string; artists?: string[]; [key: string]: unknown }
     }
   | {
       sourceType: 'album'

@@ -1,4 +1,5 @@
 import { Router, type NextFunction, type Request, type Response } from 'express'
+import { Prisma } from '@prisma/client'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
@@ -15,6 +16,7 @@ import {
   buildWikiVisibilityWhere,
   buildPostVisibilityWhere,
   buildGalleryVisibilityWhere,
+  fetchSongsWithRelations,
   toWikiResponse,
   toPostResponse,
   toGalleryResponse,
@@ -28,6 +30,7 @@ import {
 } from '../utils'
 import { prisma } from '../prisma'
 import { UPLOAD_MAX_FILE_SIZE_BYTES } from '../../lib/uploadLimits'
+import { formatMusicCredits } from '../../lib/musicCredits'
 import type { ImageSourceType, ImageEmbeddingPayload } from '../vector/qdrantService'
 import { createUploadStorageInfo } from '../uploadPath'
 
@@ -38,6 +41,23 @@ const VECTOR_SEARCH_CANDIDATE_LIMIT = 200
 const QDRANT_TIMEOUT_MS = Number(process.env.QDRANT_TIMEOUT_MS || 2000)
 export const RRF_K = 60
 const SEMANTIC_SEARCH_DISABLED_MESSAGE = '语义搜索功能未启用'
+
+async function findMusicDocIdsByArtistPartial(query: string, take: number) {
+  if (!query) return [] as string[]
+  const rows = await prisma.$queryRaw<Array<{ docId: string }>>(Prisma.sql`
+    SELECT "docId"
+    FROM "MusicTrack"
+    WHERE "deletedAt" IS NULL
+      AND EXISTS (
+        SELECT 1
+        FROM unnest("artists") AS artist_name(name)
+        WHERE artist_name.name LIKE ${`%${query}%`}
+      )
+    ORDER BY "updatedAt" DESC
+    LIMIT ${take}
+  `)
+  return rows.map((row) => row.docId)
+}
 
 type ClipEmbeddingModule = typeof import('../vector/clipEmbedding')
 type QdrantServiceModule = typeof import('../vector/qdrantService')
@@ -468,7 +488,7 @@ async function processTextSearchResults(
         })
       : Promise.resolve([]),
     musicDocIds.length
-      ? prisma.musicTrack.findMany({ where: { docId: { in: musicDocIds }, deletedAt: null } })
+      ? fetchSongsWithRelations({ docId: { in: musicDocIds }, deletedAt: null })
       : Promise.resolve([]),
     albumDocIds.length
       ? prisma.album.findMany({ where: { docId: { in: albumDocIds }, deletedAt: null } })
@@ -660,10 +680,14 @@ export function buildHybridResponse(
       .filter((v) => v.type === 'gallery')
       .map((v) => v.data as Awaited<ReturnType<typeof toGalleryResponse>>),
     music: keywordFlat
-      .filter((v) => v.type === 'music' && v.data && typeof v.data === 'object' && 'createdAt' in v.data)
+      .filter(
+        (v) => v.type === 'music' && v.data && typeof v.data === 'object' && 'createdAt' in v.data
+      )
       .map((v) => toMusicResponse(v.data as Parameters<typeof toMusicResponse>[0])),
     albums: keywordFlat
-      .filter((v) => v.type === 'album' && v.data && typeof v.data === 'object' && 'createdAt' in v.data)
+      .filter(
+        (v) => v.type === 'album' && v.data && typeof v.data === 'object' && 'createdAt' in v.data
+      )
       .map((v) => toAlbumResponse(v.data as Parameters<typeof toAlbumResponse>[0])),
     searchMeta: {
       mode: degraded ? 'keyword (degraded)' : mode,
@@ -714,6 +738,8 @@ router.get('/', searchLimiter, async (req: AuthenticatedRequest, res) => {
     const cacheKey = `search:${q}:${category || 'all'}:${type}:${mode}:${req.authUser?.role || 'anonymous'}`
     const cached = enhancedCache.get(cacheKey)
     if (cached) return res.json(cached)
+    const musicArtistMatchDocIds =
+      wantsMusic && q ? await findMusicDocIdsByArtistPartial(q, 100) : []
 
     const wikiPromise = wantsWiki
       ? prisma.wikiPage.findMany({
@@ -858,7 +884,10 @@ router.get('/', searchLimiter, async (req: AuthenticatedRequest, res) => {
               ? {
                   OR: [
                     { title: { contains: q } },
-                    { artist: { contains: q } },
+                    { artists: { has: q } },
+                    ...(musicArtistMatchDocIds.length
+                      ? [{ docId: { in: musicArtistMatchDocIds } }]
+                      : []),
                     { album: { contains: q } },
                     { lyric: { contains: q } },
                   ],
@@ -869,10 +898,16 @@ router.get('/', searchLimiter, async (req: AuthenticatedRequest, res) => {
             docId: true,
             id: true,
             title: true,
-            artist: true,
+            artists: true,
+            lyricists: true,
+            composers: true,
+            arrangers: true,
+            vocals: true,
             album: true,
             cover: true,
             audioUrl: true,
+            releaseDate: true,
+            durationMs: true,
             primaryPlatform: true,
             enabledPlatform: true,
             neteaseId: true,
@@ -901,6 +936,7 @@ router.get('/', searchLimiter, async (req: AuthenticatedRequest, res) => {
                     docId: true,
                     title: true,
                     artist: true,
+                    releaseDate: true,
                   },
                 },
               },
@@ -941,6 +977,7 @@ router.get('/', searchLimiter, async (req: AuthenticatedRequest, res) => {
             description: true,
             platformUrl: true,
             tracks: true,
+            releaseDate: true,
             defaultCoverSource: true,
             covers: {
               orderBy: { sortOrder: 'asc' },
@@ -958,7 +995,7 @@ router.get('/', searchLimiter, async (req: AuthenticatedRequest, res) => {
                     docId: true,
                     id: true,
                     title: true,
-                    artist: true,
+                    artists: true,
                     cover: true,
                   },
                 },
@@ -1271,6 +1308,7 @@ router.get('/suggest', searchLimiter, async (req: AuthenticatedRequest, res) => 
     }
 
     const normalized = normalizeKeyword(q)
+    const musicArtistMatchDocIds = await findMusicDocIdsByArtistPartial(q, 3)
 
     const [keywordMatches, wikiMatches, postMatches, musicMatches, albumMatches] =
       await Promise.all([
@@ -1302,11 +1340,15 @@ router.get('/suggest', searchLimiter, async (req: AuthenticatedRequest, res) => 
         prisma.musicTrack.findMany({
           where: {
             deletedAt: null,
-            OR: [{ title: { contains: q } }, { artist: { contains: q } }],
+            OR: [
+              { title: { contains: q } },
+              { artists: { has: q } },
+              ...(musicArtistMatchDocIds.length ? [{ docId: { in: musicArtistMatchDocIds } }] : []),
+            ],
           },
           orderBy: { updatedAt: 'desc' },
           take: 3,
-          select: { docId: true, title: true, artist: true },
+          select: { docId: true, title: true, artists: true },
         }),
         prisma.album.findMany({
           where: {
@@ -1339,7 +1381,12 @@ router.get('/suggest', searchLimiter, async (req: AuthenticatedRequest, res) => 
     })
 
     musicMatches.forEach((m) => {
-      suggestions.push({ type: 'music', text: m.title, subtext: m.artist, id: m.docId })
+      suggestions.push({
+        type: 'music',
+        text: m.title,
+        subtext: formatMusicCredits(m.artists, '未知歌手'),
+        id: m.docId,
+      })
     })
 
     albumMatches.forEach((a) => {

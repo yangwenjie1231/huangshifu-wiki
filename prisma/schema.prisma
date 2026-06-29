@@ -783,6 +783,7 @@ model Album {
   description        String?
   platformUrl        String?
   tracks             Json?
+  releaseDate        DateTime?           @db.Date
   defaultCoverSource String?
   deletedAt          DateTime?
   deletedBy          String?
@@ -803,12 +804,18 @@ model MusicTrack {
   docId     String   @id @default(cuid())
   id        String   @unique
   title     String
-  artist    String
+  artists   String[] @default([])
+  lyricists String[] @default([])
+  composers String[] @default([])
+  arrangers String[] @default([])
+  vocals    String[] @default([])
   album     String   @default("")
   cover     String   @default("")
   audioUrl  String   @default("")
   lyric     String?
   description String?
+  releaseDate DateTime? @db.Date
+  durationMs  Int?
   primaryPlatform    MusicPlatform   @default(netease)
   enabledPlatform    MusicPlatform?
   neteaseId          String?

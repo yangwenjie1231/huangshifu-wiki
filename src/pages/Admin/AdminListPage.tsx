@@ -16,10 +16,17 @@ import {
   XCircle,
 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { apiDelete, apiGet, apiPatch, apiPost, invalidateApiCacheByPrefix } from '../../lib/apiClient'
+import {
+  apiDelete,
+  apiGet,
+  apiPatch,
+  apiPost,
+  invalidateApiCacheByPrefix,
+} from '../../lib/apiClient'
 import { formatDateTime } from '../../lib/dateUtils'
 import { getStatusClassName, getStatusText } from '../../lib/contentUtils'
 import { CONTENT_LIMITS } from '../../lib/contentLimits'
+import { formatMusicCredits } from '../../lib/musicCredits'
 import { useDialog } from '../../components/Dialog'
 import { useToast } from '../../components/Toast'
 import { SmartImage } from '../../components/SmartImage'
@@ -146,9 +153,11 @@ const isContentStatus = (value: unknown): value is ContentStatus =>
 const toText = (value: unknown, fallback = 'N/A') =>
   typeof value === 'string' && value.trim() ? value : fallback
 
-const toOptionalText = (value: unknown) => (typeof value === 'string' && value.trim() ? value : null)
+const toOptionalText = (value: unknown) =>
+  typeof value === 'string' && value.trim() ? value : null
 
-const toNumber = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0)
+const toNumber = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value) ? value : 0
 
 const getTags = (item: AdminDataItem) =>
   Array.isArray(item.tags) ? item.tags.filter((tag): tag is string => typeof tag === 'string') : []
@@ -163,7 +172,12 @@ const getPlatforms = (item: AdminDataItem) =>
 const formatCount = (value: unknown) => toNumber(value).toLocaleString('zh-CN')
 
 const renderBadge = (label: string, className = 'bg-surface-alt text-text-muted') => (
-  <span className={clsx('inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium', className)}>
+  <span
+    className={clsx(
+      'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium',
+      className
+    )}
+  >
     {label}
   </span>
 )
@@ -194,7 +208,9 @@ const renderDateBlock = (item: AdminDataItem) => {
       <p>更新：{formatDateTime(item.updatedAt, 'N/A')}</p>
       <p>创建：{formatDateTime(item.createdAt, 'N/A')}</p>
       {reviewedAt && <p>审核：{formatDateTime(reviewedAt, 'N/A')}</p>}
-      {item.deletedAt && <p className="theme-text-error">删除：{formatDateTime(item.deletedAt, 'N/A')}</p>}
+      {item.deletedAt && (
+        <p className="theme-text-error">删除：{formatDateTime(item.deletedAt, 'N/A')}</p>
+      )}
       {item.deletedAt && deletionReason && (
         <p className="max-w-[220px] break-words theme-text-error">理由：{deletionReason}</p>
       )}
@@ -208,13 +224,17 @@ const renderTagsAndLocation = (item: AdminDataItem) => {
     <div className="space-y-2 text-xs">
       {tags.length > 0 ? (
         <div className="flex max-w-[220px] flex-wrap gap-1">
-          {tags.slice(0, 4).map((tag) => renderKeyedBadge(tag, tag, 'bg-surface-alt text-brand-gold'))}
+          {tags
+            .slice(0, 4)
+            .map((tag) => renderKeyedBadge(tag, tag, 'bg-surface-alt text-brand-gold'))}
           {tags.length > 4 && renderBadge(`+${tags.length - 4}`, 'bg-surface-alt text-text-muted')}
         </div>
       ) : (
         <span className="text-text-muted">无标签</span>
       )}
-      <p className="truncate text-text-muted">{toOptionalText(item.locationName) || toOptionalText(item.locationDetail) || '未设置位置'}</p>
+      <p className="truncate text-text-muted">
+        {toOptionalText(item.locationName) || toOptionalText(item.locationDetail) || '未设置位置'}
+      </p>
     </div>
   )
 }
@@ -224,7 +244,7 @@ const renderDetails = (type: ListType, item: AdminDataItem, Icon: React.ElementT
   const title = toText(item.title || item.displayName || item.name || item.slug || item.id)
   const subtitle =
     type === 'music'
-      ? [item.artist, item.album].filter(Boolean).join(' / ')
+      ? [formatMusicCredits(item.artists, ''), item.album].filter(Boolean).join(' / ')
       : item.content?.slice(0, 80) || item.description?.slice(0, 80) || ''
 
   return (
@@ -236,7 +256,11 @@ const renderDetails = (type: ListType, item: AdminDataItem, Icon: React.ElementT
           className="h-11 w-11 rounded bg-surface-alt object-cover"
         />
       ) : type === 'music' ? (
-        <SmartImage src={item.cover || ''} alt="" className="h-11 w-11 rounded bg-surface-alt object-cover" />
+        <SmartImage
+          src={item.cover || ''}
+          alt=""
+          className="h-11 w-11 rounded bg-surface-alt object-cover"
+        />
       ) : (
         <div className="flex h-11 w-11 items-center justify-center rounded bg-surface-alt text-brand-gold">
           <Icon size={18} />
@@ -276,7 +300,10 @@ const renderDetails = (type: ListType, item: AdminDataItem, Icon: React.ElementT
 const renderStatus = (type: ListType, item: AdminDataItem) => {
   if (item.isDeleted) return renderBadge('回收站', 'theme-status-error')
   if (type === 'announcements') {
-    return renderBadge(item.active ? '启用中' : '已禁用', item.active ? 'theme-status-success' : 'bg-surface-alt text-text-muted')
+    return renderBadge(
+      item.active ? '启用中' : '已禁用',
+      item.active ? 'theme-status-success' : 'bg-surface-alt text-text-muted'
+    )
   }
   if (type === 'galleries') {
     const status = toOptionalText(item.status) as ContentStatus | null
@@ -285,9 +312,14 @@ const renderStatus = (type: ListType, item: AdminDataItem) => {
       <div className="space-y-1">
         {status
           ? renderBadge(getStatusText(status), getStatusClassName(status))
-          : renderBadge(published ? '已发布' : '未发布', published ? 'theme-status-success' : 'theme-status-warning')}
+          : renderBadge(
+              published ? '已发布' : '未发布',
+              published ? 'theme-status-success' : 'theme-status-warning'
+            )}
         {toOptionalText(item.publishedAt) && (
-          <p className="text-xs text-text-muted">{formatDateTime(toOptionalText(item.publishedAt))}</p>
+          <p className="text-xs text-text-muted">
+            {formatDateTime(toOptionalText(item.publishedAt))}
+          </p>
         )}
       </div>
     )
@@ -362,7 +394,9 @@ const renderRelations = (type: ListType, item: AdminDataItem) => {
       <div className="space-y-1 text-xs text-text-muted">
         <p className="font-medium text-text-primary">{toText(item.album, '未设置专辑')}</p>
         <p>显示：{toText(item.displayAlbumMode, '默认')}</p>
-        {toOptionalText(item.manualAlbumName) && <p>手动：{toOptionalText(item.manualAlbumName)}</p>}
+        {toOptionalText(item.manualAlbumName) && (
+          <p>手动：{toOptionalText(item.manualAlbumName)}</p>
+        )}
       </div>
     )
   }
@@ -383,8 +417,12 @@ const renderPlatformIds = (item: AdminDataItem) => {
     <div className="flex max-w-[260px] flex-wrap gap-1 text-xs">
       {rows.map(([label, id]) =>
         id
-          ? renderKeyedBadge(label || 'unknown', `${label}: ${id}`, 'bg-surface-alt text-brand-gold')
-          : renderKeyedBadge(label || 'unknown', `${label}: 无`),
+          ? renderKeyedBadge(
+              label || 'unknown',
+              `${label}: ${id}`,
+              'bg-surface-alt text-brand-gold'
+            )
+          : renderKeyedBadge(label || 'unknown', `${label}: 无`)
       )}
     </div>
   )
@@ -399,14 +437,24 @@ const renderMedia = (item: AdminDataItem) => (
 
 const renderLink = (item: AdminDataItem) =>
   toOptionalText(item.link) ? (
-    <a href={toOptionalText(item.link) || '#'} target="_blank" rel="noopener noreferrer" className="text-xs text-brand-gold hover:underline">
+    <a
+      href={toOptionalText(item.link) || '#'}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-xs text-brand-gold hover:underline"
+    >
       {toOptionalText(item.link)}
     </a>
   ) : (
     <span className="text-xs text-text-muted">无链接</span>
   )
 
-const renderCell = (type: ListType, item: AdminDataItem, key: ColumnKey, Icon: React.ElementType) => {
+const renderCell = (
+  type: ListType,
+  item: AdminDataItem,
+  key: ColumnKey,
+  Icon: React.ElementType
+) => {
   if (key === 'details') return renderDetails(type, item, Icon)
   if (key === 'status') return renderStatus(type, item)
   if (key === 'owner') return renderOwner(type, item)
@@ -415,7 +463,8 @@ const renderCell = (type: ListType, item: AdminDataItem, key: ColumnKey, Icon: R
   if (key === 'tags') return renderTagsAndLocation(item)
   if (key === 'media') return renderMedia(item)
   if (key === 'link') return renderLink(item)
-  if (key === 'order') return <span className="text-sm font-medium text-text-primary">{toNumber(item.order)}</span>
+  if (key === 'order')
+    return <span className="text-sm font-medium text-text-primary">{toNumber(item.order)}</span>
   if (key === 'ids') return renderPlatformIds(item)
   if (key === 'lifecycle') return renderDateBlock(item)
   return null
@@ -428,7 +477,9 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
   const Icon = cfg.icon
   const [data, setData] = useState<AdminDataItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [pendingActions, setPendingActions] = useState<Record<string, 'delete' | 'restore' | 'permanentDelete'>>({})
+  const [pendingActions, setPendingActions] = useState<
+    Record<string, 'delete' | 'restore' | 'permanentDelete'>
+  >({})
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set())
   const [batchDisplayOpen, setBatchDisplayOpen] = useState(false)
   const [batchDisplaySaving, setBatchDisplaySaving] = useState(false)
@@ -464,7 +515,7 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
 
   const setRowPendingAction = (
     id: string,
-    action: 'delete' | 'restore' | 'permanentDelete' | null,
+    action: 'delete' | 'restore' | 'permanentDelete' | null
   ) => {
     setPendingActions((prev) => {
       if (action) return { ...prev, [id]: action }
@@ -508,7 +559,10 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
 
   const handleBatchDisplaySubmit = async () => {
     if (type !== 'music' || !selectedRowIds.size || batchDisplaySaving) return
-    if (batchDisplayForm.displayAlbumMode === 'manual' && !batchDisplayForm.manualAlbumName.trim()) {
+    if (
+      batchDisplayForm.displayAlbumMode === 'manual' &&
+      !batchDisplayForm.manualAlbumName.trim()
+    ) {
       show('手动专辑名不能为空', { variant: 'error' })
       return
     }
@@ -523,7 +577,8 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
             ? batchDisplayForm.manualAlbumName.trim()
             : null,
         displayAlbumDocId:
-          batchDisplayForm.displayAlbumMode === 'linked' && batchDisplayForm.displayAlbumDocId.trim()
+          batchDisplayForm.displayAlbumMode === 'linked' &&
+          batchDisplayForm.displayAlbumDocId.trim()
             ? batchDisplayForm.displayAlbumDocId.trim()
             : null,
       })
@@ -541,16 +596,15 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
 
   const handleDelete = async (id: string) => {
     const requiresReason = type === 'wiki' || type === 'posts' || type === 'galleries'
-    const reasonInput =
-      requiresReason
-        ? await dialog.prompt({
-            title: '删除理由',
-            message: '删除理由（必填）',
-            confirmText: '继续删除',
-            variant: 'warning',
-            multiline: true,
-          })
-        : ''
+    const reasonInput = requiresReason
+      ? await dialog.prompt({
+          title: '删除理由',
+          message: '删除理由（必填）',
+          confirmText: '继续删除',
+          variant: 'warning',
+          multiline: true,
+        })
+      : ''
     if (reasonInput === null) return
     const trimmedReasonInput = reasonInput.trim()
     if (requiresReason && !trimmedReasonInput) {
@@ -574,9 +628,9 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
         ? prev.map((item) =>
             String(item.docId || item.id || item.uid || '') === id
               ? { ...item, isDeleted: true, deletedAt, deletionReason: trimmedReasonInput || null }
-              : item,
+              : item
           )
-        : prev.filter((item) => String(item.docId || item.id || item.uid || '') !== id),
+        : prev.filter((item) => String(item.docId || item.id || item.uid || '') !== id)
     )
     try {
       const deletePath = `/api/admin/${cfg.apiPath}/${id}`
@@ -604,8 +658,8 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
         prev.map((item) =>
           String(item.docId || item.id || item.uid || '') === id
             ? { ...item, isDeleted: false, deletedAt: null, deletedBy: null }
-            : item,
-        ),
+            : item
+        )
       )
       show('已恢复', { variant: 'success' })
     } catch (e) {
@@ -664,11 +718,16 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
 
   const toggleAnnouncement = async (item: AdminDataItem) => {
     try {
-      const result = await apiPatch<{ announcement: AdminDataItem }>(`/api/announcements/${item.id}`, {
-        active: !item.active,
-      })
+      const result = await apiPatch<{ announcement: AdminDataItem }>(
+        `/api/announcements/${item.id}`,
+        {
+          active: !item.active,
+        }
+      )
       setData((prev) =>
-        prev.map((d) => (d.id === item.id ? { ...d, active: result.announcement?.active ?? !item.active } : d)),
+        prev.map((d) =>
+          d.id === item.id ? { ...d, active: result.announcement?.active ?? !item.active } : d
+        )
       )
       show('状态已更新', { variant: 'success' })
     } catch (e) {
@@ -676,7 +735,7 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
     }
   }
 
-  const renderActions = (item: AdminDataItem, rowId: string) => (
+  const renderActions = (item: AdminDataItem, rowId: string) =>
     (() => {
       const pendingAction = pendingActions[rowId]
       const isPending = Boolean(pendingAction)
@@ -716,7 +775,7 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
               disabled={isPending}
               className={clsx(
                 'rounded p-1.5 transition-all hover:bg-surface-alt disabled:cursor-wait disabled:opacity-50',
-                item.active ? 'theme-text-success' : 'text-text-muted',
+                item.active ? 'theme-text-success' : 'text-text-muted'
               )}
               title={item.active ? '禁用' : '启用'}
             >
@@ -755,7 +814,6 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
         </div>
       )
     })()
-  )
 
   return (
     <div className="space-y-5">
@@ -770,7 +828,7 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
               'rounded border px-4 py-2 text-sm transition-all',
               showDeleted
                 ? 'border-brand-gold text-brand-gold'
-                : 'border-border text-text-secondary hover:border-brand-gold hover:text-brand-gold',
+                : 'border-border text-text-secondary hover:border-brand-gold hover:text-brand-gold'
             )}
           >
             <Ban size={14} className="mr-1 inline" /> {showDeleted ? '隐藏已删除' : '显示已删除'}
@@ -841,7 +899,10 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
                 type="text"
                 value={batchDisplayForm.displayAlbumDocId}
                 onChange={(event) =>
-                  setBatchDisplayForm((prev) => ({ ...prev, displayAlbumDocId: event.target.value }))
+                  setBatchDisplayForm((prev) => ({
+                    ...prev,
+                    displayAlbumDocId: event.target.value,
+                  }))
                 }
                 disabled={batchDisplayForm.displayAlbumMode !== 'linked'}
                 placeholder="展示专辑 docId（可选）"
@@ -938,7 +999,10 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
                 {cfg.columns.map((col) => (
                   <th
                     key={col.key}
-                    className={clsx('px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-text-muted', col.className)}
+                    className={clsx(
+                      'px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-text-muted',
+                      col.className
+                    )}
                   >
                     {col.label}
                   </th>
@@ -949,7 +1013,10 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
               {loading ? (
                 [1, 2, 3].map((i) => (
                   <tr key={i} className="animate-pulse">
-                    <td colSpan={cfg.columns.length + (isSelectableList ? 1 : 0)} className="px-5 py-4">
+                    <td
+                      colSpan={cfg.columns.length + (isSelectableList ? 1 : 0)}
+                      className="px-5 py-4"
+                    >
                       <div className="h-6 rounded bg-surface-alt" />
                     </td>
                   </tr>
@@ -960,7 +1027,10 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
                   return (
                     <tr
                       key={rowId}
-                      className={clsx('transition-colors hover:bg-surface-alt', item.isDeleted && 'opacity-70')}
+                      className={clsx(
+                        'transition-colors hover:bg-surface-alt',
+                        item.isDeleted && 'opacity-70'
+                      )}
                     >
                       {isSelectableList && (
                         <td className="px-5 py-4 align-top">
@@ -978,10 +1048,12 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
                           key={col.key}
                           className={clsx(
                             'px-5 py-4 align-top',
-                            col.key === 'actions' && 'text-right',
+                            col.key === 'actions' && 'text-right'
                           )}
                         >
-                          {col.key === 'actions' ? renderActions(item, rowId) : renderCell(type, item, col.key, Icon)}
+                          {col.key === 'actions'
+                            ? renderActions(item, rowId)
+                            : renderCell(type, item, col.key, Icon)}
                         </td>
                       ))}
                     </tr>
@@ -989,7 +1061,10 @@ export const AdminListPage = ({ type }: { type: ListType }) => {
                 })
               ) : (
                 <tr>
-                  <td colSpan={cfg.columns.length + (isSelectableList ? 1 : 0)} className="px-5 py-16 text-center italic text-text-muted">
+                  <td
+                    colSpan={cfg.columns.length + (isSelectableList ? 1 : 0)}
+                    className="px-5 py-16 text-center italic text-text-muted"
+                  >
                     暂无数据
                   </td>
                 </tr>

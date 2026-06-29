@@ -16,6 +16,7 @@ import MarkdownRenderer from '../components/MarkdownRenderer'
 import { useToast } from '../components/Toast'
 import { useAuth } from '../context/AuthContext'
 import { apiGet, apiPatch } from '../lib/apiClient'
+import { formatMusicCredits } from '../lib/musicCredits'
 import { PROFILE_SIGNATURE_MAX_LENGTH } from '../lib/contentLimits'
 import { DEFAULT_AVATAR, handleAvatarError } from '../lib/defaultAvatar'
 import {
@@ -87,7 +88,10 @@ function getFavoriteTitle(item: FavoriteItem | HistoryItem) {
 function getFavoriteMeta(item: FavoriteItem | HistoryItem) {
   if (item.targetType === 'wiki') return item.target?.category || '百科'
   if (item.targetType === 'post') return item.target?.section || '帖子'
-  return item.target?.artist ? `${item.target.artist}${item.target.album ? ` · ${item.target.album}` : ''}` : '音乐'
+  const artistsText = formatMusicCredits(item.target?.artists, '')
+  return artistsText
+    ? `${artistsText}${item.target?.album ? ` · ${item.target.album}` : ''}`
+    : '音乐'
 }
 
 function ProfileActivityList({
@@ -302,18 +306,24 @@ export default function UserProfile() {
         }
 
         if (activeTab === 'galleries') {
-          const data = await apiGet<{ galleries: GalleryItem[] }>(`/api/users/${userId}/galleries`, {
-            limit: 50,
-            visibility: 'public',
-          })
+          const data = await apiGet<{ galleries: GalleryItem[] }>(
+            `/api/users/${userId}/galleries`,
+            {
+              limit: 50,
+              visibility: 'public',
+            }
+          )
           if (!cancelled) setGalleries(data.galleries || [])
           return
         }
 
         if (activeTab === 'favorites' && profile.canViewFavorites) {
-          const data = await apiGet<{ favorites: FavoriteItem[] }>(`/api/users/${userId}/favorites`, {
-            limit: 50,
-          })
+          const data = await apiGet<{ favorites: FavoriteItem[] }>(
+            `/api/users/${userId}/favorites`,
+            {
+              limit: 50,
+            }
+          )
           if (!cancelled) setFavorites(data.favorites || [])
           return
         }
@@ -384,11 +394,27 @@ export default function UserProfile() {
   }, [activeTab, hasPendingGalleryThumbnails, userId])
 
   const visibleTabs = useMemo(() => {
-    const tabs: Array<{ id: UserProfileTab; label: string; icon: React.ReactNode; path: string }> = [
-      { id: 'profile', label: '个人简介', icon: <UserRound size={14} />, path: `/users/${userId}` },
-      { id: 'posts', label: '帖子', icon: <FileText size={14} />, path: `/users/${userId}/posts` },
-      { id: 'galleries', label: '图集', icon: <ImageIcon size={14} />, path: `/users/${userId}/galleries` },
-    ]
+    const tabs: Array<{ id: UserProfileTab; label: string; icon: React.ReactNode; path: string }> =
+      [
+        {
+          id: 'profile',
+          label: '个人简介',
+          icon: <UserRound size={14} />,
+          path: `/users/${userId}`,
+        },
+        {
+          id: 'posts',
+          label: '帖子',
+          icon: <FileText size={14} />,
+          path: `/users/${userId}/posts`,
+        },
+        {
+          id: 'galleries',
+          label: '图集',
+          icon: <ImageIcon size={14} />,
+          path: `/users/${userId}/galleries`,
+        },
+      ]
     if (profile?.canViewFavorites) {
       tabs.push({
         id: 'favorites',
@@ -533,7 +559,9 @@ export default function UserProfile() {
               to={item.path}
               className={clsx(
                 'relative inline-flex shrink-0 items-center gap-1.5 px-3 py-2.5 text-sm transition-colors',
-                activeTab === item.id ? 'text-brand-gold' : 'text-text-secondary hover:text-brand-gold'
+                activeTab === item.id
+                  ? 'text-brand-gold'
+                  : 'text-text-secondary hover:text-brand-gold'
               )}
             >
               {item.icon}
@@ -574,7 +602,8 @@ export default function UserProfile() {
                             {post.title}
                           </p>
                           <p className="mt-1 text-xs text-text-muted">
-                            {post.section} · 评论 {post.commentsCount || 0} · 喜欢 {post.likesCount || 0}
+                            {post.section} · 评论 {post.commentsCount || 0} · 喜欢{' '}
+                            {post.likesCount || 0}
                           </p>
                         </div>
                         <p className="shrink-0 whitespace-nowrap text-xs text-text-muted">

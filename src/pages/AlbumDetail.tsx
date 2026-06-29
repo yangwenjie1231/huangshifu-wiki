@@ -1,179 +1,187 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Disc3, Play, Heart, ExternalLink, Link2, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
-import { clsx } from 'clsx';
+import React, { useEffect, useRef, useState } from 'react'
+import { Link, useParams, useNavigate } from 'react-router-dom'
+import {
+  ArrowLeft,
+  Disc3,
+  Play,
+  Heart,
+  ExternalLink,
+  Link2,
+  ChevronDown,
+  ChevronUp,
+  Trash2,
+} from 'lucide-react'
+import { clsx } from 'clsx'
 
-import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
-import { useMusic } from '../context/MusicContext';
-import { useAuth } from '../context/AuthContext';
-import { useDialog } from '../components/Dialog';
-import { useToast } from '../components/Toast';
-import { CoverManager } from '../components/CoverManager';
-import { SmartImage } from '../components/SmartImage';
-import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
-import { Platform, PlatformIds } from '../types/PlatformIds';
+import { apiDelete, apiGet, apiPost } from '../lib/apiClient'
+import { useMusic } from '../context/MusicContext'
+import { useAuth } from '../context/AuthContext'
+import { useDialog } from '../components/Dialog'
+import { useToast } from '../components/Toast'
+import { CoverManager } from '../components/CoverManager'
+import { SmartImage } from '../components/SmartImage'
+import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink'
+import { formatMusicCredits } from '../lib/musicCredits'
+import { Platform, PlatformIds } from '../types/PlatformIds'
 
 type SongItem = {
-  docId: string;
-  id: string;
-  title: string;
-  artist: string;
-  album: string;
-  cover: string;
-  audioUrl: string;
-  sourceUrl?: string | null;
-  lyric?: string | null;
-  favoritedByMe?: boolean;
-  trackOrder?: number;
-  primaryPlatform?: Platform | null;
-  platformIds?: PlatformIds;
-};
+  docId: string
+  id: string
+  title: string
+  artists: string[]
+  album: string
+  cover: string
+  audioUrl: string
+  sourceUrl?: string | null
+  lyric?: string | null
+  favoritedByMe?: boolean
+  trackOrder?: number
+  primaryPlatform?: Platform | null
+  platformIds?: PlatformIds
+}
 
 type AlbumResponse = {
   album: {
-    id: string;
-    title: string;
-    artist: string;
-    cover: string;
-    description?: string | null;
-    platformUrl?: string | null;
-    tracks: SongItem[];
-  };
-};
+    id: string
+    title: string
+    artist: string
+    cover: string
+    description?: string | null
+    platformUrl?: string | null
+    tracks: SongItem[]
+  }
+}
 
 const AlbumDetail = () => {
-  const { albumId } = useParams();
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [album, setAlbum] = useState<AlbumResponse['album'] | null>(null);
-  const [favoriting, setFavoriting] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [descExpanded, setDescExpanded] = useState(false);
-  const [descNeedExpand, setDescNeedExpand] = useState(false);
-  const descRef = useRef<HTMLDivElement>(null);
-  const { user, isAdmin } = useAuth();
-  const dialog = useDialog();
+  const { albumId } = useParams()
+  const navigate = useNavigate()
+  const [loading, setLoading] = useState(true)
+  const [album, setAlbum] = useState<AlbumResponse['album'] | null>(null)
+  const [favoriting, setFavoriting] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [descExpanded, setDescExpanded] = useState(false)
+  const [descNeedExpand, setDescNeedExpand] = useState(false)
+  const descRef = useRef<HTMLDivElement>(null)
+  const { user, isAdmin } = useAuth()
+  const dialog = useDialog()
 
   useEffect(() => {
     if (descRef.current && !descExpanded) {
-      setDescNeedExpand(descRef.current.scrollHeight > descRef.current.clientHeight + 1);
+      setDescNeedExpand(descRef.current.scrollHeight > descRef.current.clientHeight + 1)
     }
-  }, [album?.description, descExpanded]);
-  const { currentSong, playAlbumTracks } = useMusic();
-  const { show } = useToast();
+  }, [album?.description, descExpanded])
+  const { currentSong, playAlbumTracks } = useMusic()
+  const { show } = useToast()
 
   const fetchAlbum = async () => {
-    if (!albumId) return;
-    setLoading(true);
+    if (!albumId) return
+    setLoading(true)
     try {
-      const response = await apiGet<AlbumResponse>(`/api/albums/${albumId}`);
-      setAlbum(response.album || null);
+      const response = await apiGet<AlbumResponse>(`/api/albums/${albumId}`)
+      setAlbum(response.album || null)
     } catch (error) {
-      console.error('Fetch album detail error:', error);
-      setAlbum(null);
+      console.error('Fetch album detail error:', error)
+      setAlbum(null)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   useEffect(() => {
-    fetchAlbum();
-  }, [albumId]);
+    fetchAlbum()
+  }, [albumId])
 
   const handlePlay = (index = 0) => {
-    if (!album) return;
-    const tracks = [...album.tracks].sort((a, b) => (a.trackOrder || 0) - (b.trackOrder || 0));
-    playAlbumTracks(album.id, album.title, tracks, index);
-  };
+    if (!album) return
+    const tracks = [...album.tracks].sort((a, b) => (a.trackOrder || 0) - (b.trackOrder || 0))
+    playAlbumTracks(album.id, album.title, tracks, index)
+  }
 
   const toggleFavorite = async (song: SongItem) => {
     if (!user || !song.docId || favoriting === song.docId) {
-      if (!user) show('请先登录后收藏', { variant: 'error' });
-      return;
+      if (!user) show('请先登录后收藏', { variant: 'error' })
+      return
     }
 
-    setFavoriting(song.docId);
+    setFavoriting(song.docId)
     try {
       if (song.favoritedByMe) {
-        await apiDelete(`/api/favorites/music/${song.docId}`);
+        await apiDelete(`/api/favorites/music/${song.docId}`)
       } else {
         await apiPost('/api/favorites', {
           targetType: 'music',
           targetId: song.docId,
-        });
+        })
       }
 
       setAlbum((prev) => {
-        if (!prev) return prev;
+        if (!prev) return prev
         return {
           ...prev,
-          tracks: prev.tracks.map((track) => (
-            track.docId === song.docId
-              ? { ...track, favoritedByMe: !track.favoritedByMe }
-              : track
-          )),
-        };
-      });
+          tracks: prev.tracks.map((track) =>
+            track.docId === song.docId ? { ...track, favoritedByMe: !track.favoritedByMe } : track
+          ),
+        }
+      })
     } catch (error) {
-      console.error('Toggle favorite in album detail error:', error);
-      show('收藏操作失败，请稍后重试', { variant: 'error' });
+      console.error('Toggle favorite in album detail error:', error)
+      show('收藏操作失败，请稍后重试', { variant: 'error' })
     } finally {
-      setFavoriting(null);
+      setFavoriting(null)
     }
-  };
+  }
 
   const handleCopyAlbumLink = async () => {
-    if (!album?.id) return;
-    const copied = await copyToClipboard(toAbsoluteInternalUrl(`/album/${album.id}`));
+    if (!album?.id) return
+    const copied = await copyToClipboard(toAbsoluteInternalUrl(`/album/${album.id}`))
     if (copied) {
-      show('专辑内链已复制');
-      return;
+      show('专辑内链已复制')
+      return
     }
-    show('复制链接失败，请稍后重试', { variant: 'error' });
-  };
+    show('复制链接失败，请稍后重试', { variant: 'error' })
+  }
 
   const handleDeleteAlbum = async () => {
-    if (!albumId || !album || isDeleting) return;
+    if (!albumId || !album || isDeleting) return
     const confirmed = await dialog.confirm({
       title: '删除专辑',
       message: `确定要删除专辑《${album.title}》吗？删除后可在回收站恢复。`,
       confirmText: '删除',
       variant: 'danger',
-    });
-    if (!confirmed) return;
+    })
+    if (!confirmed) return
 
     try {
-      setIsDeleting(true);
-      await apiDelete(`/api/albums/${albumId}`);
-      show('专辑已删除');
-      navigate('/music');
+      setIsDeleting(true)
+      await apiDelete(`/api/albums/${albumId}`)
+      show('专辑已删除')
+      navigate('/music')
     } catch (error) {
-      console.error('Delete album failed:', error);
-      show(error instanceof Error ? error.message : '删除专辑失败', { variant: 'error' });
+      console.error('Delete album failed:', error)
+      show(error instanceof Error ? error.message : '删除专辑失败', { variant: 'error' })
     } finally {
-      setIsDeleting(false);
+      setIsDeleting(false)
     }
-  };
+  }
 
   if (loading) {
     return (
-      <div
-        className="min-h-screen antique-page bg-bg-primary"
-      >
+      <div className="min-h-screen antique-page bg-bg-primary">
         <div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
           <div className="h-40 bg-surface-alt rounded animate-pulse" />
         </div>
       </div>
-    );
+    )
   }
 
   if (!album) {
     return (
-      <div
-        className="min-h-screen antique-page bg-bg-primary"
-      >
+      <div className="min-h-screen antique-page bg-bg-primary">
         <div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
-          <Link to="/music" className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-brand-gold transition-colors">
+          <Link
+            to="/music"
+            className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-brand-gold transition-colors"
+          >
             <ArrowLeft size={16} /> 返回音乐馆
           </Link>
           <div className="mt-6 bg-surface rounded border border-border p-10 text-center text-text-muted italic tracking-[0.1em]">
@@ -181,15 +189,16 @@ const AlbumDetail = () => {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   return (
-    <div
-      className="min-h-screen antique-detail text-[var(--color-text-antique)] bg-bg-primary"
-    >
+    <div className="min-h-screen antique-detail text-[var(--color-text-antique)] bg-bg-primary">
       <div className="max-w-[1100px] mx-auto px-6 py-8 pb-32">
-        <Link to="/music" className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-brand-gold transition-colors mb-5">
+        <Link
+          to="/music"
+          className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-brand-gold transition-colors mb-5"
+        >
           <ArrowLeft size={16} /> 返回音乐馆
         </Link>
 
@@ -201,8 +210,12 @@ const AlbumDetail = () => {
             className="w-40 h-40 md:w-44 md:h-44 object-cover flex-shrink-0 rounded bg-surface-alt"
           />
           <div className="flex-1 flex flex-col justify-center min-w-0">
-            <h1 className="text-[1.75rem] font-bold text-text-primary tracking-[0.12em] mb-1.5">{album.title}</h1>
-            <p className="text-base text-text-secondary tracking-[0.08em] mb-4">{album.artist} · {album.tracks.length} 首歌曲</p>
+            <h1 className="text-[1.75rem] font-bold text-text-primary tracking-[0.12em] mb-1.5">
+              {album.title}
+            </h1>
+            <p className="text-base text-text-secondary tracking-[0.08em] mb-4">
+              {album.artist} · {album.tracks.length} 首歌曲
+            </p>
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => handlePlay(0)}
@@ -238,7 +251,13 @@ const AlbumDetail = () => {
               <span className="w-[3px] h-4 bg-brand-gold rounded-[1px] opacity-60 inline-block" />
               专辑简介
             </h2>
-            <div ref={descRef} className={clsx('text-text-secondary leading-relaxed whitespace-pre-wrap', !descExpanded && 'line-clamp-3')}>
+            <div
+              ref={descRef}
+              className={clsx(
+                'text-text-secondary leading-relaxed whitespace-pre-wrap',
+                !descExpanded && 'line-clamp-3'
+              )}
+            >
               {album.description}
             </div>
             {descNeedExpand && (
@@ -247,9 +266,13 @@ const AlbumDetail = () => {
                 className="text-xs px-3 py-1.5 border border-border text-text-muted hover:text-brand-gold hover:border-brand-gold rounded transition-all duration-300 mt-3 inline-flex items-center gap-0.5"
               >
                 {descExpanded ? (
-                  <>收起 <ChevronUp size={12} /></>
+                  <>
+                    收起 <ChevronUp size={12} />
+                  </>
                 ) : (
-                  <>展开 <ChevronDown size={12} /></>
+                  <>
+                    展开 <ChevronDown size={12} />
+                  </>
                 )}
               </button>
             )}
@@ -272,24 +295,38 @@ const AlbumDetail = () => {
                   currentSong?.docId === track.docId && 'bg-brand-gold/10'
                 )}
               >
-                <span className="text-sm text-text-muted w-7 text-right flex-shrink-0">{(track.trackOrder ?? index) + 1}</span>
+                <span className="text-sm text-text-muted w-7 text-right flex-shrink-0">
+                  {(track.trackOrder ?? index) + 1}
+                </span>
                 <button
-                  onClick={(e) => { e.stopPropagation(); handlePlay(index); }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handlePlay(index)
+                  }}
                   className="w-8 h-8 flex items-center justify-center text-text-secondary hover:text-brand-gold hover:bg-surface-alt rounded-full transition-all flex-shrink-0"
                 >
                   <Play size={14} />
                 </button>
                 <div className="flex-1 min-w-0">
-                  <p className="text-base text-text-primary truncate hover:text-brand-gold transition-colors">{track.title}</p>
-                  <p className="text-xs text-text-muted truncate">{track.artist}</p>
+                  <p className="text-base text-text-primary truncate hover:text-brand-gold transition-colors">
+                    {track.title}
+                  </p>
+                  <p className="text-xs text-text-muted truncate">
+                    {formatMusicCredits(track.artists, '未知歌手')}
+                  </p>
                 </div>
                 <button
-                  onClick={(e) => { e.stopPropagation(); toggleFavorite(track); }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleFavorite(track)
+                  }}
                   disabled={favoriting === track.docId}
                   className={clsx(
                     'p-2 transition-colors flex-shrink-0',
-                    track.favoritedByMe ? 'theme-text-error' : 'text-text-muted theme-icon-button-danger',
-                    favoriting === track.docId && 'opacity-50 cursor-not-allowed',
+                    track.favoritedByMe
+                      ? 'theme-text-error'
+                      : 'text-text-muted theme-icon-button-danger',
+                    favoriting === track.docId && 'opacity-50 cursor-not-allowed'
                   )}
                 >
                   <Heart size={15} />
@@ -317,7 +354,9 @@ const AlbumDetail = () => {
                 resourceType="album"
                 resourceId={albumId}
                 currentCover={album.cover}
-                onCoverUpdated={(newCoverUrl) => setAlbum((prev) => prev ? { ...prev, cover: newCoverUrl } : prev)}
+                onCoverUpdated={(newCoverUrl) =>
+                  setAlbum((prev) => (prev ? { ...prev, cover: newCoverUrl } : prev))
+                }
               />
               <button
                 onClick={handleDeleteAlbum}
@@ -331,7 +370,7 @@ const AlbumDetail = () => {
         )}
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default AlbumDetail;
+export default AlbumDetail

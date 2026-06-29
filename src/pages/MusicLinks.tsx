@@ -1,131 +1,135 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { ExternalLink, Filter, Link2, Loader2, Search } from 'lucide-react';
-import { clsx } from 'clsx';
+import React, { useState, useEffect, useMemo } from 'react'
+import { Link } from 'react-router-dom'
+import { ExternalLink, Filter, Link2, Loader2, Search } from 'lucide-react'
+import { clsx } from 'clsx'
 
-import { apiGet } from '../lib/apiClient';
-import { useAuth } from '../context/AuthContext';
-import { getPlatformExternalUrl } from '../lib/musicPlatformUrls';
-import Pagination from '../components/Pagination';
-import { usePagination } from '../hooks/usePagination';
-import { Platform, PlatformIds } from '../types/PlatformIds';
+import { apiGet } from '../lib/apiClient'
+import { useAuth } from '../context/AuthContext'
+import { getPlatformExternalUrl } from '../lib/musicPlatformUrls'
+import { formatMusicCredits } from '../lib/musicCredits'
+import Pagination from '../components/Pagination'
+import { usePagination } from '../hooks/usePagination'
+import { Platform, PlatformIds } from '../types/PlatformIds'
 
-const DEFAULT_PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE = 50
 
 type SongItem = {
-  docId: string;
-  id: string;
-  title: string;
-  artist: string;
-  album: string;
-  cover: string;
-  primaryPlatform?: Platform | null;
-  platformIds?: PlatformIds;
-};
+  docId: string
+  id: string
+  title: string
+  artists: string[]
+  album: string
+  cover: string
+  primaryPlatform?: Platform | null
+  platformIds?: PlatformIds
+}
 
-const platformInfo: Array<{ key: keyof PlatformIds; label: string; color: string; bgColor: string }> = [
+const platformInfo: Array<{
+  key: keyof PlatformIds
+  label: string
+  color: string
+  bgColor: string
+}> = [
   { key: 'neteaseId', label: '网易云', color: 'text-brand-gold', bgColor: 'bg-brand-gold/10' },
   { key: 'tencentId', label: 'QQ音乐', color: 'text-brand-gold', bgColor: 'bg-brand-gold/10' },
   { key: 'kugouId', label: '酷狗', color: 'text-brand-gold', bgColor: 'bg-brand-gold/10' },
   { key: 'baiduId', label: '百度', color: 'text-brand-gold', bgColor: 'bg-brand-gold/10' },
   { key: 'kuwoId', label: '酷我', color: 'text-brand-gold', bgColor: 'bg-brand-gold/10' },
-];
+]
 
 function buildPlatformUrl(platform: Platform, id: string): string {
   return getPlatformExternalUrl(platform, id) || '#'
 }
 
 const MusicLinks = () => {
-  const [songs, setSongs] = useState<SongItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filterPlatform, setFilterPlatform] = useState<Platform | 'all'>('all');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'partial' | 'unlinked'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const { isAdmin } = useAuth();
+  const [songs, setSongs] = useState<SongItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filterPlatform, setFilterPlatform] = useState<Platform | 'all'>('all')
+  const [filterStatus, setFilterStatus] = useState<'all' | 'partial' | 'unlinked'>('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const { isAdmin } = useAuth()
 
   const filteredSongs = useMemo(() => {
-    let result = songs;
+    let result = songs
 
     if (filterPlatform !== 'all') {
       result = result.filter((song) => {
-        const fieldKey = `${filterPlatform}Id` as keyof PlatformIds;
-        return song.platformIds?.[fieldKey];
-      });
+        const fieldKey = `${filterPlatform}Id` as keyof PlatformIds
+        return song.platformIds?.[fieldKey]
+      })
     }
 
     if (filterStatus === 'partial') {
       result = result.filter((song) => {
-        const linkedCount = platformInfo.filter(
-          (p) => song.platformIds?.[p.key]
-        ).length;
-        return linkedCount > 0 && linkedCount < 5;
-      });
+        const linkedCount = platformInfo.filter((p) => song.platformIds?.[p.key]).length
+        return linkedCount > 0 && linkedCount < 5
+      })
     } else if (filterStatus === 'unlinked') {
       result = result.filter((song) => {
-        return platformInfo.every((p) => !song.platformIds?.[p.key]);
-      });
+        return platformInfo.every((p) => !song.platformIds?.[p.key])
+      })
     }
 
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
+      const query = searchQuery.toLowerCase()
       result = result.filter(
         (song) =>
           song.title.toLowerCase().includes(query) ||
-          song.artist.toLowerCase().includes(query)
-      );
+          formatMusicCredits(song.artists, '').toLowerCase().includes(query)
+      )
     }
 
-    return result;
-  }, [songs, filterPlatform, filterStatus, searchQuery]);
+    return result
+  }, [songs, filterPlatform, filterStatus, searchQuery])
 
-  const pagination = usePagination({ totalCount: filteredSongs.length, defaultPageSize: 50 });
+  const pagination = usePagination({ totalCount: filteredSongs.length, defaultPageSize: 50 })
 
   useEffect(() => {
     const fetchSongs = async () => {
-      setLoading(true);
+      setLoading(true)
       try {
-        const data = await apiGet<{ songs: SongItem[] }>('/api/music', { limit: 100 });
-        setSongs(data.songs || []);
+        const data = await apiGet<{ songs: SongItem[] }>('/api/music', { limit: 100 })
+        setSongs(data.songs || [])
       } catch (error) {
-        console.error('Fetch songs error:', error);
-        setSongs([]);
+        console.error('Fetch songs error:', error)
+        setSongs([])
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
-    };
-    fetchSongs();
-  }, []);
+    }
+    fetchSongs()
+  }, [])
 
   const paginatedSongs = useMemo(() => {
-    const start = (pagination.page - 1) * pagination.pageSize;
-    return filteredSongs.slice(start, start + pagination.pageSize);
-  }, [filteredSongs, pagination.page, pagination.pageSize]);
+    const start = (pagination.page - 1) * pagination.pageSize
+    return filteredSongs.slice(start, start + pagination.pageSize)
+  }, [filteredSongs, pagination.page, pagination.pageSize])
 
   useEffect(() => {
-    pagination.setPage(1);
-  }, [filterPlatform, filterStatus, searchQuery]);
+    pagination.setPage(1)
+  }, [filterPlatform, filterStatus, searchQuery])
 
   const stats = useMemo(() => {
-    const total = songs.length;
+    const total = songs.length
     const linkedCount = songs.filter((song) =>
       platformInfo.some((p) => song.platformIds?.[p.key])
-    ).length;
+    ).length
     const partialCount = songs.filter((song) => {
-      const count = platformInfo.filter((p) => song.platformIds?.[p.key]).length;
-      return count > 0 && count < 5;
-    }).length;
+      const count = platformInfo.filter((p) => song.platformIds?.[p.key]).length
+      return count > 0 && count < 5
+    }).length
     const fullyLinkedCount = songs.filter((song) =>
       platformInfo.every((p) => song.platformIds?.[p.key])
-    ).length;
-    return { total, linkedCount, partialCount, fullyLinkedCount };
-  }, [songs]);
+    ).length
+    return { total, linkedCount, partialCount, fullyLinkedCount }
+  }, [songs])
 
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center bg-[var(--color-bg-antique)]">
         <Loader2 size={32} className="animate-spin text-brand-gold" />
       </div>
-    );
+    )
   }
 
   return (
@@ -170,7 +174,10 @@ const MusicLinks = () => {
         <div className="bg-surface border border-border rounded mb-6 overflow-hidden">
           <div className="p-4 border-b border-border flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+              <Search
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+              />
               <input
                 type="text"
                 value={searchQuery}
@@ -227,12 +234,18 @@ const MusicLinks = () => {
                   </tr>
                 ) : (
                   paginatedSongs.map((song) => {
-                    const linkedPlatforms = platformInfo.filter((p) => song.platformIds?.[p.key]);
-                    const unlinkedPlatforms = platformInfo.filter((p) => !song.platformIds?.[p.key]);
+                    const linkedPlatforms = platformInfo.filter((p) => song.platformIds?.[p.key])
+                    const unlinkedPlatforms = platformInfo.filter((p) => !song.platformIds?.[p.key])
                     return (
-                      <tr key={song.docId} className="border-b border-border hover:bg-surface-alt/50 transition-colors">
+                      <tr
+                        key={song.docId}
+                        className="border-b border-border hover:bg-surface-alt/50 transition-colors"
+                      >
                         <td className="px-4 py-3">
-                          <Link to={`/music/${song.docId}`} className="flex items-center gap-3 group">
+                          <Link
+                            to={`/music/${song.docId}`}
+                            className="flex items-center gap-3 group"
+                          >
                             <img
                               src={song.cover}
                               alt=""
@@ -240,13 +253,17 @@ const MusicLinks = () => {
                               referrerPolicy="no-referrer"
                             />
                             <div className="min-w-0">
-                              <p className="font-medium text-text-primary truncate max-w-[180px] group-hover:text-brand-gold transition-colors">{song.title}</p>
-                              <p className="text-xs text-text-muted truncate max-w-[180px]">{song.artist}</p>
+                              <p className="font-medium text-text-primary truncate max-w-[180px] group-hover:text-brand-gold transition-colors">
+                                {song.title}
+                              </p>
+                              <p className="text-xs text-text-muted truncate max-w-[180px]">
+                                {formatMusicCredits(song.artists, '未知歌手')}
+                              </p>
                             </div>
                           </Link>
                         </td>
                         {platformInfo.map((platform) => {
-                          const isLinked = Boolean(song.platformIds?.[platform.key]);
+                          const isLinked = Boolean(song.platformIds?.[platform.key])
                           return (
                             <td key={platform.key} className="px-3 py-3 text-center">
                               {isLinked ? (
@@ -272,7 +289,7 @@ const MusicLinks = () => {
                                 </span>
                               )}
                             </td>
-                          );
+                          )
                         })}
                         <td className="px-3 py-3 text-center">
                           <Link
@@ -284,7 +301,7 @@ const MusicLinks = () => {
                           </Link>
                         </td>
                       </tr>
-                    );
+                    )
                   })
                 )}
               </tbody>
@@ -312,7 +329,7 @@ const MusicLinks = () => {
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default MusicLinks;
+export default MusicLinks

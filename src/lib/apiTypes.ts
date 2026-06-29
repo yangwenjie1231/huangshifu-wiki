@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod'
 
 // ============================================================================
 // 基础 Schema
@@ -7,7 +7,7 @@ import { z } from 'zod';
 export const successResponseSchema = z.object({
   success: z.boolean(),
   message: z.string().optional(),
-});
+})
 
 // ============================================================================
 // 用户相关 Schema
@@ -21,18 +21,20 @@ export const userSchema = z.object({
   status: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
-});
+})
 
 export const authMeResponseSchema = z.object({
-  user: z.object({
-    uid: z.string(),
-    nickname: z.string(),
-    avatarUrl: z.string().optional(),
-    role: z.enum(['user', 'admin', 'super_admin']),
-    status: z.enum(['active', 'banned', 'pending']),
-    preferences: z.record(z.string(), z.unknown()).optional(),
-  }).nullable(),
-});
+  user: z
+    .object({
+      uid: z.string(),
+      nickname: z.string(),
+      avatarUrl: z.string().optional(),
+      role: z.enum(['user', 'admin', 'super_admin']),
+      status: z.enum(['active', 'banned', 'pending']),
+      preferences: z.record(z.string(), z.unknown()).optional(),
+    })
+    .nullable(),
+})
 
 // ============================================================================
 // Wiki 相关 Schema
@@ -54,11 +56,11 @@ export const wikiSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   author: userSchema.optional(),
-});
+})
 
 export const wikiDetailResponseSchema = z.object({
   wiki: wikiSchema,
-});
+})
 
 // ============================================================================
 // 帖子相关 Schema
@@ -67,7 +69,7 @@ export const wikiDetailResponseSchema = z.object({
 export const sectionSchema = z.object({
   id: z.string(),
   name: z.string(),
-});
+})
 
 export const postSchema = z.object({
   id: z.string(),
@@ -85,11 +87,11 @@ export const postSchema = z.object({
   updatedAt: z.string(),
   author: userSchema.optional(),
   section: sectionSchema.optional(),
-});
+})
 
 export const postDetailResponseSchema = z.object({
   post: postSchema,
-});
+})
 
 // ============================================================================
 // 音乐相关 Schema
@@ -99,27 +101,32 @@ export const songSchema = z.object({
   id: z.string(),
   docId: z.string(),
   title: z.string(),
-  artist: z.string(),
+  artists: z.array(z.string()),
+  lyricists: z.array(z.string()).optional(),
+  composers: z.array(z.string()).optional(),
+  arrangers: z.array(z.string()).optional(),
+  vocals: z.array(z.string()).optional(),
   album: z.string().optional(),
   description: z.string().nullable().optional(),
   coverUrl: z.string().optional(),
   playUrl: z.string().optional(),
-  duration: z.number().optional(),
+  releaseDate: z.string().nullable().optional(),
+  durationMs: z.number().nullable().optional(),
   createdAt: z.string(),
-});
+})
 
 export const musicListResponseSchema = z.object({
   songs: z.array(songSchema),
   total: z.number(),
-});
+})
 
 export const musicDetailResponseSchema = z.object({
   song: songSchema,
-});
+})
 
 export const musicPlayUrlResponseSchema = z.object({
   playUrl: z.string(),
-});
+})
 
 // ============================================================================
 // 画廊相关 Schema
@@ -132,7 +139,7 @@ export const galleryImageItemSchema = z.object({
   name: z.string(),
   mimeType: z.string().nullable(),
   sizeBytes: z.number().nullable(),
-});
+})
 
 export const gallerySchema = z.object({
   id: z.string(),
@@ -150,11 +157,11 @@ export const gallerySchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   images: z.array(galleryImageItemSchema),
-});
+})
 
 export const galleryDetailResponseSchema = z.object({
   gallery: gallerySchema,
-});
+})
 
 export const galleryListResponseSchema = z.object({
   galleries: z.array(gallerySchema),
@@ -162,11 +169,11 @@ export const galleryListResponseSchema = z.object({
   page: z.number(),
   limit: z.number(),
   hasMore: z.boolean(),
-});
+})
 
 export const galleryUploadResponseSchema = z.object({
   urls: z.array(z.string()),
-});
+})
 
 // ============================================================================
 // 分页响应 Schema
@@ -179,7 +186,7 @@ export function createPaginatedResponseSchema<T extends z.ZodType>(itemSchema: T
     page: z.number(),
     limit: z.number(),
     totalPages: z.number(),
-  });
+  })
 }
 
 // ============================================================================
@@ -191,11 +198,11 @@ export const adminBackupSchema = z.object({
   size: z.number(),
   createdAt: z.string(),
   note: z.string(),
-});
+})
 
 export const adminBackupsResponseSchema = z.object({
   backups: z.array(adminBackupSchema),
-});
+})
 
 export const adminReviewQueueItemSchema = z.object({
   id: z.string(),
@@ -203,12 +210,12 @@ export const adminReviewQueueItemSchema = z.object({
   title: z.string(),
   author: userSchema,
   submittedAt: z.string(),
-});
+})
 
 export const adminReviewQueueResponseSchema = z.object({
   items: z.array(adminReviewQueueItemSchema),
   total: z.number(),
-});
+})
 
 // ============================================================================
 // 工具函数
@@ -222,7 +229,7 @@ export const adminReviewQueueResponseSchema = z.object({
  * @throws ZodError - 验证失败时抛出错误
  */
 export function validateApiResponse<T>(data: unknown, schema: z.ZodSchema<T>): T {
-  return schema.parse(data);
+  return schema.parse(data)
 }
 
 /**
@@ -232,5 +239,5 @@ export function validateApiResponse<T>(data: unknown, schema: z.ZodSchema<T>): T
  * @returns 验证结果
  */
 export function safeValidateApiResponse<T>(data: unknown, schema: z.ZodSchema<T>) {
-  return schema.safeParse(data);
+  return schema.safeParse(data)
 }

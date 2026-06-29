@@ -1,38 +1,50 @@
-import React from "react";
-import { clsx } from "clsx";
-import { motion, AnimatePresence } from "motion/react";
-import { Book, MessageSquare, Image as ImageIcon, Music, Sparkles, Search as SearchIcon, Tag, FileText } from "lucide-react";
-import { VIEW_MODE_CONFIG } from "../../lib/viewModes";
-import type { ViewMode } from "../../types/userPreferences";
-import { toDateValue } from "../../lib/dateUtils";
-import { format } from "date-fns";
-import type { SearchState } from "../../hooks/useSearchPage";
-import type { WikiItem, PostItem, GalleryItem, SongItem, AlbumItem } from "../../types/entities";
-import type { TextSearchResult } from "../../types/api";
-import { MixedSearchResultCard } from "../MixedSearchResultCard";
-import { SearchResultCard } from "./SearchResultCard";
-import { getFirstGalleryImage, shouldWaitForGalleryThumbnail } from "../../lib/galleryThumbnails";
+import React from 'react'
+import { clsx } from 'clsx'
+import { motion, AnimatePresence } from 'motion/react'
+import {
+  Book,
+  MessageSquare,
+  Image as ImageIcon,
+  Music,
+  Sparkles,
+  Search as SearchIcon,
+  Tag,
+  FileText,
+} from 'lucide-react'
+import { VIEW_MODE_CONFIG } from '../../lib/viewModes'
+import { formatMusicCredits } from '../../lib/musicCredits'
+import type { ViewMode } from '../../types/userPreferences'
+import { toDateValue } from '../../lib/dateUtils'
+import { format } from 'date-fns'
+import type { SearchState } from '../../hooks/useSearchPage'
+import type { WikiItem, PostItem, GalleryItem, SongItem, AlbumItem } from '../../types/entities'
+import type { TextSearchResult } from '../../types/api'
+import { MixedSearchResultCard } from '../MixedSearchResultCard'
+import { SearchResultCard } from './SearchResultCard'
+import { getFirstGalleryImage, shouldWaitForGalleryThumbnail } from '../../lib/galleryThumbnails'
 
 interface SearchResultsProps {
-  state: SearchState;
-  viewMode: ViewMode;
-  tabItems: Array<{ id: string; label: string; count: number }>;
-  onTabChange: (tab: string) => void;
+  state: SearchState
+  viewMode: ViewMode
+  tabItems: Array<{ id: string; label: string; count: number }>
+  onTabChange: (tab: string) => void
 }
 
-function wikiToConfig(page: WikiItem): import("./SearchResultCard").SearchResultCardConfig {
+function wikiToConfig(page: WikiItem): import('./SearchResultCard').SearchResultCardConfig {
   return {
     id: page.id,
     title: page.title,
-    description: (page.content || '').replace(/[#*`]/g, "").substring(0, 80),
+    description: (page.content || '').replace(/[#*`]/g, '').substring(0, 80),
     link: `/wiki/${page.slug}`,
     tags: [page.category],
-    meta: toDateValue(page.updatedAt) ? format(toDateValue(page.updatedAt)!, "yyyy-MM-dd") : "刚刚",
-    type: "wiki",
-  };
+    meta: toDateValue(page.updatedAt) ? format(toDateValue(page.updatedAt)!, 'yyyy-MM-dd') : '刚刚',
+    type: 'wiki',
+  }
 }
 
-function galleryToConfig(gallery: GalleryItem): import("./SearchResultCard").SearchResultCardConfig {
+function galleryToConfig(
+  gallery: GalleryItem
+): import('./SearchResultCard').SearchResultCardConfig {
   const image = getFirstGalleryImage(gallery)
 
   return {
@@ -43,22 +55,22 @@ function galleryToConfig(gallery: GalleryItem): import("./SearchResultCard").Sea
     image: image?.thumbnailUrl || undefined,
     imagePlaceholder: shouldWaitForGalleryThumbnail(gallery) ? '生成中...' : undefined,
     meta: `${Array.isArray(gallery.images) ? gallery.images.length : 0} 张图片`,
-    type: "gallery",
-  };
+    type: 'gallery',
+  }
 }
 
-function musicToConfig(track: SongItem): import("./SearchResultCard").SearchResultCardConfig {
+function musicToConfig(track: SongItem): import('./SearchResultCard').SearchResultCardConfig {
   return {
     id: track.id,
     title: track.title,
-    subtitle: `${track.artist} — ${track.album}`,
+    subtitle: `${formatMusicCredits(track.artists, '未知歌手')} — ${track.album}`,
     link: `/music/${track.id}`,
     image: track.cover || undefined,
-    type: "music",
-  };
+    type: 'music',
+  }
 }
 
-function albumToConfig(album: AlbumItem): import("./SearchResultCard").SearchResultCardConfig {
+function albumToConfig(album: AlbumItem): import('./SearchResultCard').SearchResultCardConfig {
   return {
     id: album.id,
     title: album.title,
@@ -66,20 +78,20 @@ function albumToConfig(album: AlbumItem): import("./SearchResultCard").SearchRes
     link: `/album/${album.id}`,
     image: album.cover || undefined,
     meta: `${album.trackCount} 曲`,
-    type: "album",
-  };
+    type: 'album',
+  }
 }
 
-function postToConfig(post: PostItem): import("./SearchResultCard").SearchResultCardConfig {
+function postToConfig(post: PostItem): import('./SearchResultCard').SearchResultCardConfig {
   return {
     id: post.id,
     title: post.title,
-    description: (post.content || "").replace(/[#*`]/g, "").substring(0, 80),
+    description: (post.content || '').replace(/[#*`]/g, '').substring(0, 80),
     link: `/forum/${post.id}`,
     tags: [post.section],
-    meta: toDateValue(post.updatedAt) ? format(toDateValue(post.updatedAt)!, "yyyy-MM-dd") : "刚刚",
-    type: "post",
-  };
+    meta: toDateValue(post.updatedAt) ? format(toDateValue(post.updatedAt)!, 'yyyy-MM-dd') : '刚刚',
+    type: 'post',
+  }
 }
 
 const TEXT_SEMANTIC_SOURCE_LABELS: Record<string, string> = {
@@ -111,7 +123,7 @@ function getTextSemanticTitle(result: TextSearchResult): string {
     case 'post':
       return result.entity.title || result.sourceId
     case 'music':
-      return result.entity.title || result.entity.artist || result.sourceId
+      return result.entity.title || formatMusicCredits(result.entity.artists, '') || result.sourceId
     case 'album':
       return result.entity.title || result.entity.artist || result.sourceId
     default:
@@ -119,13 +131,17 @@ function getTextSemanticTitle(result: TextSearchResult): string {
   }
 }
 
-function textSemanticToConfig(result: TextSearchResult): import("./SearchResultCard").SearchResultCardConfig {
+function textSemanticToConfig(
+  result: TextSearchResult
+): import('./SearchResultCard').SearchResultCardConfig {
   return {
     id: `${result.sourceType}-${result.sourceId}`,
     title: getTextSemanticTitle(result),
     subtitle:
-      result.sourceType === "music" || result.sourceType === "album"
-        ? result.entity.artist
+      result.sourceType === 'music' || result.sourceType === 'album'
+        ? result.sourceType === 'music'
+          ? formatMusicCredits(result.entity.artists, '未知歌手')
+          : result.entity.artist
         : undefined,
     description: undefined,
     link: getTextSemanticLink(result),
@@ -133,8 +149,8 @@ function textSemanticToConfig(result: TextSearchResult): import("./SearchResultC
     meta: `相似度 ${(result.score * 100).toFixed(1)}%`,
     type: result.sourceType,
     chunkPreview: result.chunkPreview,
-    matchSource: "semantic",
-  };
+    matchSource: 'semantic',
+  }
 }
 
 export const SearchResults: React.FC<SearchResultsProps> = ({
@@ -143,17 +159,27 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
   tabItems,
   onTabChange,
 }) => {
-  const { loading, hasSearched, activeTab, isMixedSearch, mixedResults, results, filters, textSemanticResults } = state;
+  const {
+    loading,
+    hasSearched,
+    activeTab,
+    isMixedSearch,
+    mixedResults,
+    results,
+    filters,
+    textSemanticResults,
+  } = state
 
-  const hasFilters = filters.selectedTags.length > 0 || filters.dateRange.start || filters.dateRange.end;
+  const hasFilters =
+    filters.selectedTags.length > 0 || filters.dateRange.start || filters.dateRange.end
   const filteredMixedResults = isMixedSearch
     ? mixedResults.filter((result) => activeTab === 'semantic' || result.sourceType === activeTab)
-    : [];
+    : []
   const resultGridClassName = clsx(
-    "grid",
+    'grid',
     VIEW_MODE_CONFIG[viewMode].gridCols,
     VIEW_MODE_CONFIG[viewMode].gap
-  );
+  )
 
   if (loading) {
     return (
@@ -162,7 +188,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
           <div key={i} className="h-24 theme-panel rounded" />
         ))}
       </div>
-    );
+    )
   }
 
   if (!hasSearched && !hasFilters) {
@@ -171,7 +197,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
         <Tag size={48} className="mx-auto text-border mb-6" />
         <p className="text-text-muted italic">输入关键词、上传图片或使用高级筛选开始探索</p>
       </div>
-    );
+    )
   }
 
   const totalResults =
@@ -180,7 +206,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
     results.galleries.length +
     results.music.length +
     results.albums.length +
-    (textSemanticResults?.length ?? 0);
+    (textSemanticResults?.length ?? 0)
 
   if (!isMixedSearch && totalResults === 0 && (textSemanticResults?.length ?? 0) === 0) {
     return (
@@ -188,7 +214,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
         <SearchIcon size={48} className="mx-auto text-border mb-6" />
         <p className="text-text-muted italic">未找到符合筛选条件的结果</p>
       </div>
-    );
+    )
   }
 
   if (isMixedSearch && mixedResults.length === 0) {
@@ -198,7 +224,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
         <p className="text-text-muted italic">未找到语义匹配的结果</p>
         <p className="text-text-muted/70 text-sm mt-2">尝试使用其他关键词或上传图片搜索</p>
       </div>
-    );
+    )
   }
 
   return (
@@ -211,10 +237,10 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
               className={clsx(
-                "text-[1.125rem] pb-2 relative tracking-[0.05em] transition-all cursor-pointer",
+                'text-[1.125rem] pb-2 relative tracking-[0.05em] transition-all cursor-pointer',
                 activeTab === tab.id
                   ? "text-brand-gold font-semibold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[var(--color-theme-accent)] after:rounded-[1px]"
-                  : "text-text-muted hover:text-brand-gold"
+                  : 'text-text-muted hover:text-brand-gold'
               )}
             >
               {tab.label}
@@ -258,31 +284,32 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
           {!isMixedSearch && (
             <>
               {/* Text Semantic Results */}
-              {(activeTab === "all" || activeTab === "textSemantic") && textSemanticResults.length > 0 && (
-                <motion.section
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
-                  className="space-y-4"
-                >
-                  <h2 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-4 flex items-center gap-2">
-                    <FileText size={14} className="text-brand-gold" /> 语义匹配
-                  </h2>
-                  <div className={resultGridClassName}>
-                    {textSemanticResults.map((result) => (
-                      <SearchResultCard
-                        key={`${result.sourceType}-${result.sourceId}`}
-                        config={textSemanticToConfig(result)}
-                        viewMode={viewMode}
-                        cardHeight={VIEW_MODE_CONFIG[viewMode].cardHeight}
-                      />
-                    ))}
-                  </div>
-                </motion.section>
-              )}
+              {(activeTab === 'all' || activeTab === 'textSemantic') &&
+                textSemanticResults.length > 0 && (
+                  <motion.section
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    className="space-y-4"
+                  >
+                    <h2 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-4 flex items-center gap-2">
+                      <FileText size={14} className="text-brand-gold" /> 语义匹配
+                    </h2>
+                    <div className={resultGridClassName}>
+                      {textSemanticResults.map((result) => (
+                        <SearchResultCard
+                          key={`${result.sourceType}-${result.sourceId}`}
+                          config={textSemanticToConfig(result)}
+                          viewMode={viewMode}
+                          cardHeight={VIEW_MODE_CONFIG[viewMode].cardHeight}
+                        />
+                      ))}
+                    </div>
+                  </motion.section>
+                )}
 
               {/* Wiki Results */}
-              {(activeTab === "all" || activeTab === "wiki") && results.wiki.length > 0 && (
+              {(activeTab === 'all' || activeTab === 'wiki') && results.wiki.length > 0 && (
                 <motion.section
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -306,7 +333,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
               )}
 
               {/* Posts Results */}
-              {(activeTab === "all" || activeTab === "posts") && results.posts.length > 0 && (
+              {(activeTab === 'all' || activeTab === 'posts') && results.posts.length > 0 && (
                 <motion.section
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -330,31 +357,32 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
               )}
 
               {/* Galleries Results */}
-              {(activeTab === "all" || activeTab === "galleries") && results.galleries.length > 0 && (
-                <motion.section
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
-                  className="space-y-4"
-                >
-                  <h2 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-4 flex items-center gap-2">
-                    <ImageIcon size={14} className="text-brand-gold" /> 图集馆
-                  </h2>
-                  <div className={resultGridClassName}>
-                    {results.galleries.map((gallery) => (
-                      <SearchResultCard
-                        key={gallery.id}
-                        config={galleryToConfig(gallery)}
-                        viewMode={viewMode}
-                        cardHeight={VIEW_MODE_CONFIG[viewMode].cardHeight}
-                      />
-                    ))}
-                  </div>
-                </motion.section>
-              )}
+              {(activeTab === 'all' || activeTab === 'galleries') &&
+                results.galleries.length > 0 && (
+                  <motion.section
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    className="space-y-4"
+                  >
+                    <h2 className="text-[0.875rem] font-semibold text-text-secondary tracking-[0.12em] uppercase mb-4 flex items-center gap-2">
+                      <ImageIcon size={14} className="text-brand-gold" /> 图集馆
+                    </h2>
+                    <div className={resultGridClassName}>
+                      {results.galleries.map((gallery) => (
+                        <SearchResultCard
+                          key={gallery.id}
+                          config={galleryToConfig(gallery)}
+                          viewMode={viewMode}
+                          cardHeight={VIEW_MODE_CONFIG[viewMode].cardHeight}
+                        />
+                      ))}
+                    </div>
+                  </motion.section>
+                )}
 
               {/* Music Results */}
-              {(activeTab === "all" || activeTab === "music") && results.music.length > 0 && (
+              {(activeTab === 'all' || activeTab === 'music') && results.music.length > 0 && (
                 <motion.section
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -378,7 +406,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
               )}
 
               {/* Albums Results */}
-              {(activeTab === "all" || activeTab === "albums") && results.albums.length > 0 && (
+              {(activeTab === 'all' || activeTab === 'albums') && results.albums.length > 0 && (
                 <motion.section
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -405,5 +433,5 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
         </AnimatePresence>
       </div>
     </div>
-  );
-};
+  )
+}

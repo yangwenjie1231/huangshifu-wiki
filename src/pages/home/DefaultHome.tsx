@@ -5,6 +5,7 @@ import { clsx } from 'clsx'
 import { SmartImage } from '../../components/SmartImage'
 import { useMusic } from '../../context/MusicContext'
 import { apiGet } from '../../lib/apiClient'
+import { formatMusicCredits } from '../../lib/musicCredits'
 import {
   getFirstGalleryImage,
   getGalleryThumbnailPlaceholderLabel,
@@ -433,7 +434,9 @@ export const DefaultHome = () => {
                           {song.title}
                         </h3>
                         <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[0.8125rem] text-text-muted">
-                          <span className="truncate">{song.artist || '未知歌手'}</span>
+                          <span className="truncate">
+                            {formatMusicCredits(song.artists, '未知歌手')}
+                          </span>
                           {song.album ? (
                             <>
                               <span className="h-[3px] w-[3px] rounded-full bg-border" />

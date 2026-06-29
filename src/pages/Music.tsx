@@ -1,32 +1,33 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { auth } from '../lib/auth';
-import { Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { useUserPreferences } from '../context/UserPreferencesContext';
-import { useMusic } from '../context/MusicContext';
-import { Search, Plus, List, Sparkles, X, Heart, Link2 } from 'lucide-react';
-import { clsx } from 'clsx';
-import { motion, AnimatePresence } from 'motion/react';
-import { MusicImportModal } from '../components/MusicImportModal';
-import { AlbumEditModal } from '../components/AlbumEditModal';
-import { useToast } from '../components/Toast';
-import { apiDelete, apiGet, apiPost } from '../lib/apiClient';
-import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink';
-import Pagination from '../components/Pagination';
-import { usePagination } from '../hooks/usePagination';
-import { PlatformIds } from '../types/PlatformIds';
-import { useI18n } from '../lib/i18n';
-import { PageSkeleton } from '../components/PageSkeleton';
-import { SongCard } from '../components/Music/SongCard';
-import { AlbumCard } from '../components/Music/AlbumCard';
-import { MusicFilters } from '../components/Music/MusicFilters';
-import { BatchActions } from '../components/Music/BatchActions';
-import { ViewModeSelector } from '../components/ViewModeSelector';
-import { VIEW_MODE_CONFIG } from '../lib/viewModes';
-import { useFloatingPresence } from '../hooks/useFloatingPresence';
-import type { SongItem, AlbumItem } from '../types/entities';
+import React, { useState, useEffect, useMemo, useRef } from 'react'
+import { auth } from '../lib/auth'
+import { Link } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import { useUserPreferences } from '../context/UserPreferencesContext'
+import { useMusic } from '../context/MusicContext'
+import { Search, Plus, List, Sparkles, X, Heart, Link2 } from 'lucide-react'
+import { clsx } from 'clsx'
+import { motion, AnimatePresence } from 'motion/react'
+import { MusicImportModal } from '../components/MusicImportModal'
+import { AlbumEditModal } from '../components/AlbumEditModal'
+import { useToast } from '../components/Toast'
+import { apiDelete, apiGet, apiPost } from '../lib/apiClient'
+import { copyToClipboard, toAbsoluteInternalUrl } from '../lib/copyLink'
+import Pagination from '../components/Pagination'
+import { usePagination } from '../hooks/usePagination'
+import { PlatformIds } from '../types/PlatformIds'
+import { useI18n } from '../lib/i18n'
+import { PageSkeleton } from '../components/PageSkeleton'
+import { SongCard } from '../components/Music/SongCard'
+import { AlbumCard } from '../components/Music/AlbumCard'
+import { MusicFilters } from '../components/Music/MusicFilters'
+import { BatchActions } from '../components/Music/BatchActions'
+import { ViewModeSelector } from '../components/ViewModeSelector'
+import { VIEW_MODE_CONFIG } from '../lib/viewModes'
+import { formatMusicCredits } from '../lib/musicCredits'
+import { useFloatingPresence } from '../hooks/useFloatingPresence'
+import type { SongItem, AlbumItem } from '../types/entities'
 
-const DEFAULT_PAGE_SIZE = 40;
+const DEFAULT_PAGE_SIZE = 40
 
 enum OperationType {
   CREATE = 'create',
@@ -38,21 +39,21 @@ enum OperationType {
 }
 
 interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
+  error: string
+  operationType: OperationType
+  path: string | null
   authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
+    userId: string | undefined
+    email: string | null | undefined
+    emailVerified: boolean | undefined
+    isAnonymous: boolean | undefined
+    tenantId: string | null | undefined
     providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
+      providerId: string
+      displayName: string | null
+      email: string | null
+      photoUrl: string | null
+    }[]
   }
 }
 
@@ -65,312 +66,342 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
       emailVerified: auth.currentUser?.emailVerified,
       isAnonymous: auth.currentUser?.isAnonymous,
       tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
+      providerInfo:
+        auth.currentUser?.providerData.map((provider) => ({
+          providerId: provider.providerId,
+          displayName: provider.displayName,
+          email: provider.email,
+          photoUrl: provider.photoURL,
+        })) || [],
     },
     operationType,
-    path
+    path,
   }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.error('Firestore Error: ', JSON.stringify(errInfo))
+  throw new Error(JSON.stringify(errInfo))
 }
 
 const Music = () => {
-  const [songs, setSongs] = useState<SongItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchId, setSearchId] = useState('');
-  const [isAdding, setIsAdding] = useState(false);
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [editingAlbum, setEditingAlbum] = useState<AlbumItem | null>(null);
-  const [isAlbumModalOpen, setIsAlbumModalOpen] = useState(false);
-  const [selectedSongs, setSelectedSongs] = useState<Set<string>>(new Set());
-  const [isBatchMode, setIsBatchMode] = useState(false);
-  const [confirmModal, setConfirmModal] = useState<{ show: boolean }>({ show: false });
-  const confirmModalPresence = useFloatingPresence(confirmModal.show);
-  const [favoriting, setFavoriting] = useState<string | null>(null);
-  const [albums, setAlbums] = useState<AlbumItem[]>([]);
-  const [loadingAlbums, setLoadingAlbums] = useState(false);
-  const [activeTab, setActiveTab] = useState<'music' | 'albums'>('music');
-  const [selectedPlatform, setSelectedPlatform] = useState<'netease' | 'qq' | 'kugou' | 'baidu' | 'kuwo'>('netease');
-  const { user, isAdmin, isBanned } = useAuth();
-  const { currentSong, setCurrentSong, setIsPlaying, setPlaylist, playSongAtIndex } = useMusic();
-  const { preferences, setViewMode } = useUserPreferences();
-  const viewMode = preferences.viewMode;
-  const { show } = useToast();
-  const { t } = useI18n();
+  const [songs, setSongs] = useState<SongItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchId, setSearchId] = useState('')
+  const [isAdding, setIsAdding] = useState(false)
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false)
+  const [editingAlbum, setEditingAlbum] = useState<AlbumItem | null>(null)
+  const [isAlbumModalOpen, setIsAlbumModalOpen] = useState(false)
+  const [selectedSongs, setSelectedSongs] = useState<Set<string>>(new Set())
+  const [isBatchMode, setIsBatchMode] = useState(false)
+  const [confirmModal, setConfirmModal] = useState<{ show: boolean }>({ show: false })
+  const confirmModalPresence = useFloatingPresence(confirmModal.show)
+  const [favoriting, setFavoriting] = useState<string | null>(null)
+  const [albums, setAlbums] = useState<AlbumItem[]>([])
+  const [loadingAlbums, setLoadingAlbums] = useState(false)
+  const [activeTab, setActiveTab] = useState<'music' | 'albums'>('music')
+  const [selectedPlatform, setSelectedPlatform] = useState<
+    'netease' | 'qq' | 'kugou' | 'baidu' | 'kuwo'
+  >('netease')
+  const { user, isAdmin, isBanned } = useAuth()
+  const { currentSong, setCurrentSong, setIsPlaying, setPlaylist, playSongAtIndex } = useMusic()
+  const { preferences, setViewMode } = useUserPreferences()
+  const viewMode = preferences.viewMode
+  const { show } = useToast()
+  const { t } = useI18n()
 
-  const [sortBy, setSortBy] = useState<'createdAt' | 'title' | 'artist'>('createdAt');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [filterPlatform, setFilterPlatform] = useState<'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo' | 'all'>('all');
+  const [sortBy, setSortBy] = useState<'createdAt' | 'title' | 'artist'>('createdAt')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [filterPlatform, setFilterPlatform] = useState<
+    'netease' | 'tencent' | 'kugou' | 'baidu' | 'kuwo' | 'all'
+  >('all')
 
   const displaySongs = useMemo(() => {
-    let result = [...songs];
+    let result = [...songs]
 
     if (filterPlatform !== 'all') {
-      const fieldKey = `${filterPlatform}Id` as keyof PlatformIds;
-      result = result.filter(song => song.platformIds?.[fieldKey]);
+      const fieldKey = `${filterPlatform}Id` as keyof PlatformIds
+      result = result.filter((song) => song.platformIds?.[fieldKey])
     }
 
     result.sort((a, b) => {
       if (sortBy === 'title') {
         return sortOrder === 'asc'
           ? a.title.localeCompare(b.title, 'zh-CN')
-          : b.title.localeCompare(a.title, 'zh-CN');
+          : b.title.localeCompare(a.title, 'zh-CN')
       }
       if (sortBy === 'artist') {
+        const artistA = formatMusicCredits(a.artists, '')
+        const artistB = formatMusicCredits(b.artists, '')
         return sortOrder === 'asc'
-          ? a.artist.localeCompare(b.artist, 'zh-CN')
-          : b.artist.localeCompare(a.artist, 'zh-CN');
+          ? artistA.localeCompare(artistB, 'zh-CN')
+          : artistB.localeCompare(artistA, 'zh-CN')
       }
       return sortOrder === 'asc'
         ? (a.createdAt || '').localeCompare(b.createdAt || '')
-        : (b.createdAt || '').localeCompare(a.createdAt || '');
-    });
+        : (b.createdAt || '').localeCompare(a.createdAt || '')
+    })
 
-    return result;
-  }, [songs, filterPlatform, sortBy, sortOrder]);
+    return result
+  }, [songs, filterPlatform, sortBy, sortOrder])
 
-  const musicPagination = usePagination({ totalCount: displaySongs.length, defaultPageSize: 40 });
-  const albumPagination = usePagination({ totalCount: albums.length, defaultPageSize: 24 });
-  const [showAccompaniments, setShowAccompaniments] = useState(false);
+  const musicPagination = usePagination({ totalCount: displaySongs.length, defaultPageSize: 40 })
+  const albumPagination = usePagination({ totalCount: albums.length, defaultPageSize: 24 })
+  const [showAccompaniments, setShowAccompaniments] = useState(false)
 
   const paginatedSongs = useMemo(() => {
-    const start = (musicPagination.page - 1) * musicPagination.pageSize;
-    return displaySongs.slice(start, start + musicPagination.pageSize);
-  }, [displaySongs, musicPagination.page, musicPagination.pageSize]);
+    const start = (musicPagination.page - 1) * musicPagination.pageSize
+    return displaySongs.slice(start, start + musicPagination.pageSize)
+  }, [displaySongs, musicPagination.page, musicPagination.pageSize])
 
   const paginatedAlbums = useMemo(() => {
-    const start = (albumPagination.page - 1) * albumPagination.pageSize;
-    return albums.slice(start, start + albumPagination.pageSize);
-  }, [albums, albumPagination.page, albumPagination.pageSize]);
+    const start = (albumPagination.page - 1) * albumPagination.pageSize
+    return albums.slice(start, start + albumPagination.pageSize)
+  }, [albums, albumPagination.page, albumPagination.pageSize])
 
   useEffect(() => {
-    musicPagination.setPage(1);
-    albumPagination.setPage(1);
-  }, [activeTab]);
+    musicPagination.setPage(1)
+    albumPagination.setPage(1)
+  }, [activeTab])
 
   const fetchSongs = async () => {
-    setLoading(true);
+    setLoading(true)
     try {
       const data = await apiGet<{ songs: SongItem[]; total: number }>('/api/music', {
         limit: 100,
         page: 1,
         includeInstrumentals: showAccompaniments,
-      });
-      const fetchedSongs = data.songs || [];
-      setSongs(fetchedSongs);
-      setPlaylist(fetchedSongs);
+      })
+      const fetchedSongs = data.songs || []
+      setSongs(fetchedSongs)
+      setPlaylist(fetchedSongs)
     } catch (e) {
-      handleFirestoreError(e, OperationType.GET, '/api/music');
+      handleFirestoreError(e, OperationType.GET, '/api/music')
     }
-    setLoading(false);
-  };
+    setLoading(false)
+  }
 
   useEffect(() => {
-    fetchSongs();
-  }, [showAccompaniments]);
+    fetchSongs()
+  }, [showAccompaniments])
 
   const fetchAlbums = async () => {
-    setLoadingAlbums(true);
+    setLoadingAlbums(true)
     try {
-      const data = await apiGet<{ albums: AlbumItem[]; total: number; hasMore?: boolean }>('/api/albums', {
-        limit: 100,
-        page: 1,
-      });
-      setAlbums(data.albums || []);
+      const data = await apiGet<{ albums: AlbumItem[]; total: number; hasMore?: boolean }>(
+        '/api/albums',
+        {
+          limit: 100,
+          page: 1,
+        }
+      )
+      setAlbums(data.albums || [])
     } catch (error) {
-      console.error('Fetch albums error:', error);
-      setAlbums([]);
+      console.error('Fetch albums error:', error)
+      setAlbums([])
     }
-    setLoadingAlbums(false);
-  };
+    setLoadingAlbums(false)
+  }
 
   useEffect(() => {
-    fetchAlbums();
-  }, []);
+    fetchAlbums()
+  }, [])
 
   const handleAddSong = async () => {
-    if (!searchId) return;
+    if (!searchId) return
     if (isBanned) {
-      show('账号已被封禁，无法执行此操作', { variant: 'error' });
-      return;
+      show('账号已被封禁，无法执行此操作', { variant: 'error' })
+      return
     }
-    
-    const ids = searchId.split(/[\s,\n]+/).map(s => {
-      let id = s.trim();
-      if (id.includes('id=')) {
-        id = id.split('id=')[1].split('&')[0];
-      }
-      return id;
-    }).filter(id => id);
 
-    if (ids.length === 0) return;
+    const ids = searchId
+      .split(/[\s,\n]+/)
+      .map((s) => {
+        let id = s.trim()
+        if (id.includes('id=')) {
+          id = id.split('id=')[1].split('&')[0]
+        }
+        return id
+      })
+      .filter((id) => id)
 
-    setLoading(true);
-    let addedCount = 0;
-    let skippedCount = 0;
-    const existingSongs = new Set(songs.map((song) => String(song.id).trim()));
+    if (ids.length === 0) return
+
+    setLoading(true)
+    let addedCount = 0
+    let skippedCount = 0
+    const existingSongs = new Set(songs.map((song) => String(song.id).trim()))
 
     for (const id of ids) {
       try {
         if (existingSongs.has(id)) {
-          skippedCount++;
-          continue;
+          skippedCount++
+          continue
         }
 
         try {
-          await apiPost<{ song: SongItem }>(`/api/music/from-${selectedPlatform}`, { id });
-          existingSongs.add(id);
-          addedCount++;
+          await apiPost<{ song: SongItem }>(`/api/music/from-${selectedPlatform}`, { id })
+          existingSongs.add(id)
+          addedCount++
         } catch (error) {
-          console.error(`Failed to add metadata for ID: ${id}`, error);
-          skippedCount++;
+          console.error(`Failed to add metadata for ID: ${id}`, error)
+          skippedCount++
         }
       } catch (e) {
-        console.error(`Error adding song ${id}:`, e);
-        skippedCount++;
+        console.error(`Error adding song ${id}:`, e)
+        skippedCount++
       }
     }
 
-    show(`添加完成！成功: ${addedCount}, 跳过/失败: ${skippedCount}`);
-    setSearchId('');
-    setIsAdding(false);
-    fetchSongs();
-    setLoading(false);
-  };
+    show(`添加完成！成功: ${addedCount}, 跳过/失败: ${skippedCount}`)
+    setSearchId('')
+    setIsAdding(false)
+    fetchSongs()
+    setLoading(false)
+  }
 
   const playSong = (song: SongItem) => {
     if (isBatchMode) {
-      toggleSelect(song.docId);
-      return;
+      toggleSelect(song.docId)
+      return
     }
-    const index = songs.findIndex((item) => item.docId === song.docId);
+    const index = songs.findIndex((item) => item.docId === song.docId)
     if (index >= 0) {
-      playSongAtIndex(index);
-      return;
+      playSongAtIndex(index)
+      return
     }
-    setCurrentSong(song);
-    setIsPlaying(true);
-  };
+    setCurrentSong(song)
+    setIsPlaying(true)
+  }
 
-  const handleCopyAlbumLink = async (event: React.MouseEvent<HTMLButtonElement>, albumId: string) => {
-    event.stopPropagation();
-    const copied = await copyToClipboard(toAbsoluteInternalUrl(`/album/${albumId}`));
+  const handleCopyAlbumLink = async (
+    event: React.MouseEvent<HTMLButtonElement>,
+    albumId: string
+  ) => {
+    event.stopPropagation()
+    const copied = await copyToClipboard(toAbsoluteInternalUrl(`/album/${albumId}`))
     if (copied) {
-      show('专辑内链已复制');
-      return;
+      show('专辑内链已复制')
+      return
     }
-    show('复制链接失败，请稍后重试', { variant: 'error' });
-  };
+    show('复制链接失败，请稍后重试', { variant: 'error' })
+  }
 
   const handleToggleFavorite = async (song: SongItem) => {
     if (!user || !song.docId) {
-      show('请先登录后收藏', { variant: 'error' });
-      return;
+      show('请先登录后收藏', { variant: 'error' })
+      return
     }
 
-    if (favoriting === song.docId) return;
-    setFavoriting(song.docId);
+    if (favoriting === song.docId) return
+    setFavoriting(song.docId)
     try {
       if (song.favoritedByMe) {
-        await apiDelete(`/api/favorites/music/${song.docId}`);
-        setSongs((prev) => prev.map((item) => (item.docId === song.docId ? { ...item, favoritedByMe: false } : item)));
+        await apiDelete(`/api/favorites/music/${song.docId}`)
+        setSongs((prev) =>
+          prev.map((item) => (item.docId === song.docId ? { ...item, favoritedByMe: false } : item))
+        )
       } else {
         await apiPost('/api/favorites', {
           targetType: 'music',
           targetId: song.docId,
-        });
-        setSongs((prev) => prev.map((item) => (item.docId === song.docId ? { ...item, favoritedByMe: true } : item)));
+        })
+        setSongs((prev) =>
+          prev.map((item) => (item.docId === song.docId ? { ...item, favoritedByMe: true } : item))
+        )
       }
     } catch (error) {
-      console.error('Toggle music favorite error:', error);
-      show('收藏操作失败，请稍后重试', { variant: 'error' });
+      console.error('Toggle music favorite error:', error)
+      show('收藏操作失败，请稍后重试', { variant: 'error' })
     } finally {
-      setFavoriting(null);
+      setFavoriting(null)
     }
-  };
+  }
 
   const toggleSelect = (docId: string) => {
-    const newSelected = new Set(selectedSongs);
+    const newSelected = new Set(selectedSongs)
     if (newSelected.has(docId)) {
-      newSelected.delete(docId);
+      newSelected.delete(docId)
     } else {
-      newSelected.add(docId);
+      newSelected.add(docId)
     }
-    setSelectedSongs(newSelected);
-  };
+    setSelectedSongs(newSelected)
+  }
 
   const handleBatchDelete = async () => {
-    if (selectedSongs.size === 0) return;
+    if (selectedSongs.size === 0) return
 
-    setLoading(true);
-    let successCount = 0;
-    let failCount = 0;
+    setLoading(true)
+    let successCount = 0
+    let failCount = 0
 
     for (const docId of Array.from(selectedSongs)) {
       try {
-        await apiDelete(`/api/music/${docId}`);
-        successCount++;
+        await apiDelete(`/api/music/${docId}`)
+        successCount++
       } catch (e) {
-        console.error(`Error deleting ${docId}:`, e);
-        failCount++;
+        console.error(`Error deleting ${docId}:`, e)
+        failCount++
       }
     }
-    
+
     if (failCount > 0) {
-      show(`批量删除完成。成功: ${successCount}, 失败: ${failCount}`, { variant: failCount > 0 ? 'error' : 'success' });
+      show(`批量删除完成。成功: ${successCount}, 失败: ${failCount}`, {
+        variant: failCount > 0 ? 'error' : 'success',
+      })
     }
 
-    setSelectedSongs(new Set());
-    setIsBatchMode(false);
-    setConfirmModal({ show: false });
-    fetchSongs();
-    setLoading(false);
-  };
-
-  if (loading) {
-    return <PageSkeleton variant="music" />;
+    setSelectedSongs(new Set())
+    setIsBatchMode(false)
+    setConfirmModal({ show: false })
+    fetchSongs()
+    setLoading(false)
   }
 
-	return (
-		<div
-			className="gufeng-music-page min-h-screen bg-bg-primary"
-			style={{
-				fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif",
-				lineHeight: 1.8,
-			}}
+  if (loading) {
+    return <PageSkeleton variant="music" />
+  }
+
+  return (
+    <div
+      className="gufeng-music-page min-h-screen bg-bg-primary"
+      style={{
+        fontFamily: "'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'STSong', 'FangSong', serif",
+        lineHeight: 1.8,
+      }}
     >
       <div className="max-w-[1100px] mx-auto px-6 py-8 pb-32 md:pb-32">
         {/* Header */}
         <header className="mb-7">
           <div className="flex items-end justify-between flex-wrap gap-3">
-            <h1 className="text-[1.75rem] font-semibold tracking-[0.12em] text-text-primary">{t('music.title')}</h1>
+            <h1 className="text-[1.75rem] font-semibold tracking-[0.12em] text-text-primary">
+              {t('music.title')}
+            </h1>
             {isAdmin && (
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() => {
-                    if (isBanned) { show('账号已被封禁，无法执行此操作', { variant: 'error' }); return; }
-                    setIsBatchMode(!isBatchMode);
-                    setSelectedSongs(new Set());
+                    if (isBanned) {
+                      show('账号已被封禁，无法执行此操作', { variant: 'error' })
+                      return
+                    }
+                    setIsBatchMode(!isBatchMode)
+                    setSelectedSongs(new Set())
                   }}
-                   className={clsx(
-                     "px-4 py-2 text-[0.9375rem] rounded border transition-all",
-                     isBatchMode
-                       ? "bg-[var(--color-theme-accent)] text-white border-[var(--color-theme-accent)]"
-                       : "bg-transparent text-text-secondary border-border hover:text-brand-gold hover:border-brand-gold"
-                   )}
+                  className={clsx(
+                    'px-4 py-2 text-[0.9375rem] rounded border transition-all',
+                    isBatchMode
+                      ? 'bg-[var(--color-theme-accent)] text-white border-[var(--color-theme-accent)]'
+                      : 'bg-transparent text-text-secondary border-border hover:text-brand-gold hover:border-brand-gold'
+                  )}
                 >
                   <List size={16} className="inline mr-1.5 -mt-0.5" />
                   {isBatchMode ? t('music.batchExit') : t('music.batchManage')}
                 </button>
                 <button
                   onClick={() => {
-                    if (isBanned) { show('账号已被封禁，无法执行此操作', { variant: 'error' }); return; }
-                    setIsImportModalOpen(true);
+                    if (isBanned) {
+                      show('账号已被封禁，无法执行此操作', { variant: 'error' })
+                      return
+                    }
+                    setIsImportModalOpen(true)
                   }}
                   className="px-4 py-2 text-[0.9375rem] rounded border border-border text-text-secondary hover:text-brand-gold hover:border-brand-gold transition-all"
                 >
@@ -379,12 +410,19 @@ const Music = () => {
                 </button>
                 <button
                   onClick={() => {
-                    if (isBanned) { show('账号已被封禁，无法执行此操作', { variant: 'error' }); return; }
-                    setIsAdding(!isAdding);
+                    if (isBanned) {
+                      show('账号已被封禁，无法执行此操作', { variant: 'error' })
+                      return
+                    }
+                    setIsAdding(!isAdding)
                   }}
                   className="px-4 py-2 text-[0.9375rem] rounded theme-button-primary transition-all"
                 >
-                  {isAdding ? <X size={16} className="inline mr-1.5 -mt-0.5" /> : <Plus size={16} className="inline mr-1.5 -mt-0.5" />}
+                  {isAdding ? (
+                    <X size={16} className="inline mr-1.5 -mt-0.5" />
+                  ) : (
+                    <Plus size={16} className="inline mr-1.5 -mt-0.5" />
+                  )}
                   {isAdding ? t('music.cancelAdd') : t('music.addMusic')}
                 </button>
                 <Link
@@ -413,12 +451,14 @@ const Music = () => {
               </h3>
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-4">
-                  <label className="text-sm font-medium text-text-secondary">{t('music.selectPlatform')}：</label>
+                  <label className="text-sm font-medium text-text-secondary">
+                    {t('music.selectPlatform')}：
+                  </label>
                   <select
                     value={selectedPlatform}
-                    onChange={e => setSelectedPlatform(e.target.value as typeof selectedPlatform)}
+                    onChange={(e) => setSelectedPlatform(e.target.value as typeof selectedPlatform)}
                     className="theme-input px-4 py-2 rounded text-sm"
-                    style={{ fontFamily: "inherit" }}
+                    style={{ fontFamily: 'inherit' }}
                   >
                     <option value="netease">{t('music.platforms.netease')}</option>
                     <option value="qq">{t('music.platforms.tencent')}</option>
@@ -429,10 +469,10 @@ const Music = () => {
                 </div>
                 <textarea
                   value={searchId}
-                  onChange={e => setSearchId(e.target.value)}
+                  onChange={(e) => setSearchId(e.target.value)}
                   placeholder={`${t('music.inputPlaceholder')} ${selectedPlatform === 'netease' ? t('music.platforms.netease') : selectedPlatform === 'qq' ? t('music.platforms.tencent') : selectedPlatform === 'kugou' ? t('music.platforms.kugou') : selectedPlatform === 'baidu' ? t('music.platforms.baidu') : t('music.platforms.kuwo')} ${t('music.idOrLinkList')}`}
                   className="theme-input w-full px-4 py-3 rounded min-h-[100px] text-sm resize-y"
-                  style={{ fontFamily: "inherit" }}
+                  style={{ fontFamily: 'inherit' }}
                 />
                 <div className="flex justify-end">
                   <button
@@ -476,24 +516,26 @@ const Music = () => {
             aria-hidden={!confirmModal.show}
           >
             <div className="floating-panel bg-surface rounded p-8 max-w-md w-full border border-border">
-                <h3 className="text-xl font-semibold text-text-primary mb-4 tracking-wide">{t('music.confirmDelete')}</h3>
-                <p className="text-text-secondary mb-8 text-[0.9375rem]">
-                  {t('music.confirmDeleteBatch', { count: selectedSongs.size })}
-                </p>
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => setConfirmModal({ show: false })}
-                    className="flex-1 px-6 py-3 bg-surface-alt text-text-secondary rounded font-semibold hover:bg-bg-tertiary transition-all"
-                  >
-                    {t('music.cancel')}
-                  </button>
-                  <button
-                    onClick={handleBatchDelete}
-                    className="flex-1 px-6 py-3 theme-button-primary rounded font-semibold transition-all"
-                  >
-                    {t('music.confirmDeleteButton')}
-                  </button>
-                </div>
+              <h3 className="text-xl font-semibold text-text-primary mb-4 tracking-wide">
+                {t('music.confirmDelete')}
+              </h3>
+              <p className="text-text-secondary mb-8 text-[0.9375rem]">
+                {t('music.confirmDeleteBatch', { count: selectedSongs.size })}
+              </p>
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setConfirmModal({ show: false })}
+                  className="flex-1 px-6 py-3 bg-surface-alt text-text-secondary rounded font-semibold hover:bg-bg-tertiary transition-all"
+                >
+                  {t('music.cancel')}
+                </button>
+                <button
+                  onClick={handleBatchDelete}
+                  className="flex-1 px-6 py-3 theme-button-primary rounded font-semibold transition-all"
+                >
+                  {t('music.confirmDeleteButton')}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -507,11 +549,14 @@ const Music = () => {
               onTabChange={setActiveTab}
               isAdmin={isAdmin}
               onCreateAlbum={() => {
-                setEditingAlbum(null);
-                setIsAlbumModalOpen(true);
+                setEditingAlbum(null)
+                setIsAlbumModalOpen(true)
               }}
               sortBy={sortBy}
-              onSortByChange={(value) => { setSortBy(value); musicPagination.setPage(1); }}
+              onSortByChange={(value) => {
+                setSortBy(value)
+                musicPagination.setPage(1)
+              }}
               sortOrder={sortOrder}
               onSortOrderChange={setSortOrder}
               showAccompaniments={showAccompaniments}
@@ -531,7 +576,11 @@ const Music = () => {
                       className={clsx(
                         viewMode === 'list'
                           ? 'divide-y divide-border'
-                          : clsx('grid', VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)
+                          : clsx(
+                              'grid',
+                              VIEW_MODE_CONFIG[viewMode].gridCols,
+                              VIEW_MODE_CONFIG[viewMode].gap
+                            )
                       )}
                     >
                       {paginatedSongs.map((song) => (
@@ -564,14 +613,22 @@ const Music = () => {
                     )}
                   </>
                 ) : (
-                  <div className="py-20 text-center text-text-muted italic tracking-[0.1em]">{t('music.noMusic')}</div>
+                  <div className="py-20 text-center text-text-muted italic tracking-[0.1em]">
+                    {t('music.noMusic')}
+                  </div>
                 )}
               </div>
             ) : (
               <div className="mt-6">
                 {loadingAlbums ? (
-                  <div className={clsx("grid", VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
-                    {[1,2,3,4,5,6].map(i => (
+                  <div
+                    className={clsx(
+                      'grid',
+                      VIEW_MODE_CONFIG[viewMode].gridCols,
+                      VIEW_MODE_CONFIG[viewMode].gap
+                    )}
+                  >
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
                       <div key={i} className="animate-pulse">
                         <div className="aspect-square rounded bg-surface-alt mb-2.5" />
                         <div className="h-4 bg-surface-alt rounded w-2/3 mb-1.5" />
@@ -581,7 +638,13 @@ const Music = () => {
                   </div>
                 ) : albums.length > 0 ? (
                   <>
-                    <div className={clsx("grid", VIEW_MODE_CONFIG[viewMode].gridCols, VIEW_MODE_CONFIG[viewMode].gap)}>
+                    <div
+                      className={clsx(
+                        'grid',
+                        VIEW_MODE_CONFIG[viewMode].gridCols,
+                        VIEW_MODE_CONFIG[viewMode].gap
+                      )}
+                    >
                       {paginatedAlbums.map((album) => (
                         <AlbumCard
                           key={album.docId || album.id}
@@ -604,7 +667,9 @@ const Music = () => {
                     )}
                   </>
                 ) : (
-                  <div className="py-20 text-center text-text-muted italic tracking-[0.1em]">{t('music.noAlbums')}</div>
+                  <div className="py-20 text-center text-text-muted italic tracking-[0.1em]">
+                    {t('music.noAlbums')}
+                  </div>
                 )}
               </div>
             )}
@@ -632,7 +697,7 @@ const Music = () => {
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default Music;
+export default Music
