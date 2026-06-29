@@ -71,6 +71,7 @@ npm run dev
 | 命令                       | 用途                                   |
 | -------------------------- | -------------------------------------- |
 | `npm run dev`              | 启动 Express + Vite 开发服务           |
+| `npm run format`           | 使用 Prettier 格式化代码、配置和文档   |
 | `npm run lint`             | TypeScript 类型检查                    |
 | `npm run test:unit`        | 运行单元测试                           |
 | `npm run test:integration` | 运行集成测试                           |
@@ -124,6 +125,7 @@ docs/                   项目文档
 提交前请至少运行：
 
 ```bash
+npm run format
 npm run verify
 npm audit --omit=dev --audit-level=high
 ```

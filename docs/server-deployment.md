@@ -853,18 +853,16 @@ npx prisma migrate status
 
 ```bash
 cd /root/huangshifu-wiki
-npm run lint
-npm test
-npm run build
+npm run format
+npm run verify
 ```
 
 说明：
 
-- `npm run lint`：执行 TypeScript 类型检查（`tsc --noEmit`）
-- `npm test`：执行 Vitest 单元测试
-- `npm run build`：验证生产构建可通过
+- `npm run format`：使用 Prettier 统一格式化代码、配置和文档
+- `npm run verify`：依次执行类型检查、单元测试、集成测试和生产构建
 
-若三项全部通过，再执行 `pm2 restart huangshifu-wiki --update-env`。
+若命令全部通过，再执行 `pm2 restart huangshifu-wiki --update-env`。
 
 ---
 
